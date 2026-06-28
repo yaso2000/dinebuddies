@@ -17,6 +17,7 @@ import {
   unlikeDiscoveryProfile,
   sendDiscoveryGreeting,
 } from '../../utils/discoveryProfile';
+import { showLikeCooldownWarning } from '../../utils/connectionActionCooldown';
 import { isFollowing as checkIsFollowing } from '../../utils/followHelpers';
 import { checkCanMessage } from '../../utils/chatHelpers';
 import {
@@ -38,9 +39,9 @@ import { AppText } from '../base';
 
 /** Directory card — name + age, cover, avatar, quick actions. */
 export default function UserDirectoryCard({ user, currentUser, onGift }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { showToast } = useToast();
+  const { showToast, showPersistentWarning } = useToast();
   const { userProfile, isGuest } = useAuth();
   const { toggleFollow, currentUser: invitationUser } = useInvitations();
   const { celebrateMatch } = useMatchCelebration();
@@ -144,6 +145,10 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
 
         const result = await likeDiscoveryProfile(viewerUid, user, userProfile || currentUser);
         if (result?.reason === 'already_liked') return;
+        if (result?.reason === 'cooldown') {
+          showLikeCooldownWarning(showPersistentWarning, i18n, result.cancelledAtMs, result.retryAtMs);
+          return;
+        }
         if (!result?.ok) {
           showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
           return;
@@ -175,6 +180,8 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
       likeBusy,
       liked,
       refreshCanChat,
+      i18n,
+      showPersistentWarning,
       showToast,
       showUnlikeError,
       t,
@@ -202,7 +209,9 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
         const wasFollowing = isFollowingUser;
         const result = await toggleFollow(user.id);
         if (!result?.ok) {
-          showToast(t('discovery_follow_failed', 'Could not follow. Try again.'), 'error');
+          if (result?.reason !== 'cooldown') {
+            showToast(t('discovery_follow_failed', 'Could not follow. Try again.'), 'error');
+          }
           return;
         }
         if (result.connectionComplete && result.connectionKind) {
@@ -303,7 +312,15 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
   );
 
   const profileInfo = (
-    <AppText as="h3" className="user-directory-card__name">{headline}</AppText>
+    <AppText as="span" className="user-directory-card__name">{headline}</AppText>
+  );
+
+  const nameChip = profilePath ? (
+    <Link to={profilePath} className="user-directory-card__name-chip" draggable={false}>
+      {profileInfo}
+    </Link>
+  ) : (
+    <div className="user-directory-card__name-chip">{profileInfo}</div>
   );
 
   return (
@@ -338,14 +355,25 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
           <div className="user-directory-card__cover-scrim" />
         </div>
 
-        <div className="user-directory-card__avatar-wrap">
-          {profilePath ? (
-            <Link
-              to={profilePath}
-              className="user-directory-card__avatar-link"
-              aria-label={displayName}
-              draggable={false}
-            >
+        <div className="user-directory-card__profile-column">
+          {nameChip}
+          <div className="user-directory-card__avatar-wrap">
+            {profilePath ? (
+              <Link
+                to={profilePath}
+                className="user-directory-card__avatar-link"
+                aria-label={displayName}
+                draggable={false}
+              >
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  className="user-directory-card__avatar"
+                  loading="lazy"
+                  draggable={false}
+                />
+              </Link>
+            ) : (
               <img
                 src={avatarUrl}
                 alt=""
@@ -353,35 +381,20 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
                 loading="lazy"
                 draggable={false}
               />
-            </Link>
-          ) : (
-            <img
-              src={avatarUrl}
-              alt=""
-              className="user-directory-card__avatar"
-              loading="lazy"
-              draggable={false}
-            />
-          )}
-          {showPrivateInviteBadge ? (
-            <PrivateInviteProfileBadge
-              user={user}
-              currentUser={viewerProfile}
-              logoSrc="/db-logo-white.svg"
-              className="user-directory-card__private-invite"
-            />
-          ) : null}
+            )}
+            {showPrivateInviteBadge ? (
+              <PrivateInviteProfileBadge
+                user={user}
+                currentUser={viewerProfile}
+                logoSrc="/db-logo-white.svg"
+                className="user-directory-card__private-invite"
+              />
+            ) : null}
+          </div>
         </div>
 
         <div className="user-directory-card__overlay">
           <OnlineStatusBadge isOnline={isOnline} className="user-directory-card__online-badge" size="sm" />
-          {profilePath ? (
-            <Link to={profilePath} className="user-directory-card__info-link" draggable={false}>
-              {profileInfo}
-            </Link>
-          ) : (
-            <div className="user-directory-card__info-link">{profileInfo}</div>
-          )}
           {!isSelf ? (
             <div className="user-directory-card__actions">
               <button

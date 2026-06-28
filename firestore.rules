@@ -58,10 +58,17 @@ service cloud.firestore {
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner');
     }
 
+    function communityOwnerDoc(partnerId) {
+      return exists(/databases/$(database)/documents/users/$(partnerId))
+        ? get(/databases/$(database)/documents/users/$(partnerId))
+        : get(/databases/$(database)/documents/restaurants/$(partnerId));
+    }
+
     function isCommunityMember(partnerId) {
       let me = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      let partner = get(/databases/$(database)/documents/users/$(partnerId)).data;
       let joined = me.get('joinedCommunities', []);
+      let partnerSnap = communityOwnerDoc(partnerId);
+      let partner = partnerSnap.data;
       let members = partner.get('communityMembers', []);
       let blocked = partner.get('communityBlockedUserIds', []);
       return (request.auth.uid == partnerId ||
@@ -71,7 +78,7 @@ service cloud.firestore {
     }
 
     function isCommunityChatMuted(partnerId) {
-      let partner = get(/databases/$(database)/documents/users/$(partnerId)).data;
+      let partner = communityOwnerDoc(partnerId).data;
       let muted = partner.get('communityMutedUserIds', []);
       return request.auth.uid in muted;
     }
@@ -281,6 +288,13 @@ service cloud.firestore {
                          .hasOnly(['businessInfo']) &&
                        request.resource.data.get('businessInfo', {}).diff(resource.data.get('businessInfo', {})).affectedKeys()
                          .hasOnly(['profileViews', 'profileLikes', 'profileShares', 'totalInvitations']);
+      // Follow / unfollow: any signed-in user may bump followersCount by ±1 only
+      allow update: if isSignedIn() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount']) &&
+                       (
+                         request.resource.data.followersCount == resource.data.get('followersCount', 0) + 1 ||
+                         request.resource.data.followersCount == resource.data.get('followersCount', 0) - 1
+                       );
       
       // SUPER OWNER PROTECTION:
       // 1. Only Super Owner can delete Admins.
@@ -573,8 +587,12 @@ service cloud.firestore {
     // ============================================
     
     match /conversations/{conversationId} {
-      // Only participants can read the conversation document
-      allow read: if isSignedIn() && request.auth.uid in resource.data.participants;
+      // getDoc on missing doc has resource == null — must allow before checking fields.
+      allow get: if isSignedIn() && (
+        resource == null ||
+        request.auth.uid in resource.data.participants
+      );
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
       
       // Security: enforce strict 1:1 participant shape to prevent forged conversation graphs
       allow create: if isSignedIn() &&
@@ -891,6 +909,18 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Profile gifts (Cloud Functions only — sender/recipient read)
+    match /profile_gifts/{giftId} {
+      allow read: if isSignedIn() &&
+        (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // Gift send idempotency locks (Cloud Functions only)
+    match /profile_gift_idempotency/{docId} {
+      allow read, write: if false;
+    }
+
     // ============================================
     // AFFILIATE PAYOUT REQUESTS (created by Cloud Functions only)
     // ============================================
@@ -972,12 +1002,21 @@ service cloud.firestore {
         request.resource.data.keys().hasAll(['targetUserId', 'likerId', 'createdAt', 'mutual']) &&
         request.resource.data.mutual is bool;
       // Match completion: the second liker may flip mutual on the existing reverse doc.
-      allow update: if isSignedIn() &&
-        resource.data.targetUserId == request.auth.uid &&
-        resource.data.mutual != true &&
-        request.resource.data.mutual == true &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mutual']);
-      allow delete: if false;
+      allow update: if isSignedIn() && (
+        (
+          resource.data.targetUserId == request.auth.uid &&
+          resource.data.mutual != true &&
+          request.resource.data.mutual == true &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mutual'])
+        ) ||
+        (
+          resource.data.mutual == true &&
+          request.resource.data.mutual == false &&
+          (request.auth.uid == resource.data.likerId || request.auth.uid == resource.data.targetUserId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mutual'])
+        )
+      );
+      allow delete: if isSignedIn() && resource.data.likerId == request.auth.uid;
     }
 
     // Discovery wave greetings — one per sender→target per UTC day (doc id includes dayKey)
@@ -995,6 +1034,23 @@ service cloud.firestore {
         request.resource.data.dayKey is string &&
         request.resource.data.keys().hasAll(['targetUserId', 'senderId', 'createdAt', 'dayKey']);
       allow update, delete: if false;
+    }
+
+    // Follow / like refollow cooldown — 24h after unfollow or unlike
+    match /connection_action_cooldowns/{docId} {
+      allow get: if isSignedIn() &&
+        resource.data.viewerId == request.auth.uid;
+      allow list: if false;
+      allow create: if isSignedIn() &&
+        request.resource.data.viewerId == request.auth.uid &&
+        request.resource.data.targetId is string &&
+        request.resource.data.targetId != request.auth.uid &&
+        request.resource.data.keys().hasAll(['viewerId', 'targetId']);
+      allow update: if isSignedIn() &&
+        resource.data.viewerId == request.auth.uid &&
+        request.resource.data.viewerId == request.auth.uid &&
+        request.resource.data.targetId == resource.data.targetId;
+      allow delete: if false;
     }
 
     // ============================================

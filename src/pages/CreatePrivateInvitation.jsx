@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { flushSync } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  FaCalendarAlt, FaMapMarkerAlt, FaTimes, FaCheckCircle,
+  FaCalendarAlt, FaTimes, FaCheckCircle,
   FaLock, FaChevronLeft,
   FaCamera, FaUpload, FaImage, FaMagic } from
 'react-icons/fa';
@@ -10,7 +10,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import VenueLocationPicker from '../components/VenueLocationPicker';
+import InvitationVenueLocationSection from '../components/InvitationVenueLocationSection';
 import { commitInvitationAiCover, resolveAiGeneratedCoverPreview, verifyPublicStorageImageUrl } from '../services/mediaService';
 import { isServerPersistedAiCoverUrl } from '../utils/aiGeneratedMediaUrl';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
@@ -45,7 +45,10 @@ import {
   getPrivateCardBackgroundOptions,
   getDatingHeroCoverFromMediaData,
   parseDatingCoverTemplateIdFromUrl,
-  DEFAULT_DATING_CARD_BACKGROUND_ID } from
+  getDefaultPrivateCardBackgroundId,
+  isPrivateBackgroundIdForCategory,
+  createPrivateCategoryCoverSlice,
+  getFirstPrivateBackgroundFileUrl } from
 '../components/Invitations/privateCard/privateCardBackgrounds';
 import {
   PERSONAL_INVITE_CATEGORIES,
@@ -89,12 +92,15 @@ import SocialInvitationInviteePanel from '../components/Invitations/socialCard/S
 import InvitationEditorLeaveDialog from '../components/Invitations/socialCard/InvitationEditorLeaveDialog';
 import {
   getPrivateInviteeDisplayName,
-  isUserAvailableForPrivateInvite } from
+  isUserAvailableForPrivateInvite,
+  senderFollowsInvitee } from
 '../utils/privateInviteAvailability';
 import '../components/Invitations/socialCard/SocialInvitationEditorFooter.css';
 import { goToLogin, getCurrentReturnPath } from '../utils/goToLogin';
 import { resolveCardStructureFromBackgroundId } from '../utils/cardStructure';
 import { AppText, AppTextInput } from "../components/base";
+import LookingForChips from '../components/profile/LookingForChips';
+import { normalizeLookingFor } from '../constants/personalInviteCategories';
 
 function resolvePrivateInvitationAuthorUid(authUser, invitationContextUser) {
   return authUser?.uid || invitationContextUser?.uid || invitationContextUser?.id || null;
@@ -137,9 +143,17 @@ const CreatePrivateInvitation = () => {
   const [cardCopyOffsetY, setCardCopyOffsetY] = useState(DEFAULT_CARD_COPY_OFFSET_Y);
   const [cardCopyWidthPct, setCardCopyWidthPct] = useState(DEFAULT_CARD_COPY_WIDTH_PCT);
   const [cardCopyFontScale, setCardCopyFontScale] = useState(DEFAULT_CARD_COPY_FONT_SCALE);
-  const [cardBackgroundId, setCardBackgroundId] = useState(
-    () => editInvitation?.cardBackgroundId || DEFAULT_DATING_CARD_BACKGROUND_ID
-  );
+  const [cardBackgroundId, setCardBackgroundId] = useState(() => {
+    if (editInvitation?.cardBackgroundId) {
+      const cat = normalizePersonalInviteCategory(editInvitation.personalInviteCategory);
+      if (isPrivateBackgroundIdForCategory(editInvitation.cardBackgroundId, cat)) {
+        return editInvitation.cardBackgroundId;
+      }
+    }
+    return getDefaultPrivateCardBackgroundId(
+      editInvitation?.personalInviteCategory || DEFAULT_PERSONAL_INVITE_CATEGORY
+    );
+  });
   const [cardGradientId, setCardGradientId] = useState(
     () =>
     editInvitation?.cardGradientId &&
@@ -184,6 +198,8 @@ const CreatePrivateInvitation = () => {
 
   /** Persist cover media per tab when switching Camera / Upload / Template */
   const datingCoverDraftsRef = useRef({ template: null, upload: null, camera: null, ai: null });
+  /** Isolated cover editor state per personal invite category (dating / friendship / social). */
+  const coverByCategoryRef = useRef(null);
   const mediaDataRef = useRef(null);
   const datingCoverTabRef = useRef(editInvitation ? 'camera' : 'template');
   const coverUploadInputRef = useRef(null);
@@ -222,7 +238,7 @@ const CreatePrivateInvitation = () => {
     datingCoverDraftsRef.current.ai = media;
   }, [location.state?.aiStudioImage]);
 
-  /** Profile → create-dating: pre-select invitee (must accept private invites). */
+  /** Profile → create-dating: pre-select invitee (must accept private invites + sender follows). */
   useEffect(() => {
     if (editInvitation || !preselectedInvitee?.id) return;
     if (!isUserAvailableForPrivateInvite(preselectedInvitee)) {
@@ -234,11 +250,22 @@ const CreatePrivateInvitation = () => {
       );
       return;
     }
+    const following = userProfile?.following ?? currentUser?.following ?? [];
+    if (!senderFollowsInvitee(following, preselectedInvitee.id)) {
+      showToast(
+        t(
+          'private_invite_follow_required',
+          'Follow this member first to send a private invite.'
+        ),
+        'warning'
+      );
+      return;
+    }
     setFormData((prev) => {
       if (prev.invitedFriends?.includes(preselectedInvitee.id)) return prev;
       return { ...prev, invitedFriends: [preselectedInvitee.id] };
     });
-  }, [editInvitation, preselectedInvitee, showToast, t]);
+  }, [editInvitation, preselectedInvitee, showToast, t, userProfile?.following, currentUser?.following]);
 
   /** Load selected invitee profile for AI personalization. */
   useEffect(() => {
@@ -301,11 +328,36 @@ const CreatePrivateInvitation = () => {
 
   useEffect(() => {
     return () => {
+      const bucket = coverByCategoryRef.current;
+      if (bucket) {
+        Object.values(bucket).forEach((slice) => revokeAllPrivateCoverStash(slice.stash || []));
+      }
       revokeAllPrivateCoverStash(coverMediaStashRef.current);
     };
   }, []);
 
   const datingHeroCover = useMemo(() => getDatingHeroCoverFromMediaData(mediaData), [mediaData]);
+
+  /** Template art as hero — same path as sent invites / notifications (not internal bg resolver). */
+  const privatePreviewHeroCover = useMemo(() => {
+    if (datingHeroCover?.src) return datingHeroCover;
+    if (cardGradientId) return null;
+    if (!cardBackgroundId) return null;
+    if (!isPrivateBackgroundIdForCategory(cardBackgroundId, formData.personalInviteCategory)) {
+      return null;
+    }
+    const url = getFirstPrivateBackgroundFileUrl(
+      cardBackgroundId,
+      formData.personalInviteCategory
+    );
+    if (!url || String(url).startsWith('data:')) return null;
+    return { src: url, mediaType: 'image', poster: null };
+  }, [
+    datingHeroCover,
+    cardGradientId,
+    cardBackgroundId,
+    formData.personalInviteCategory,
+  ]);
 
   const heroCoverPending = useMemo(() => {
     if (!mediaData) return false;
@@ -314,15 +366,102 @@ const CreatePrivateInvitation = () => {
   }, [mediaData]);
 
   const editorPhotoBackgroundActive = useMemo(() => {
-    if (datingHeroCover?.src) return true;
-    return getPrivateCardBackgroundOptions(formData.personalInviteCategory).some(
-      (o) => o.id === cardBackgroundId
-    );
-  }, [datingHeroCover?.src, cardBackgroundId, formData.personalInviteCategory]);
+    if (privatePreviewHeroCover?.src) return true;
+    return isPrivateBackgroundIdForCategory(cardBackgroundId, formData.personalInviteCategory);
+  }, [privatePreviewHeroCover?.src, cardBackgroundId, formData.personalInviteCategory]);
+
+  const ensureCoverByCategoryRef = useCallback(() => {
+    if (!coverByCategoryRef.current) {
+      coverByCategoryRef.current = {
+        dating: createPrivateCategoryCoverSlice('dating'),
+        friendship: createPrivateCategoryCoverSlice('friendship'),
+        social: createPrivateCategoryCoverSlice('social'),
+      };
+    }
+    return coverByCategoryRef.current;
+  }, []);
+
+  const snapshotCoverStateToCategory = useCallback(
+    (categoryId) => {
+      const bucket = ensureCoverByCategoryRef();
+      const cat = normalizePersonalInviteCategory(categoryId);
+      bucket[cat] = {
+        cardBackgroundId,
+        cardGradientId,
+        coverTab: datingCoverTab,
+        mediaData,
+        drafts: { ...datingCoverDraftsRef.current },
+        stash: coverMediaStash,
+      };
+    },
+    [
+      cardBackgroundId,
+      cardGradientId,
+      datingCoverTab,
+      mediaData,
+      coverMediaStash,
+      ensureCoverByCategoryRef,
+    ]
+  );
+
+  const applyCoverStateFromCategory = useCallback(
+    (categoryId) => {
+      const bucket = ensureCoverByCategoryRef();
+      const cat = normalizePersonalInviteCategory(categoryId);
+      let slice = bucket[cat];
+      if (!slice) {
+        slice = createPrivateCategoryCoverSlice(cat);
+        bucket[cat] = slice;
+      }
+      const bgId =
+        slice.cardBackgroundId && isPrivateBackgroundIdForCategory(slice.cardBackgroundId, cat)
+          ? slice.cardBackgroundId
+          : getDefaultPrivateCardBackgroundId(cat);
+      setCardBackgroundId(bgId);
+      setCardGradientId(slice.cardGradientId ?? null);
+      const tab = slice.coverTab ?? 'template';
+      setDatingCoverTab(tab);
+      datingCoverTabRef.current = tab;
+      datingCoverDraftsRef.current = {
+        template: null,
+        upload: null,
+        camera: null,
+        ai: null,
+        ...(slice.drafts || {}),
+      };
+      setMediaData(slice.mediaData ?? null);
+      setCoverMediaStash(slice.stash ?? []);
+    },
+    [ensureCoverByCategoryRef]
+  );
+
+  const handlePersonalInviteCategoryChange = useCallback(
+    (nextCategoryId) => {
+      const prevCat = formData.personalInviteCategory;
+      const nextCat = normalizePersonalInviteCategory(nextCategoryId);
+      if (prevCat === nextCat) return;
+      snapshotCoverStateToCategory(prevCat);
+      applyCoverStateFromCategory(nextCat);
+      setFormData((prev) => ({ ...prev, personalInviteCategory: nextCat }));
+    },
+    [formData.personalInviteCategory, snapshotCoverStateToCategory, applyCoverStateFromCategory]
+  );
 
   // Populate when editing
   useEffect(() => {
     if (editInvitation) {
+      const editCategory = normalizePersonalInviteCategory(editInvitation.personalInviteCategory);
+      let initialCoverTab = 'template';
+      let initialCoverBgId = getDefaultPrivateCardBackgroundId(editCategory);
+      let initialCoverGradient =
+        editInvitation.cardGradientId &&
+        isPrivateCardGradientBackgroundId(editInvitation.cardGradientId)
+          ? editInvitation.cardGradientId
+          : null;
+      let initialCoverMedia = null;
+      let initialCoverDrafts = { template: null, upload: null, camera: null, ai: null };
+      let initialCoverStash = [];
+
       setExistingDraftId(editInvitation.id);
       setFormData({
         title: editInvitation.title || '',
@@ -361,22 +500,26 @@ const CreatePrivateInvitation = () => {
           videoThumbnail: editInvitation.videoThumbnail
         };
         const videoEntry = { id: createPrivateCoverStashId(), kind: 'camera', media: m };
-        setCoverMediaStash([videoEntry]);
-        setDatingCoverTab('camera');
-        setMediaData(m);
-        datingCoverDraftsRef.current = { template: null, upload: null, camera: m };
+        initialCoverStash = [videoEntry];
+        initialCoverTab = 'camera';
+        initialCoverMedia = m;
+        initialCoverDrafts = { template: null, upload: null, camera: m, ai: null };
+        setCoverMediaStash(initialCoverStash);
+        setDatingCoverTab(initialCoverTab);
+        setMediaData(initialCoverMedia);
+        datingCoverDraftsRef.current = initialCoverDrafts;
       } else if (imgUrl) {
-        const editCategory = normalizePersonalInviteCategory(editInvitation.personalInviteCategory);
         const templateId =
         parseDatingCoverTemplateIdFromUrl(imgUrl) || editInvitation.cardBackgroundId;
-        if (
-        templateId &&
-        getPrivateCardBackgroundOptions(editCategory).some((o) => o.id === templateId))
-        {
-          setCardBackgroundId(templateId);
-          setDatingCoverTab('template');
+        if (templateId && isPrivateBackgroundIdForCategory(templateId, editCategory)) {
+          initialCoverBgId = templateId;
+          initialCoverTab = 'template';
+          initialCoverMedia = null;
+          initialCoverDrafts = { template: null, upload: null, camera: null, ai: null };
+          setCardBackgroundId(initialCoverBgId);
+          setDatingCoverTab(initialCoverTab);
           setMediaData(null);
-          datingCoverDraftsRef.current = { template: null, upload: null, camera: null };
+          datingCoverDraftsRef.current = initialCoverDrafts;
         } else {
           const m = {
             source: 'custom_image',
@@ -386,34 +529,56 @@ const CreatePrivateInvitation = () => {
             file: null
           };
           const imageEntry = { id: createPrivateCoverStashId(), kind: 'upload', media: m };
-          setCoverMediaStash([imageEntry]);
-          setDatingCoverTab('upload');
-          setMediaData(m);
-          datingCoverDraftsRef.current = { template: null, upload: m, camera: null };
+          initialCoverStash = [imageEntry];
+          initialCoverTab = 'upload';
+          initialCoverMedia = m;
+          initialCoverDrafts = { template: null, upload: m, camera: null, ai: null };
+          setCoverMediaStash(initialCoverStash);
+          setDatingCoverTab(initialCoverTab);
+          setMediaData(initialCoverMedia);
+          datingCoverDraftsRef.current = initialCoverDrafts;
         }
-      } else if (
-      editInvitation.cardGradientId &&
-      isPrivateCardGradientBackgroundId(editInvitation.cardGradientId))
-      {
-        setCardGradientId(editInvitation.cardGradientId);
+      } else if (initialCoverGradient) {
+        initialCoverBgId = null;
+        initialCoverTab = 'template';
+        initialCoverMedia = null;
+        initialCoverDrafts = { template: null, upload: null, camera: null, ai: null };
+        setCardGradientId(initialCoverGradient);
         setCardBackgroundId(null);
-        setDatingCoverTab('template');
+        setDatingCoverTab(initialCoverTab);
         setMediaData(null);
-        datingCoverDraftsRef.current = { template: null, upload: null, camera: null, ai: null };
+        datingCoverDraftsRef.current = initialCoverDrafts;
       } else if (
       editInvitation.cardBackgroundId &&
-      getPrivateCardBackgroundOptions(
-        normalizePersonalInviteCategory(editInvitation.personalInviteCategory)
-      ).some((o) => o.id === editInvitation.cardBackgroundId))
+      isPrivateBackgroundIdForCategory(editInvitation.cardBackgroundId, editCategory))
       {
-        setCardBackgroundId(editInvitation.cardBackgroundId);
-        setDatingCoverTab('template');
+        initialCoverBgId = editInvitation.cardBackgroundId;
+        initialCoverTab = 'template';
+        initialCoverMedia = null;
+        initialCoverDrafts = { template: null, upload: null, camera: null, ai: null };
+        setCardBackgroundId(initialCoverBgId);
+        setDatingCoverTab(initialCoverTab);
         setMediaData(null);
-        datingCoverDraftsRef.current = { template: null, upload: null, camera: null, ai: null };
+        datingCoverDraftsRef.current = initialCoverDrafts;
       } else {
-        setDatingCoverTab('template');
-        datingCoverDraftsRef.current = { template: null, upload: null, camera: null, ai: null };
+        initialCoverTab = 'template';
+        datingCoverDraftsRef.current = initialCoverDrafts;
+        setDatingCoverTab(initialCoverTab);
       }
+
+      coverByCategoryRef.current = {
+        dating: createPrivateCategoryCoverSlice('dating'),
+        friendship: createPrivateCategoryCoverSlice('friendship'),
+        social: createPrivateCategoryCoverSlice('social'),
+      };
+      coverByCategoryRef.current[editCategory] = createPrivateCategoryCoverSlice(editCategory, {
+        cardBackgroundId: initialCoverBgId,
+        cardGradientId: initialCoverGradient,
+        coverTab: initialCoverTab,
+        mediaData: initialCoverMedia,
+        drafts: initialCoverDrafts,
+        stash: initialCoverStash,
+      });
 
       setCardFontId(editInvitation.cardFontId || DEFAULT_FONT_ID);
       setCardFrameColorId(editInvitation.cardFrameColorId || DEFAULT_FRAME_COLOR_ID);
@@ -427,24 +592,6 @@ const CreatePrivateInvitation = () => {
       setCardCopyFontScale(editInvitation.cardCopyFontScale ?? DEFAULT_CARD_COPY_FONT_SCALE);
     }
   }, [editInvitation]);
-
-  /** Default personal card background + validate when category or editor opens */
-  useEffect(() => {
-    if (cardGradientId) return;
-    const opts = getPrivateCardBackgroundOptions(formData.personalInviteCategory);
-    if (opts.length === 0) {
-      setCardBackgroundId(null);
-      return;
-    }
-    if (
-    editInvitation?.cardBackgroundId &&
-    opts.some((o) => o.id === editInvitation.cardBackgroundId))
-    {
-      setCardBackgroundId(editInvitation.cardBackgroundId);
-      return;
-    }
-    setCardBackgroundId((prev) => prev && opts.some((o) => o.id === prev) ? prev : opts[0].id);
-  }, [editInvitation?.id, editInvitation?.cardBackgroundId, cardGradientId, formData.personalInviteCategory]);
 
   useEffect(() => {
     if (userProfile?.isGuest || userProfile?.role === 'guest' || currentUser?.id === 'guest') {
@@ -473,20 +620,26 @@ const CreatePrivateInvitation = () => {
   }, [restaurantData, userProfile]);
 
   const handleLocationSelect = (placeData) => {
+    const isDbVenue = !!(placeData.restaurantId || placeData.isDineBuddiesVenue);
     setFormData((prev) => ({
       ...prev,
       location: placeData.fullAddress || placeData.name || prev.location,
       lat: placeData.lat ?? prev.lat,
       lng: placeData.lng ?? prev.lng,
-      restaurantId: placeData.restaurantId || null,
-      restaurantName: placeData.restaurantName || placeData.name || prev.restaurantName,
+      restaurantId: isDbVenue ? placeData.restaurantId || null : null,
+      restaurantName: isDbVenue ? placeData.restaurantName || placeData.name || prev.restaurantName : '',
+      placeId: placeData.placeId || prev.placeId || null,
       city: placeData.city || prev.city,
+      country: placeData.country || prev.country,
+      countryCode: placeData.countryCode || prev.countryCode,
+      ...(isDbVenue ? { isDineBuddiesVenue: true } : {}),
       venueType:
       placeData.businessType ||
       placeData.venueType ||
       prev.venueType ||
       'Restaurant',
-      title: placeData.name ? `${t('invitation_at')} ${placeData.name}` : prev.title
+      title: placeData.name ? `${t('invitation_at')} ${placeData.name}` : prev.title,
+      ...(placeData.matchedFromGoogle ? { venueMatchedFromGoogle: true } : {})
     }));
   };
 
@@ -575,9 +728,10 @@ const CreatePrivateInvitation = () => {
 
     if (tab === 'template') {
       setCardGradientId(null);
-      const opts = getPrivateCardBackgroundOptions(formData.personalInviteCategory);
       setCardBackgroundId((prev) =>
-      prev && opts.some((o) => o.id === prev) ? prev : opts[0]?.id || null
+      prev && isPrivateBackgroundIdForCategory(prev, formData.personalInviteCategory) ?
+      prev :
+      getDefaultPrivateCardBackgroundId(formData.personalInviteCategory)
       );
     } else if (tab === 'ai' || tab === 'upload' || tab === 'camera') {
       setCardGradientId(null);
@@ -1418,6 +1572,18 @@ const CreatePrivateInvitation = () => {
             onInvitedFriendsChange={handlePrivateInviteesChange}
             className="mb-3" />
 
+                    {privateInviteeProfile?.id && normalizeLookingFor(privateInviteeProfile.lookingFor).length > 0 ?
+            <div className="private-invitee-recipient-preview mb-3">
+                        <AppText as="p" className="private-invitee-recipient-preview__label">
+                            {t('profile_looking_for_title', 'Looking for')}
+                        </AppText>
+                        <LookingForChips
+                ids={privateInviteeProfile.lookingFor}
+                className="private-invitee-recipient-preview__chips"
+                chipClassName="private-invitee-recipient-preview__chip" />
+                    </div> :
+            null}
+
 
                     <div className="form-group mb-4">
                         <label className="elegant-label">
@@ -1432,12 +1598,7 @@ const CreatePrivateInvitation = () => {
                     type="button"
                     className={`private-occasion-chip personal-invite-purpose-chip${selected ? ' private-occasion-chip--selected' : ''}`}
                     aria-pressed={selected}
-                    onClick={() =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      personalInviteCategory: cat.id
-                    }))
-                    }>
+                    onClick={() => handlePersonalInviteCategoryChange(cat.id)}>
 
                                         <AppText as="span" className="private-occasion-chip__icon" aria-hidden>
                                             {cat.icon}
@@ -1479,11 +1640,7 @@ const CreatePrivateInvitation = () => {
                         </div>
                     </div>
 
-                    {/* Location */}
-                    <div className="form-group mb-3 venue-search-stack">
-                        <label className="elegant-label"><FaMapMarkerAlt className="label-icon" /> {t('location')}</label>
-                        <VenueLocationPicker
-              compact
+                    <InvitationVenueLocationSection
               value={formData.location}
               onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
               onSelect={handleLocationSelect}
@@ -1491,9 +1648,8 @@ const CreatePrivateInvitation = () => {
               countryCode={resolveVenueCountryIso(formData, userProfile)}
               userLat={formData.userLat ?? userProfile?.coordinates?.lat}
               userLng={formData.userLng ?? userProfile?.coordinates?.lng}
-              className="elegant-input" />
-
-                    </div>
+              className="elegant-input"
+            />
 
                     <div className="mb-4">
                         <AIFloatingLauncher
@@ -1708,9 +1864,9 @@ const CreatePrivateInvitation = () => {
                       cardBackgroundId={cardBackgroundId}
                       cardGradientId={cardGradientId}
                       cardStructure={privateAiContext.cardStructure}
-                      heroCoverSrc={datingHeroCover?.src ?? null}
-                      heroCoverMediaType={datingHeroCover?.mediaType ?? null}
-                      heroCoverPoster={datingHeroCover?.poster ?? null}
+                      heroCoverSrc={privatePreviewHeroCover?.src ?? null}
+                      heroCoverMediaType={privatePreviewHeroCover?.mediaType ?? null}
+                      heroCoverPoster={privatePreviewHeroCover?.poster ?? null}
                       heroCoverPending={heroCoverPending}
                       title={formData.title}
                       description={formData.description}
@@ -1731,7 +1887,6 @@ const CreatePrivateInvitation = () => {
                                     </PrivateCardPreviewStage>
                                     <SocialInvitationCoverRightRail
                     templateVariant="dating"
-                    categoryId="dating"
                     personalInviteCategory={formData.personalInviteCategory}
                     cardBackgroundId={cardBackgroundId}
                     onCardBackgroundIdChange={handleDatingCardBackgroundChange}

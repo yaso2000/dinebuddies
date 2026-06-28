@@ -48,6 +48,10 @@
             "destination": "/api/sitemap"
         },
         {
+            "source": "/business/:id",
+            "destination": "/api/business-preview?id=:id"
+        },
+        {
             "source": "/api/auth/login-resolver",
             "destination": "/api/business-login-resolver"
         },

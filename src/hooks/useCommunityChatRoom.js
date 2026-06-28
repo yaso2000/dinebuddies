@@ -18,6 +18,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useTranslation } from 'react-i18next';
 import app, { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { uploadImage } from '../utils/mediaUtils';
@@ -36,8 +37,33 @@ import { buildReplyFields } from '../utils/communityChatReply';
 import { resolveCommunityBannerDisplay } from '../utils/communityBannerDisplay';
 import { DEFAULT_HOST_SPOTLIGHT_POS } from '../utils/communityHostSpotlightPosition';
 import {
-    resolveNewHostSpotlightPosition,
-} from '../utils/communityHostSpotlightPins';
+    COMMUNITY_CHAT_ZONE_THEME_IDS,
+    resolveCommunityChatZoneThemeId,
+    buildCommunityChatZoneThemeInlineStyle,
+} from '../constants/communityChatZoneThemes';
+import {
+    normalizeCommunityGuestFrameHexColor,
+    resolveCommunityChatGuestFrameBackground,
+} from '../constants/communityChatGuestFrameLook';
+import { sanitizeBannerBgDensity } from '../utils/communityChatBanner';
+import { COMMUNITY_GUEST_FRAME_BACKGROUND_PRESET_IDS } from '../constants/communityGuestFrameBackgrounds';
+import { resolveCommunityChatBannerVisible } from '../constants/communityChatBannerMode';
+import {
+    readGuestCommunityBannerVisible,
+    writeGuestCommunityBannerVisible,
+} from '../utils/communityChatBannerLocalPref';
+import { resolveNewHostSpotlightPosition } from '../utils/communityHostSpotlightPins';
+import {
+    generateAIDesignStudioImage,
+    formatAiErrorMessage,
+    isInsufficientCreditsError,
+} from '../services/generateAIContent';
+import { extractAIImageUrl } from '../utils/aiContentFieldMapper';
+import {
+    apiImageNeedsClientUpload,
+    uploadInvitationMagicCoverFromApiBytes,
+} from '../utils/clientInvitationAiCoverUpload';
+import { AI_IMAGE_GENERATION_CREDITS } from '../utils/aiCreditCosts';
 
 /**
  * Real-time community chat room state (messages + single-slot banner + membership).
@@ -46,12 +72,13 @@ import {
 export function useCommunityChatRoom(partnerId) {
     const { t } = useTranslation();
     const { currentUser, userProfile } = useAuth();
+    const { currentUser: inviteCurrentUser } = useInvitations();
     const { showToast } = useToast();
 
     const [messages, setMessages] = useState([]);
     const [banner, setBanner] = useState(() => normalizeCommunityBanner(null));
     const [partner, setPartner] = useState(null);
-    const [isMember, setIsMember] = useState(false);
+    const [isBlockedFromCommunity, setIsBlockedFromCommunity] = useState(false);
     const [isMutedInChat, setIsMutedInChat] = useState(false);
     const [loading, setLoading] = useState(true);
     const [uploadingBanner, setUploadingBanner] = useState(false);
@@ -59,17 +86,65 @@ export function useCommunityChatRoom(partnerId) {
     const [pendingReplyTo, setPendingReplyTo] = useState(null);
     const [participants, setParticipants] = useState([]);
     const [participantsLoading, setParticipantsLoading] = useState(false);
+    const [zoneThemeSaving, setZoneThemeSaving] = useState(false);
+    const [bannerVisibleSaving, setBannerVisibleSaving] = useState(false);
+    const [guestFrameBackgroundUploading, setGuestFrameBackgroundUploading] = useState(false);
+    const [guestFrameBackgroundGenerating, setGuestFrameBackgroundGenerating] = useState(false);
 
     const uid = currentUser?.uid;
     const isHost = Boolean(partnerId && uid && uid === partnerId);
     const functions = getFunctions(app, 'us-central1');
+    const joinedCommunities =
+        inviteCurrentUser?.joinedCommunities ??
+        userProfile?.joinedCommunities ??
+        [];
+
+    const isMember = useMemo(() => {
+        if (!partnerId || !uid) return false;
+        if (isBlockedFromCommunity) return false;
+        if (uid === partnerId) return true;
+        if (joinedCommunities.includes(partnerId)) return true;
+        const members = Array.isArray(partner?.communityMembers) ? partner.communityMembers : [];
+        return members.includes(uid);
+    }, [partnerId, uid, isBlockedFromCommunity, joinedCommunities, partner?.communityMembers]);
 
     const bannerDisplay = useMemo(
         () => resolveCommunityBannerDisplay(banner, partner),
         [banner, partner]
     );
 
-    // Partner profile + membership (users/{partnerId})
+    const zoneThemeId = useMemo(() => resolveCommunityChatZoneThemeId(partner), [partner]);
+
+    const zoneThemeInlineStyle = useMemo(() => {
+        const overrides =
+            partner?.communityChatZoneThemeTokens ||
+            partner?.businessInfo?.communityChatZoneThemeTokens ||
+            partner?.businessInfo?.drafts?.communityChatZoneThemeTokens;
+        return buildCommunityChatZoneThemeInlineStyle(overrides);
+    }, [partner]);
+
+    const guestFrameBackground = useMemo(
+        () => resolveCommunityChatGuestFrameBackground(partner),
+        [partner]
+    );
+
+    const hostBannerVisible = useMemo(() => resolveCommunityChatBannerVisible(partner), [partner]);
+    const [guestBannerLocalVisible, setGuestBannerLocalVisible] = useState(true);
+
+    useEffect(() => {
+        if (!partnerId || !uid || isHost) return;
+        setGuestBannerLocalVisible(readGuestCommunityBannerVisible(uid, partnerId));
+    }, [partnerId, uid, isHost]);
+
+    const bannerVisible = useMemo(() => {
+        if (hostBannerVisible === false) return false;
+        if (isHost) return true;
+        return guestBannerLocalVisible !== false;
+    }, [hostBannerVisible, isHost, guestBannerLocalVisible]);
+
+    const bannerToggleDisabled = !isHost && hostBannerVisible === false;
+
+    // Partner profile + moderation (users/{partnerId}, fallback restaurants/{partnerId})
     useEffect(() => {
         if (!partnerId || !currentUser || !userProfile) {
             setLoading(false);
@@ -88,26 +163,39 @@ export function useCommunityChatRoom(partnerId) {
                 : [];
 
             if (uid !== partnerId && blockedIds.includes(uid)) {
-                setIsMember(false);
+                setIsBlockedFromCommunity(true);
                 setIsMutedInChat(false);
                 return;
             }
 
+            setIsBlockedFromCommunity(false);
             setIsMutedInChat(uid !== partnerId && mutedIds.includes(uid));
-
-            if (uid === partnerId) {
-                setIsMember(true);
-            } else {
-                const joinedCommunities = userProfile.joinedCommunities || [];
-                setIsMember(joinedCommunities.includes(partnerId));
-            }
         };
 
-        const unsub = onSnapshot(
+        let unsubRestaurant = () => {};
+
+        const unsubUser = onSnapshot(
             doc(db, 'users', partnerId),
             (snap) => {
-                if (snap.exists()) applyPartnerModeration(snap.data());
-                setLoading(false);
+                if (snap.exists()) {
+                    unsubRestaurant();
+                    unsubRestaurant = () => {};
+                    applyPartnerModeration(snap.data());
+                    setLoading(false);
+                    return;
+                }
+
+                unsubRestaurant = onSnapshot(
+                    doc(db, 'restaurants', partnerId),
+                    (restSnap) => {
+                        if (restSnap.exists()) applyPartnerModeration(restSnap.data());
+                        setLoading(false);
+                    },
+                    (err) => {
+                        console.error('[useCommunityChatRoom] restaurant partner snapshot', err);
+                        setLoading(false);
+                    }
+                );
             },
             (err) => {
                 console.error('[useCommunityChatRoom] partner snapshot', err);
@@ -115,7 +203,10 @@ export function useCommunityChatRoom(partnerId) {
             }
         );
 
-        return unsub;
+        return () => {
+            unsubUser();
+            unsubRestaurant();
+        };
     }, [partnerId, currentUser, userProfile, uid]);
 
     // Single-slot banner on communities/{partnerId}
@@ -721,9 +812,200 @@ export function useCommunityChatRoom(partnerId) {
         [isHost, partnerId, showToast, t]
     );
 
+    const uploadCommunityChatGuestFrameBackgroundFile = useCallback(
+        async (file) => {
+            if (!file || !uid) return null;
+            setGuestFrameBackgroundUploading(true);
+            try {
+                return await uploadImage(file, uid);
+            } catch (err) {
+                console.error('[useCommunityChatRoom] uploadCommunityChatGuestFrameBackgroundFile', err);
+                notifyImageUploadError(showToast, err, t);
+                return null;
+            } finally {
+                setGuestFrameBackgroundUploading(false);
+            }
+        },
+        [showToast, t, uid]
+    );
+
+    const generateCommunityChatGuestFrameBackgroundImage = useCallback(
+        async (userPrompt) => {
+            if (!isHost || !partnerId) return null;
+            setGuestFrameBackgroundGenerating(true);
+            try {
+                const result = await generateAIDesignStudioImage({
+                    userPrompt: String(userPrompt || '').trim(),
+                    designCategory: 'landscape',
+                    aspectRatio: '16:9',
+                });
+
+                if (!result.success) {
+                    if (isInsufficientCreditsError(result)) {
+                        showToast(
+                            result.message || t('ai_insufficient_credits_default'),
+                            'error'
+                        );
+                        return null;
+                    }
+                    if (result.code === 'MODERATION_FAILED' || result.status === 422) {
+                        showToast(t('magic_cover_moderation_failed'), 'error');
+                        return null;
+                    }
+                    showToast(formatAiErrorMessage(result, t), 'error');
+                    return null;
+                }
+
+                let imageUrl = extractAIImageUrl(result.data);
+                if (!imageUrl && apiImageNeedsClientUpload(result.data?.image)) {
+                    imageUrl = await uploadInvitationMagicCoverFromApiBytes(result.data.image);
+                }
+                if (!imageUrl) {
+                    showToast(t('ai_generate_failed'), 'error');
+                    return null;
+                }
+
+                const creditsCharged = result.meta?.creditsCharged ?? AI_IMAGE_GENERATION_CREDITS;
+                if (creditsCharged) {
+                    showToast(t('magic_cover_charged_notice', { cost: creditsCharged }), 'info');
+                }
+                return imageUrl;
+            } catch (err) {
+                console.error('[useCommunityChatRoom] generateCommunityChatGuestFrameBackgroundImage', err);
+                showToast(t('ai_generate_failed'), 'error');
+                return null;
+            } finally {
+                setGuestFrameBackgroundGenerating(false);
+            }
+        },
+        [isHost, partnerId, showToast, t]
+    );
+
+    const saveCommunityChatZoneThemeSettings = useCallback(
+        async ({ themeId, guestFrame }) => {
+            if (!isHost || !partnerId) return false;
+            const id = COMMUNITY_CHAT_ZONE_THEME_IDS.includes(themeId) ? themeId : 'stage';
+            const imageMode = guestFrame?.imageMode || 'none';
+            const hasImage = imageMode === 'preset' || imageMode === 'custom';
+            const hasColor = guestFrame?.colorOverlayEnabled !== false;
+            const intensity = sanitizeBannerBgDensity(guestFrame?.intensity, 100);
+            const color1 = normalizeCommunityGuestFrameHexColor(guestFrame?.colorStart);
+            const color2 = normalizeCommunityGuestFrameHexColor(guestFrame?.colorEnd);
+
+            const update = {
+                communityChatZoneTheme: id,
+            };
+
+            if (!hasImage && !hasColor) {
+                update.communityChatGuestFrameBgMode = 'none';
+                update.communityChatGuestFrameBgPreset = null;
+                update.communityChatGuestFrameBgUrl = null;
+                update.communityChatGuestFrameBgColor1 = null;
+                update.communityChatGuestFrameBgColor2 = null;
+                update.communityChatGuestFrameBgIntensity = null;
+            } else if (hasImage) {
+                if (imageMode === 'preset') {
+                    const presetId = COMMUNITY_GUEST_FRAME_BACKGROUND_PRESET_IDS.includes(
+                        guestFrame?.presetId
+                    )
+                        ? guestFrame.presetId
+                        : null;
+                    if (!presetId) return false;
+                    update.communityChatGuestFrameBgMode = 'preset';
+                    update.communityChatGuestFrameBgPreset = presetId;
+                    update.communityChatGuestFrameBgUrl = null;
+                } else {
+                    const url = String(guestFrame?.customUrl || '').trim();
+                    if (!url) return false;
+                    update.communityChatGuestFrameBgMode = 'custom';
+                    update.communityChatGuestFrameBgPreset = null;
+                    update.communityChatGuestFrameBgUrl = url;
+                }
+                if (hasColor) {
+                    update.communityChatGuestFrameBgColor1 = color1;
+                    update.communityChatGuestFrameBgColor2 = color2;
+                    update.communityChatGuestFrameBgIntensity = intensity;
+                } else {
+                    update.communityChatGuestFrameBgColor1 = null;
+                    update.communityChatGuestFrameBgColor2 = null;
+                    update.communityChatGuestFrameBgIntensity = null;
+                }
+            } else {
+                update.communityChatGuestFrameBgMode = 'color';
+                update.communityChatGuestFrameBgPreset = null;
+                update.communityChatGuestFrameBgUrl = null;
+                update.communityChatGuestFrameBgIntensity = intensity;
+                update.communityChatGuestFrameBgColor1 = color1;
+                update.communityChatGuestFrameBgColor2 = color2;
+            }
+
+            setZoneThemeSaving(true);
+            try {
+                await updateDoc(doc(db, 'users', partnerId), update);
+                showToast(
+                    t('community_chat_zone_theme_saved', 'Chat colors updated.'),
+                    'success'
+                );
+                return true;
+            } catch (err) {
+                console.error('[useCommunityChatRoom] saveCommunityChatZoneThemeSettings', err);
+                showToast(t('failed_save', 'Could not save. Please try again.'), 'error');
+                return false;
+            } finally {
+                setZoneThemeSaving(false);
+            }
+        },
+        [isHost, partnerId, showToast, t]
+    );
+
+    const setCommunityChatBannerVisible = useCallback(
+        async (visible) => {
+            if (!partnerId || !uid) return false;
+            const next = Boolean(visible);
+
+            if (!isHost) {
+                if (hostBannerVisible === false) return false;
+                setGuestBannerLocalVisible(next);
+                writeGuestCommunityBannerVisible(uid, partnerId, next);
+                showToast(
+                    next
+                        ? t('community_chat_banner_shown_local', 'Top banner is visible on your device.')
+                        : t(
+                              'community_chat_banner_hidden_local',
+                              'Top banner hidden on your device — normal chat layout.'
+                          ),
+                    'success'
+                );
+                return true;
+            }
+
+            setBannerVisibleSaving(true);
+            try {
+                await updateDoc(doc(db, 'users', partnerId), {
+                    communityChatBannerVisible: next,
+                });
+                showToast(
+                    next
+                        ? t('community_chat_banner_shown', 'Top banner is visible for everyone.')
+                        : t('community_chat_banner_hidden', 'Top banner hidden — normal chat layout.'),
+                    'success'
+                );
+                return true;
+            } catch (err) {
+                console.error('[useCommunityChatRoom] setCommunityChatBannerVisible', err);
+                showToast(t('failed_save', 'Could not save. Please try again.'), 'error');
+                return false;
+            } finally {
+                setBannerVisibleSaving(false);
+            }
+        },
+        [hostBannerVisible, isHost, partnerId, showToast, t, uid]
+    );
+
     return {
         loading,
         isMember,
+        isBlockedFromCommunity,
         isHost,
         isMutedInChat,
         partner,
@@ -755,5 +1037,19 @@ export function useCommunityChatRoom(partnerId) {
         participants,
         participantsLoading,
         partnerId,
+        zoneThemeId,
+        zoneThemeInlineStyle,
+        saveCommunityChatZoneThemeSettings,
+        zoneThemeSaving,
+        guestFrameBackground,
+        uploadCommunityChatGuestFrameBackgroundFile,
+        generateCommunityChatGuestFrameBackgroundImage,
+        guestFrameBackgroundUploading,
+        guestFrameBackgroundGenerating,
+        bannerVisible,
+        hostBannerVisible,
+        setCommunityChatBannerVisible,
+        bannerVisibleSaving,
+        bannerToggleDisabled,
     };
 }

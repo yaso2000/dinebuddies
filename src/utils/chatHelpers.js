@@ -1,49 +1,51 @@
-import { checkIsMutualMatch } from './discoveryProfile';
-import { isMutualFollow } from './followHelpers';
+import { isConnectionComplete } from './connectConnection';
+
+/** Deterministic 1:1 conversation document id (matches Cloud Function). */
+export function getDirectConversationId(uidA, uidB) {
+    if (!uidA || !uidB || uidA === uidB) return null;
+    return [uidA, uidB].sort().join('_');
+}
 
 /**
- * Whether two standard users may DM each other (mutual follow OR mutual discovery like).
- * Mutual follow is resolved from in-memory following arrays when possible (no network).
- *
+ * Whether two members may DM — unified gate for dating, acquaintance, and friendship. *
  * @param {string} currentUserId
  * @param {string} targetUserId
  * @param {string[]} [currentUserFollowing]
  * @param {string[]} [targetUserFollowing]
+ * @param {{ currentUserProfile?: object, targetUserProfile?: object }} [options]
  * @returns {Promise<boolean>}
  */
 export async function checkCanMessage(
     currentUserId,
     targetUserId,
     currentUserFollowing = [],
-    targetUserFollowing = []
+    targetUserFollowing = [],
+    { currentUserProfile = null, targetUserProfile = null } = {}
 ) {
-    if (!currentUserId || !targetUserId || currentUserId === targetUserId) {
-        return false;
-    }
-
-    if (isMutualFollow(currentUserFollowing, targetUserFollowing, currentUserId, targetUserId)) {
-        return true;
-    }
-
-    return checkIsMutualMatch(currentUserId, targetUserId);
+    return isConnectionComplete(
+        currentUserId,
+        targetUserId,
+        currentUserProfile,
+        targetUserProfile,
+        currentUserFollowing,
+        targetUserFollowing
+    );
 }
 
 /**
- * Resolve chat permission for many list rows efficiently:
- * - mutual follows: local only (no Firestore reads)
- * - everyone else: parallel `checkIsMutualMatch` calls only
+ * Resolve chat permission for conversation list rows.
  *
  * @param {string} currentUserId
- * @param {Array<{ id: string, following?: string[] }>} targets
+ * @param {Array<{ id: string, following?: string[], openToDating?: boolean, lookingFor?: string[] }>} targets
  * @param {string[]} currentUserFollowing
- * @param {{ followerIdsOfViewer?: string[] }} [options]
+ * @param {{ followerIdsOfViewer?: string[], currentUserProfile?: object }} [options]
  * @returns {Promise<Record<string, boolean>>}
  */
 export async function resolveCanMessageMap(
     currentUserId,
     targets,
     currentUserFollowing = [],
-    { followerIdsOfViewer = [] } = {}
+    { followerIdsOfViewer = [], currentUserProfile = null } = {}
 ) {
     if (!currentUserId || !Array.isArray(targets) || targets.length === 0) {
         return {};
@@ -51,36 +53,27 @@ export async function resolveCanMessageMap(
 
     const followerSet = new Set(followerIdsOfViewer.filter(Boolean));
     const map = {};
-    const matchQueue = [];
 
-    for (const target of targets) {
-        const targetId = target?.id;
-        if (!targetId || targetId === currentUserId) continue;
+    await Promise.all(
+        targets.map(async (target) => {
+            const targetId = target?.id;
+            if (!targetId || targetId === currentUserId) return;
 
-        const targetFollowing = Array.isArray(target.following) ? target.following : [];
-        const enrichedFollowing =
-            followerSet.has(targetId) && !targetFollowing.includes(currentUserId)
-                ? [...targetFollowing, currentUserId]
-                : targetFollowing;
+            const targetFollowing = Array.isArray(target.following) ? target.following : [];
+            const enrichedFollowing =
+                followerSet.has(targetId) && !targetFollowing.includes(currentUserId)
+                    ? [...targetFollowing, currentUserId]
+                    : targetFollowing;
 
-        if (isMutualFollow(currentUserFollowing, enrichedFollowing, currentUserId, targetId)) {
-            map[targetId] = true;
-        } else {
-            matchQueue.push(targetId);
-        }
-    }
-
-    if (matchQueue.length > 0) {
-        const results = await Promise.all(
-            matchQueue.map(async (targetId) => {
-                const matched = await checkIsMutualMatch(currentUserId, targetId);
-                return [targetId, matched];
-            })
-        );
-        for (const [targetId, matched] of results) {
-            map[targetId] = matched;
-        }
-    }
+            map[targetId] = await checkCanMessage(
+                currentUserId,
+                targetId,
+                currentUserFollowing,
+                enrichedFollowing,
+                { currentUserProfile, targetUserProfile: target }
+            );
+        })
+    );
 
     return map;
 }

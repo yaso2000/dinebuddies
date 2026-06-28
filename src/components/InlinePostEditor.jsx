@@ -12,6 +12,7 @@ import { publishGeoFirestoreFields, resolvePostPublishGeo } from '../utils/postP
 import { extractAIContentFields } from '../utils/aiContentFieldMapper';
 import { buildRegularPostAiUserPrompt } from '../utils/aiPromptLocale';
 import AIFloatingLauncher from './AIFloatingLauncher';
+import FeedAiImageLauncher from './FeedAiImageLauncher';
 import { FaImage, FaTimes, FaSmile, FaPaperPlane } from 'react-icons/fa';
 import TikTokEmbed from './TikTokEmbed';
 import { buildYoutubeEmbedSrc, parseYoutubeLink, YOUTUBE_EMBED_ALLOW } from '../utils/videoEmbedUtils';
@@ -169,6 +170,12 @@ const InlinePostEditor = ({
     const fields = extractAIContentFields('regular_post', data);
     if (fields.title) setTitle(fields.title.slice(0, POST_TITLE_MAX));
     if (fields.text) setText(fields.text.slice(0, POST_BODY_MAX));
+  }, []);
+
+  const handleAiImageInsert = useCallback(({ url, preview }) => {
+    if (!url) return;
+    setMedia({ type: 'image', preview: preview || url, url });
+    setEmbedData(null);
   }, []);
 
   const draftStorageKey = useMemo(
@@ -378,6 +385,7 @@ const InlinePostEditor = ({
           maxLength={POST_BODY_MAX} />
           
                     <div className="composer-field__footer">
+                        <div className="composer-field__ai-actions">
                         <AIFloatingLauncher
               postType="regular_post"
               onTextSuccess={handleRegularPostAiContent}
@@ -385,7 +393,8 @@ const InlinePostEditor = ({
               disabled={loading}
               iconOnly
               className="ai-floating-launcher--feed-inline" />
-            
+                        <FeedAiImageLauncher disabled={loading} onInsert={handleAiImageInsert} />
+                        </div>
                         <button
               type="button"
               className="composer-field__post-btn"

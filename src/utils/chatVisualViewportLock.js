@@ -11,7 +11,8 @@
  * On iOS, also handle `visualViewport` **scroll** (rubber-band / pan): reset document scroll and
  * re-apply `sync` so the shell does not “slide away” under the status bar when the user drags.
  * On Android, pin shell height while the composer input stays focused so send taps do not bounce
- * the keyboard open/closed.
+ * the keyboard open/closed. When the keyboard closes, clear inline geometry — stale offsetTop
+ * after dismiss otherwise shrinks the shell to the bottom strip and hides the chat header.
  */
 
 export function isAppleWebKitTouch() {
@@ -86,6 +87,31 @@ function readSafeAreaInsetsPx() {
     };
 }
 
+function resetDocumentScroll() {
+    window.scrollTo(0, 0);
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+}
+
+function setChatKeyboardOpenAttribute(open) {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    if (open) {
+        root.setAttribute('data-chat-keyboard-open', 'true');
+    } else {
+        root.removeAttribute('data-chat-keyboard-open');
+    }
+}
+
+function clearShellInlineGeometry(el) {
+    if (!el) return;
+    el.classList.remove('chat-vv-shell');
+    for (const prop of GEOMETRY_PROPS) {
+        el.style[prop] = '';
+    }
+    el.style.maxHeight = '';
+}
+
 function lockPageScroll() {
     const prevBodyOverflow = document.body.style.overflow;
     const prevHtmlOverflow = document.documentElement.style.overflow;
@@ -126,16 +152,30 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
     const sync = () => {
         const el = getRoot();
         if (!el) return;
-        el.classList.add('chat-vv-shell');
         const innerH = window.innerHeight;
         const innerW = window.innerWidth;
+        const keyboardOpen = isKeyboardOpenByViewport(vv);
 
         const overrideRaw = typeof getShellHeightOverride === 'function' ? getShellHeightOverride() : null;
         const override =
             overrideRaw != null && Number.isFinite(overrideRaw) ? Math.round(overrideRaw) : null;
 
-        const keyboardOpen = isKeyboardOpenByViewport(vv);
         const { bottom: sab } = readSafeAreaInsetsPx();
+
+        // Keyboard closed: drop inline geometry so CSS (100dvh + safe-area) owns the shell again.
+        // Android Chrome often keeps a stale visualViewport.offsetTop after dismiss; using it shrinks
+        // the shell to the bottom band only and hides the in-flow chat header.
+        if (!keyboardOpen && override == null) {
+            clearShellInlineGeometry(el);
+            setChatKeyboardOpenAttribute(false);
+            resetDocumentScroll();
+            if (onViewportChange) onViewportChange(vv);
+            return;
+        }
+
+        setChatKeyboardOpenAttribute(keyboardOpen);
+
+        el.classList.add('chat-vv-shell');
 
         if (isAppleWebKitTouch()) {
             let h = Math.max(1, Math.min(vv.height, innerH));
@@ -200,35 +240,38 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
         sync();
     };
 
-    const onComposerFocusOut = () => {
-        if (!androidCompose) return;
-        window.setTimeout(() => {
+    const scheduleSyncAfterComposerBlur = () => {
+        const runIfComposerBlurred = () => {
             const active = document.activeElement;
             if (isComposerField(active) || isInsideComposerRoot(active)) return;
-            androidPinnedShellHeight = null;
+            if (androidCompose) androidPinnedShellHeight = null;
             sync();
-        }, 0);
+        };
+        window.setTimeout(runIfComposerBlurred, 0);
+        window.setTimeout(runIfComposerBlurred, 120);
+        window.setTimeout(runIfComposerBlurred, 320);
+    };
+
+    const onComposerFocusOut = (event) => {
+        if (!isComposerField(event.target) && !isInsideComposerRoot(event.target)) return;
+        scheduleSyncAfterComposerBlur();
     };
 
     vv.addEventListener('resize', sync);
     sync();
 
-    if (androidCompose) {
-        document.addEventListener('focusin', onComposerFocusIn);
-        document.addEventListener('focusout', onComposerFocusOut);
-    }
+    document.addEventListener('focusin', onComposerFocusIn);
+    document.addEventListener('focusout', onComposerFocusOut);
 
     let onVVScroll = null;
-    if (isAppleWebKitTouch()) {
+    if (isAppleWebKitTouch() || androidCompose) {
         let ticking = false;
         onVVScroll = () => {
             if (ticking) return;
             ticking = true;
             requestAnimationFrame(() => {
                 ticking = false;
-                window.scrollTo(0, 0);
-                if (document.documentElement) document.documentElement.scrollTop = 0;
-                if (document.body) document.body.scrollTop = 0;
+                resetDocumentScroll();
                 sync();
             });
         };
@@ -242,19 +285,11 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
         if (onVVScroll) {
             vv.removeEventListener('scroll', onVVScroll);
         }
-        if (androidCompose) {
-            document.removeEventListener('focusin', onComposerFocusIn);
-            document.removeEventListener('focusout', onComposerFocusOut);
-        }
+        document.removeEventListener('focusin', onComposerFocusIn);
+        document.removeEventListener('focusout', onComposerFocusOut);
         androidPinnedShellHeight = null;
-        const el = getRoot();
-        if (el) {
-            el.classList.remove('chat-vv-shell');
-            for (const prop of GEOMETRY_PROPS) {
-                el.style[prop] = '';
-            }
-            el.style.maxHeight = '';
-        }
+        clearShellInlineGeometry(getRoot());
+        setChatKeyboardOpenAttribute(false);
         unlockScroll();
     }
 

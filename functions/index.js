@@ -9,6 +9,7 @@ const { inferInviteCategory } = require('./inviteCategory');
 const { registerAdminBrowseUsers } = require('./adminBrowseUsers');
 const { registerAdminSearchUsers } = require('./adminSearchUsers');
 const { registerAdminDashboard } = require('./adminDashboard');
+const { registerProfileGiftCallables } = require('./giftCredits');
 const { registerAdminMassMessaging } = require('./adminMassMessaging');
 const { registerDirectorySearch } = require('./directorySearch');
 const { registerConsumerAccountSearch } = require('./consumerAccountSearch');
@@ -158,6 +159,7 @@ const ALLOWED_NOTIFICATION_TYPES = new Set([
     'message',
     'reminder',
     'like',
+    'connect',
     'greeting',
     'comment',
     'comment_like',
@@ -363,6 +365,20 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
         return Array.isArray(following) && following.includes(userId);
     }
 
+    if (type === 'connect') {
+        if (metadata?.mutual !== true || metadata?.source !== 'connect') return false;
+        const otherUserId = metadata?.otherUserId || metadata?.senderId;
+        if (typeof otherUserId !== 'string' || !otherUserId.trim()) return false;
+        const otherId = otherUserId.trim();
+        if (otherId !== senderId && otherId !== userId) return false;
+        const [senderSnap, recipientSnap] = await Promise.all([
+            db.collection('users').doc(senderId).get(),
+            db.collection('users').doc(userId).get(),
+        ]);
+        if (!senderSnap.exists || !recipientSnap.exists) return false;
+        return hasConnectConnection(senderId, userId, senderSnap.data(), recipientSnap.data());
+    }
+
     if (type === 'greeting') {
         const senderIdMeta = metadata?.senderId;
         if (typeof senderIdMeta !== 'string' || !senderIdMeta.trim()) return false;
@@ -401,11 +417,19 @@ async function assertAdminContext(context) {
 registerAdminSearchUsers(exports, { db, admin, assertAdminContext });
 registerAdminBrowseUsers(exports, { db, admin, assertAdminContext });
 registerAdminDashboard(exports, { db, admin, assertAdminContext });
+registerProfileGiftCallables(exports);
 registerAdminMassMessaging(exports, { db, admin, assertAdminContext });
 registerDirectorySearch(exports, { db, admin });
 registerConsumerAccountSearch(exports, { db });
 const { registerBusinessPostNotify } = require('./businessPostNotify');
 registerBusinessPostNotify(exports, { db, admin, enforceCallableRateLimit });
+const { registerConnectMatchNotifications } = require('./connectMatchNotifications');
+registerConnectMatchNotifications(exports, {
+    db,
+    admin,
+    resolveConnectionKindFromData,
+    hasConnectConnection,
+});
 function asTrimmedString(value) {
     if (typeof value !== 'string') return null;
     const trimmed = value.trim();
@@ -632,6 +656,10 @@ exports.createPortalSession = stripeModule.createPortalSession;
 exports.createCreditsCheckoutSession = stripeModule.createCreditsCheckoutSession;
 exports.createBusinessSubscriptionCheckout = stripeModule.createBusinessSubscriptionCheckout;
 exports.getStripeCommerceStatus = stripeModule.getStripeCommerceStatus;
+
+const googlePlayModule = require('./googlePlayBilling');
+exports.verifyGooglePlayCreditsPurchase = googlePlayModule.verifyGooglePlayCreditsPurchase;
+exports.getGooglePlayCommerceStatus = googlePlayModule.getGooglePlayCommerceStatus;
 
 // ─── Webhook Handler ────────────────────────────────────
 exports.stripeWebhook = webhookModule.stripeWebhook;
@@ -986,6 +1014,9 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
             throwInvitationRuleError(creatorBlock);
         }
 
+        const hostFollowing = Array.isArray(hostUser.following) ? hostUser.following : [];
+        const requiresSenderFollowsInvitee = isPrivateInvitationDocForBilling(invPre);
+
         const rawIds = Array.isArray(invPre.invitedFriends) ? invPre.invitedFriends : [];
         functions.logger.info('publishPrivateInvitationDraft:prefilter_input', {
             invitationId,
@@ -997,6 +1028,7 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
         const filteredFriends = [];
         for (const fid of rawIds) {
             if (!fid || typeof fid !== 'string') continue;
+            if (requiresSenderFollowsInvitee && !hostFollowing.includes(fid)) continue;
             const fSnap = await db.collection('users').doc(fid).get();
             if (!fSnap.exists) continue;
             const fd = fSnap.data() || {};
@@ -1015,7 +1047,9 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
         if (rawIds.length > 0 && filteredFriends.length === 0) {
             throw new functions.https.HttpsError(
                 'failed-precondition',
-                'No valid invitees remained (blocked, muted, missing, or non-user account).'
+                requiresSenderFollowsInvitee
+                    ? 'You must follow each invitee before sending a private invitation.'
+                    : 'No valid invitees remained (blocked, muted, missing, or non-user account).'
             );
         }
 
@@ -1406,13 +1440,59 @@ function areMutuallyFollowing(reqData, othData, uid, otherUserId) {
     return reqFollowing.includes(otherUserId) && othFollowing.includes(uid);
 }
 
+function isUserOpenToDatingData(data) {
+    if (!data || typeof data !== 'object') return false;
+    if (data.openToDating === true) return true;
+    if (data.openToDating === false) return false;
+    const lookingFor = Array.isArray(data.lookingFor) ? data.lookingFor : [];
+    return lookingFor.includes('dating');
+}
+
+function resolveConnectionKindFromData(a, b) {
+    const aOpen = isUserOpenToDatingData(a);
+    const bOpen = isUserOpenToDatingData(b);
+    if (aOpen && bOpen) return 'dating';
+    if (!aOpen && !bOpen) return 'friendship';
+    return 'acquaintance';
+}
+
 async function hasMutualDiscoveryMatch(uid, otherUserId) {
     const [likeSnapA, likeSnapB] = await Promise.all([
         db.collection('discovery_likes').doc(`${otherUserId}_${uid}`).get(),
         db.collection('discovery_likes').doc(`${uid}_${otherUserId}`).get(),
     ]);
     if (!likeSnapA.exists || !likeSnapB.exists) return false;
-    return likeSnapA.data()?.mutual === true && likeSnapB.data()?.mutual === true;
+    const d1 = likeSnapA.data();
+    const d2 = likeSnapB.data();
+    return d1?.mutual === true || d2?.mutual === true;
+}
+
+async function hasAcquaintanceConnection(uid, otherUserId, reqData, othData) {
+    const reqFollowing = Array.isArray(reqData?.following) ? reqData.following : [];
+    const othFollowing = Array.isArray(othData?.following) ? othData.following : [];
+
+    if (areMutuallyFollowing(reqData, othData, uid, otherUserId)) {
+        return true;
+    }
+
+    const [likeReqToOth, likeOthToReq] = await Promise.all([
+        db.collection('discovery_likes').doc(`${otherUserId}_${uid}`).get(),
+        db.collection('discovery_likes').doc(`${uid}_${otherUserId}`).get(),
+    ]);
+
+    const reqLikedOth = likeReqToOth.exists;
+    const othLikedReq = likeOthToReq.exists;
+
+    if (reqFollowing.includes(otherUserId) && othLikedReq) return true;
+    if (othFollowing.includes(uid) && reqLikedOth) return true;
+    return false;
+}
+
+async function hasConnectConnection(uid, otherUserId, reqData, othData) {
+    const kind = resolveConnectionKindFromData(reqData, othData);
+    if (kind === 'dating') return hasMutualDiscoveryMatch(uid, otherUserId);
+    if (kind === 'friendship') return areMutuallyFollowing(reqData, othData, uid, otherUserId);
+    return hasAcquaintanceConnection(uid, otherUserId, reqData, othData);
 }
 
 // ─── Trusted callable: create/get conversation with anti-spam limits ────────
@@ -1430,26 +1510,14 @@ exports.createOrGetConversation = functions.https.onCall(async (data, context) =
         throw new functions.https.HttpsError('invalid-argument', 'Cannot create a conversation with yourself.');
     }
 
-    await enforceCallableRateLimit(uid, 'create_or_get_conversation', {
-        perMinute: 20,
-        perHour: 200,
-        perDay: 600,
-        cooldownMs: 500
-    });
-
     // Deterministic conversation ID: sorted UIDs joined by "_".
-    // Guarantees a single document per pair without a query scan.
     const conversationId = [uid, otherUserId].sort().join('_');
     const convRef = db.collection('conversations').doc(conversationId);
-    const existingSnap = await convRef.get();
 
-    if (existingSnap.exists) {
-        return { success: true, conversationId, created: false };
-    }
-
-    const [reqSnap, othSnap] = await Promise.all([
+    const [existingSnap, reqSnap, othSnap] = await Promise.all([
+        convRef.get(),
         db.collection('users').doc(uid).get(),
-        db.collection('users').doc(otherUserId).get()
+        db.collection('users').doc(otherUserId).get(),
     ]);
     const reqData = reqSnap.data() || {};
     const othData = othSnap.data() || {};
@@ -1466,17 +1534,26 @@ exports.createOrGetConversation = functions.https.onCall(async (data, context) =
 
     const isSystemPeer = reqData.isSystemAccount === true || othData.isSystemAccount === true;
     if (!isSystemPeer) {
-        let hasMutualConnection = areMutuallyFollowing(reqData, othData, uid, otherUserId);
-        if (!hasMutualConnection) {
-            hasMutualConnection = await hasMutualDiscoveryMatch(uid, otherUserId);
-        }
-        if (!hasMutualConnection) {
+        const hasConnection = await hasConnectConnection(uid, otherUserId, reqData, othData);
+        if (!hasConnection) {
             throw new functions.https.HttpsError(
                 'failed-precondition',
                 'Mutual connection required to start a conversation.'
             );
         }
     }
+
+    if (existingSnap.exists) {
+        return { success: true, conversationId, created: false };
+    }
+
+    // Rate limit only when creating a new conversation (not on idempotent get).
+    await enforceCallableRateLimit(uid, 'create_or_get_conversation', {
+        perMinute: 20,
+        perHour: 200,
+        perDay: 600,
+        cooldownMs: 500,
+    });
 
     await convRef.set({
         participants: [uid, otherUserId],
@@ -1823,6 +1900,43 @@ exports.lookupBusinessByPlaceId = functions.https.onCall(async (data, context) =
     }
 
     return { success: true, found: true, businessId: businessDoc.id };
+});
+
+// ─── Trusted callable: Google place → published DineBuddies venue (exact match) ─
+const { resolveDineBuddiesVenueFromGoogle } = require('./resolveDineBuddiesVenueFromGoogle');
+
+exports.resolveDineBuddiesVenueFromGoogle = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const requesterUid = context.auth.uid;
+    await enforceCallableRateLimit(requesterUid, 'resolve_db_venue_google', {
+        perMinute: 40,
+        perHour: 800,
+        perDay: 4000,
+        cooldownMs: 300,
+    });
+
+    const placeId = typeof data?.placeId === 'string' ? data.placeId.trim() : '';
+    const address = typeof data?.address === 'string' ? data.address.trim() : '';
+    const lat = data?.lat != null ? Number(data.lat) : null;
+    const lng = data?.lng != null ? Number(data.lng) : null;
+
+    if (!placeId && !address && (!Number.isFinite(lat) || !Number.isFinite(lng))) {
+        throw new functions.https.HttpsError(
+            'invalid-argument',
+            'placeId or address or lat/lng is required.'
+        );
+    }
+
+    const result = await resolveDineBuddiesVenueFromGoogle(db, { placeId, address, lat, lng });
+    return {
+        success: true,
+        found: Boolean(result.found),
+        matchReason: result.matchReason || null,
+        venue: result.venue || null,
+    };
 });
 
 // ─── Trusted admin callable: add test locations to businesses ────────────────

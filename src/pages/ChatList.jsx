@@ -1,39 +1,127 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import UserAvatar from '../components/UserAvatar';
+import OnlineStatusBadge from '../components/profile/OnlineStatusBadge';
+import { useUserPresence } from '../hooks/usePresence';
 import CommunitiesChatPanel from '../components/Messages/CommunitiesChatPanel';
+import NotificationsPanel from '../components/Messages/NotificationsPanel';
 import { useJoinedCommunities } from '../hooks/useJoinedCommunities';
-import { FaArrowLeft, FaSearch, FaEllipsisV } from 'react-icons/fa';
+import AppBackButton from '../components/AppBackButton';
+import { APP_HOME_PATH } from '../utils/appRouteShell';
+import { LuBell, LuMessageCircle, LuSearch } from 'react-icons/lu';
 import './ChatList.css';
 import { goToLogin } from '../utils/goToLogin';
-import { AppText, AppTextInput } from "../components/base";
+import { AppText, AppTextInput } from '../components/base';
 
+const PANEL_MESSAGES = 'messages';
+const PANEL_NOTIFICATIONS = 'notifications';
 const TAB_CHATS = 'chats';
 const TAB_COMMUNITIES = 'communities';
 
+function readPanel(searchParams) {
+  return searchParams.get('panel') === PANEL_NOTIFICATIONS ? PANEL_NOTIFICATIONS : PANEL_MESSAGES;
+}
+
 function readTab(searchParams) {
   return searchParams.get('tab') === TAB_COMMUNITIES ? TAB_COMMUNITIES : TAB_CHATS;
+}
+
+function MessagesEmpty({ title, message, ctaLabel, ctaTo }) {
+  return (
+    <div className="messages-page__empty">
+      <div className="messages-page__empty-icon" aria-hidden>
+        <LuMessageCircle />
+      </div>
+      <AppText as="h3" className="messages-page__empty-title" format={false}>
+        {title}
+      </AppText>
+      <AppText as="p" className="messages-page__empty-text" format={false}>
+        {message}
+      </AppText>
+      {ctaLabel && ctaTo ? (
+        <Link to={ctaTo} className="messages-page__empty-cta">
+          {ctaLabel}
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+function ConversationRow({ convo, onOpen, formatTime, t }) {
+  const otherUser = convo.otherUser;
+  const isOnline = useUserPresence(otherUser?.uid, { fallback: Boolean(otherUser?.isOnline) });
+
+  if (!otherUser) return null;
+
+  return (
+    <div
+      className={`messages-page__item${convo.isUnread ? ' unread' : ''}`}
+      onClick={() => onOpen(otherUser.uid)}>
+      <div className="messages-page__avatar">
+        <UserAvatar user={otherUser} alt={otherUser.displayName} style={{ objectFit: 'cover' }} />
+        {isOnline ? <div className="messages-page__online" /> : null}
+      </div>
+
+      <div className="messages-page__content">
+        <div className="messages-page__row-top">
+          <div className="messages-page__name-row">
+            <AppText as="h3" className="messages-page__name">
+              {otherUser.displayName}
+            </AppText>
+            {isOnline ? <OnlineStatusBadge isOnline size="sm" className="messages-page__online-badge" /> : null}
+          </div>
+          <AppText as="span" className="messages-page__time">
+            {formatTime(convo.lastMessageTime)}
+          </AppText>
+        </div>
+        <div className="messages-page__row-bottom">
+          <AppText as="p" className="messages-page__preview">
+            {convo.lastMessage === 'shared_content'
+              ? `🔗 ${t('shared_content_preview', 'Shared content')}`
+              : convo.lastMessage || t('no_messages_yet', 'No messages yet')}
+          </AppText>
+          {convo.isUnread ? <div className="messages-page__unread-dot" /> : null}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const ChatList = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const activePanel = readPanel(searchParams);
   const activeTab = readTab(searchParams);
-  const { conversations, loading: chatsLoading } = useChat();
+  const { conversations, loading: chatsLoading, unreadCount: chatUnreadCount } = useChat();
+  const { unreadBellCount = 0, unreadMessageCount = 0 } = useNotifications();
   const { communities, loading: communitiesLoading, totalUnread: communityUnread, removeCommunity } =
-  useJoinedCommunities();
+    useJoinedCommunities();
   const { userProfile } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
+
+  const messagesBadge = chatUnreadCount + communityUnread + unreadMessageCount;
+  const notificationsBadge = unreadBellCount;
 
   useEffect(() => {
     if (userProfile?.isGuest || userProfile?.role === 'guest') {
       goToLogin();
     }
   }, [userProfile, navigate]);
+
+  const setActivePanel = (panel) => {
+    if (panel === PANEL_NOTIFICATIONS) {
+      setSearchParams({ panel: PANEL_NOTIFICATIONS }, { replace: true });
+    } else {
+      const tab = searchParams.get('tab');
+      setSearchParams(tab === TAB_COMMUNITIES ? { tab: TAB_COMMUNITIES } : {}, { replace: true });
+    }
+    setSearchQuery('');
+  };
 
   const setActiveTab = (tab) => {
     if (tab === TAB_COMMUNITIES) {
@@ -46,11 +134,11 @@ const ChatList = () => {
 
   const filteredConversations = useMemo(
     () =>
-    conversations.filter((convo) => {
-      if (!searchQuery) return true;
-      const otherUser = convo.otherUser;
-      return otherUser?.displayName?.toLowerCase().includes(searchQuery.toLowerCase());
-    }),
+      conversations.filter((convo) => {
+        if (!searchQuery) return true;
+        const otherUser = convo.otherUser;
+        return otherUser?.displayName?.toLowerCase().includes(searchQuery.toLowerCase());
+      }),
     [conversations, searchQuery]
   );
 
@@ -58,7 +146,6 @@ const ChatList = () => {
     if (!timestamp) return '';
     const date = timestamp.toDate();
     const now = new Date();
-    const diff = now - date;
 
     if (date.toDateString() === now.toDateString()) {
       return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -70,6 +157,7 @@ const ChatList = () => {
       return t('yesterday', 'Yesterday');
     }
 
+    const diff = now - date;
     if (diff < 604800000) {
       return date.toLocaleDateString('en-US', { weekday: 'short' });
     }
@@ -78,147 +166,144 @@ const ChatList = () => {
   };
 
   const searchPlaceholder =
-  activeTab === TAB_COMMUNITIES ?
-  t('Search communities...', 'Search communities...') :
-  t('search_conversations');
+    activeTab === TAB_COMMUNITIES
+      ? t('search_communities', 'Search communities...')
+      : t('search_conversations', 'Search conversations...');
 
-  const isLoading = activeTab === TAB_CHATS && chatsLoading;
+  const isLoading = activePanel === PANEL_MESSAGES && activeTab === TAB_CHATS && chatsLoading;
+
+  const messagesBody =
+    activeTab === TAB_CHATS ? (
+      filteredConversations.length === 0 ? (
+        <MessagesEmpty
+          title={t('no_conversations', 'No conversations yet')}
+          message={t(
+            'messages_empty_hint',
+            'Connect with members from their profile — like, follow, or send a greeting to open a chat.'
+          )}
+          ctaLabel={t('messages_empty_cta', 'Browse members')}
+          ctaTo="/search/list"
+        />
+      ) : (
+        <div className="messages-page__list">
+          {filteredConversations.map((convo) => (
+            <ConversationRow
+              key={convo.id}
+              convo={convo}
+              onOpen={(uid) => navigate(`/chat/${uid}`)}
+              formatTime={formatTime}
+              t={t}
+            />
+          ))}
+        </div>
+      )
+    ) : (
+      <CommunitiesChatPanel
+        communities={communities}
+        loading={communitiesLoading}
+        searchQuery={searchQuery}
+        onLeaveCommunity={removeCommunity}
+      />
+    );
+
+  const hubShell = (body) => (
+    <div className="chat-list-container messages-page">
+      <div className="messages-page__top">
+        <header className="messages-page__header">
+          <AppBackButton className="back-btn messages-page__back" fallback={APP_HOME_PATH} />
+          <AppText as="h1" className="messages-page__title">
+            {t('inbox_hub_title', 'Inbox')}
+          </AppText>
+          <span className="messages-page__header-spacer" aria-hidden />
+        </header>
+
+        <div className="messages-page__hub-tabs" role="tablist" aria-label={t('inbox_hub_title', 'Inbox')}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activePanel === PANEL_MESSAGES}
+          className={`messages-page__hub-tab${activePanel === PANEL_MESSAGES ? ' active' : ''}`}
+          onClick={() => setActivePanel(PANEL_MESSAGES)}>
+          <LuMessageCircle aria-hidden />
+          {t('inbox_panel_messages', 'Messages')}
+          {messagesBadge > 0 ? (
+            <AppText as="span" className="messages-page__tab-badge">
+              {messagesBadge > 99 ? '99+' : messagesBadge}
+            </AppText>
+          ) : null}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activePanel === PANEL_NOTIFICATIONS}
+          className={`messages-page__hub-tab${activePanel === PANEL_NOTIFICATIONS ? ' active' : ''}`}
+          onClick={() => setActivePanel(PANEL_NOTIFICATIONS)}>
+          <LuBell aria-hidden />
+          {t('inbox_panel_notifications', 'Notifications')}
+          {notificationsBadge > 0 ? (
+            <AppText as="span" className="messages-page__tab-badge">
+              {notificationsBadge > 99 ? '99+' : notificationsBadge}
+            </AppText>
+          ) : null}
+        </button>
+      </div>
+      </div>
+
+      {activePanel === PANEL_MESSAGES ? (
+        <>
+          <div className="messages-page__tabs messages-page__tabs--sub" role="tablist" aria-label={t('messages', 'Messages')}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TAB_CHATS}
+              className={`messages-page__tab${activeTab === TAB_CHATS ? ' active' : ''}`}
+              onClick={() => setActiveTab(TAB_CHATS)}>
+              {t('messages_tab_chats', 'Chats')}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TAB_COMMUNITIES}
+              className={`messages-page__tab${activeTab === TAB_COMMUNITIES ? ' active' : ''}`}
+              onClick={() => setActiveTab(TAB_COMMUNITIES)}>
+              {t('messages_tab_communities', 'Communities')}
+              {communityUnread > 0 ? (
+                <AppText as="span" className="messages-page__tab-badge">
+                  {communityUnread > 99 ? '99+' : communityUnread}
+                </AppText>
+              ) : null}
+            </button>
+          </div>
+
+          <div className="messages-page__search-wrap">
+            <div className="messages-page__search">
+              <LuSearch className="messages-page__search-icon" aria-hidden />
+              <AppTextInput
+                type="text"
+                className="messages-page__search-input"
+                placeholder={searchPlaceholder}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      <div
+        className={`messages-page__body${activePanel === PANEL_NOTIFICATIONS ? ' messages-page__body--notifications' : ''}`}>
+        {body}
+      </div>
+    </div>
+  );
 
   if (isLoading) {
-    return (
-      <div className="chat-list-container">
-                <header className="chat-list-header">
-                    <button type="button" className="back-btn" onClick={() => navigate('/posts-feed')}>
-                        <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
-                    </button>
-                    <AppText as="h1">{t('messages')}</AppText>
-                </header>
-                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    {t('loading_conversations')}
-                </div>
-            </div>);
-
+    return hubShell(
+      <div className="messages-page__loading">{t('loading_conversations', 'Loading conversations...')}</div>
+    );
   }
 
-  return (
-    <>
-            <div className="chat-list-desktop-placeholder">
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '12px' }}>💬</div>
-                    <AppText as="h3" style={{ fontWeight: '700', marginBottom: '6px', color: 'var(--text-main)' }}>
-                        {t('messages')}
-                    </AppText>
-                    <AppText as="p" style={{ fontSize: '0.9rem' }}>{t('select_conversation_prompt')}</AppText>
-                </div>
-            </div>
-
-            <div className="chat-list-container">
-                <header className="chat-list-header">
-                    <button type="button" className="back-btn" onClick={() => navigate('/posts-feed')}>
-                        <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
-                    </button>
-                    <AppText as="h1">{t('messages')}</AppText>
-                    <button type="button" className="options-btn" aria-hidden="true">
-                        <FaEllipsisV />
-                    </button>
-                </header>
-
-                <div className="messages-hub-tabs" role="tablist" aria-label={t('messages')}>
-                    <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === TAB_CHATS}
-            className={`messages-hub-tab${activeTab === TAB_CHATS ? ' active' : ''}`}
-            onClick={() => setActiveTab(TAB_CHATS)}>
-            
-                        {t('messages_tab_chats', 'Chats')}
-                    </button>
-                    <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === TAB_COMMUNITIES}
-            className={`messages-hub-tab${activeTab === TAB_COMMUNITIES ? ' active' : ''}`}
-            onClick={() => setActiveTab(TAB_COMMUNITIES)}>
-            
-                        {t('messages_tab_communities', 'Communities')}
-                        {communityUnread > 0 &&
-            <AppText as="span" className="messages-hub-tab-badge">
-                                {communityUnread > 99 ? '99+' : communityUnread}
-                            </AppText>
-            }
-                    </button>
-                </div>
-
-                <div className="search-bar">
-                    <FaSearch className="search-icon" />
-                    <AppTextInput
-            type="text"
-            placeholder={searchPlaceholder}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)} />
-          
-                </div>
-
-                {activeTab === TAB_CHATS ?
-        <div className="conversations-list">
-                        {filteredConversations.length === 0 ?
-          <div className="empty-state">
-                                <div className="empty-icon">💬</div>
-                                <AppText as="h3">{t('no_conversations')}</AppText>
-                                <AppText as="p">{t('start_chatting_friends')}</AppText>
-                            </div> :
-
-          filteredConversations.map((convo) => {
-            const otherUser = convo.otherUser;
-            if (!otherUser) return null;
-
-            return (
-              <div
-                key={convo.id}
-                className={`conversation-item ${convo.isUnread ? 'unread' : ''}`}
-                onClick={() => navigate(`/chat/${otherUser.uid}`)}>
-                
-                                        <div className="conversation-avatar">
-                                            <UserAvatar
-                    user={otherUser}
-                    alt={otherUser.displayName}
-                    style={{ objectFit: 'cover' }} />
-                  
-                                            {otherUser.isOnline && <div className="online-indicator" />}
-                                        </div>
-
-                                        <div className="conversation-content">
-                                            <div className="conversation-top">
-                                                <AppText as="h3" className="conversation-name">{otherUser.displayName}</AppText>
-                                                <AppText as="span" className="conversation-time">
-                                                    {formatTime(convo.lastMessageTime)}
-                                                </AppText>
-                                            </div>
-                                            <div className="conversation-bottom">
-                                                <AppText as="p" className="last-message">
-                                                    {convo.lastMessage === 'shared_content' ?
-                      `🔗 ${t('shared_content_preview', 'Shared content')}` :
-                      convo.lastMessage || t('no_messages_yet')}
-                                                </AppText>
-                                                {convo.isUnread && <div className="unread-badge" />}
-                                            </div>
-                                        </div>
-                                    </div>);
-
-          })
-          }
-                    </div> :
-
-        <CommunitiesChatPanel
-          communities={communities}
-          loading={communitiesLoading}
-          searchQuery={searchQuery}
-          onLeaveCommunity={removeCommunity} />
-
-        }
-            </div>
-        </>);
-
+  return hubShell(activePanel === PANEL_NOTIFICATIONS ? <NotificationsPanel /> : messagesBody);
 };
 
 export default ChatList;

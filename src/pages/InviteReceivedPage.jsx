@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaCheck, FaTimes } from 'react-icons/fa';
+import { FaEye, FaTimes } from 'react-icons/fa';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useInvitations } from '../context/InvitationContext';
@@ -23,7 +23,7 @@ import { getInvitationCardTextBackdropFromInvitation } from '../components/Invit
 import { getPrivateInvitationHeroCoverFromInvitation } from '../components/Invitations/privateCard/privateCardBackgrounds';
 import { getSocialInvitationHeroCoverFromInvitation } from '../components/Invitations/socialCard/socialCardBackgrounds';
 import { isPrivateHostedInvitation } from '../utils/inviteCategory';
-import { getHostedInvitationDetailsPath, navigateToHostedInvitationDetails } from '../utils/hostedInvitationRoutes';
+import { getHostedInvitationDetailsPath } from '../utils/hostedInvitationRoutes';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import '../components/Invitations/InviteLandingGate.css';
 
@@ -92,16 +92,11 @@ export default function InviteReceivedPage() {
         goFeed();
     }, [goFeed]);
 
-    const handleAccept = useCallback(async () => {
-        if (!current?.id || typeof respondToPrivateInvitation !== 'function') return;
-        setResponding(true);
-        try {
-            const ok = await respondToPrivateInvitation(current.id, 'accepted');
-            if (ok) navigate(getHostedInvitationDetailsPath(current), { replace: true });
-        } finally {
-            setResponding(false);
-        }
-    }, [current?.id, respondToPrivateInvitation, navigate]);
+    const handleView = useCallback(() => {
+        if (!current?.id) return;
+        dismissInviteLandingSession();
+        navigate(getHostedInvitationDetailsPath(current), { replace: true });
+    }, [current, navigate]);
 
     const handleDecline = useCallback(async () => {
         if (!current?.id || typeof respondToPrivateInvitation !== 'function') return;
@@ -222,10 +217,10 @@ export default function InviteReceivedPage() {
                     <button
                         type="button"
                         className="invite-landing__btn invite-landing__btn--accept"
-                        onClick={handleAccept}
+                        onClick={handleView}
                         disabled={responding}
                     >
-                        <FaCheck aria-hidden /> {t('accept', 'Accept')}
+                        <FaEye aria-hidden /> {t('invite_notification_view', 'View')}
                     </button>
                 </div>
             </div>

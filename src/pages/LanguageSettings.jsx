@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import AppBackButton from '../components/AppBackButton';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaArrowLeft, FaGlobe, FaCheck } from 'react-icons/fa';
@@ -35,9 +36,7 @@ const LanguageSettings = () => {
   return (
     <div className="settings-page">
             <div className="settings-header">
-                <button onClick={() => navigate('/settings')} className="back-btn">
-                    <FaArrowLeft />
-                </button>
+                <AppBackButton fallback="/settings" />
                 <AppText as="h1">{t('language_settings_title', 'Language')}</AppText>
                 <div style={{ width: '40px' }}></div>
             </div>

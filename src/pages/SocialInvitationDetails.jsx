@@ -31,6 +31,7 @@ import { OCCASION_PRESETS } from '../utils/invitationTemplates';
 import { asUidArray } from '../utils/userSocialLists';
 import { goToLogin, getCurrentReturnPath } from '../utils/goToLogin';
 import { isPrivateInvitationDraft } from '../utils/socialInvitationDraft';
+import { normalizePersonalInviteCategory } from '../constants/personalInviteCategories';
 
 /** Stable string uid for Firestore comparisons (rules use request.auth.uid as string). */import { AppText } from "../components/base";
 function normUid(v) {
@@ -265,6 +266,15 @@ const SocialInvitationDetails = () => {
 
   const isPrivateInvitation = invitation?.type === 'Private';
 
+  const personalInviteCategory = useMemo(
+    () => normalizePersonalInviteCategory(invitation?.personalInviteCategory),
+    [invitation?.personalInviteCategory]
+  );
+
+  const detailsThemeClass = isPrivateInvitation
+    ? `theme-personal-${personalInviteCategory}`
+    : `theme-${(invitation?.occasionType || 'social').toLowerCase()}`;
+
   const datingHostProfile = useMemo(() => {
     if (!invitation) return null;
     const hostId = normUid(invitation.authorId || invitation.author?.id);
@@ -371,7 +381,7 @@ const SocialInvitationDetails = () => {
   };
 
   return (
-    <div className={`private-details-page page-container theme-${(invitation.occasionType || 'social').toLowerCase()}`} style={{ paddingBottom: '120px', position: 'relative' }}>
+    <div className={`private-details-page page-container ${detailsThemeClass}`} style={{ paddingBottom: '120px', position: 'relative' }}>
             {/* Lottie Background Animation */}
             {animationData &&
       <div className="lottie-bg-container" style={{
@@ -560,6 +570,7 @@ const SocialInvitationDetails = () => {
           host={datingHostProfile}
           guest={datingGuestProfile}
           guestRsvpStatus={datingGuestRsvp}
+          personalInviteCategory={personalInviteCategory}
           t={t} /> :
 
 

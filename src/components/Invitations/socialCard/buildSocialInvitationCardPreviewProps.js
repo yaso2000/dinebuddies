@@ -1,4 +1,6 @@
 import { DEFAULT_FRAME_COLOR_ID } from './socialCardFrameColors';
+import { normalizePersonalInviteCategory } from '../../../constants/personalInviteCategories';
+import { getPrivateInvitationHeroCoverFromInvitation } from '../privateCard/privateCardBackgrounds';
 import { DEFAULT_FONT_ID } from './socialCardFonts';
 import {
     DEFAULT_CARD_COPY_OFFSET_Y,
@@ -28,6 +30,16 @@ export function buildSocialInvitationCardPreviewProps(invitation, options = {}) 
 
     const cardTemplateSet = invitation?.type === 'Private' ? 'dating' : 'private';
 
+    let resolvedHeroCover = heroCover;
+    if (cardTemplateSet === 'dating' && !resolvedHeroCover?.src) {
+        resolvedHeroCover = getPrivateInvitationHeroCoverFromInvitation(invitation);
+    }
+
+    const personalInviteCategory =
+        invitation?.type === 'Private'
+            ? normalizePersonalInviteCategory(invitation.personalInviteCategory)
+            : null;
+
     return {
         className,
         freezeMotion: true,
@@ -42,11 +54,12 @@ export function buildSocialInvitationCardPreviewProps(invitation, options = {}) 
         copyWidthPct: invitation?.cardCopyWidthPct ?? DEFAULT_CARD_COPY_WIDTH_PCT,
         copyFontScale: invitation?.cardCopyFontScale ?? DEFAULT_CARD_COPY_FONT_SCALE,
         occasionType: invitation?.occasionType,
+        occasionCategoryId: personalInviteCategory || undefined,
         cardBackgroundId: invitation?.cardBackgroundId || null,
         cardGradientId: invitation?.cardGradientId || null,
-        heroCoverSrc: heroCover?.src ?? null,
-        heroCoverMediaType: heroCover?.mediaType ?? null,
-        heroCoverPoster: heroCover?.poster ?? null,
+        heroCoverSrc: resolvedHeroCover?.src ?? null,
+        heroCoverMediaType: resolvedHeroCover?.mediaType ?? null,
+        heroCoverPoster: resolvedHeroCover?.poster ?? null,
         title: invitation?.title,
         description: invitation?.description,
         date: invitation?.date,

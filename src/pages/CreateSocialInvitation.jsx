@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  FaCalendarAlt, FaMapMarkerAlt, FaTimes, FaCheckCircle,
+  FaCalendarAlt, FaTimes, FaCheckCircle,
   FaClock, FaLock, FaChevronLeft,
   FaMoneyBillWave, FaUsers, FaBriefcase,
   FaBirthdayCake, FaMoon, FaUtensils, FaCoffee, FaGamepad,
@@ -12,7 +12,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import VenueLocationPicker from '../components/VenueLocationPicker';
+import InvitationVenueLocationSection from '../components/InvitationVenueLocationSection';
 import { commitInvitationAiCover, resolveAiGeneratedCoverPreview, verifyPublicStorageImageUrl } from '../services/mediaService';
 import { isServerPersistedAiCoverUrl } from '../utils/aiGeneratedMediaUrl';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
@@ -374,12 +374,22 @@ const CreateSocialInvitation = () => {
   }, [restaurantData, userProfile]);
 
   const handleLocationSelect = (placeData) => {
+    const isDbVenue = !!(placeData.restaurantId || placeData.isDineBuddiesVenue);
+    const label = placeData.fullAddress || placeData.name || '';
     setFormData((prev) => ({
       ...prev,
-      location: placeData.name,
-      lat: placeData.lat,
-      lng: placeData.lng,
-      title: placeData.name ? `${t('invitation_at')} ${placeData.name}` : prev.title
+      location: label || prev.location,
+      lat: placeData.lat ?? prev.lat,
+      lng: placeData.lng ?? prev.lng,
+      restaurantId: isDbVenue ? placeData.restaurantId || null : null,
+      restaurantName: isDbVenue ? placeData.restaurantName || placeData.name || '' : '',
+      placeId: placeData.placeId || prev.placeId || null,
+      city: placeData.city || prev.city,
+      country: placeData.country || prev.country,
+      countryCode: placeData.countryCode || prev.countryCode,
+      ...(isDbVenue ? { isDineBuddiesVenue: true } : {}),
+      title: placeData.name ? `${t('invitation_at')} ${placeData.name}` : prev.title,
+      ...(placeData.matchedFromGoogle ? { venueMatchedFromGoogle: true } : {})
     }));
   };
 
@@ -1276,9 +1286,7 @@ const CreateSocialInvitation = () => {
                         </div>
                     </div>
 
-                    <div className="form-group mb-4 venue-search-stack">
-                        <label className="elegant-label"><FaMapMarkerAlt className="label-icon" /> {t('location')}</label>
-                        <VenueLocationPicker
+                    <InvitationVenueLocationSection
               value={formData.location}
               onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
               onSelect={handleLocationSelect}
@@ -1286,9 +1294,8 @@ const CreateSocialInvitation = () => {
               countryCode={resolveVenueCountryIso(formData, userProfile)}
               userLat={formData.userLat ?? userProfile?.coordinates?.lat}
               userLng={formData.userLng ?? userProfile?.coordinates?.lng}
-              className="elegant-input" />
-
-                    </div>
+              className="elegant-input"
+            />
 
                     <div className="form-group mb-4">
                         <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>

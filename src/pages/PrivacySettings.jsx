@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import AppBackButton from '../components/AppBackButton';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -88,9 +89,7 @@ const PrivacySettings = () => {
     <div className="settings-page">
             {/* Header */}
             <div className="settings-header">
-                <button onClick={() => navigate('/settings')} className="back-btn">
-                    <FaArrowLeft />
-                </button>
+                <AppBackButton fallback="/settings" />
                 <AppText as="h1">{t('settings_privacy', 'Privacy & Security')}</AppText>
                 <div style={{ width: '40px' }}></div>
             </div>

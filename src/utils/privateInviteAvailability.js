@@ -1,7 +1,7 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
-/** User accepts private invites (opt-out via `availableForPrivateInvite === false`). */
+/** Consumer members may receive private invites (business/admin/guest excluded). */
 export function isUserAvailableForPrivateInvite(user) {
     if (!user || typeof user !== 'object') return false;
     const profileType = String(user.profileType || '').toLowerCase();
@@ -9,7 +9,7 @@ export function isUserAvailableForPrivateInvite(user) {
     const role = String(user.role || '').toLowerCase();
     if (role === 'business' || role === 'admin' || role === 'guest') return false;
     if (user.isBusiness === true) return false;
-    return user.availableForPrivateInvite !== false;
+    return true;
 }
 
 /** Load role / dating opt-out from user docs (per-doc get — allowed for signed-in clients). */
@@ -54,4 +54,32 @@ export function getPrivateInviteeDisplayName(user) {
         user.username ||
         ''
     ).trim();
+}
+
+/** True when `senderFollowing` includes `inviteeId` (one-way follow — sender → invitee). */
+export function senderFollowsInvitee(senderFollowing, inviteeId) {
+    const fid = typeof inviteeId === 'string' ? inviteeId.trim() : '';
+    if (!fid || !Array.isArray(senderFollowing)) return false;
+    return senderFollowing.includes(fid);
+}
+
+/**
+ * Keep only invitees the sender follows (private invites — no mutual follow required).
+ * @param {string[]|null|undefined} senderFollowing
+ * @param {string[]|null|undefined} inviteeIds
+ */
+export function filterInviteesFollowedBySender(senderFollowing, inviteeIds) {
+    const followingSet = new Set(
+        (Array.isArray(senderFollowing) ? senderFollowing : []).filter(
+            (id) => typeof id === 'string' && id.length > 0
+        )
+    );
+    const allowed = [];
+    const skipped = [];
+    for (const id of Array.isArray(inviteeIds) ? inviteeIds : []) {
+        if (!id || typeof id !== 'string') continue;
+        if (followingSet.has(id)) allowed.push(id);
+        else skipped.push(id);
+    }
+    return { allowed, skipped };
 }

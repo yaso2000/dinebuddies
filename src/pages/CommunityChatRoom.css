@@ -834,3 +834,37 @@ svg.progress-ring {
         right: 16px;
     }
 }
+
+.community-chat-join-gate {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 72px 24px 32px;
+    text-align: center;
+    color: var(--text-primary);
+    overflow-x: hidden;
+}
+
+.community-chat-join-gate h2,
+.community-chat-join-gate p {
+    width: 100%;
+    max-width: min(340px, calc(100vw - 48px));
+    margin-left: auto;
+    margin-right: auto;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+}
+
+.community-chat-join-gate .community-chat-join-gate__back {
+    margin-top: 12px;
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.95rem;
+}

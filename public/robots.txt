@@ -1,5 +1,7 @@
 User-agent: *
 Allow: /
+Allow: /business/
+Allow: /restaurants
 Disallow: /admin
 Disallow: /admin/*
 Disallow: /business/signup
@@ -9,3 +11,5 @@ Disallow: /privacy-settings
 Disallow: /profile
 Disallow: /notifications
 Disallow: /auth
+
+Sitemap: https://www.dinebuddies.com/sitemap.xml

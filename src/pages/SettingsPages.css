@@ -437,6 +437,42 @@
     border-color: rgba(251, 191, 36, 0.45);
 }
 
+.google-play-commerce-banner {
+    max-width: 520px;
+    margin: 0 auto 0.75rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: 10px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.4;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    color: #14532d;
+    background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+    border: 1px solid #6ee7b7;
+}
+
+.google-play-commerce-banner--warn {
+    color: #92400e;
+    background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+    border-color: #fcd34d;
+}
+
+[data-theme='dark'] .google-play-commerce-banner {
+    color: #a7f3d0;
+    background: linear-gradient(180deg, rgba(6, 78, 59, 0.45) 0%, rgba(6, 95, 70, 0.25) 100%);
+    border-color: rgba(52, 211, 153, 0.45);
+}
+
+[data-theme='dark'] .google-play-commerce-banner--warn {
+    color: #fde68a;
+    background: linear-gradient(180deg, rgba(146, 64, 14, 0.35) 0%, rgba(120, 53, 15, 0.2) 100%);
+    border-color: rgba(251, 191, 36, 0.45);
+}
+
 /* ── Dine Credits wallet (/settings/credits) — polished layout + icons ── */
 .credits-wallet-page .credits-wallet__header {
     padding: 0.75rem 1rem;
@@ -594,6 +630,33 @@
 .credits-wallet__split-icon--paid {
     background: color-mix(in srgb, var(--primary) 22%, transparent);
     color: var(--primary);
+}
+
+.credits-wallet__split-icon--saved {
+    background: color-mix(in srgb, #ec4899 22%, transparent);
+    color: #f472b6;
+}
+
+.credits-wallet__balance--savings {
+    border-color: color-mix(in srgb, #ec4899 28%, var(--border-color));
+    background: color-mix(in srgb, #ec4899 6%, var(--bg-card));
+}
+
+.credits-wallet__hero-ring--savings {
+    background: color-mix(in srgb, #ec4899 14%, transparent);
+    border-color: color-mix(in srgb, #ec4899 35%, transparent);
+}
+
+.credits-wallet__total-number--savings {
+    color: #f472b6;
+}
+
+.credits-wallet__wallet-desc {
+    margin: 0.35rem 0 0;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+    max-width: 28rem;
 }
 
 .credits-wallet__split-label {

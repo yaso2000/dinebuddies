@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getDiscoveryActionStatus, peekDiscoveryActionStatus } from '../utils/discoveryProfile';
 
 /**
- * Preload like / daily-greeting limits — buttons stay enabled unless cache says already used.
+ * Preload like / daily-greeting limits — stays in sync after like/unlike via cache events.
  */
 export function useDiscoveryActionStatus(viewerUid, targetId) {
     const cached = peekDiscoveryActionStatus(viewerUid, targetId);
@@ -19,12 +19,29 @@ export function useDiscoveryActionStatus(viewerUid, targetId) {
             return undefined;
         }
 
+        const onCacheUpdate = (event) => {
+            const detail = event?.detail;
+            if (!detail || detail.viewerId !== viewerUid || detail.targetId !== targetId) return;
+            setStatus((prev) => ({
+                liked: detail.liked ?? prev.liked,
+                greetedToday: detail.greetedToday ?? prev.greetedToday,
+                loading: false,
+            }));
+        };
+
+        window.addEventListener('discovery-action-status', onCacheUpdate);
+
         let cancelled = false;
 
         getDiscoveryActionStatus(viewerUid, targetId)
             .then((next) => {
                 if (!cancelled) {
-                    setStatus({ liked: next.liked, greetedToday: next.greetedToday, loading: false });
+                    const peek = peekDiscoveryActionStatus(viewerUid, targetId);
+                    setStatus({
+                        liked: peek?.liked ?? next.liked,
+                        greetedToday: peek?.greetedToday ?? next.greetedToday,
+                        loading: false,
+                    });
                 }
             })
             .catch(() => {
@@ -35,6 +52,7 @@ export function useDiscoveryActionStatus(viewerUid, targetId) {
 
         return () => {
             cancelled = true;
+            window.removeEventListener('discovery-action-status', onCacheUpdate);
         };
     }, [viewerUid, targetId]);
 

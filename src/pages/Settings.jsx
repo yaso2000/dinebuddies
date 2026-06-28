@@ -10,6 +10,8 @@ import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaShieldAlt, FaSignOut
 import { useTheme } from '../context/ThemeContext';
 import './Settings.css';
 import { goToLogin } from '../utils/goToLogin';
+import AppBackButton from '../components/AppBackButton';
+import { APP_HOME_PATH } from '../utils/appRouteShell';
 import { normalizeBusinessTier, getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import { BUSINESS_PAID_PLAN_DISPLAY } from '../config/stripeCommerce';
 import {
@@ -17,6 +19,7 @@ import {
   getLanguageNativeLabel,
   resolveLanguageCode } from
 '../constants/languageOptions';
+import { getPurchaseCredits } from '../utils/walletCredits';
 import { AppText, AppTextInput } from "../components/base";
 
 const BUSINESS_PAID_MONTHLY_USD = Number(String(BUSINESS_PAID_PLAN_DISPLAY.priceLabel).replace(/[^\d.]/g, '')) || 29;
@@ -297,9 +300,7 @@ const Settings = () => {
   }
 
   if (!isBusiness) {
-    const creditTotal =
-    Math.max(0, Number(userProfile?.freeCredits) || 0) +
-    Math.max(0, Number(userProfile?.paidCredits) || 0);
+    const creditTotal = getPurchaseCredits(userProfile);
     settingsSections.unshift({
       title: t('subscription_billing', 'Subscription & Billing'),
       items: [
@@ -331,9 +332,7 @@ const Settings = () => {
       <div className="page-container" style={{ paddingBottom: '100px' }}>
                 {/* Header */}
                 <header className="app-header sticky-header-glass">
-                    <button className="back-btn" onClick={() => navigate(-1)}>
-                        <FaArrowLeft />
-                    </button>
+                    <AppBackButton fallback={APP_HOME_PATH} />
                     <AppText as="h3" style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>
                         ⚙️ {t('settings_title_page', 'Settings')}
                     </AppText>
@@ -424,13 +423,7 @@ const Settings = () => {
             <div className="settings-page-inner">
             {/* Minimal Header */}
             <div className="settings-header">
-                <button
-            onClick={() => navigate(-1)}
-            className="settings-back-btn"
-            aria-label={t('back', 'Back')}>
-
-                    <FaArrowLeft />
-                </button>
+                <AppBackButton className="settings-back-btn" fallback={APP_HOME_PATH} />
                 <AppText as="h2" className="settings-title">{t('settings_title_page', 'Settings')}</AppText>
             </div>
 

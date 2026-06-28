@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaUsers, FaMars, FaVenus } from 'react-icons/fa';
+import { FaUsers, FaMars, FaVenus, FaHeart } from 'react-icons/fa';
 import EmojiPicker from '../EmojiPicker';
 import {
   DINING_PERSONA_PRESETS,
@@ -8,8 +8,15 @@ import {
   INVITE_PREFERENCE_OPTIONS,
   JOIN_REASON_MAX,
   FIRST_DATE_PLACE_HINT_MAX,
-  getJoinReasonOptions } from
-'../../constants/privateProfileOptions';
+  getJoinReasonOptions,
+  isInvitePreferenceChosen,
+} from '../../constants/privateProfileOptions';
+import {
+  getLookingForOptions,
+} from '../../constants/personalInviteCategories';
+import {
+  syncLookingForWithOpenToDating,
+} from '../../utils/openToDating';
 import './PrivateProfileFields.css';
 import { AppText, AppTextInput } from "../base";
 
@@ -29,7 +36,12 @@ export default function PrivateProfileFields({
   invitePreference = 'any',
   firstDatePlaceHint = '',
   joinReasons = [],
+  lookingFor = [],
+  openToDating = false,
+  availableForPrivateInvite = true,
+  showAvailableForPrivateInviteToggle = false,
   showInvitePreference = true,
+  requireInviteFields = false,
   onChange
 }) {
   const { t } = useTranslation();
@@ -44,6 +56,9 @@ export default function PrivateProfileFields({
     invitePreference,
     firstDatePlaceHint,
     joinReasons,
+    lookingFor,
+    openToDating,
+    availableForPrivateInvite,
     ...patch
   });
 
@@ -65,6 +80,15 @@ export default function PrivateProfileFields({
     }
     if (joinReasons.length >= JOIN_REASON_MAX) return;
     emit({ joinReasons: [...joinReasons, id] });
+  };
+
+  const toggleLookingFor = (id) => {
+    const has = lookingFor.includes(id);
+    if (has) {
+      emit({ lookingFor: lookingFor.filter((item) => item !== id) });
+      return;
+    }
+    emit({ lookingFor: [...lookingFor, id] });
   };
 
   const addCustomTag = () => {
@@ -95,14 +119,91 @@ export default function PrivateProfileFields({
   diningPersona.length < DINING_PERSONA_MAX_TAGS;
 
   const joinReasonOptions = getJoinReasonOptions({ includePrivateOnly: showInvitePreference });
+  const lookingForOptions = getLookingForOptions({ includeDating: openToDating });
+  const invitePrefMissing = requireInviteFields && !isInvitePreferenceChosen(invitePreference);
+  const lookingForMissing = requireInviteFields && !lookingFor.length;
+
+  const setOpenToDating = (next) => {
+    emit({
+      openToDating: next,
+      lookingFor: syncLookingForWithOpenToDating(lookingFor, next),
+    });
+  };
 
   return (
     <div className="private-profile-fields">
+            {showAvailableForPrivateInviteToggle ?
+      <div className={`private-profile-fields__dating-switch${availableForPrivateInvite ? ' private-profile-fields__dating-switch--on private-profile-fields__private-invite-switch--on' : ''}`}>
+                <div className="private-profile-fields__dating-switch-copy">
+                    <label className="private-profile-fields__pref-label private-profile-fields__dating-label" htmlFor="profile-available-private-invite">
+                        {t('available_for_private_invite', 'Available for private invitations')}
+                    </label>
+                    <AppText as="p" className="private-profile-fields__join-hint">
+                        {t(
+              'admin_demo_user_private_invite_hint',
+              'When off, this demo user only accepts public/social invites.'
+            )}
+                    </AppText>
+                </div>
+                <button
+          id="profile-available-private-invite"
+          type="button"
+          role="switch"
+          aria-checked={availableForPrivateInvite === true}
+          className={`private-profile-fields__switch private-profile-fields__switch--invite${availableForPrivateInvite ? ' private-profile-fields__switch--on private-profile-fields__switch--invite-on' : ''}`}
+          onClick={() => emit({ availableForPrivateInvite: !availableForPrivateInvite })}>
+          
+                    <AppText as="span" className="private-profile-fields__switch-knob" aria-hidden />
+                </button>
+            </div> :
+      null}
+
+            <div className={`private-profile-fields__dating-switch${openToDating ? ' private-profile-fields__dating-switch--on' : ''}`}>
+                <div className="private-profile-fields__dating-switch-copy">
+                    <label className="private-profile-fields__pref-label private-profile-fields__dating-label" htmlFor="profile-open-to-dating">
+                        <FaHeart
+              className={`private-profile-fields__dating-label-icon${openToDating ? '' : ' private-profile-fields__dating-label-icon--muted'}`}
+              aria-hidden />
+                        {t('profile_open_to_dating_title', 'Open to dating')}
+                    </label>
+                    <AppText as="p" className="private-profile-fields__join-hint">
+                        {t(
+              'profile_open_to_dating_hint',
+              'When on, others see a heart on your card (dating). When off, they can follow you as friends.'
+            )}
+                    </AppText>
+                </div>
+                <button
+          id="profile-open-to-dating"
+          type="button"
+          role="switch"
+          aria-checked={openToDating === true}
+          className={`private-profile-fields__switch${openToDating ? ' private-profile-fields__switch--on' : ''}`}
+          onClick={() => setOpenToDating(!openToDating)}>
+          
+                    {openToDating ?
+          <FaHeart className="private-profile-fields__switch-heart" aria-hidden /> :
+          null}
+                    <AppText as="span" className="private-profile-fields__switch-knob" aria-hidden />
+                </button>
+            </div>
+
             {showInvitePreference ?
-      <div>
+      <div className={invitePrefMissing ? 'private-profile-fields__section--required' : ''}>
                     <label className="private-profile-fields__pref-label">
                         {t('private_profile_invite_pref_title', 'Who can send you Private Invites?')}
+                        {requireInviteFields ?
+            <AppText as="span" className="private-profile-fields__required-mark" aria-hidden> *</AppText> :
+            null}
                     </label>
+                    {invitePrefMissing ?
+          <AppText as="p" className="private-profile-fields__required-hint" role="alert">
+                        {t(
+              'profile_private_invite_gender_pref_required',
+              'Choose who can send you private invites (gender preference).'
+            )}
+                    </AppText> :
+          null}
                     <div className="private-profile-fields__pref-row">
                         {INVITE_PREFERENCE_OPTIONS.map((opt) => {
             const active = invitePreference === opt.value;
@@ -125,6 +226,47 @@ export default function PrivateProfileFields({
                     </div>
                 </div> :
       null}
+
+            <div className={lookingForMissing ? 'private-profile-fields__section--required' : ''}>
+                <label className="private-profile-fields__pref-label">
+                    {t('profile_looking_for_title', 'Looking for')}
+                    {requireInviteFields ?
+          <AppText as="span" className="private-profile-fields__required-mark" aria-hidden> *</AppText> :
+          null}
+                </label>
+                <AppText as="p" className="private-profile-fields__join-hint">
+                    {t(
+            'profile_looking_for_hint',
+            'Select all that apply — your relationship intentions on DineBuddies.'
+          )}
+                </AppText>
+                {lookingForMissing ?
+        <AppText as="p" className="private-profile-fields__required-hint" role="alert">
+                    {t(
+            'profile_private_invite_looking_for_required',
+            'Select at least one option under Looking for.'
+          )}
+                </AppText> :
+        null}
+                <div className="private-profile-fields__looking-for">
+                    {lookingForOptions.map((opt) => {
+            const active = lookingFor.includes(opt.id);
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                className={`private-profile-fields__looking-btn${active ? ' private-profile-fields__looking-btn--active' : ''}`}
+                onClick={() => toggleLookingFor(opt.id)}>
+                
+                                <AppText as="span" className="private-profile-fields__looking-icon" aria-hidden>
+                                    {opt.icon}
+                                </AppText>
+                                {t(opt.labelKey, opt.defaultLabel)}
+                            </button>);
+
+          })}
+                </div>
+            </div>
 
             <div>
                 <label className="private-profile-fields__pref-label">

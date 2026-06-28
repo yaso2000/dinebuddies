@@ -9,11 +9,14 @@ import { getFollowing } from '../../../utils/followHelpers';
 import { isExcludedFromUserDocSearch } from '../../../utils/consumerSearchExclusions';
 import { searchAccounts } from '../../../services/accountSearch';
 import UserAvatar from '../../UserAvatar';
+import LookingForChips from '../../profile/LookingForChips';
 import {
   fetchPrivateInviteEligibilityByUserIds,
   isUserAvailableForPrivateInvite,
-  mergePrivateInviteEligibility } from
+  mergePrivateInviteEligibility,
+  senderFollowsInvitee } from
 '../../../utils/privateInviteAvailability';
+import { useToast } from '../../../context/ToastContext';
 import { AppText, AppTextInput } from "../../base";
 
 const SOCIAL_MAX_GUESTS = 30;
@@ -33,6 +36,7 @@ export default function SocialInvitationInviteePanel({
   className = ''
 }) {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const { currentUser: authUser, userProfile } = useAuth();
   const { currentUser } = useInvitations();
 
@@ -40,6 +44,7 @@ export default function SocialInvitationInviteePanel({
   const selectedIds = Array.isArray(invitedFriendIds) ? invitedFriendIds : [];
 
   const [mutualFriends, setMutualFriends] = useState([]);
+  const [followingIds, setFollowingIds] = useState([]);
   const [friendsLoading, setFriendsLoading] = useState(true);
   const [friendSearchQuery, setFriendSearchQuery] = useState('');
   const [friendSearchLoading, setFriendSearchLoading] = useState(false);
@@ -62,6 +67,7 @@ export default function SocialInvitationInviteePanel({
           const userDoc = await getDoc(doc(db, 'users', uid));
           followingIds = userDoc.data()?.following || [];
         }
+        setFollowingIds(followingIds);
         const friends = await getFollowing(uid, followingIds);
         let list = friends;
         if (mode === 'dating') {
@@ -147,6 +153,7 @@ export default function SocialInvitationInviteePanel({
         const merged = new Map();
         const addCandidate = (id, data) => {
           if (!id || id === uid) return;
+          if (mode === 'dating' && !senderFollowsInvitee(followingIds, id)) return;
           if (isExcludedFromUserDocSearch(data)) return;
           if (mode === 'dating') {
             if (!isUserAvailableForPrivateInvite(data)) return;
@@ -209,7 +216,7 @@ export default function SocialInvitationInviteePanel({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [friendSearchQuery, uid, mutualFriends, mode]);
+  }, [friendSearchQuery, uid, mutualFriends, mode, followingIds]);
 
   const searchQ = friendSearchQuery.trim().toLowerCase();
   const filteredFriends = searchQ ? friendSearchResults : mutualFriends;
@@ -251,6 +258,16 @@ export default function SocialInvitationInviteePanel({
 
   const toggleFriend = (friendId) => {
     if (readOnly) return;
+    if (mode === 'dating' && !senderFollowsInvitee(followingIds, friendId)) {
+      showToast(
+        t(
+          'private_invite_follow_required',
+          'Follow this member first to send a private invite.'
+        ),
+        'info'
+      );
+      return;
+    }
     const current = [...selectedIds];
     if (current.includes(friendId)) {
       persistInvitees(current.filter((id) => id !== friendId));
@@ -300,9 +317,15 @@ export default function SocialInvitationInviteePanel({
                     {selectedProfiles.map((friend) =>
         <li key={friend.id} className="social-invitee-panel__selected-item">
                             <UserAvatar user={friend} alt="" style={{ width: 40, height: 40 }} />
-                            <AppText as="span" className="social-invitee-panel__selected-name">
-                                {friend.display_name || friend.name || t('user', 'User')}
-                            </AppText>
+                            <div className="social-invitee-panel__selected-meta">
+                                <AppText as="span" className="social-invitee-panel__selected-name">
+                                    {friend.display_name || friend.name || t('user', 'User')}
+                                </AppText>
+                                <LookingForChips
+                  ids={friend.lookingFor}
+                  className="social-invitee-panel__looking-for"
+                  chipClassName="social-invitee-panel__looking-chip" />
+                            </div>
                             {!readOnly ?
           <button
             type="button"

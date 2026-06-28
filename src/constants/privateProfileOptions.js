@@ -1,4 +1,6 @@
 /** Preset vibe & interest tags for private-enabled profiles (`users.diningPersona`). */
+import { normalizeLookingFor } from './personalInviteCategories';
+
 export const DINING_PERSONA_PRESETS = [
     '☕ Coffee',
     '🚶 Walking',
@@ -103,10 +105,42 @@ export function normalizeJoinReasons(raw, { includePrivateOnly = true } = {}) {
     return out;
 }
 
+const INVITE_PREFERENCE_VALUES = new Set(['any', 'male_only', 'female_only']);
+
 export function normalizeInvitePreference(raw) {
     const v = String(raw || 'any').trim().toLowerCase();
     if (v === 'male_only' || v === 'female_only') return v;
     return 'any';
+}
+
+/** True when the member explicitly chose an invite gender preference. */
+export function isInvitePreferenceChosen(raw) {
+    const v = String(raw ?? '').trim().toLowerCase();
+    return INVITE_PREFERENCE_VALUES.has(v);
+}
+
+/**
+ * Read invite preference for profile forms — empty until explicitly chosen.
+ * @param {object | null | undefined} user
+ */
+export function readInvitePreferenceForForm(user) {
+    if (!isInvitePreferenceChosen(user?.invitePreference)) return '';
+    return normalizeInvitePreference(user.invitePreference);
+}
+
+/**
+ * Required profile fields for unified member profiles.
+ * @returns {{ ok: true } | { ok: false, code: 'invite_preference_required' | 'looking_for_required' }}
+ */
+export function validatePrivateInviteProfileFields({ invitePreference, lookingFor }) {
+    const normalizedLookingFor = normalizeLookingFor(lookingFor, { includeDating: true });
+    if (!normalizedLookingFor.length) {
+        return { ok: false, code: 'looking_for_required' };
+    }
+    if (!isInvitePreferenceChosen(invitePreference)) {
+        return { ok: false, code: 'invite_preference_required' };
+    }
+    return { ok: true };
 }
 
 export function normalizeFirstDatePlaceHint(raw) {

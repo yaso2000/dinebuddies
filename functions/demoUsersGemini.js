@@ -129,10 +129,6 @@ function parseGeminiJsonArray(text) {
     throw new Error('Gemini JSON must be an array of user profiles');
 }
 
-/**
- * @param {{ city: string, state?: string, country: string, countryCode?: string, count: number }} opts
- * @returns {Promise<object[]>}
- */
 async function callGeminiForDemographics(opts) {
     const city = String(opts.city || '').trim();
     const country = String(opts.country || '').trim();
@@ -176,7 +172,107 @@ async function callGeminiForDemographics(opts) {
     }
 }
 
+/**
+ * @param {{
+ *   city: string,
+ *   state?: string,
+ *   country: string,
+ *   countryCode?: string,
+ *   gender?: string,
+ *   ageCategory?: string,
+ *   displayName?: string,
+ *   existingBio?: string,
+ *   diningPersona?: string[],
+ *   userPrompt?: string,
+ * }} opts
+ */
+function buildBioPrompt(opts) {
+    const city = String(opts.city || '').trim();
+    const country = String(opts.country || '').trim();
+    const countryCode = String(opts.countryCode || '').trim().toUpperCase().slice(0, 2);
+    const state = String(opts.state || '').trim();
+    const primaryLanguage = resolvePrimaryLanguage(country, countryCode);
+    const gender = opts.gender === 'female' ? 'female' : opts.gender === 'male' ? 'male' : 'person';
+    const ageCategory = String(opts.ageCategory || '').trim() || '25-34';
+    const displayName = String(opts.displayName || '').trim();
+    const existingBio = String(opts.existingBio || '').trim();
+    const persona = Array.isArray(opts.diningPersona)
+        ? opts.diningPersona.map((x) => String(x || '').trim()).filter(Boolean).slice(0, 3)
+        : [];
+    const userPrompt = String(opts.userPrompt || '').trim();
+
+    return `
+You write short social-dining profile bios for a demo user in ${[city, state, country].filter(Boolean).join(', ')}.
+
+RULES:
+1. Return ONLY JSON: {"bio":"..."} — no markdown.
+2. "bio" max 100 characters, written entirely in ${primaryLanguage}.
+3. Match local culture and food/social vibes of ${city}, ${country}.
+4. Gender context: ${gender}. Age band: ${ageCategory}.
+${displayName ? `5. First name vibe (do not repeat as full sentence): ${displayName}.` : '5. Use a friendly first-person tone.'}
+${persona.length ? `6. Reflect dining persona tags: ${persona.join(', ')}.` : ''}
+${existingBio ? `7. Improve or replace this draft if helpful: "${existingBio}".` : ''}
+${userPrompt ? `8. Admin creative brief: ${userPrompt}` : ''}
+
+Write one authentic, concise bio line suitable for a dining/social app profile.
+`.trim();
+}
+
+/**
+ * @param {Parameters<typeof buildBioPrompt>[0]} opts
+ * @returns {Promise<{ bio: string }>}
+ */
+async function callGeminiForDemoBio(opts) {
+    const city = String(opts.city || '').trim();
+    const country = String(opts.country || '').trim();
+    if (!city || !country) {
+        throw new Error('city and country are required for bio generation.');
+    }
+
+    const prompt = buildBioPrompt(opts);
+    const genAI = getGenAiClient();
+
+    try {
+        let responseText;
+        if (genAI) {
+            const model = genAI.getGenerativeModel({
+                model: DEFAULT_MODEL,
+                generationConfig: {
+                    responseMimeType: 'application/json',
+                    temperature: 0.85,
+                },
+            });
+            const result = await model.generateContent(prompt);
+            responseText = result.response.text();
+        } else {
+            responseText = await callVertexGemini(prompt, DEFAULT_MODEL);
+        }
+
+        let parsed;
+        try {
+            parsed = JSON.parse(String(responseText || '').trim());
+        } catch {
+            const raw = String(responseText || '');
+            const start = raw.indexOf('{');
+            const end = raw.lastIndexOf('}');
+            if (start < 0 || end <= start) throw new Error('Gemini bio response is not JSON');
+            parsed = JSON.parse(raw.slice(start, end + 1));
+        }
+
+        const bio = String(parsed?.bio || '').trim();
+        if (!bio) throw new Error('Gemini returned an empty bio');
+        return { bio: bio.slice(0, 100) };
+    } catch (error) {
+        console.error('Gemini demo bio failed:', error?.message || error);
+        const err = new Error(error?.message || 'Failed to generate demo bio');
+        err.code = error?.code || 'gemini-bio-failed';
+        throw err;
+    }
+}
+
 module.exports = {
     callGeminiForDemographics,
+    callGeminiForDemoBio,
     buildDemographicsPrompt,
+    buildBioPrompt,
 };

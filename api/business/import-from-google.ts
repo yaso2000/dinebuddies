@@ -15,6 +15,7 @@ import {
     refreshVirtualBusinessFromGoogle,
     loadExistingRestaurantForImport,
 } from '../_virtualBusinessIngest.js';
+import { assessBusinessImportDuplicates } from '../_businessImportDuplicateCheck.js';
 import type {
     ImportFromGoogleApiError,
     ImportFromGooglePreviewSuccess,
@@ -27,6 +28,7 @@ type ImportRequestBody = {
     placeId?: string;
     action?: ImportAction;
     previewCoverImage?: string;
+    forceCreate?: boolean;
 };
 
 type VercelRequest = {
@@ -116,8 +118,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
         if (action === 'preview') {
-            const existing = await loadExistingRestaurantForImport(placeId);
             const previewResult = await fetchGooglePlacePreview(placeId);
+            const assessment = await assessBusinessImportDuplicates({
+                ...previewResult,
+                googlePlaceId: placeId,
+            });
+            const existing = assessment.exactMatch;
 
             return res.status(200).json({
                 status: 'ok',
@@ -129,10 +135,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 ...(existing
                     ? { alreadyExisted: true, docId: existing.docId }
                     : {}),
+                duplicateMatches: assessment.duplicates,
+                ...(assessment.primaryDuplicate && !existing
+                    ? {
+                          duplicateMergeTarget: assessment.primaryDuplicate.docId,
+                          duplicateMergeReason: assessment.primaryDuplicate.matchReason,
+                      }
+                    : {}),
             });
         }
 
         const previewCoverImage = String(body.previewCoverImage || '').trim();
+        const forceCreate = body.forceCreate === true;
         const existing = await loadExistingRestaurantForImport(placeId);
 
         const details = await fetchGooglePlaceMinimal(placeId, {
@@ -156,6 +170,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const publishDetails = {
             ...details,
+            googlePlaceId: placeId,
             ...(previewCoverImage ? { previewCoverImage } : {}),
         };
 
@@ -175,6 +190,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
         }
 
+        const assessment = await assessBusinessImportDuplicates(publishDetails);
+
+        if (assessment.primaryDuplicate && !forceCreate) {
+            const target = assessment.primaryDuplicate;
+            const { docId, placeholder } = await refreshVirtualBusinessFromGoogle(
+                publishDetails,
+                target.docId,
+            );
+            return res.status(200).json({
+                status: 'ok',
+                action: 'publish',
+                docId,
+                alreadyExisted: true,
+                refreshed: true,
+                mergedFromDuplicate: true,
+                duplicateMergeReason: target.matchReason,
+                duplicateMatches: assessment.duplicates,
+                directorySynced: true,
+                placeholder,
+            });
+        }
+
         const { docId, placeholder } = await ingestVirtualBusinessFromGoogle(publishDetails);
         return res.status(200).json({
             status: 'ok',
@@ -182,6 +219,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             docId,
             placeholder,
             directorySynced: true,
+            ...(assessment.duplicates.length ? { duplicateMatches: assessment.duplicates } : {}),
         });
     } catch (err) {
         const code =

@@ -364,9 +364,15 @@ export default function SocialInvitationCardPreview({
   const photoBgClass = fullBleedBackground ? ' social-invitation-card-preview--photo-bg' : '';
 
   const iconEl =
-  !templateArtActive && !colorBackgroundActive ?
+  cardTemplateSet !== 'dating' &&
+  !templateArtActive &&
+  !colorBackgroundActive &&
+  !hasHeroCover ?
   <div className="social-invitation-card-preview__icon-wrap">
-                <SocialCardCategoryIcon categoryId={categoryId} />
+                <SocialCardCategoryIcon
+                  categoryId={categoryId}
+                  personalIntent={cardTemplateSet === 'dating'}
+                />
             </div> :
   null;
 

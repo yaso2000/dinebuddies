@@ -51,8 +51,10 @@ export function printFirebaseLoginHelp() {
     console.error('');
     console.error('[firebase] No Firebase CLI session. Log in first (recommended):');
     console.error('  npm run firebase:login');
+    console.error('  npm run firebase:login:reauth');
     console.error('');
     console.error('If login still fails (auth.firebase.tools/attest):');
+    console.error('  - Use: npm run firebase:login   (NOT bare "firebase login")');
     console.error('  - Disable VPN/proxy temporarily');
     console.error('  - Try another network (mobile hotspot)');
     console.error('  - Or use Node 22 LTS: nvm use 22 && npm run firebase:login');

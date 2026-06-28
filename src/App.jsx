@@ -78,6 +78,7 @@ const BusinessCreatePostGate = lazy(() => import('./components/BusinessCreatePos
 const CreateFeaturedPost = lazy(() => import('./pages/business/CreateFeaturedPost'));
 const CreateStory = lazy(() => import('./pages/CreateStory'));
 const AiDesignStudio = lazy(() => import('./pages/AiDesignStudio'));
+const AiTextStudio = lazy(() => import('./pages/AiTextStudio'));
 const EmailSettings = lazy(() => import('./pages/EmailSettings'));
 const PasswordSettings = lazy(() => import('./pages/PasswordSettings'));
 const NotificationsSettings = lazy(() => import('./pages/NotificationsSettings'));
@@ -106,6 +107,8 @@ import GlobalImageUploadIndicator from './components/GlobalImageUploadIndicator'
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { InvitationProvider } from './context/InvitationContext';
+import { MatchCelebrationProvider } from './context/MatchCelebrationContext';
+import { SocialPingCelebrationProvider } from './context/SocialPingCelebrationContext';
 import { StripeProvider } from './context/StripeContext';
 import { ChatProvider } from './context/ChatContext';
 import { NotificationProvider } from './context/NotificationContext';
@@ -159,6 +162,8 @@ function App() {
                     <AuthProvider>
                         <AccountThemeBridge />
                         <InvitationProvider>
+                            <MatchCelebrationProvider>
+                            <SocialPingCelebrationProvider>
                             <NotificationProvider>
                                 <ChatProvider>
                                     <StripeProvider>
@@ -280,6 +285,7 @@ function App() {
                                                         }
                                                     />
                                                     <Route path="/ai-design-studio" element={<GuestBlockedRoute><AiDesignStudio /></GuestBlockedRoute>} />
+                                                    <Route path="/ai-text-studio" element={<GuestBlockedRoute><AiTextStudio /></GuestBlockedRoute>} />
                                                     <Route path="/create" element={<GuestBlockedRoute><CreateInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-social" element={<GuestBlockedRoute><CreateSocialInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-private" element={<GuestBlockedRoute><CreatePrivateInvitation /></GuestBlockedRoute>} />
@@ -348,6 +354,8 @@ function App() {
                                     </StripeProvider>
                                 </ChatProvider>
                             </NotificationProvider>
+                            </SocialPingCelebrationProvider>
+                            </MatchCelebrationProvider>
                         </InvitationProvider>
                     </AuthProvider>
                 </Router>

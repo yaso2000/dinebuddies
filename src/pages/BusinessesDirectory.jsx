@@ -4,7 +4,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaTrophy } from 'react-icons/fa';
+import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaTrophy, FaUserPlus } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -12,11 +12,17 @@ import { subscribeBusinessLiked, toggleBusinessLike, incrementBusinessShareCount
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import { DEFAULT_BUSINESS_COVER, handleBusinessCoverImageError, resolveBusinessCoverImageUrl } from '../utils/businessCoverImage';
 import UserAvatar from '../components/UserAvatar';
+import { useUserPresence } from '../hooks/usePresence';
 import { getContrastText } from '../utils/colorUtils';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import '../components/MapStyles.css';
 import { goToLogin } from '../utils/goToLogin';
+import {
+  handleBusinessCommunityJoinClick,
+  isJoinedToBusinessCommunity,
+  resolveBusinessCommunityId,
+} from '../utils/businessCommunityJoin';
 import {
   detachLeafletMap,
   ensureLeafletMapDetachedIfOrphan } from
@@ -217,6 +223,130 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
 
 };
 
+const BusinessDirectoryGridCard = React.memo(({ res }) => {
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { userProfile, currentUser: authCurrentUser } = useAuth();
+  const context = useInvitations();
+  const currentUser = context?.currentUser || authCurrentUser || {};
+  const joinCommunity = context?.joinCommunity || (() => Promise.resolve(false));
+
+  const joinedCommunities = currentUser.joinedCommunities || [];
+  const communityId = resolveBusinessCommunityId(joinedCommunities, {
+    ownerId: res.ownerId,
+    businessId: res.id,
+  });
+  const isJoined = isJoinedToBusinessCommunity(joinedCommunities, communityId);
+  const isOwner = currentUser?.id === res.ownerId || (currentUser?.ownedRestaurants || []).includes(res.id);
+  const isBusinessAccount = userProfile?.isBusiness || false;
+  const isOnline = useUserPresence(res.ownerId || res.id, { fallback: Boolean(res.isOnline) });
+  const effectiveJoined = isJoined;
+
+  const categoryLabel = res.type
+    ? t(`type_${res.type.toLowerCase().replace(/\s+/g, '')}`, res.type)
+    : t('venue', 'Venue');
+
+  const openProfile = () => navigate(`/business/${res.id}`);
+
+  const handleJoinOrChat = (e) => {
+    handleBusinessCommunityJoinClick({
+      event: e,
+      navigate,
+      goToLogin,
+      currentUser,
+      communityId,
+      isJoined: effectiveJoined,
+      joinCommunity,
+      returnPath: `/business/${res.id}`,
+    });
+  };
+
+  return (
+    <article className="restaurant-grid-card">
+      <div
+        className="restaurant-grid-card__media"
+        onClick={openProfile}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openProfile();
+          }
+        }}
+      >
+        <img
+          src={
+            resolveBusinessCoverImageUrl(res) ||
+            pickSafeDisplayImageUrl(res.image, res.businessInfo?.coverImage) ||
+            DEFAULT_BUSINESS_COVER
+          }
+          alt={res.name}
+          onError={(e) => handleBusinessCoverImageError(e, res)}
+          className="restaurant-grid-card__image"
+          loading="lazy"
+        />
+        <div className="restaurant-grid-card__scrim" aria-hidden />
+        <div className="restaurant-grid-card__top">
+          <AppText as="span" className="restaurant-grid-card__category">
+            {categoryLabel}
+          </AppText>
+          <span
+            className={`restaurant-grid-card__presence${isOnline ? ' restaurant-grid-card__presence--online' : ' restaurant-grid-card__presence--offline'}`}
+            role="status"
+          >
+            <span className="restaurant-grid-card__presence-dot" aria-hidden />
+            <AppText as="span">{isOnline ? t('online', 'Online') : t('offline', 'Offline')}</AppText>
+          </span>
+        </div>
+
+        {isOwner ? (
+          <AppText as="span" className="restaurant-grid-card__owner-badge">
+            {t('owner', 'Owner')}
+          </AppText>
+        ) : !isBusinessAccount ? (
+          <button
+            type="button"
+            className={`restaurant-grid-card__join${effectiveJoined ? ' restaurant-grid-card__join--chat' : ''}`}
+            onClick={handleJoinOrChat}
+            title={
+              effectiveJoined
+                ? t('business_grid_join_chat', 'Join chat')
+                : t('join_plus', '+ Join')
+            }
+            aria-label={
+              effectiveJoined
+                ? t('business_grid_join_chat', 'Join chat')
+                : t('join_plus', '+ Join')
+            }
+          >
+            {effectiveJoined ? (
+              <>
+                <FaComments className="restaurant-grid-card__join-icon" aria-hidden />
+                <AppText as="span" className="restaurant-grid-card__join-label">
+                  {t('business_grid_join_chat', 'Join chat')}
+                </AppText>
+              </>
+            ) : (
+              <FaUserPlus className="restaurant-grid-card__join-icon" aria-hidden />
+            )}
+          </button>
+        ) : null}
+      </div>
+
+      <div className="restaurant-grid-card__footer">
+        <button type="button" className="restaurant-grid-card__name-btn" onClick={openProfile}>
+          <AppText as="h2" className="restaurant-grid-card__name" title={res.name}>
+            {res.name}
+          </AppText>
+        </button>
+      </div>
+    </article>
+  );
+});
+
+BusinessDirectoryGridCard.displayName = 'BusinessDirectoryGridCard';
+
 const RestaurantCard = React.memo(({ res, onViewMembers }) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -227,7 +357,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
   const currentUser = context?.currentUser || {};
   // Use Auth for like flow so heart works consistently (context.currentUser can be stale or missing .uid)
   const likeUser = authCurrentUser || currentUser;
-  const toggleCommunity = context?.toggleCommunity || (() => {});
+  const joinCommunity = context?.joinCommunity || (() => Promise.resolve(false));
 
   if (!res) return null;
 
@@ -261,10 +391,11 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
 
 
   const joinedCommunities = currentUser.joinedCommunities || [];
-  const communityId = joinedCommunities.includes(res.ownerId) ?
-  res.ownerId :
-  joinedCommunities.includes(res.id) ? res.id : res.ownerId || res.id;
-  const isJoined = joinedCommunities.includes(communityId);
+  const communityId = resolveBusinessCommunityId(joinedCommunities, {
+    ownerId: res.ownerId,
+    businessId: res.id,
+  });
+  const isJoined = isJoinedToBusinessCommunity(joinedCommunities, communityId);
   const isOwner = currentUser?.id === res.ownerId || (currentUser?.ownedRestaurants || []).includes(res.id);
   const isBusinessAccount = userProfile?.isBusiness || false;
 
@@ -281,6 +412,11 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
   }, [res.id, likeUser?.uid]);
 
   const effectiveLiked = optimisticLiked ?? cardLiked;
+
+  useEffect(() => {
+    if (optimisticLiked === null) return;
+    if (optimisticLiked === cardLiked) setOptimisticLiked(null);
+  }, [cardLiked, optimisticLiked]);
 
   const handleToggleLike = async (e) => {
     e.stopPropagation();
@@ -303,46 +439,30 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
         address: res.location || '',
         city: ''
       } : undefined;
-      await toggleBusinessLike(businessId, userId, effectiveLiked, businessInfoForFavorite);
-    } catch (err) {
-      setOptimisticLiked(effectiveLiked);
-      console.warn('[like] card toggle failed', { businessId, userId, err });
-      showToast(t('like_failed', 'Could not update like. Try again.'), 'error');
+      void toggleBusinessLike(businessId, userId, effectiveLiked, businessInfoForFavorite).catch((err) => {
+        setOptimisticLiked(effectiveLiked);
+        console.warn('[like] card toggle failed', { businessId, userId, err });
+        showToast(t('like_failed', 'Could not update like. Try again.'), 'error');
+      });
     } finally {
-      setOptimisticLiked(null);
       setLikeInProgress(false);
     }
   };
 
-  const [communityMembers, setCommunityMembers] = useState([]);
-  const [memberCount, setMemberCount] = useState(0);
-  const [optimisticJoined, setOptimisticJoined] = useState(null);
-  const [joinInProgress, setJoinInProgress] = useState(false);
-  const effectiveJoined = optimisticJoined ?? isJoined;
+  const effectiveJoined = isJoined;
 
-  // Use ref to avoid triggering effect on every context re-render
-  const getMembersRef = useRef(context?.getCommunityMembers);
-  useEffect(() => {
-    getMembersRef.current = context?.getCommunityMembers;
-  }, [context?.getCommunityMembers]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadCommunityPreview = async () => {
-      if (!getMembersRef.current || !likeUser?.uid) return;
-      try {
-        const result = await getMembersRef.current(communityId, { includeMembers: true, limit: 5 });
-        if (cancelled) return;
-        setCommunityMembers(result?.members || []);
-        setMemberCount(Number(result?.memberCount || 0));
-      } catch (err) {}
-    };
-    // Add a tiny delay to debounce rapid mounts
-    const timer = setTimeout(() => {
-      loadCommunityPreview();
-    }, 100);
-    return () => {cancelled = true;clearTimeout(timer);};
-  }, [likeUser?.uid, res.id, res.ownerId]);
+  const handleJoinOrChat = (e) => {
+    handleBusinessCommunityJoinClick({
+      event: e,
+      navigate,
+      goToLogin,
+      currentUser,
+      communityId,
+      isJoined: effectiveJoined,
+      joinCommunity,
+      returnPath: `/business/${res.id}`,
+    });
+  };
 
   const handleShare = async (e) => {
     e.stopPropagation();
@@ -623,38 +743,25 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
           color: 'white'
         }}>
                     <div style={{ display: 'flex', alignItems: 'center' }}>
-                        {/* Avatars */}
-                        {memberCount > 0 ?
-            <div
-              onClick={(e) => {e.stopPropagation();onViewMembers && onViewMembers(res.id);}}
-              style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', minWidth: 0, flex: 1 }}>
+                        <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onViewMembers) onViewMembers(res.id);
+              }}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                padding: 0,
+                margin: 0,
+                fontSize: '0.85rem',
+                color: 'rgba(255,255,255,0.9)',
+                fontWeight: 600,
+                cursor: onViewMembers ? 'pointer' : 'default'
+              }}>
               
-                                {communityMembers.slice(0, 5).map((member, index) =>
-              <img
-                key={member.uid || index}
-                src={getSafeAvatar(member)}
-                alt=""
-                style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  border: '2px solid rgba(255,255,255,0.5)',
-                  objectFit: 'cover',
-                  marginInlineStart: index === 0 ? '0' : '-9px',
-                  zIndex: 10 - index,
-                  flexShrink: 0
-                }} />
-
-              )}
-                                <AppText as="span" style={{ marginInlineStart: '8px', fontSize: '0.82rem', color: 'white', fontWeight: '700', whiteSpace: 'nowrap' }}>
-                                    {memberCount} {t('members')}
-                                </AppText>
-                            </div> :
-
-            <AppText as="span" style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.9)', fontWeight: '600' }}>
                                 {t('restaurant_community')}
-                            </AppText>
-            }
+                            </button>
                     </div>
 
                     {isOwner ?
@@ -671,51 +778,43 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
                         </AppText> :
           !isBusinessAccount &&
           <button
-            className="community-join-btn"
-            disabled={joinInProgress}
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              if (!currentUser?.uid && !currentUser?.id && !currentUser?.isGuest) {
-                goToLogin();
-              } else {
-                const nextJoined = !effectiveJoined;
-                setOptimisticJoined(nextJoined);
-                setJoinInProgress(true);
-                Promise.resolve(toggleCommunity(communityId)).
-                then((ok) => {
-                  if (ok === false) {
-                    setOptimisticJoined(effectiveJoined);
-                  }
-                }).
-                catch(() => {
-                  setOptimisticJoined(effectiveJoined);
-                }).
-                finally(() => {
-                  setOptimisticJoined(null);
-                  setJoinInProgress(false);
-                });
-              }
-            }}
+            type="button"
+            className={`community-join-btn${effectiveJoined ? ' community-join-btn--chat' : ''}`}
+            onClick={handleJoinOrChat}
+            title={
+              effectiveJoined
+                ? t('business_grid_join_chat', 'Join chat')
+                : t('join_plus', '+ Join')
+            }
+            aria-label={
+              effectiveJoined
+                ? t('business_grid_join_chat', 'Join chat')
+                : t('join_plus', '+ Join')
+            }
             style={{
               background: effectiveJoined ? 'rgba(255,255,255,0.25)' : '#ffffff',
-              color: effectiveJoined ? '#ffffff' : '#f97316', // Use hardcoded orange for text to ensure visibility
+              color: effectiveJoined ? '#ffffff' : '#f97316',
               border: effectiveJoined ? '1px solid rgba(255,255,255,0.4)' : 'none',
               padding: '8px 20px',
               borderRadius: '14px',
               fontWeight: '900',
               fontSize: '0.85rem',
-              cursor: joinInProgress ? 'wait' : 'pointer',
+              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
               transition: 'all 0.2s',
-              boxShadow: effectiveJoined ? 'none' : '0 6px 15px rgba(0,0,0,0.15)',
-              opacity: joinInProgress ? 0.85 : 1
+              boxShadow: effectiveJoined ? 'none' : '0 6px 15px rgba(0,0,0,0.15)'
             }}>
-            
-                            {joinInProgress ? '…' : effectiveJoined ? t('member_joined') : t('join_plus')}
-                        </button>
+            {effectiveJoined ? (
+              <>
+                <FaComments aria-hidden />
+                {t('business_grid_join_chat', 'Join chat')}
+              </>
+            ) : (
+              t('join_plus', '+ Join')
+            )}
+          </button>
           }
                 </div>
             </div>
@@ -750,7 +849,7 @@ const BusinessesDirectory = () => {
   const [locationFilter, setLocationFilter] = useState('All');
   const [activeFilter, setActiveFilter] = useState(() => searchParams.get('category') || 'All'); // Category filter
   const [showFilters, setShowFilters] = useState(false); // Controls filter visibility
-  const [viewMode, setViewMode] = useState('list');
+  const [viewMode, setViewMode] = useState('grid');
   const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode for map
   const [userLocation, setUserLocation] = useState(null);
   const [detectedLocationContext, setDetectedLocationContext] = useState(null);
@@ -1197,13 +1296,29 @@ const BusinessesDirectory = () => {
                     </div>
                     <div style={{ background: 'var(--bg-card)', padding: '4px', borderRadius: '50px', display: 'flex', border: '1px solid var(--border-color)' }}>
                         <button
+              onClick={() => setViewMode('grid')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '50px',
+                background: viewMode === 'grid' ? 'var(--luxury-gold)' : 'transparent',
+                color: viewMode === 'grid' ? 'rgba(255, 255, 254, 1)' : 'var(--text-main)',
+                border: 'none',
+                fontSize: '0.82rem',
+                fontWeight: 600
+              }}>
+              
+                            {t('grid', 'Grid')}
+                        </button>
+                        <button
               onClick={() => setViewMode('list')}
               style={{
-                padding: '6px 16px',
+                padding: '6px 12px',
                 borderRadius: '50px',
                 background: viewMode === 'list' ? 'var(--luxury-gold)' : 'transparent',
                 color: viewMode === 'list' ? 'rgba(255, 255, 254, 1)' : 'var(--text-main)',
-                border: 'none'
+                border: 'none',
+                fontSize: '0.82rem',
+                fontWeight: 600
               }}>
               
                             {t('list')}
@@ -1211,11 +1326,13 @@ const BusinessesDirectory = () => {
                         <button
               onClick={() => setViewMode('map')}
               style={{
-                padding: '6px 16px',
+                padding: '6px 12px',
                 borderRadius: '50px',
                 background: viewMode === 'map' ? 'var(--luxury-gold)' : 'transparent',
                 color: viewMode === 'map' ? 'rgba(255, 255, 254, 1)' : 'var(--text-main)',
-                border: 'none'
+                border: 'none',
+                fontSize: '0.82rem',
+                fontWeight: 600
               }}>
               
                             {t('map')}
@@ -1448,9 +1565,24 @@ const BusinessesDirectory = () => {
                     </div>
                 </div>
 
-                {/* List View Container - Always in DOM but hidden when not active */}
+                {/* Grid View */}
                 <div
-          className="restaurant-list"
+          className="restaurant-list restaurant-list--grid"
+          style={{ display: viewMode === 'grid' ? 'grid' : 'none' }}>
+          
+                    {filteredRestaurants.map((res) =>
+          <BusinessDirectoryGridCard key={res.id} res={res} />
+          )}
+                    {filteredRestaurants.length === 0 && viewMode === 'grid' && (
+          <AppText as="p" className="restaurant-list--grid-empty" style={{ textAlign: 'center', opacity: 0.5 }}>
+            {t('no_results')}
+          </AppText>
+          )}
+                </div>
+
+                {/* List View (classic cards) */}
+                <div
+          className="restaurant-list restaurant-list--list"
           style={{
             display: viewMode === 'list' ? 'flex' : 'none',
             flexDirection: 'column',
@@ -1462,9 +1594,10 @@ const BusinessesDirectory = () => {
             key={res.id}
             res={res}
             onViewMembers={handleViewMembers} />
-
           )}
-                    {filteredRestaurants.length === 0 && <AppText as="p" style={{ textAlign: 'center', opacity: 0.5 }}>{t('no_results')}</AppText>}
+                    {filteredRestaurants.length === 0 && viewMode === 'list' && (
+          <AppText as="p" style={{ textAlign: 'center', opacity: 0.5 }}>{t('no_results')}</AppText>
+          )}
                 </div>
             </div>
             {/* Members Modal */}

@@ -20,6 +20,7 @@ import './SocialInvitation.css';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import SocialInvitationCardPreview from '../components/Invitations/socialCard/SocialInvitationCardPreview';
 import { buildSocialInvitationCardPreviewProps } from '../components/Invitations/socialCard/buildSocialInvitationCardPreviewProps';
+import { getPrivateInvitationHeroCoverFromInvitation } from '../components/Invitations/privateCard/privateCardBackgrounds';
 import { getSocialInvitationHeroCoverFromInvitation } from '../components/Invitations/socialCard/socialCardBackgrounds';
 import { getInvitationCardTextBackdropFromInvitation } from '../components/Invitations/socialCard/socialCardTextBackdrop';
 import SocialInvitationExternalShare from '../components/Invitations/socialCard/SocialInvitationExternalShare';
@@ -124,7 +125,10 @@ const SocialInvitationPreview = () => {
 
   const cardHeroCover = useMemo(() => {
     if (!invitation) return null;
-    return getSocialInvitationHeroCoverFromInvitation(invitation);
+    return (
+      getPrivateInvitationHeroCoverFromInvitation(invitation) ||
+      getSocialInvitationHeroCoverFromInvitation(invitation)
+    );
   }, [invitation]);
 
   const textBackdrop = useMemo(

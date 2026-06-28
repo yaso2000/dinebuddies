@@ -258,6 +258,141 @@ html {
     z-index: 1;
 }
 
+/* ── Locked / restricted chat state (centered warning) ── */
+
+.chat-blocked-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 28px 20px;
+    background: rgba(2, 6, 23, 0.78);
+    backdrop-filter: blur(6px);
+}
+
+[data-theme='light'] .chat-blocked-overlay {
+    background: rgba(248, 250, 252, 0.88);
+}
+
+.chat-blocked-card {
+    width: min(100%, 320px);
+    padding: 28px 22px 24px;
+    border-radius: 20px;
+    text-align: center;
+    box-shadow:
+        0 20px 48px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+
+.chat-blocked-card--connection {
+    border: 1px solid rgba(251, 191, 36, 0.45);
+    background: linear-gradient(165deg, rgba(69, 45, 12, 0.95) 0%, rgba(28, 20, 8, 0.98) 100%);
+}
+
+.chat-blocked-card--restricted {
+    border: 1px solid rgba(248, 113, 113, 0.45);
+    background: linear-gradient(165deg, rgba(69, 20, 20, 0.95) 0%, rgba(28, 10, 10, 0.98) 100%);
+}
+
+[data-theme='light'] .chat-blocked-card--connection {
+    border-color: rgba(217, 119, 6, 0.45);
+    background: linear-gradient(165deg, #fffbeb 0%, #fef3c7 100%);
+    box-shadow: 0 16px 40px rgba(180, 83, 9, 0.12);
+}
+
+[data-theme='light'] .chat-blocked-card--restricted {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: linear-gradient(165deg, #fef2f2 0%, #fee2e2 100%);
+    box-shadow: 0 16px 40px rgba(220, 38, 38, 0.1);
+}
+
+.chat-blocked-card__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    font-size: 1.35rem;
+}
+
+.chat-blocked-card--connection .chat-blocked-card__icon {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.16);
+    box-shadow: 0 0 0 6px rgba(251, 191, 36, 0.08);
+}
+
+.chat-blocked-card--restricted .chat-blocked-card__icon {
+    color: #f87171;
+    background: rgba(248, 113, 113, 0.16);
+    box-shadow: 0 0 0 6px rgba(248, 113, 113, 0.08);
+}
+
+.chat-blocked-card__title {
+    margin: 0 0 10px;
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #fef3c7;
+}
+
+.chat-blocked-card--restricted .chat-blocked-card__title {
+    color: #fecaca;
+}
+
+[data-theme='light'] .chat-blocked-card--connection .chat-blocked-card__title {
+    color: #92400e;
+}
+
+[data-theme='light'] .chat-blocked-card--restricted .chat-blocked-card__title {
+    color: #b91c1c;
+}
+
+.chat-blocked-card__desc {
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.55;
+    color: rgba(254, 243, 199, 0.82);
+}
+
+.chat-blocked-card--restricted .chat-blocked-card__desc {
+    color: rgba(254, 202, 202, 0.88);
+}
+
+[data-theme='light'] .chat-blocked-card--connection .chat-blocked-card__desc {
+    color: #78350f;
+}
+
+[data-theme='light'] .chat-blocked-card--restricted .chat-blocked-card__desc {
+    color: #991b1b;
+}
+
+.chat-blocked-card__action {
+    margin-top: 18px;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    color: #451a03;
+    background: linear-gradient(135deg, #fcd34d, #f59e0b);
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.chat-blocked-card__action:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(245, 158, 11, 0.42);
+}
+
+.chat-blocked-card__action:active {
+    transform: scale(0.98);
+}
+
 /* Scrollbar styling */
 .messages-area::-webkit-scrollbar {
     width: 4px;

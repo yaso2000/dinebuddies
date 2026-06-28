@@ -35,9 +35,10 @@ export async function previewBusinessFromGoogle(placeId, idToken) {
  * @param {string} placeId
  * @param {string | null | undefined} previewCoverImage data URL from preview phase
  * @param {string} idToken
+ * @param {{ forceCreate?: boolean }} [opts]
  * @returns {Promise<{ ok: boolean; status: number; data: ImportFromGooglePublishSuccess | ImportFromGoogleApiError }>}
  */
-export async function publishBusinessFromGoogle(placeId, previewCoverImage, idToken) {
+export async function publishBusinessFromGoogle(placeId, previewCoverImage, idToken, opts = {}) {
     const res = await fetch(resolveApiUrl('/api/business/import-from-google'), {
         method: 'POST',
         headers: {
@@ -48,6 +49,7 @@ export async function publishBusinessFromGoogle(placeId, previewCoverImage, idTo
             placeId: String(placeId || '').trim(),
             action: 'publish',
             ...(previewCoverImage ? { previewCoverImage: String(previewCoverImage) } : {}),
+            ...(opts.forceCreate === true ? { forceCreate: true } : {}),
         }),
     });
     const data = await res.json().catch(() => (/** @type {ImportFromGoogleApiError} */ ({

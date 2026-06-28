@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaCheck, FaTimes } from 'react-icons/fa';
+import { FaEye, FaTimes } from 'react-icons/fa';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import SocialInvitationCardPreview from './socialCard/SocialInvitationCardPreview';
@@ -79,7 +79,7 @@ function resolveHostProfile(inv, cache) {
 }
 
 /**
- * Full-screen pending private/private invite receiver (swipe queue, accept / decline / later).
+ * Full-screen pending private/social invite receiver (swipe queue, view / decline / later).
  */
 export default function InvitationInboxOverlay({
   invitations = [],
@@ -217,22 +217,12 @@ export default function InvitationInboxOverlay({
     });
   }, []);
 
-  const handleAccept = useCallback(async () => {
-    if (!current?.id || !onRespond) return;
+  const handleView = useCallback(() => {
+    if (!current?.id) return;
     const id = current.id;
     removeFromQueue(id);
-    setResponding(true);
-    try {
-      const ok = await onRespond(id, 'accepted');
-      if (ok) {
-        navigate(getHostedInvitationDetailsPath(current), { replace: true });
-      } else {
-        restoreToQueue(id);
-      }
-    } finally {
-      setResponding(false);
-    }
-  }, [current?.id, onRespond, navigate, removeFromQueue, restoreToQueue]);
+    navigate(getHostedInvitationDetailsPath(current), { replace: true });
+  }, [current, navigate, removeFromQueue]);
 
   const handleDecline = useCallback(async () => {
     if (!current?.id || !onRespond) return;
@@ -397,14 +387,14 @@ export default function InvitationInboxOverlay({
                 <button
             type="button"
             className="invitation-inbox-overlay__btn invitation-inbox-overlay__btn--accept"
-            onClick={handleAccept}
+            onClick={handleView}
             disabled={responding}>
             
                     <AppText as="span" className="invitation-inbox-overlay__btn-icon" aria-hidden>
-                        <FaCheck />
+                        <FaEye />
                     </AppText>
                     <AppText as="span" className="invitation-inbox-overlay__btn-label">
-                        {t('accept', 'Accept')}
+                        {t('invite_notification_view', 'View')}
                     </AppText>
                 </button>
             </div>

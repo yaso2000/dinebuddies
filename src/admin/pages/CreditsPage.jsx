@@ -17,7 +17,7 @@ export default function CreditsPage() {
   const [msg, setMsg] = useState('');
 
   const paid = Math.max(0, Math.floor(Number(selected?.paidCredits) || 0));
-  const free = Math.max(0, Math.floor(Number(selected?.freeCredits) || 0));
+  const saved = Math.max(0, Math.floor(Number(selected?.savedCredits) || 0));
 
   const runSearch = useCallback(async () => {
     const term = search.trim();
@@ -41,12 +41,13 @@ export default function CreditsPage() {
       setMsg(t('admin_invalid_amount'));
       return;
     }
-    if (!window.confirm(t('admin_grant_free_confirm', { count: n }))) return;
+    if (!window.confirm(t('admin_grant_paid_confirm', { count: n, defaultValue: `Grant ${n} purchase credits?` }))) return;
     setGranting(true);
     try {
       const res = await adminApi.grantFreeCredits(selected.id, n, note);
-      setSelected((p) => p ? { ...p, freeCredits: res.freeCredits } : p);
-      setMsg(t('admin_grant_success', { count: res.freeCredits }));
+      const nextPaid = res.paidCredits ?? res.freeCredits ?? paid + n;
+      setSelected((p) => p ? { ...p, paidCredits: nextPaid, freeCredits: 0 } : p);
+      setMsg(t('admin_grant_paid_success', { count: nextPaid, defaultValue: `Purchase wallet: ${nextPaid}` }));
     } catch (e) {
       setMsg(e.message || t('admin_failed'));
     } finally {
@@ -85,7 +86,7 @@ export default function CreditsPage() {
 
                             {t('admin_credits_user_summary', {
             name: u.display_name || u.email || u.id,
-            free: u.freeCredits ?? 0,
+            free: u.savedCredits ?? 0,
             paid: u.paidCredits ?? 0
           })}
                         </button>
@@ -104,13 +105,13 @@ export default function CreditsPage() {
 
                     <div className="db-credit-row">
                         <div className="db-credit-box db-credit-box--paid">
-                            <label>paid_credit</label>
+                            <label>{t('admin_credits_paid_label', 'purchase')}</label>
                             <div className="val">{paid}</div>
-                            <small style={{ color: 'var(--db-muted)' }}>{t('admin_read_only')}</small>
                         </div>
                         <div className="db-credit-box db-credit-box--free">
-                            <label>free_credit</label>
-                            <div className="val">{free}</div>
+                            <label>{t('admin_savings_wallet_label', 'savings')}</label>
+                            <div className="val">{saved}</div>
+                            <small style={{ color: 'var(--db-muted)' }}>{t('admin_read_only', 'Read only')}</small>
                         </div>
                     </div>
 
@@ -140,7 +141,7 @@ export default function CreditsPage() {
         <AppText as="p"
         style={{
           marginTop: '0.75rem',
-          color: msg.includes('free_credit =') ? 'var(--db-lime)' : 'var(--db-danger)'
+          color: msg.includes('wallet') || msg.includes('paid') ? 'var(--db-lime)' : 'var(--db-danger)'
         }}>
 
                             {msg}

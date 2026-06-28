@@ -31,7 +31,18 @@ export default function GooglePlacesImportPage() {
   const [preview, setPreview] = useState(null);
   const [previewCoverImage, setPreviewCoverImage] = useState(null);
   const [result, setResult] = useState(null);
+  const [forceCreate, setForceCreate] = useState(false);
   const inFlightRef = useRef(false);
+
+  const duplicateReasonLabel = useCallback(
+    (reason) => {
+      if (reason === 'phone') return t('admin_places_dup_phone', 'Same phone number');
+      if (reason === 'coordinates') return t('admin_places_dup_coordinates', 'Same coordinates');
+      if (reason === 'address') return t('admin_places_dup_address', 'Same address');
+      return reason;
+    },
+    [t]
+  );
 
   const handleGeoChange = useCallback((next) => {
     setGeo(next);
@@ -40,6 +51,7 @@ export default function GooglePlacesImportPage() {
     setPreview(null);
     setPreviewCoverImage(null);
     setResult(null);
+    setForceCreate(false);
     setError('');
   }, []);
 
@@ -81,6 +93,7 @@ export default function GooglePlacesImportPage() {
 
         setPreview(data);
         setPreviewCoverImage(data.previewCoverImage || null);
+        setForceCreate(false);
         if (data.photoWarning) {
           setError(
             t('admin_places_google_photo_failed', {
@@ -117,7 +130,8 @@ export default function GooglePlacesImportPage() {
         const { ok, status, data } = await publishBusinessFromGoogle(
           id,
           previewCoverImage,
-          token
+          token,
+          { forceCreate }
         );
 
         if (!ok || data?.status !== 'ok' || data.action !== 'publish') {
@@ -145,7 +159,7 @@ export default function GooglePlacesImportPage() {
         inFlightRef.current = false;
       }
     },
-    [preview, previewCoverImage, selected?.placeId, t]
+    [preview, previewCoverImage, selected?.placeId, t, forceCreate]
   );
 
   const handlePlaceSelect = useCallback(
@@ -318,6 +332,53 @@ export default function GooglePlacesImportPage() {
                             </AppText>
           }
 
+                        {Array.isArray(preview.duplicateMatches) && preview.duplicateMatches.length > 0 && !preview.alreadyExisted &&
+          <div
+            style={{
+              marginTop: '0.75rem',
+              padding: '0.75rem',
+              borderRadius: 8,
+              border: '1px solid #fbbf24',
+              background: 'rgba(251, 191, 36, 0.08)'
+            }}>
+            
+                                <AppText as="p" style={{ margin: 0, color: '#fbbf24', fontSize: '0.85rem', fontWeight: 700 }}>
+                                    {t('admin_places_duplicate_warning', 'Possible duplicate business detected')}
+                                </AppText>
+                                <ul style={{ margin: '0.5rem 0 0', paddingInlineStart: '1.1rem', fontSize: '0.82rem' }}>
+                                    {preview.duplicateMatches.map((match) =>
+              <li key={`${match.docId}:${match.matchReason}`} style={{ marginBottom: '0.35rem' }}>
+                                            <strong>{match.name}</strong>
+                                            {' · '}
+                                            <code>restaurants/{match.docId}</code>
+                                            {' · '}
+                                            {duplicateReasonLabel(match.matchReason)}
+                                        </li>
+              )}
+                                </ul>
+                                {preview.duplicateMergeTarget &&
+            <AppText as="p" className="db-muted" style={{ margin: '0.5rem 0 0', fontSize: '0.82rem' }}>
+                                        {t('admin_places_duplicate_merge_hint', {
+                  docId: preview.duplicateMergeTarget,
+                  defaultValue:
+                    'Publish will update the existing record restaurants/{{docId}} instead of creating a duplicate.'
+                })}
+                                    </AppText>
+            }
+                                <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginTop: '0.65rem', fontSize: '0.82rem', cursor: 'pointer' }}>
+                                    <input
+                type="checkbox"
+                checked={forceCreate}
+                onChange={(e) => setForceCreate(e.target.checked)} />
+              
+                                    {t(
+                'admin_places_force_create',
+                'Create as a new business anyway (ignore duplicate detection)'
+              )}
+                                </label>
+                            </div>
+          }
+
                         <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
                             <button
               type="button"
@@ -325,7 +386,13 @@ export default function GooglePlacesImportPage() {
               disabled={publishing}
               onClick={runPublish}>
               
-                                {publishing ? t('admin_places_publishing') : t('admin_places_publish')}
+                                {publishing ?
+              t('admin_places_publishing') :
+              preview.alreadyExisted ?
+              t('admin_places_publish_update', 'Update existing') :
+              preview.duplicateMergeTarget && !forceCreate ?
+              t('admin_places_publish_merge', 'Update matched business') :
+              t('admin_places_publish')}
                             </button>
                             <button
               type="button"
@@ -353,6 +420,14 @@ export default function GooglePlacesImportPage() {
             <> · Directory: <code>public_profiles/{result.docId}</code></>
             }
                         </AppText>
+                        {result.mergedFromDuplicate &&
+          <AppText as="p" style={{ marginTop: '0.5rem', color: '#fbbf24', fontSize: '0.85rem' }}>
+                            {t('admin_places_merged_from_duplicate', {
+              reason: duplicateReasonLabel(result.duplicateMergeReason),
+              defaultValue: 'Updated existing business (matched by {{reason}}) — no duplicate was created.'
+            })}
+                        </AppText>
+          }
                         <AppText as="p" className="db-muted" style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
                             {t('admin_places_visible_in')}{' '}
                             <a href="/restaurants" target="_blank" rel="noreferrer">

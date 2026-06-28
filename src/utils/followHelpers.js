@@ -4,6 +4,11 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { notifyNewFollower } from './notificationHelpers';
 import { getSafeAvatar } from './avatarUtils';
 import { isHiddenFromConsumerApp } from './consumerSearchExclusions';
+import {
+  checkFollowRefollowAllowed,
+  clearFollowCooldown,
+  recordFollowCancelled,
+} from './connectionActionCooldown';
 
 const functions = getFunctions();
 const listUserNetworkCallable = httpsCallable(functions, 'listUserNetwork');
@@ -145,11 +150,25 @@ export const getMutualFollowersCount = (user1Following = [], user2Following = []
 
 /**
  * Follow a user
- * @param {{ skipAlreadyCheck?: boolean }} [options] — skip getDoc when caller already verified state
+ * @param {{ skipAlreadyCheck?: boolean, skipCooldown?: boolean, skipDailyLimit?: boolean }} [options]
  */
 export const followUser = async (currentUserId, targetUserId, currentUserData = null, options = {}) => {
-    const { skipAlreadyCheck = false } = options;
+    const { skipAlreadyCheck = false, skipDailyLimit = false } = options;
+    const skipCooldown = options.skipCooldown ?? skipDailyLimit;
     try {
+        if (!skipCooldown) {
+            const allowed = await checkFollowRefollowAllowed(currentUserId, targetUserId);
+            if (!allowed.ok) {
+                return {
+                    success: false,
+                    message: allowed.reason === 'cooldown' ? 'cooldown' : 'follow_failed',
+                    reason: allowed.reason,
+                    cancelledAtMs: allowed.cancelledAtMs,
+                    retryAtMs: allowed.retryAtMs,
+                };
+            }
+        }
+
         const currentUserRef = doc(db, 'users', currentUserId);
         const targetUserRef = doc(db, 'users', targetUserId);
 
@@ -175,10 +194,16 @@ export const followUser = async (currentUserId, targetUserId, currentUserData = 
             };
         }
 
-        await Promise.all([
-            updateDoc(currentUserRef, { following: arrayUnion(targetUserId) }),
-            updateDoc(targetUserRef, { followersCount: increment(1) })
-        ]);
+        await updateDoc(currentUserRef, { following: arrayUnion(targetUserId) });
+        try {
+            await updateDoc(targetUserRef, { followersCount: increment(1) });
+        } catch (counterErr) {
+            console.warn('[followUser] followersCount increment failed', counterErr?.message || counterErr);
+        }
+
+        if (!skipCooldown) {
+            void clearFollowCooldown(currentUserId, targetUserId).catch(() => {});
+        }
 
         notifyNewFollower(targetUserId, followerData);
 
@@ -190,22 +215,31 @@ export const followUser = async (currentUserId, targetUserId, currentUserData = 
 };
 
 /**
- * Unfollow a user
+ * Unfollow a user — always allowed; starts 24h refollow cooldown.
+ * @param {{ skipCooldown?: boolean, skipDailyLimit?: boolean }} [options]
  */
-export const unfollowUser = async (currentUserId, targetUserId) => {
+export const unfollowUser = async (currentUserId, targetUserId, options = {}) => {
+    const { skipDailyLimit = false } = options;
+    const skipCooldown = options.skipCooldown ?? skipDailyLimit;
     try {
         const currentUserRef = doc(db, 'users', currentUserId);
         const targetUserRef = doc(db, 'users', targetUserId);
 
-        await Promise.all([
-            updateDoc(currentUserRef, { following: arrayRemove(targetUserId) }),
-            updateDoc(targetUserRef, { followersCount: increment(-1) })
-        ]);
+        await updateDoc(currentUserRef, { following: arrayRemove(targetUserId) });
+        try {
+            await updateDoc(targetUserRef, { followersCount: increment(-1) });
+        } catch (counterErr) {
+            console.warn('[unfollowUser] followersCount decrement failed', counterErr?.message || counterErr);
+        }
 
-        return true;
+        if (!skipCooldown) {
+            void recordFollowCancelled(currentUserId, targetUserId).catch(() => {});
+        }
+
+        return { success: true };
     } catch (error) {
         console.error('Error unfollowing user:', error);
-        return false;
+        return { success: false, reason: 'error' };
     }
 };
 

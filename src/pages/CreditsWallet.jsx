@@ -1,10 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
+import AppBackButton from '../components/AppBackButton';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import app from '../firebase/config';
 import {
   FaArrowLeft,
   FaWallet,
@@ -16,19 +14,22 @@ import {
   FaMagic,
   FaLock,
   FaHeart,
-  FaInfoCircle } from
-'react-icons/fa';
+  FaInfoCircle,
+  FaPiggyBank
+} from 'react-icons/fa';
 import { DINE_CREDIT_PACKS } from '../config/stripeCommerce';
 import StripeTestModeBanner from '../components/StripeTestModeBanner';
+import GooglePlayCommerceBanner from '../components/GooglePlayCommerceBanner';
+import { useCreditsPurchase } from '../hooks/useCreditsPurchase';
 import {
   AI_IMAGE_GENERATION_CREDITS,
   AI_INVITATION_BUNDLE_CREDITS,
-  AI_TEXT_GENERATION_CREDITS } from
-'../utils/aiCreditCosts';
+  AI_TEXT_GENERATION_CREDITS
+} from '../utils/aiCreditCosts';
+import { getPurchaseCredits, getSavedCredits, GIFT_RECIPIENT_VALUE_RATE } from '../utils/walletCredits';
+import { isGooglePlayCommerce } from '../utils/commercePlatform';
 import './SettingsPages.css';
 import { AppText } from "../components/base";
-
-const FUNCTIONS_REGION = 'us-central1';
 
 const PACK_META = {
   credits_200: { icon: FaBolt, accent: 'credits-wallet__pack-icon--sm' },
@@ -44,62 +45,36 @@ const PACKS = DINE_CREDIT_PACKS.map((p) => ({
 }));
 
 /**
- * Dine Credits wallet — one-time Stripe checkouts (server maps package → price).
+ * Two wallets: purchase (spend) + savings (gift receipts at 50%).
  */
 export default function CreditsWallet() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { userProfile } = useAuth();
-  const { showToast } = useToast();
-  const [loadingId, setLoadingId] = useState(null);
+  const { buyPack, loadingId, isGooglePlay } = useCreditsPurchase();
 
-  const free = Math.max(0, Number(userProfile?.freeCredits) || 0);
-  const paid = Math.max(0, Number(userProfile?.paidCredits) || 0);
-  const total = free + paid;
+  const purchaseBalance = getPurchaseCredits(userProfile);
+  const savedBalance = getSavedCredits(userProfile);
   const purchased = Math.max(0, Number(userProfile?.totalCreditsPurchased) || 0);
   const spent = Math.max(0, Number(userProfile?.totalCreditsSpent) || 0);
-
-  const buyPack = async (pack) => {
-    setLoadingId(pack.id);
-    try {
-      const fn = httpsCallable(getFunctions(app, FUNCTIONS_REGION), 'createCreditsCheckoutSession');
-      const origin = window.location.origin;
-      const result = await fn({
-        packageId: pack.id,
-        successUrl: `${origin}/settings/credits?purchase=success`,
-        cancelUrl: `${origin}/settings/credits`
-      });
-      const url = result.data?.url;
-      if (url) window.location.href = url;
-    } catch (e) {
-      console.error(e);
-      const msg =
-      e?.message ||
-      e?.details ||
-      t('checkout_start_failed', 'Could not start checkout. Check Stripe functions config.');
-      showToast(msg, 'error');
-    } finally {
-      setLoadingId(null);
-    }
-  };
+  const savedLifetime = Math.max(0, Number(userProfile?.totalSavedCreditsEarned) || 0);
+  const giftPercent = Math.round(GIFT_RECIPIENT_VALUE_RATE * 100);
 
   return (
     <div className="settings-page credits-wallet-page">
             <div className="settings-header credits-wallet__header">
-                <button type="button" onClick={() => navigate('/settings')} className="back-btn">
-                    <FaArrowLeft />
-                </button>
+                <AppBackButton fallback="/settings" />
                 <div className="credits-wallet__title-block">
                     <AppText as="h1">{t('dine_credits', 'Dine Credits')}</AppText>
                     <AppText as="p" className="credits-wallet__title-sub">
-                        {t('credits_wallet_subtitle', 'One balance for invites, dates & AI')}
+                        {t('credits_wallet_subtitle_dual', 'Purchase wallet for spending · Savings wallet from gifts')}
                     </AppText>
                 </div>
                 <div className="credits-wallet__header-spacer" aria-hidden />
             </div>
 
             <div className="settings-content credits-wallet__content">
-                <StripeTestModeBanner />
+                {isGooglePlay ? <GooglePlayCommerceBanner /> : <StripeTestModeBanner />}
                 <div className="credits-wallet__column">
                     <section className="settings-card credits-wallet__balance credits-wallet__balance--elevated">
                         <div className="credits-wallet__balance-top">
@@ -107,30 +82,21 @@ export default function CreditsWallet() {
                                 <FaWallet className="credits-wallet__hero-wallet" />
                             </div>
                             <div className="credits-wallet__hero-copy">
-                                <AppText as="h2" className="credits-wallet__balance-heading">{t('your_balance', 'Your balance')}</AppText>
+                                <AppText as="h2" className="credits-wallet__balance-heading">
+                                    {t('purchase_wallet_title', 'Purchase wallet')}
+                                </AppText>
                                 <div className="credits-wallet__total-display" aria-live="polite">
-                                    <AppText as="span" className="credits-wallet__total-number">{total}</AppText>
+                                    <AppText as="span" className="credits-wallet__total-number">{purchaseBalance}</AppText>
                                     <AppText as="span" className="credits-wallet__total-suffix">
                                         {t('credits_unit', 'credits')}
                                     </AppText>
                                 </div>
-                            </div>
-                        </div>
-
-                        <div className="credits-wallet__split-stats">
-                            <div className="credits-wallet__split-card">
-                                <AppText as="span" className="credits-wallet__split-icon credits-wallet__split-icon--free">
-                                    <FaGift aria-hidden />
+                                <AppText as="p" className="credits-wallet__wallet-desc">
+                                    {t(
+                    'purchase_wallet_desc',
+                    'Buy credits here and spend on invites, AI, boosts, and sending gifts.'
+                  )}
                                 </AppText>
-                                <AppText as="span" className="credits-wallet__split-label">{t('free_credits', 'Free')}</AppText>
-                                <AppText as="span" className="credits-wallet__split-value">{free}</AppText>
-                            </div>
-                            <div className="credits-wallet__split-card">
-                                <AppText as="span" className="credits-wallet__split-icon credits-wallet__split-icon--paid">
-                                    <FaCoins aria-hidden />
-                                </AppText>
-                                <AppText as="span" className="credits-wallet__split-label">{t('paid_credits', 'Paid')}</AppText>
-                                <AppText as="span" className="credits-wallet__split-value">{paid}</AppText>
                             </div>
                         </div>
 
@@ -152,12 +118,8 @@ export default function CreditsWallet() {
                                     {t('credit_hint_rate', '1 credit ≈ $0.01 USD when you buy packs.')}
                                 </li>
                                 <li>
-                                    <FaGift className="credits-wallet__hint-ico" aria-hidden />
-                                    {t('credit_hint_free', 'Free credits: up to 20, +10 refreshed each month.')}
-                                </li>
-                                <li>
                                     <FaCoins className="credits-wallet__hint-ico" aria-hidden />
-                                    {t('credit_hint_paid', 'Paid credits never expire. Free pool is used first.')}
+                                    {t('credit_hint_paid_only', 'Purchased credits never expire. Free credits are no longer offered.')}
                                 </li>
                                 <li>
                                     <AppText as="span" className="credits-wallet__hint-ico credits-wallet__hint-ico--cluster" aria-hidden>
@@ -169,13 +131,65 @@ export default function CreditsWallet() {
                         </div>
                     </section>
 
+                    <section className="settings-card credits-wallet__balance credits-wallet__balance--savings">
+                        <div className="credits-wallet__balance-top">
+                            <div className="credits-wallet__hero-ring credits-wallet__hero-ring--savings" aria-hidden>
+                                <FaPiggyBank className="credits-wallet__hero-wallet" />
+                            </div>
+                            <div className="credits-wallet__hero-copy">
+                                <AppText as="h2" className="credits-wallet__balance-heading">
+                                    {t('savings_wallet_title', 'Savings wallet')}
+                                </AppText>
+                                <div className="credits-wallet__total-display" aria-live="polite">
+                                    <AppText as="span" className="credits-wallet__total-number credits-wallet__total-number--savings">
+                                        {savedBalance}
+                                    </AppText>
+                                    <AppText as="span" className="credits-wallet__total-suffix">
+                                        {t('credits_unit', 'credits')}
+                                    </AppText>
+                                </div>
+                                <AppText as="p" className="credits-wallet__wallet-desc">
+                                    {t(
+                    'savings_wallet_desc',
+                    'Gifts you receive are saved here at {{percent}}% of the amount sent — separate from your purchase wallet.',
+                    { percent: giftPercent }
+                  )}
+                                </AppText>
+                            </div>
+                        </div>
+
+                        <div className="credits-wallet__lifetime">
+                            <FaGift aria-hidden style={{ marginInlineEnd: 6, opacity: 0.75 }} />
+                            {t('savings_wallet_lifetime', 'Total received from gifts')}: <strong>{savedLifetime}</strong>
+                        </div>
+
+                        <div className="credits-wallet__hints">
+                            <ul className="credits-wallet__hints-list">
+                                <li>
+                                    <FaGift className="credits-wallet__hint-ico" aria-hidden />
+                                    {t(
+                    'savings_wallet_gift_rule',
+                    'Example: a gift of 50 credits adds 25 to your savings wallet.'
+                  )}
+                                </li>
+                                <li>
+                                    <FaLock className="credits-wallet__hint-ico" aria-hidden />
+                                    {t(
+                    'savings_wallet_separate',
+                    'Savings and purchase wallets never mix — you cannot spend savings on invites or AI.'
+                  )}
+                                </li>
+                            </ul>
+                        </div>
+                    </section>
+
                     <section className="settings-card credits-wallet__ai-pricing">
                         <div className="credits-wallet__hints-title">
                             <FaMagic aria-hidden />
                             {t('credits_ai_pricing_title', 'AI credit costs')}
                         </div>
                         <AppText as="p" className="credits-wallet__buy-lead" style={{ marginTop: '0.5rem', marginBottom: '0.75rem' }}>
-                            {t('credits_ai_pricing_lead', 'Each AI action deducts credits from your Dine balance.')}
+                            {t('credits_ai_pricing_lead', 'Each AI action deducts credits from your purchase wallet.')}
                         </AppText>
                         <ul className="credits-wallet__hints-list">
                             <li>
@@ -205,7 +219,12 @@ export default function CreditsWallet() {
                             {t('buy_credits', 'Buy credits')}
                         </AppText>
                         <AppText as="p" className="credits-wallet__buy-lead">
-                            {t('buy_credits_lead', 'Pay once — no subscription. Choose a pack below.')}
+                            {isGooglePlay
+              ? t(
+                  'buy_credits_lead_google_play',
+                  'Pay with Google Play — credits go to your purchase wallet.'
+                )
+              : t('buy_credits_lead', 'Pay once — no subscription. Credits go to your purchase wallet.')}
                         </AppText>
                         <div className="credits-wallet__pack-grid">
                             {PACKS.map((pack) => {

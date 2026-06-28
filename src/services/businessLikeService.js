@@ -138,11 +138,11 @@ export async function toggleBusinessLike(businessId, userId, currentlyLiked, bus
     }
 
     const delta = currentlyLiked ? -1 : 1;
-    const countP = updateDoc(businessRef, { 'businessInfo.profileLikes': increment(delta) }).catch((countErr) => {
+    void updateDoc(businessRef, { 'businessInfo.profileLikes': increment(delta) }).catch((countErr) => {
         console.warn('[like] profileLikes count update failed (like still saved)', { businessId, code: countErr?.code, message: countErr?.message });
     });
 
-    const favoritesP = (async () => {
+    void (async () => {
         try {
             const userSnap = await getDoc(userRef);
             const currentPlaces = userSnap.exists() ? (userSnap.data().favoritePlaces || []).slice() : [];
@@ -169,6 +169,4 @@ export async function toggleBusinessLike(businessId, userId, currentlyLiked, bus
             console.warn('[like] favoritePlaces sync failed (like still succeeded)', err);
         }
     })();
-
-    await Promise.all([countP, favoritesP]);
 }

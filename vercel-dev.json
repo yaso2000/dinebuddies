@@ -16,6 +16,10 @@
         {
             "source": "/sitemap.xml",
             "destination": "/api/sitemap"
+        },
+        {
+            "source": "/business/:id",
+            "destination": "/api/business-preview?id=:id"
         }
     ]
 }

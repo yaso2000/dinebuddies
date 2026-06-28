@@ -44,6 +44,43 @@ import {
   sanitizeYoutubeVideoId,
 } from '../../utils/videoEmbedUtils';
 import CommunityBannerYoutubeBackground from './CommunityBannerYoutubeBackground';
+import CommunityChatZoneThemePicker from './CommunityChatZoneThemePicker';
+import InvitationEditorLeaveDialog from '../Invitations/socialCard/InvitationEditorLeaveDialog';
+import {
+  buildGuestFrameBackgroundFromDraft,
+  createGuestFrameDraftFromResolved,
+} from '../../constants/communityChatGuestFrameLook';
+
+const DEFAULT_ZONE_THEME_DRAFT = {
+  themeId: 'stage',
+  guestFrame: {
+    imageMode: 'none',
+    colorOverlayEnabled: true,
+    colorStart: DEFAULT_BANNER_BG,
+    colorEnd: DEFAULT_BANNER_BG2,
+    intensity: 100,
+    presetId: null,
+    customUrl: null,
+  },
+};
+
+function createDefaultZoneThemeDraftSnapshot() {
+  return {
+    themeId: DEFAULT_ZONE_THEME_DRAFT.themeId,
+    guestFrame: { ...DEFAULT_ZONE_THEME_DRAFT.guestFrame },
+  };
+}
+
+function createZoneThemeDraftSnapshot(themeId, guestFrameBackground) {
+  return {
+    themeId: themeId || 'stage',
+    guestFrame: createGuestFrameDraftFromResolved(guestFrameBackground),
+  };
+}
+
+function zoneThemeDraftsEqual(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 const TITLE_FONT_FAMILY_OPTIONS = [
   { key: 'system', labelKey: 'community_banner_font_system', fallback: 'System' },
@@ -85,7 +122,7 @@ function BannerIconBtn({ active, onClick, ariaLabel, title, children, className 
   );
 }
 
-function BannerToolModal({ title, titleId, onClose, children, footer }) {
+function BannerToolModal({ title, titleId, onClose, children, footer, headerActions }) {
   if (typeof document === 'undefined') return null;
 
   return createPortal(
@@ -101,14 +138,17 @@ function BannerToolModal({ title, titleId, onClose, children, footer }) {
           <AppText as="h2" id={titleId} className="community-banner-modal__title">
             {title}
           </AppText>
-          <button
-            type="button"
-            className="community-main-chat__attach-btn"
-            aria-label="Close"
-            onClick={onClose}
-          >
-            <FaTimes size={16} />
-          </button>
+          <div className="community-banner-modal__head-actions">
+            {headerActions}
+            <button
+              type="button"
+              className="community-main-chat__attach-btn"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              <FaTimes size={16} />
+            </button>
+          </div>
         </div>
         <div className="community-banner-modal__body">{children}</div>
         {footer ? <div className="community-banner-modal__footer">{footer}</div> : null}
@@ -221,7 +261,7 @@ function BannerPreviewStrip({
 /** Host-only banner tools — image + title + body + background + templates (vertical rail on banner). */
 export default function CommunityHostBannerComposerTools({ room, layout = 'banner-rail' }) {
   const { t } = useTranslation();
-  const { banner, bannerDisplay, uploadingBanner, setBannerImage, setBannerYoutube, updateBanner, setHostSpotlightAuto } = room;
+  const { banner, bannerDisplay, uploadingBanner, setBannerImage, setBannerYoutube, updateBanner, setHostSpotlightAuto, zoneThemeId, saveCommunityChatZoneThemeSettings, zoneThemeSaving, guestFrameBackground, uploadCommunityChatGuestFrameBackgroundFile, generateCommunityChatGuestFrameBackgroundImage, guestFrameBackgroundUploading, guestFrameBackgroundGenerating } = room;
 
   const bannerForPreview = {
     ...banner,
@@ -241,6 +281,9 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
   const [fontSizeDraft, setFontSizeDraft] = useState(DEFAULT_BANNER_FONT_SIZE);
   const [showCamera, setShowCamera] = useState(false);
   const [youtubeDraft, setYoutubeDraft] = useState('');
+  const [zoneThemeDraft, setZoneThemeDraft] = useState(null);
+  const [zoneThemeSavedSnapshot, setZoneThemeSavedSnapshot] = useState(null);
+  const [zoneThemeLeaveOpen, setZoneThemeLeaveOpen] = useState(false);
 
   const parsedYoutubeDraft = parseYoutubeLink(youtubeDraft);
   const youtubePreviewId =
@@ -296,7 +339,13 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
     setActiveModal('background');
   };
 
-  const openTemplatesModal = () => setActiveModal('templates');
+  const openZoneThemeModal = () => {
+    const snapshot = createZoneThemeDraftSnapshot(zoneThemeId, guestFrameBackground);
+    setZoneThemeDraft(snapshot);
+    setZoneThemeSavedSnapshot(snapshot);
+    setZoneThemeLeaveOpen(false);
+    setActiveModal('zoneTheme');
+  };
 
   const openYoutubeModal = () => {
     setYoutubeDraft(banner.youtubeId ? `https://youtu.be/${banner.youtubeId}` : '');
@@ -304,6 +353,70 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
   };
 
   const closeModal = () => setActiveModal(null);
+
+  const isZoneThemeDraftDirty =
+    zoneThemeDraft &&
+    zoneThemeSavedSnapshot &&
+    !zoneThemeDraftsEqual(zoneThemeDraft, zoneThemeSavedSnapshot);
+
+  const zoneThemeDraftBusy =
+    zoneThemeSaving || guestFrameBackgroundUploading || guestFrameBackgroundGenerating;
+
+  const updateZoneThemeDraft = (patch) => {
+    setZoneThemeDraft((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
+  const updateZoneThemeGuestFrameDraft = (patch) => {
+    setZoneThemeDraft((prev) =>
+      prev
+        ? {
+            ...prev,
+            guestFrame: { ...prev.guestFrame, ...patch },
+          }
+        : prev
+    );
+  };
+
+  const publishZoneTheme = async () => {
+    if (!zoneThemeDraft || zoneThemeDraftBusy) return false;
+    const ok = await saveCommunityChatZoneThemeSettings(zoneThemeDraft);
+    if (ok) {
+      setZoneThemeSavedSnapshot(zoneThemeDraft);
+    }
+    return ok;
+  };
+
+  const closeZoneThemeModal = () => {
+    setZoneThemeLeaveOpen(false);
+    closeModal();
+  };
+
+  const requestCloseZoneThemeModal = () => {
+    if (zoneThemeDraftBusy) return;
+    if (isZoneThemeDraftDirty) {
+      setZoneThemeLeaveOpen(true);
+      return;
+    }
+    closeZoneThemeModal();
+  };
+
+  const saveZoneThemeAndClose = async () => {
+    const ok = await publishZoneTheme();
+    if (ok) closeZoneThemeModal();
+  };
+
+  const discardZoneThemeDraft = () => {
+    closeZoneThemeModal();
+  };
+
+  const resetZoneThemeDraftToDefaults = () => {
+    if (zoneThemeDraftBusy) return;
+    setZoneThemeDraft(createDefaultZoneThemeDraftSnapshot());
+  };
+
+  const isZoneThemeDraftAtDefaults = zoneThemeDraft
+    ? zoneThemeDraftsEqual(zoneThemeDraft, DEFAULT_ZONE_THEME_DRAFT)
+    : true;
 
   const handleMediaCaptured = async (file) => {
     setShowCamera(false);
@@ -397,6 +510,17 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
     const ok = await setBannerYoutube('');
     if (ok) closeModal();
   };
+
+  const resetBtn = (label, disabled, onClick, compact = false) => (
+    <button
+      type="button"
+      className={`community-banner-modal__reset${compact ? ' community-banner-modal__reset--compact' : ''}`}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  );
 
   const publishBtn = (label, disabled, onClick, compact = false) => (
     <button
@@ -797,6 +921,110 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
       </BannerToolModal>
     ) : null;
 
+  const zoneThemeModal =
+    activeModal === 'zoneTheme' && zoneThemeDraft ? (
+      <>
+        <BannerToolModal
+          title={t('community_chat_zone_theme_tool', 'Chat color themes')}
+          titleId="community-chat-zone-theme-modal"
+          onClose={requestCloseZoneThemeModal}
+          headerActions={
+            <>
+              {resetBtn(
+                t('community_chat_zone_theme_reset', 'Reset to default'),
+                zoneThemeDraftBusy || isZoneThemeDraftAtDefaults,
+                resetZoneThemeDraftToDefaults,
+                true
+              )}
+              {publishBtn(
+                zoneThemeSaving
+                  ? t('saving', 'Saving…')
+                  : t('save', 'Save'),
+                zoneThemeDraftBusy || !isZoneThemeDraftDirty,
+                saveZoneThemeAndClose,
+                true
+              )}
+            </>
+          }
+        >
+          <CommunityChatZoneThemePicker
+            value={zoneThemeDraft.themeId}
+            guestFrameBackground={buildGuestFrameBackgroundFromDraft(zoneThemeDraft.guestFrame)}
+            saving={zoneThemeSaving}
+            guestFrameBackgroundUploading={guestFrameBackgroundUploading}
+            guestFrameBackgroundGenerating={guestFrameBackgroundGenerating}
+            onSelect={(themeId) => updateZoneThemeDraft({ themeId })}
+            onSelectTransparent={() => {
+              updateZoneThemeGuestFrameDraft({ colorOverlayEnabled: false });
+            }}
+            onSelectGradientPreset={(colorStart, colorEnd) =>
+              updateZoneThemeGuestFrameDraft({
+                colorOverlayEnabled: true,
+                colorStart,
+                colorEnd,
+              })
+            }
+            onChangeGuestFrameColors={(colorStart, colorEnd) =>
+              updateZoneThemeGuestFrameDraft({
+                colorOverlayEnabled: true,
+                colorStart,
+                colorEnd,
+              })
+            }
+            onChangeGuestFrameDensity={(intensity) =>
+              updateZoneThemeGuestFrameDraft({
+                colorOverlayEnabled: true,
+                intensity,
+              })
+            }
+            onSelectImageNone={() => {
+              updateZoneThemeGuestFrameDraft({
+                imageMode: 'none',
+                presetId: null,
+                customUrl: null,
+              });
+            }}
+            onSelectGuestFramePreset={(presetId) =>
+              updateZoneThemeGuestFrameDraft({
+                imageMode: 'preset',
+                presetId,
+                customUrl: null,
+              })
+            }
+            onUploadGuestFrameBackground={async (file) => {
+              const url = await uploadCommunityChatGuestFrameBackgroundFile(file);
+              if (url) {
+                updateZoneThemeGuestFrameDraft({
+                  imageMode: 'custom',
+                  customUrl: url,
+                  presetId: null,
+                });
+              }
+            }}
+            onGenerateGuestFrameBackgroundAi={async (prompt) => {
+              const url = await generateCommunityChatGuestFrameBackgroundImage(prompt);
+              if (url) {
+                updateZoneThemeGuestFrameDraft({
+                  imageMode: 'custom',
+                  customUrl: url,
+                  presetId: null,
+                });
+              }
+            }}
+          />
+        </BannerToolModal>
+        <InvitationEditorLeaveDialog
+          open={zoneThemeLeaveOpen}
+          saving={zoneThemeSaving}
+          onSave={saveZoneThemeAndClose}
+          onDiscard={discardZoneThemeDraft}
+          onCancel={() => setZoneThemeLeaveOpen(false)}
+          questionKey="community_chat_zone_theme_unsaved_question"
+          questionDefault="Save your chat color changes before closing?"
+        />
+      </>
+    ) : null;
+
   const templatesModal =
     activeModal === 'templates' ? (
       <BannerToolModal
@@ -894,11 +1122,11 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
         </button>
         <button
           type="button"
-          className="community-banner-host-tools__btn"
-          aria-label={t('community_banner_templates_tool', 'Banner templates')}
-          title={t('community_banner_templates_tool', 'Banner templates')}
-          onClick={openTemplatesModal}
-          disabled={uploadingBanner}
+          className={`community-banner-host-tools__btn${zoneThemeId && zoneThemeId !== 'default' ? ' community-banner-host-tools__btn--active' : ''}`}
+          aria-label={t('community_chat_zone_theme_tool', 'Chat color themes')}
+          title={t('community_chat_zone_theme_tool', 'Chat color themes')}
+          onClick={openZoneThemeModal}
+          disabled={uploadingBanner || zoneThemeSaving}
         >
           <FaTh size={16} />
         </button>
@@ -982,11 +1210,11 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
       {layout !== 'banner-rail' ? (
         <button
           type="button"
-          className="community-banner-host-tools__btn"
-          aria-label={t('community_banner_templates_tool', 'Banner templates')}
-          title={t('community_banner_templates_tool', 'Banner templates')}
-          onClick={openTemplatesModal}
-          disabled={uploadingBanner}
+          className={`community-banner-host-tools__btn${zoneThemeId && zoneThemeId !== 'default' ? ' community-banner-host-tools__btn--active' : ''}`}
+          aria-label={t('community_chat_zone_theme_tool', 'Chat color themes')}
+          title={t('community_chat_zone_theme_tool', 'Chat color themes')}
+          onClick={openZoneThemeModal}
+          disabled={uploadingBanner || zoneThemeSaving}
         >
           <FaTh size={16} />
         </button>
@@ -1003,6 +1231,7 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
       {bodyModal}
       {backgroundModal}
       {youtubeModal}
+      {zoneThemeModal}
       {templatesModal}
 
       {showCamera ? (

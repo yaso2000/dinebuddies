@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import NotificationToastBanner from '../components/NotificationToastBanner';
+import PersistentWarningModal from '../components/PersistentWarningModal';
 import '../components/NotificationToastBanner.css';
 
 const ToastContext = createContext(null);
@@ -52,6 +53,7 @@ function ToastContainer({ toasts, onDismiss, onPin }) {
 
 export function ToastProvider({ children }) {
     const [toasts, setToasts] = useState([]);
+    const [persistentWarning, setPersistentWarning] = useState(null);
     const timeoutsRef = useRef({});
 
     const dismiss = useCallback((id) => {
@@ -92,6 +94,15 @@ export function ToastProvider({ children }) {
         []
     );
 
+    const showPersistentWarning = useCallback(({ title, message }) => {
+        if (!message) return;
+        setPersistentWarning({ title: title || null, message });
+    }, []);
+
+    const dismissPersistentWarning = useCallback(() => {
+        setPersistentWarning(null);
+    }, []);
+
     const showToast = useCallback(
         (message, type = 'info', onClick = null, durationMs = 5000) => {
             const id = Date.now() + Math.random();
@@ -120,8 +131,23 @@ export function ToastProvider({ children }) {
     }, []);
 
     return (
-        <ToastContext.Provider value={{ showToast, dismissToast: dismiss, pinToast }}>
+        <ToastContext.Provider
+            value={{
+                showToast,
+                dismissToast: dismiss,
+                pinToast,
+                showPersistentWarning,
+                dismissPersistentWarning,
+            }}
+        >
             {children}
+            {persistentWarning && (
+                <PersistentWarningModal
+                    title={persistentWarning.title}
+                    message={persistentWarning.message}
+                    onDismiss={dismissPersistentWarning}
+                />
+            )}
             {toasts.length > 0 && (
                 <ToastContainer toasts={toasts} onDismiss={dismiss} onPin={pinToast} />
             )}

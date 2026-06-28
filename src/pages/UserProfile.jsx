@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import NewReportModal from '../components/NewReportModal';
@@ -30,10 +31,26 @@ import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import { isAdminIdentity } from '../utils/adminAccess';
 import { asUidArray, toggleUserBlock, toggleUserMute } from '../utils/userSocialLists';
 import { checkCanMessage } from '../utils/chatHelpers';
+import {
+  likeDiscoveryProfile,
+  unlikeDiscoveryProfile,
+} from '../utils/discoveryProfile';
+import { showLikeCooldownWarning } from '../utils/connectionActionCooldown';
+import {
+  profileShowsLikeButton,
+  connectionKindToCelebrationType,
+  tryCelebrateConnectionComplete,
+} from '../utils/connectConnection';
+import { useDiscoveryActionStatus } from '../hooks/useDiscoveryActionStatus';
+import { useMatchCelebration } from '../context/MatchCelebrationContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { isUserAvailableForPrivateInvite, getPrivateInviteeDisplayName } from '../utils/privateInviteAvailability';
 import { normalizeDiningPersona, normalizeFirstDatePlaceHint, normalizeJoinReasons, getJoinReasonLabel } from '../constants/privateProfileOptions';
+import { normalizeLookingFor } from '../constants/personalInviteCategories';
+import LookingForChips from '../components/profile/LookingForChips';
+import OnlineStatusBadge from '../components/profile/OnlineStatusBadge';
+import { useUserPresence } from '../hooks/usePresence';
 import { resolveProfileCoverUrl, normalizeProfileGallery } from '../utils/profileGallery';
 import ProfileGalleryEditor from '../components/profile/ProfileGalleryEditor';
 import { useInvitationArchives } from '../hooks/useInvitationArchives';
@@ -59,6 +76,7 @@ const MOCK_USER_PROFILE = {
   coverPhotoUrl: DEFAULT_COVER,
   diningPersona: ['☕ Coffee', '🚶 Walking', '🍿 Cinema', '🍣 Sushi', '🎨 Art'],
   joinReasons: ['new_friends', 'fun_hangouts'],
+  lookingFor: ['friendship', 'social'],
   shortBio: 'Always down for a spontaneous bite. Coffee first, then we pick the spot together.',
   gender: 'female',
   invitePreference: 'female_only'
@@ -149,15 +167,21 @@ function ProfileHero({
                 e.currentTarget.src = getSafeAvatar(null);
               }} />
             {isOnline ?
-            <AppText as="span"
+            <span
               className="user-profile-online-dot"
-              title="Online" /> :
+              title={t('status_online', 'Online')}
+              aria-label={t('status_online', 'Online')} /> :
             null}
           </div>
         </div>
       </div>
 
       <div className="mt-14 px-4 text-center">
+        {isOnline ?
+        <div className="mb-2 flex justify-center">
+          <OnlineStatusBadge isOnline />
+        </div> :
+        null}
         <AppText as="h2" className="user-profile-headline" dir="ltr">
           {headline}
         </AppText>
@@ -199,6 +223,7 @@ function mapUserDocToProfileModel(firestoreUser) {
     directoryCoverIndex: firestoreUser.directoryCoverIndex ?? 0,
     diningPersona,
     joinReasons: normalizeJoinReasons(firestoreUser.joinReasons),
+    lookingFor: normalizeLookingFor(firestoreUser.lookingFor, { includeDating: true }),
     firstDatePlaceHint: normalizeFirstDatePlaceHint(firestoreUser.firstDatePlaceHint),
     shortBio: String(firestoreUser.bio || firestoreUser.shortBio || '').slice(0, 150),
     acceptsPrivateInvite,
@@ -226,6 +251,7 @@ function ProfileDetailsSection({ profile, galleryTheme }) {
     uid,
     diningPersona,
     joinReasons = [],
+    lookingFor = [],
     firstDatePlaceHint,
     shortBio,
     acceptsPrivateInvite,
@@ -233,11 +259,25 @@ function ProfileDetailsSection({ profile, galleryTheme }) {
     directoryCoverIndex
   } = profile;
 
+  const showLookingFor = lookingFor.length > 0;
   const showJoinReasons = joinReasons.length > 0;
   const showTasteSection = diningPersona.length > 0;
 
   return (
     <div className="user-profile-details mt-8 space-y-8 px-5">
+      {showLookingFor ?
+      <div className="user-profile-section">
+        <AppText as="h3" className="user-profile-section__title">
+          {t('profile_looking_for_title', 'Looking for')}
+        </AppText>
+        <LookingForChips
+          ids={lookingFor}
+          includeDating
+          className="flex flex-wrap gap-2"
+          chipClassName="user-profile-looking-pill" />
+      </div> :
+      null}
+
       {showJoinReasons ?
       <div className="user-profile-section">
         <AppText as="h3" className="user-profile-section__title">
@@ -281,7 +321,7 @@ function ProfileDetailsSection({ profile, galleryTheme }) {
       </AppText> :
       null}
 
-      {acceptsPrivateInvite && uid ?
+      {uid ?
       <div className="user-profile-section user-profile-gallery">
         <ProfileGalleryEditor
           userId={uid}
@@ -378,9 +418,11 @@ const UserProfile = () => {
   const { t, i18n } = useTranslation();
   const { userId } = useParams();
   const navigate = useNavigate();
+  const { goBack: goBackFromProfile } = useAppBackNavigation();
   const { invitations, currentUser, toggleFollow, submitReport } = useInvitations();
   const { userProfile, loading: authLoading } = useAuth();
-  const { showToast } = useToast();
+  const { celebrateMatch } = useMatchCelebration();
+  const { showToast, showPersistentWarning } = useToast();
   const { isDark } = useTheme();
   const galleryTheme = isDark ? 'dark' : 'light';
 
@@ -393,10 +435,19 @@ const UserProfile = () => {
   const [networkUsers, setNetworkUsers] = useState([]);
   const [networkLoading, setNetworkLoading] = useState(false);
   const [mutualFriendsCount, setMutualFriendsCount] = useState(0);
+
+  const isUserOnline = useUserPresence(userId, { fallback: Boolean(user?.isOnline) });
   const [stayOnProfileAfterBlock, setStayOnProfileAfterBlock] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [canChat, setCanChat] = useState(false);
   const [canChatLoading, setCanChatLoading] = useState(true);
+  const [likeBusy, setLikeBusy] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+
+  const myUid = currentUser?.uid || currentUser?.id;
+  const viewerProfile = userProfile || currentUser;
+  const useDatingLike = profileShowsLikeButton(user);
+  const { liked } = useDiscoveryActionStatus(myUid, userId);
 
   const profileModel = useMemo(() => mapUserDocToProfileModel(user), [user]);
   const isAdminViewer = isAdminIdentity(currentUser, userProfile);
@@ -431,7 +482,19 @@ const UserProfile = () => {
         { id: publicSnap.id, ...publicSnap.data() } :
         null;
 
-        if (publicDoc && !isConsumerDirectoryMember(publicDoc, null) && !isAdminViewer) {
+        let userDoc = null;
+        if (currentUser && !currentUser.isGuest) {
+          try {
+            const userSnap = await getDoc(doc(db, 'users', userId));
+            if (userSnap.exists()) {
+              userDoc = { id: userSnap.id, ...userSnap.data() };
+            }
+          } catch (usersErr) {
+            console.warn('UserProfile: users doc unavailable, using public projection', usersErr);
+          }
+        }
+
+        if (publicDoc && !isConsumerDirectoryMember(publicDoc, userDoc) && !isAdminViewer) {
           if (!cancelled) {
             setUser(null);
             setLoading(false);
@@ -443,23 +506,15 @@ const UserProfile = () => {
         { id: userId, ...mapPublicProfileDocToUserShape(publicDoc), ...publicDoc } :
         null;
 
-        if (currentUser && !currentUser.isGuest) {
-          try {
-            const userSnap = await getDoc(doc(db, 'users', userId));
-            if (userSnap.exists()) {
-              const fullUser = { id: userSnap.id, ...userSnap.data() };
-              if (isHiddenFromConsumerApp(fullUser) && !isAdminViewer) {
-                if (!cancelled) {
-                  setUser(null);
-                  setLoading(false);
-                }
-                return;
-              }
-              userData = { ...(userData || { id: userId }), ...fullUser };
+        if (userDoc) {
+          if (isHiddenFromConsumerApp(userDoc) && !isAdminViewer) {
+            if (!cancelled) {
+              setUser(null);
+              setLoading(false);
             }
-          } catch (usersErr) {
-            console.warn('UserProfile: users doc unavailable, using public projection', usersErr);
+            return;
           }
+          userData = { ...(userData || { id: userId }), ...userDoc };
         }
 
         if (!cancelled) {
@@ -499,7 +554,8 @@ const UserProfile = () => {
       myUid,
       userId,
       currentUser?.following || [],
-      user?.following || []
+      user?.following || [],
+      { currentUserProfile: viewerProfile, targetUserProfile: user }
     ).
     then((allowed) => {
       if (!cancelled) {
@@ -517,7 +573,152 @@ const UserProfile = () => {
     return () => {
       cancelled = true;
     };
-  }, [userId, user, currentUser?.following, currentUser?.uid, currentUser?.id, currentUser?.isGuest, authLoading]);
+  }, [userId, user, viewerProfile, currentUser?.following, myUid, currentUser?.isGuest, authLoading]);
+
+  const refreshCanChat = useCallback(async () => {
+    if (!myUid || !userId || !user) return;
+    try {
+      const allowed = await checkCanMessage(
+        myUid,
+        userId,
+        currentUser?.following || [],
+        user?.following || [],
+        { currentUserProfile: viewerProfile, targetUserProfile: user }
+      );
+      setCanChat(allowed);
+    } catch {
+      setCanChat(false);
+    }
+  }, [currentUser?.following, myUid, user, userId, viewerProfile]);
+
+  const showUnlikeError = useCallback(
+    (reason) => {
+      if (reason === 'permission_denied') {
+        showToast(
+          t(
+            'discovery_unlike_rules_pending',
+            'Could not remove like yet — app rules may need updating. Try again shortly.'
+          ),
+          'error'
+        );
+        return;
+      }
+      showToast(t('discovery_unlike_failed', 'Could not remove like. Try again.'), 'error');
+    },
+    [showToast, t]
+  );
+
+  const handleToggleLike = useCallback(async () => {
+    if (currentUser?.isGuest || !currentUser || !myUid) {
+      goToLogin({ returnPath: `/profile/${userId}` });
+      return;
+    }
+    if (likeBusy || !user) return;
+
+    setLikeBusy(true);
+    try {
+      if (liked) {
+        const result = await unlikeDiscoveryProfile(myUid, user);
+        if (result?.ok) {
+          if (result.wasMutual) await refreshCanChat();
+        } else {
+          showUnlikeError(result?.reason);
+        }
+        return;
+      }
+
+      const result = await likeDiscoveryProfile(myUid, user, viewerProfile);
+      if (result?.reason === 'already_liked') return;
+      if (result?.reason === 'cooldown') {
+        showLikeCooldownWarning(showPersistentWarning, i18n, result.cancelledAtMs, result.retryAtMs);
+        return;
+      }
+      if (!result?.ok) {
+        showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
+        return;
+      }
+      if (result.mutual || result.match) {
+        setCanChat(true);
+        await tryCelebrateConnectionComplete({
+          viewerUid: myUid,
+          targetUser: user,
+          viewerProfile,
+          viewerFollowing: currentUser?.following || [],
+          celebrateMatch,
+          displayName: getPrivateInviteeDisplayName(user) || profileModel.displayName,
+        });
+      }
+    } catch (err) {
+      console.error('[UserProfile] like', err);
+      showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
+    } finally {
+      setLikeBusy(false);
+    }
+  }, [
+    celebrateMatch,
+    currentUser,
+    liked,
+    likeBusy,
+    myUid,
+    profileModel.displayName,
+    refreshCanChat,
+    showPersistentWarning,
+    showToast,
+    showUnlikeError,
+    i18n,
+    t,
+    user,
+    userId,
+    viewerProfile,
+  ]);
+
+  const handleConnectFollow = useCallback(async () => {
+    if (currentUser?.isGuest || !currentUser || !myUid) {
+      goToLogin({ returnPath: `/profile/${userId}` });
+      return;
+    }
+    if (followBusy) return;
+
+    setFollowBusy(true);
+    try {
+      const wasFollowing = currentUser?.following?.includes(userId);
+      const result = await toggleFollow(userId);
+      if (!result?.ok) {
+        if (result?.reason !== 'cooldown') {
+          showToast(t('discovery_follow_failed', 'Could not follow. Try again.'), 'error');
+        }
+        return;
+      }
+      if (result.connectionComplete && result.connectionKind) {
+        setCanChat(true);
+        celebrateMatch({
+          type: connectionKindToCelebrationType(result.connectionKind),
+          otherUser: user,
+          otherId: userId,
+          otherName: getPrivateInviteeDisplayName(user) || profileModel.displayName,
+        });
+      } else if (wasFollowing) {
+        await refreshCanChat();
+      }
+    } catch (err) {
+      console.error('[UserProfile] follow', err);
+      showToast(t('discovery_follow_failed', 'Could not follow. Try again.'), 'error');
+    } finally {
+      setFollowBusy(false);
+    }
+  }, [
+    celebrateMatch,
+    currentUser,
+    followBusy,
+    myUid,
+    profileModel.displayName,
+    refreshCanChat,
+    showToast,
+    t,
+    toggleFollow,
+    user,
+    userId,
+  ]);
 
   useEffect(() => {
     if (!userId || !user) return;
@@ -611,7 +812,6 @@ const UserProfile = () => {
 
   }
 
-  const myUid = currentUser?.uid || currentUser?.id;
   const showInvitationHistory = canViewerSeeProfileInvitationHistory(user, myUid);
   const showFriendsList = canViewerSeeProfileFriends(user, myUid);
   const blockedIds = asUidArray(userProfile?.blockedUserIds);
@@ -635,6 +835,16 @@ const UserProfile = () => {
         t(
           'private_invite_social_only_toast',
           'This member only accepts social/public invites — private invites are turned off.'
+        ),
+        'info'
+      );
+      return;
+    }
+    if (!isFollowing) {
+      showToast(
+        t(
+          'private_invite_follow_required',
+          'Follow this member first to send a private invite.'
         ),
         'info'
       );
@@ -775,7 +985,7 @@ const UserProfile = () => {
     <button
       type="button"
       className="user-profile-float-btn mb-8"
-      onClick={() => navigate(-1)}
+      onClick={goBackFromProfile}
       aria-label={t('go_back', 'Go back')}>
       <FaArrowRight style={i18n.language === 'ar' ? {} : { transform: 'rotate(180deg)' }} />
     </button>
@@ -816,10 +1026,10 @@ const UserProfile = () => {
       onClick={() => menuOpen && setMenuOpen(false)}>
       <ProfileHero
         profile={profileModel}
-        isOnline={Boolean(user.isOnline)}
+        isOnline={isUserOnline}
         t={t}
         i18n={i18n}
-        onBack={() => navigate(-1)}
+        onBack={goBackFromProfile}
         menuOpen={menuOpen}
         onToggleMenu={(e) => {
           e.stopPropagation();
@@ -863,15 +1073,20 @@ const UserProfile = () => {
 
       <div className="user-profile-actions mt-6 flex px-4" onClick={(e) => e.stopPropagation()}>
         {userProfile?.role !== 'business' && canBeFollowed ?
+        useDatingLike ?
         <button
           type="button"
-          onClick={() => {
-            if (currentUser?.isGuest || !currentUser) {
-              goToLogin();
-              return;
-            }
-            toggleFollow(userId);
-          }}
+          onClick={handleToggleLike}
+          disabled={likeBusy}
+          aria-pressed={liked}
+          className={`user-profile-action user-profile-action--like ${liked ? 'is-liked' : ''}`}>
+          {liked ? `❤️ ${t('liked', 'Liked')}` : `🤍 ${t('user_directory_like', 'Like')}`}
+        </button> :
+        <button
+          type="button"
+          onClick={handleConnectFollow}
+          disabled={followBusy}
+          aria-pressed={isFollowing}
           className={`user-profile-action user-profile-action--follow ${isFollowing ? 'is-following' : ''}`}>
           {isFollowing ? `✔️ ${t('following')}` : t('follow')}
         </button> :

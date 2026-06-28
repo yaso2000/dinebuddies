@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { FaArrowLeft, FaCreditCard, FaPlus, FaTrash } from 'react-icons/fa';
+import AppBackButton from '../components/AppBackButton';
 import './SettingsPages.css';
 import { AppText } from "../components/base";
 
@@ -57,9 +58,7 @@ const PaymentSettings = () => {
     <div className="settings-page">
             {/* Header */}
             <div className="settings-header">
-                <button onClick={() => navigate('/settings')} className="back-btn">
-                    <FaArrowLeft />
-                </button>
+                <AppBackButton fallback="/settings" />
                 <AppText as="h1">Payment Method</AppText>
                 <div style={{ width: '40px' }}></div>
             </div>

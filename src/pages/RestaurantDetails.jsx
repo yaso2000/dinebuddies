@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaArrowRight, FaStar, FaMapMarkerAlt, FaPhone, FaClock, FaGlobe, FaArrowLeft } from 'react-icons/fa';
+import { FaArrowRight, FaStar, FaMapMarkerAlt, FaPhone, FaClock, FaGlobe, FaArrowLeft, FaComments, FaUserPlus } from 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import RestaurantRating from '../components/RestaurantRating';
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
 import { goToLogin } from '../utils/goToLogin';
+import {
+  handleBusinessCommunityJoinClick,
+  isJoinedToBusinessCommunity,
+  resolveBusinessCommunityId,
+} from '../utils/businessCommunityJoin';
 import { AppText } from "../components/base";
 
 const RestaurantDetails = () => {
@@ -21,7 +26,7 @@ const RestaurantDetails = () => {
   // Safety check for context data
   const restaurants = context?.restaurants || [];
   const currentUser = context?.currentUser || {};
-  const toggleCommunity = context?.toggleCommunity || (() => {});
+  const joinCommunity = context?.joinCommunity || (() => Promise.resolve(false));
 
   const restaurant = restaurants.find((r) => r && r.id === id);
   const mapRef = useRef(null);
@@ -65,6 +70,25 @@ const RestaurantDetails = () => {
   }
 
   const { name, type, rating, image, promoText, location, tier } = restaurant;
+
+  const joinedCommunities = currentUser?.joinedCommunities || [];
+  const communityId = resolveBusinessCommunityId(joinedCommunities, {
+    ownerId: restaurant?.ownerId,
+    businessId: id,
+  });
+  const isJoined = isJoinedToBusinessCommunity(joinedCommunities, communityId);
+
+  const handleCommunityJoinClick = () => {
+    handleBusinessCommunityJoinClick({
+      navigate,
+      goToLogin,
+      currentUser,
+      communityId,
+      isJoined,
+      joinCommunity,
+      returnPath: `/restaurant/${id}`,
+    });
+  };
 
   return (
     <div className="restaurant-details-page" style={{ paddingBottom: '100px', animation: 'fadeIn 0.5s ease-out', minHeight: '100vh', background: 'var(--bg-body)', color: 'white' }}>
@@ -134,19 +158,13 @@ const RestaurantDetails = () => {
                         </div>
                         {!isBusinessAccount &&
             <button
-              onClick={() => {
-                if (isGuest || !currentUser?.id) {
-                  goToLogin();
-                  return;
-                }
-                toggleCommunity(restaurant?.ownerId || id);
-              }}
+              onClick={handleCommunityJoinClick}
               style={{
-                background: (currentUser?.joinedCommunities || []).some((jId) => jId === id || jId === restaurant?.ownerId) ?
+                background: isJoined ?
                 'transparent' :
                 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
                 color: 'white',
-                border: (currentUser?.joinedCommunities || []).some((jId) => jId === id || jId === restaurant?.ownerId) ?
+                border: isJoined ?
                 '1px solid var(--primary)' :
                 'none',
                 padding: '10px 20px',
@@ -154,7 +172,7 @@ const RestaurantDetails = () => {
                 fontSize: '0.85rem',
                 fontWeight: '800',
                 cursor: 'pointer',
-                boxShadow: (currentUser?.joinedCommunities || []).some((jId) => jId === id || jId === restaurant?.ownerId) ?
+                boxShadow: isJoined ?
                 'none' :
                 '0 4px 12px rgba(139, 92, 246, 0.3)',
                 display: 'flex',
@@ -162,9 +180,17 @@ const RestaurantDetails = () => {
                 gap: '6px'
               }}>
               
-                                {(currentUser?.joinedCommunities || []).some((jId) => jId === id || jId === restaurant?.ownerId) ?
-              t('member_joined') :
-              t('join_plus')}
+                                {isJoined ? (
+                                  <>
+                                    <FaComments aria-hidden />
+                                    {t('business_grid_join_chat', 'Join chat')}
+                                  </>
+                                ) : (
+                                  <>
+                                    <FaUserPlus aria-hidden />
+                                    {t('join_plus')}
+                                  </>
+                                )}
                             </button>
             }
                     </div>

@@ -9,14 +9,18 @@ export default function CommunityCenterStageView({ room, bannerMediaActive = tru
 
   return (
     <div className="community-center-stage">
-      <CommunityTopMediaPanel room={room} bannerExpanded bannerMediaActive={bannerMediaActive} />
-      <CommunityPinnedHostBar
-        messages={messages}
-        partnerId={partnerId}
-        pendingReplyTo={pendingReplyTo}
-        isHost={isHost}
-        onUnpinHostMessage={isHost ? unpinHostMessage : undefined}
-      />
+      {room.bannerVisible !== false ? (
+        <>
+          <CommunityTopMediaPanel room={room} bannerExpanded bannerMediaActive={bannerMediaActive} />
+          <CommunityPinnedHostBar
+            messages={messages}
+            partnerId={partnerId}
+            pendingReplyTo={pendingReplyTo}
+            isHost={isHost}
+            onUnpinHostMessage={isHost ? unpinHostMessage : undefined}
+          />
+        </>
+      ) : null}
       <CommunityGuestChatBody room={room} className="community-guest-chat--center" />
     </div>
   );

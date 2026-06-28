@@ -83,6 +83,13 @@
     border-top: 1px solid color-mix(in srgb, var(--composer-post-border) 55%, transparent);
 }
 
+.composer-field--post .composer-field__ai-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
 .composer-field--post .composer-field__post-btn {
     flex-shrink: 0;
     width: 36px;

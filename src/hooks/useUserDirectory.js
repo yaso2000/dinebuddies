@@ -124,6 +124,41 @@ export function useUserDirectory({ excludeUid, enabled = true } = {}) {
         loadBrowse({ reset: false });
     }, [enabled, hasMore, isSearchMode, loadBrowse, loading, loadingMore]);
 
+    const runSearch = useCallback(async () => {
+        if (!enabled || !isSearchMode) return;
+        const requestId = ++searchRequestIdRef.current;
+        setSearching(true);
+        setError('');
+        try {
+            const result = await searchAccounts(term);
+            if (requestId !== searchRequestIdRef.current) return;
+            const enriched = await enrichDirectorySearchResults(result.users || []);
+            if (requestId !== searchRequestIdRef.current) return;
+            const filtered = excludeUid
+                ? enriched.filter((u) => u.id !== excludeUid && !isExcludedDirectoryUser(u))
+                : enriched.filter((u) => !isExcludedDirectoryUser(u));
+            setUsers(filtered);
+            setHasMore(false);
+        } catch (err) {
+            console.error('[useUserDirectory] search', err);
+            if (requestId === searchRequestIdRef.current) {
+                setUsers([]);
+                setError('user_directory_search_error');
+            }
+        } finally {
+            if (requestId === searchRequestIdRef.current) setSearching(false);
+        }
+    }, [enabled, excludeUid, isSearchMode, term]);
+
+    const refresh = useCallback(async () => {
+        if (!enabled) return;
+        if (isSearchMode) {
+            await runSearch();
+            return;
+        }
+        await loadBrowse({ reset: true });
+    }, [enabled, isSearchMode, loadBrowse, runSearch]);
+
     return {
         users,
         loading: loading || searching,
@@ -134,6 +169,7 @@ export function useUserDirectory({ excludeUid, enabled = true } = {}) {
         setQuery,
         isSearchMode,
         loadMore,
+        refresh,
         minSearchChars: MIN_SEARCH_CHARS,
     };
 }

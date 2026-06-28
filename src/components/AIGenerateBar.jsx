@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
-import { FaMagic, FaWallet } from 'react-icons/fa';
+import { FaPenAlt, FaWallet } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
@@ -248,12 +248,12 @@ export default function AIGenerateBar({
   return (
     <>
             <div
-        className={`ai-generate-bar${compact ? ' ai-generate-bar--compact' : ''}${showMultimodalPackages ? ' ai-generate-bar--magic' : ''}${embedded ? ' ai-generate-bar--embedded' : ''}`}
+        className={`ai-generate-bar ai-generate-bar--text${compact ? ' ai-generate-bar--compact' : ''}${showMultimodalPackages ? ' ai-generate-bar--magic' : ''}${embedded ? ' ai-generate-bar--embedded' : ''}`}
         aria-busy={loading}>
 
                 {!embedded ?
         <label className="ai-generate-bar__label" htmlFor={`ai-prompt-${postType}`}>
-                        <FaMagic aria-hidden />
+                        <FaPenAlt aria-hidden />
                         {t('ai_generate_label')}
                     </label> :
         null}
@@ -375,7 +375,7 @@ export default function AIGenerateBar({
                             </> :
 
             <>
-                                <FaMagic aria-hidden />
+                                <FaPenAlt aria-hidden />
                                 {t('ai_generate_btn')}
                             </>
             }

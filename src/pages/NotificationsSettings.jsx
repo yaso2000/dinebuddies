@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import AppBackButton from '../components/AppBackButton';
 import { useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -352,9 +353,7 @@ const NotificationsSettings = () => {
   return (
     <div className="notification-settings-page">
             <div className="settings-header">
-                <button onClick={() => navigate(-1)} className="back-btn">
-                    <FaChevronLeft style={{ transform: i18n.language === 'ar' ? 'rotate(180deg)' : 'none' }} />
-                </button>
+                <AppBackButton fallback="/settings" />
                 <AppText as="h1">{t('notification_settings', 'Notification Settings')}</AppText>
                 <div style={{ width: '40px' }} />
             </div>

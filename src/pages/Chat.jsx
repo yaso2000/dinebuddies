@@ -4,8 +4,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, doc, getDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { useInvitations } from '../context/InvitationContext';
 import { messagingRestrictedBetweenUsers } from '../utils/userSocialLists';
-import { checkCanMessage } from '../utils/chatHelpers';
+import { useConversationConnectionAllowed } from '../hooks/useConversationConnectionAllowed';
+import { getDirectConversationId } from '../utils/chatHelpers';
 import { useChat } from '../context/ChatContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
@@ -14,6 +16,7 @@ import {
   FaPaperPlane, FaEllipsisV, FaPlay, FaPause, FaFile,
   FaDownload, FaStop, FaPlus, FaArrowDown } from
 'react-icons/fa';
+import { FaLock, FaBan } from 'react-icons/fa6';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
 import { uploadImage, uploadVoiceMessage, formatFileSize, formatDuration } from '../utils/mediaUtils';
@@ -25,14 +28,17 @@ import EmojiPickerPortal, { isTouchOrCoarsePointer } from '../components/EmojiPi
 import './Chat.css';
 import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
 import { AppText, AppTextInput } from "../components/base";
+import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
 
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
 const Chat = () => {
   const { t, i18n } = useTranslation();
+  const { goBack: goBackFromChat } = useAppBackNavigation({ fallback: '/messages' });
   const { userId } = useParams();
   const navigate = useNavigate();
   const { currentUser, userProfile } = useAuth();
+  const { currentUser: invitationUser } = useInvitations();
   const { isDark } = useTheme();
   const { getOrCreateConversation, sendMessage, markAsRead, setTypingStatus, addReaction } = useChat();
   const { showToast } = useToast();
@@ -53,7 +59,27 @@ const Chat = () => {
   const [messagingRestricted, setMessagingRestricted] = useState(false);
   const [connectionLocked, setConnectionLocked] = useState(false);
 
+  const [isSupportPeer, setIsSupportPeer] = useState(false);
+
+  const viewerFollowing =
+    invitationUser?.following || userProfile?.following || [];
+  const { allowed: connectionAllowed, loading: connectionCheckLoading } =
+    useConversationConnectionAllowed(currentUser?.uid, userId, viewerFollowing, {
+      enabled: Boolean(currentUser?.uid && userId),
+      isSupportPeer,
+    });
+
+  useEffect(() => {
+    if (connectionCheckLoading) return;
+    if (messagingRestricted || isSupportPeer) {
+      setConnectionLocked(false);
+      return;
+    }
+    setConnectionLocked(!connectionAllowed);
+  }, [connectionAllowed, connectionCheckLoading, messagingRestricted, isSupportPeer]);
+
   const composerBlocked = messagingRestricted || connectionLocked;
+  const blockedVariant = messagingRestricted ? 'restricted' : connectionLocked ? 'connection' : null;
 
   const handleScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
@@ -112,15 +138,27 @@ const Chat = () => {
   };
 
   const initInFlightRef = useRef(false);
+  const initKeyRef = useRef(null);
+
   useEffect(() => {
+    let cancelled = false;
+
     const initConversation = async () => {
-      if (!currentUser?.uid || !userId) return;
-      if (initInFlightRef.current) return; // avoid duplicate calls (Strict Mode / re-renders) → 429
-      initInFlightRef.current = true;
+      if (!currentUser?.uid || !userId) {
+        setLoading(false);
+        return;
+      }
+      if (connectionCheckLoading) return;
+      if (initInFlightRef.current) return;
+
+      const initKey = `${userId}:${retryTrigger}`;
       setConversationError(false);
-      setConnectionLocked(false);
+
+      initInFlightRef.current = true;
       try {
         const userDoc = await getDoc(doc(db, 'users', userId));
+        if (cancelled) return;
+
         const userData = userDoc.exists() ? userDoc.data() : {};
         const { restricted } = messagingRestrictedBetweenUsers(
           userProfile,
@@ -130,24 +168,8 @@ const Chat = () => {
         );
         setMessagingRestricted(restricted);
 
-        const conversationIdCandidate = [currentUser.uid, userId].sort().join('_');
-        const existingConvSnap = await getDoc(doc(db, 'conversations', conversationIdCandidate));
-        const isLegacyConversation = existingConvSnap.exists();
         const isSupport = userData.isSystemAccount === true;
-        let lockedByConnection = false;
-
-        if (!restricted && !isLegacyConversation && !isSupport) {
-          const allowed = await checkCanMessage(
-            currentUser.uid,
-            userId,
-            userProfile?.following || [],
-            userData.following || []
-          );
-          if (!allowed) {
-            lockedByConnection = true;
-            setConnectionLocked(true);
-          }
-        }
+        setIsSupportPeer(isSupport);
 
         if (userDoc.exists()) {
           setOtherUser({
@@ -170,31 +192,62 @@ const Chat = () => {
           });
         }
 
-        if (lockedByConnection) {
+        const mayMessage = isSupport || (!restricted && connectionAllowed);
+
+        if (!mayMessage) {
           setConversationId(null);
+          initKeyRef.current = null;
+          setLoading(false);
+          return;
+        }
+
+        const deterministicId = getDirectConversationId(currentUser.uid, userId);
+        setConversationId(deterministicId);
+
+        if (initKeyRef.current === initKey) {
           setLoading(false);
           return;
         }
 
         const convId = await getOrCreateConversation(userId);
-        if (convId === null) {
+        if (cancelled) return;
+
+        initKeyRef.current = initKey;
+
+        if (convId) {
+          setConversationId(convId);
+          setConversationError(false);
+        } else if (!isSupport) {
           setConversationId(null);
           setConversationError(true);
-          setLoading(false);
-          return;
         }
-        setConversationId(convId);
       } catch (error) {
         console.error('Error initializing conversation:', error);
-        setConversationId(null);
-        setConversationError(true);
-        setLoading(false);
+        if (!cancelled) {
+          setConversationId(null);
+          setConversationError(true);
+        }
       } finally {
         initInFlightRef.current = false;
+        if (!cancelled) setLoading(false);
       }
     };
+
     initConversation();
-  }, [userId, currentUser?.uid, getOrCreateConversation, retryTrigger, userProfile?.blockedUserIds, userProfile?.mutedUserIds, userProfile?.following]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    userId,
+    currentUser?.uid,
+    getOrCreateConversation,
+    retryTrigger,
+    userProfile?.blockedUserIds,
+    userProfile?.mutedUserIds,
+    connectionAllowed,
+    connectionCheckLoading,
+  ]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -206,10 +259,10 @@ const Chat = () => {
       const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setMessages(msgs);
       setLoading(false);
-      markAsRead(conversationId);
+      if (!connectionLocked) markAsRead(conversationId);
     });
     return () => unsubscribe();
-  }, [conversationId, markAsRead]);
+  }, [connectionLocked, conversationId, markAsRead]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -415,11 +468,11 @@ const Chat = () => {
     setRetryTrigger((t) => t + 1);
   };
 
-  if (loading && !conversationError) {
+  if ((loading || connectionCheckLoading) && !conversationError) {
     return (
       <div dir="ltr" className="chat-container">
                 <div className="chat-header">
-                    <button className="back-btn" onClick={() => navigate('/messages')}>
+                    <button className="back-btn" onClick={goBackFromChat}>
                         <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
                     </button>
                     <div className="header-info" style={{ minWidth: 0, flex: 1 }}><AppText as="h3">{t("loading")}</AppText></div>
@@ -432,7 +485,7 @@ const Chat = () => {
     return (
       <div dir="ltr" className="chat-container">
                 <div className="chat-header">
-                    <button className="back-btn" onClick={() => navigate('/messages')}>
+                    <button className="back-btn" onClick={goBackFromChat}>
                         <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
                     </button>
                     <div className="header-info" style={{ minWidth: 0, flex: 1 }}><AppText as="h3">{t("chat_title")}</AppText></div>
@@ -469,7 +522,7 @@ const Chat = () => {
         boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,0,0.06)',
         zIndex: 100
       }}>
-                <button className="back-btn" onClick={() => navigate('/messages')} style={{
+                <button className="back-btn" onClick={goBackFromChat} style={{
           background: isDark ? 'rgba(255,255,255,0.05)' : '#ffffff',
           borderRadius: '50%',
           width: '38px',
@@ -680,6 +733,42 @@ const Chat = () => {
           }
             </div>
 
+            {blockedVariant ? (
+              <div className="chat-blocked-overlay" role="alert" aria-live="polite">
+                <div className={`chat-blocked-card chat-blocked-card--${blockedVariant}`}>
+                  <div className="chat-blocked-card__icon" aria-hidden>
+                    {blockedVariant === 'restricted' ? <FaBan /> : <FaLock />}
+                  </div>
+                  <AppText as="h2" className="chat-blocked-card__title">
+                    {blockedVariant === 'restricted'
+                      ? t('chat_messaging_restricted_title', 'Messaging unavailable')
+                      : t('chat_connection_locked_title', 'Chat locked')}
+                  </AppText>
+                  <AppText as="p" className="chat-blocked-card__desc">
+                    {blockedVariant === 'restricted'
+                      ? t(
+                          'chat_messaging_restricted',
+                          'Messaging is not available with this user.'
+                        )
+                      : t(
+                          'chat_connection_locked',
+                          'You need a mutual connection to chat — like, follow, or acquaintance match.'
+                        )}
+                  </AppText>
+                  {blockedVariant === 'connection' && userId ? (
+                    <button
+                      type="button"
+                      className="chat-blocked-card__action"
+                      onClick={() => navigate(`/profile/${userId}`)}>
+                      {t('chat_connection_locked_cta', 'View profile to connect')}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {!composerBlocked ? (
+            <>
             {
         replyTo &&
         <div className="reply-bar">
@@ -713,48 +802,15 @@ const Chat = () => {
             borderTop: '1px solid var(--border-color)',
             padding: '8px',
             display: 'flex',
-            flexDirection: composerBlocked ? 'column' : 'row',
+            flexDirection: 'row',
             alignItems: 'center',
             gap: '8px',
             paddingBottom: 'max(8px, var(--chat-composer-safe-bottom, env(safe-area-inset-bottom)))'
           }}>
-                {messagingRestricted &&
-            <div style={{
-              width: '100%',
-              textAlign: 'center',
-              fontSize: '0.85rem',
-              color: 'var(--text-muted)',
-              padding: '6px 8px',
-              background: 'rgba(239, 68, 68, 0.08)',
-              borderRadius: '12px',
-              border: '1px solid rgba(239, 68, 68, 0.2)'
-            }}>
-                        {t('chat_messaging_restricted', 'Messaging is not available with this user.')}
-                    </div>
-            }
-                {connectionLocked && !messagingRestricted &&
-            <div style={{
-              width: '100%',
-              textAlign: 'center',
-              fontSize: '0.85rem',
-              color: 'var(--text-muted)',
-              padding: '6px 8px',
-              background: 'rgba(139, 92, 246, 0.08)',
-              borderRadius: '12px',
-              border: '1px solid rgba(139, 92, 246, 0.2)'
-            }}>
-                        {t(
-              'chat_connection_locked',
-              'Messaging is locked. You must mutually follow or mutually like each other to chat.'
-            )}
-                    </div>
-            }
                 <div className="input-wrapper" style={{
               flex: 1, display: 'flex', alignItems: 'center',
               background: 'var(--bg-input)', borderRadius: '24px', padding: '4px 12px',
-              border: '1px solid var(--border-color)',
-              opacity: composerBlocked ? 0.45 : 1,
-              pointerEvents: composerBlocked ? 'none' : 'auto'
+              border: '1px solid var(--border-color)'
             }}>
                     {isRecording ?
               <div className="recording-ui" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
@@ -777,7 +833,6 @@ const Chat = () => {
                   enterKeyHint="send"
                   placeholder={t("message_placeholder")}
                   value={newMessage}
-                  disabled={composerBlocked}
                   onChange={(e) => handleTyping(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
                   className="chat-input-field" />
@@ -804,13 +859,11 @@ const Chat = () => {
               type="button"
               onPointerDown={(e) => e.preventDefault()}
               onClick={newMessage.trim() ? handleSendMessage : startRecording}
-              disabled={composerBlocked}
               style={{
                 background: isRecording ? '#ef4444' : 'var(--primary)',
                 color: 'white', border: 'none', borderRadius: '50%',
                 width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: composerBlocked ? 'not-allowed' : 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
-                opacity: composerBlocked ? 0.45 : 1
+                cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
               }}>
               
                     {isRecording ? <FaPaperPlane /> : newMessage.trim() ? <FaPaperPlane style={{ marginLeft: '-2px' }} /> : <FaMicrophone />}
@@ -828,6 +881,8 @@ const Chat = () => {
 
           }
             </div>
+            </>
+            ) : null}
             </div>
         </div>);
 

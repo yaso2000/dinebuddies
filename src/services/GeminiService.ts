@@ -33,7 +33,7 @@ export type AiOutputLanguage =
     | 'ur'
     | 'hi';
 
-export type TextPostType = 'regular_post' | 'featured_post' | 'animated_post' | 'invitation' | 'design_studio';
+export type TextPostType = 'regular_post' | 'featured_post' | 'animated_post' | 'invitation' | 'design_studio' | 'text_assistant';
 export type PostType = TextPostType | 'magic_cover';
 export type InvitationSubType = 'public' | 'private' | 'date';
 export type CardStructure = 'arch_luxury' | 'vintage_ticket' | 'modern_minimal';
@@ -421,6 +421,9 @@ function buildSystemInstruction(
         case 'animated_post':
             return `${JSON_OUTPUT_RULE} ${languageRule} Return exactly: {"title":"...","description":"...","animation_type":"..."} where animation_type is one of: slide-up, fade-in, zoom-in.`;
 
+        case 'text_assistant':
+            return `${JSON_OUTPUT_RULE} ${languageRule} Return exactly: {"answer":"..."}. "answer" is a clear, helpful reply in plain language (2–6 sentences when needed). For DineBuddies questions (invitations, credits, profiles, communities, Connect), explain app features accurately without inventing capabilities. Do not include markdown headings or bullet lists unless the user asked for a list.`;
+
         default:
             return `${JSON_OUTPUT_RULE} ${languageRule}`;
     }
@@ -655,6 +658,12 @@ function validateGeneratedContent(postType: TextPostType, value: unknown): strin
             return null;
         }
 
+        case 'text_assistant': {
+            if (!isNonEmptyString(record.answer)) return 'Missing or empty "answer"';
+            if (record.answer.length > 1200) return '"answer" must be at most 1200 characters';
+            return null;
+        }
+
         default:
             return 'Unsupported post type';
     }
@@ -698,7 +707,7 @@ export async function generateContent(input: GenerateContentInput): Promise<Gene
         const rawText = await invokeGeminiJsonModel(
             prompt,
             systemInstruction,
-            postType === 'invitation' ? 2048 : 1024,
+            postType === 'invitation' || postType === 'text_assistant' ? 2048 : 1024,
         );
 
         if (!rawText || !rawText.trim()) {

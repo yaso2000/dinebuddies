@@ -62,7 +62,6 @@ import {
 import { createGoogleAuthProvider } from '../utils/googleAuthProvider';
 import { getFirebaseRedirectResultOnce, resetFirebaseRedirectBootstrap } from '../firebase/authBootstrap';
 import { needsOAuthRedirectProfileFinish, shouldRunOAuthRedirectBootstrap } from '../utils/oauthRedirectState';
-import { SOCIAL_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
 import { adminSecurityService } from '../services/adminSecurityService';
 import {
     auth,
@@ -132,7 +131,6 @@ import {
     serverTimestamp,
     onSnapshot,
     collection,
-    increment,
 } from 'firebase/firestore';
 
 const AuthContext = createContext();
@@ -1055,42 +1053,6 @@ export const AuthProvider = ({ children }) => {
         }
 
         try {
-            let grantedCredits = 0;
-            let showWelcomeNotification = false;
-
-            // Generate a unique identifier (email or phone)
-            const uniqueId = userData.email?.toLowerCase() || auth.currentUser?.phoneNumber || null;
-
-            // welcome_gifts_claimed must be allowed in firestore.rules; if missing/denied, skip and still create users/{uid}.
-            if (uniqueId) {
-                try {
-                    const giftRef = doc(db, 'welcome_gifts_claimed', uniqueId);
-                    const giftSnap = await getDoc(giftRef);
-
-                    if (!giftSnap.exists()) {
-                        grantedCredits = 5;
-                        showWelcomeNotification = true;
-                        try {
-                            await setDoc(giftRef, {
-                                claimedAt: serverTimestamp(),
-                                userId: userId,
-                                authProvider: userData.authProvider || 'unknown'
-                            });
-                        } catch (giftWriteErr) {
-                            console.warn('welcome_gifts_claimed write skipped:', giftWriteErr?.message || giftWriteErr);
-                        }
-                    }
-                } catch (giftReadErr) {
-                    console.warn('welcome gift eligibility check skipped:', giftReadErr?.message || giftReadErr);
-                    grantedCredits = 5;
-                    showWelcomeNotification = true;
-                }
-            } else {
-                // Fallback if no unique identity can be verified (rare in Firebase Auth)
-                grantedCredits = 5;
-                showWelcomeNotification = true;
-            }
-
             const existingSnap = await getDoc(doc(db, 'users', userId));
             const existing = existingSnap.exists() ? existingSnap.data() : null;
             const existingRoleLc = String(existing?.role || '').toLowerCase();
@@ -1111,8 +1073,6 @@ export const AuthProvider = ({ children }) => {
                     typeof existing.businessInfo === 'object' &&
                     Object.keys(existing.businessInfo).length > 0);
 
-            const welcomeDinePaid =
-                grantedCredits > 0 ? grantedCredits * SOCIAL_INVITATION_PUBLISH_CREDITS : 0;
             const pendingRef =
                 typeof window !== 'undefined' && !pendingBusinessFlow && !existing?.referred_by
                     ? peekPendingReferralCode()
@@ -1124,8 +1084,9 @@ export const AuthProvider = ({ children }) => {
                 email: userData.email || '',
                 photo_url: userData.photo_url || userData.photoURL || defaultAvatar,
                 reputation: 100,
-                freeCredits: Math.max(0, Number(existing?.freeCredits) || 0),
-                paidCredits: Math.max(0, Number(existing?.paidCredits) || 0) + welcomeDinePaid,
+                freeCredits: 0,
+                paidCredits: Math.max(0, Number(existing?.paidCredits) || 0),
+                savedCredits: Math.max(0, Number(existing?.savedCredits) || 0),
                 isGuest: false,
                 created_time: serverTimestamp(),
                 last_active_time: serverTimestamp(),
@@ -1145,9 +1106,6 @@ export const AuthProvider = ({ children }) => {
             if (pendingRef) {
                 baseProfile.referred_by = pendingRef;
             }
-            if (welcomeDinePaid > 0) {
-                baseProfile.totalCreditsPurchased = increment(welcomeDinePaid);
-            }
             // Do not stamp role:user on business accounts or in-progress business signup.
             if (!pendingBusinessFlow) {
                 baseProfile.role = 'user';
@@ -1157,20 +1115,6 @@ export const AuthProvider = ({ children }) => {
 
             if (pendingRef) {
                 clearPendingReferralCode();
-            }
-
-            if (showWelcomeNotification) {
-                try {
-                    await adminSecurityService.createNotification({
-                        userId,
-                        type: 'system_announcement',
-                        title: '🎁 Welcome Gift!',
-                        message: `Welcome to DineBuddies! You received ${welcomeDinePaid} Dine Credits to use for private invites, dates, and AI. Enjoy!`,
-                        style: 'success'
-                    });
-                } catch (notifErr) {
-                    console.warn('Welcome notification skipped:', notifErr?.message || notifErr);
-                }
             }
 
             await fetchUserProfile(userId);

@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import AdminPlacesGeoFilter from '../components/AdminPlacesGeoFilter';
 import DemoUserImageUpload from '../components/DemoUserImageUpload';
+import DemoUserAiBioField from '../components/DemoUserAiBioField';
+import DemoUserAiCharacterPairTrigger from '../components/DemoUserAiCharacterPairTrigger';
 import PrivateProfileFields from '../../components/profile/PrivateProfileFields';
 import { fetchCityBoundingBox } from '../../utils/osmPhotonSearch';
 import { adminApi } from '../api';
@@ -31,6 +33,8 @@ const EMPTY_PROFILE = {
   firstDatePlaceHint: '',
   invitePreference: 'any',
   availableForPrivateInvite: true,
+  lookingFor: [],
+  openToDating: false,
 };
 
 export default function DemoUsersPage() {
@@ -206,6 +210,8 @@ export default function DemoUsersPage() {
           firstDatePlaceHint: profile.firstDatePlaceHint,
           invitePreference: profile.invitePreference,
           availableForPrivateInvite: profile.availableForPrivateInvite,
+          lookingFor: profile.lookingFor,
+          openToDating: profile.openToDating,
         },
       });
       setMsg(
@@ -356,16 +362,21 @@ export default function DemoUsersPage() {
           {t('admin_demo_user_profile_section', 'Profile details')}
         </AppText>
         <div style={{ marginTop: '0.75rem', display: 'grid', gap: '0.75rem', maxWidth: 520 }}>
-          <label className="db-label" htmlFor="admin-demo-bio">
-            {t('bio', 'Bio')}
-          </label>
-          <textarea
-            id="admin-demo-bio"
-            className="db-input"
-            rows={3}
+          <DemoUserAiBioField
             value={profile.bio}
-            onChange={(e) => updateProfile({ bio: e.target.value })}
-            style={{ resize: 'vertical' }}
+            onChange={(bio) => updateProfile({ bio })}
+            profile={profile}
+            geo={geo}
+            disabled={creating}
+          />
+
+          <DemoUserAiCharacterPairTrigger
+            profile={profile}
+            geo={geo}
+            disabled={creating}
+            onGenerated={({ avatarUrl, coverUrl }) =>
+              updateProfile({ photo_url: avatarUrl, cover_photo: coverUrl })
+            }
           />
 
           <DemoUserImageUpload
@@ -374,6 +385,11 @@ export default function DemoUsersPage() {
             value={profile.photo_url}
             onChange={(url) => updateProfile({ photo_url: url })}
             disabled={creating}
+            aiImageGenerate={{
+              profile,
+              geo,
+              onGenerated: (url) => updateProfile({ photo_url: url }),
+            }}
           />
 
           <DemoUserImageUpload
@@ -382,6 +398,11 @@ export default function DemoUsersPage() {
             value={profile.cover_photo}
             onChange={(url) => updateProfile({ cover_photo: url })}
             disabled={creating}
+            aiImageGenerate={{
+              profile,
+              geo,
+              onGenerated: (url) => updateProfile({ cover_photo: url }),
+            }}
           />
 
           {[0, 1, 2].map((index) => (
@@ -398,22 +419,15 @@ export default function DemoUsersPage() {
             />
           ))}
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={profile.availableForPrivateInvite}
-              onChange={(e) => updateProfile({ availableForPrivateInvite: e.target.checked })}
-            />
-            <AppText as="span">
-              {t('available_for_private_invite', 'Available for private invitations')}
-            </AppText>
-          </label>
-
           <PrivateProfileFields
             diningPersona={profile.diningPersona}
             invitePreference={profile.invitePreference}
             firstDatePlaceHint={profile.firstDatePlaceHint}
             joinReasons={profile.joinReasons}
+            lookingFor={profile.lookingFor}
+            openToDating={profile.openToDating}
+            availableForPrivateInvite={profile.availableForPrivateInvite}
+            showAvailableForPrivateInviteToggle
             showInvitePreference={profile.availableForPrivateInvite}
             onChange={(patch) => updateProfile(patch)}
           />

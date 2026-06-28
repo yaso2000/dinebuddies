@@ -52,7 +52,13 @@ export function normalizeCardStructure(value) {
  */
 export function resolveCardStructureFromBackgroundId(backgroundId, fallback = DEFAULT_CARD_STRUCTURE) {
     if (!backgroundId) return fallback;
-    const mapped = DATING_BACKGROUND_TO_CARD_STRUCTURE[backgroundId];
+    let mapped = DATING_BACKGROUND_TO_CARD_STRUCTURE[backgroundId];
+    if (!mapped && backgroundId.startsWith('private-friend-')) {
+        mapped = DATING_BACKGROUND_TO_CARD_STRUCTURE[`private-${backgroundId.slice('private-friend-'.length)}`];
+    }
+    if (!mapped && backgroundId.startsWith('private-social-')) {
+        mapped = DATING_BACKGROUND_TO_CARD_STRUCTURE[`private-${backgroundId.slice('private-social-'.length)}`];
+    }
     return mapped ? normalizeCardStructure(mapped) : fallback;
 }
 

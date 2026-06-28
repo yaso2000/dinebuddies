@@ -3,8 +3,14 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const functions = getFunctions(app, 'us-central1');
 
+const LONG_RUNNING_ADMIN_CALLS = new Set([
+    'adminGenerateDemoUserImage',
+    'adminGenerateDemoUserCharacterPair',
+]);
+
 async function call(name, payload) {
-    const fn = httpsCallable(functions, name);
+    const opts = LONG_RUNNING_ADMIN_CALLS.has(name) ? { timeout: 540000 } : undefined;
+    const fn = httpsCallable(functions, name, opts);
     const res = await fn(payload);
     return res?.data || {};
 }
@@ -32,7 +38,12 @@ export const adminApi = {
     listDemoUserProfiles: (payload = {}) => call('adminListDemoUserProfiles', payload),
     createDemoUser: (payload) => call('adminCreateDemoUser', payload),
     suggestDemoUserProfile: (payload) => call('adminSuggestDemoUserProfile', payload),
+    generateDemoUserImage: (payload) => call('adminGenerateDemoUserImage', payload),
+    generateDemoUserCharacterPair: (payload) =>
+        call('adminGenerateDemoUserCharacterPair', payload),
     deleteDemoUser: (payload) => call('adminDeleteDemoUser', payload),
     createDemoUsers: (payload) => call('adminCreateDemoUsers', payload),
     wipeDemoUsers: (payload) => call('adminWipeDemoUsers', payload),
+    createDemoPost: (payload) => call('adminCreateDemoPost', payload),
+    createDemoPublicInvitation: (payload) => call('adminCreateDemoPublicInvitation', payload),
 };

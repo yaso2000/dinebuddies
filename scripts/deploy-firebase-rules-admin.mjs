@@ -11,6 +11,9 @@ import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirebaseAdminCertConfig } from '../api/_firebaseAdmin.js';
+import { ensureNodeTlsEnv } from './_firebaseCliAuth.mjs';
+
+Object.assign(process.env, ensureNodeTlsEnv(process.env));
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');

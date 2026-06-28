@@ -1,24 +1,51 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { FaSearch, FaTimes, FaUsers } from 'react-icons/fa';
+import { FaSearch, FaTimes } from 'react-icons/fa';
 import { LuSparkles } from 'react-icons/lu';
+import InboxHubLink from '../components/discovery/InboxHubLink';
 import { useAuth } from '../context/AuthContext';
 import { useUserDirectory } from '../hooks/useUserDirectory';
+import { useProfileGiftPicker } from '../hooks/useProfileGiftPicker';
 import UserDirectoryCard from '../components/UserDirectory/UserDirectoryCard';
+import UserDirectoryFilters, { useDirectoryFilterContext } from '../components/UserDirectory/UserDirectoryFilters';
+import {
+  filterDirectoryUsers,
+} from '../utils/userDirectoryFilters';
 import { goToLogin } from '../utils/goToLogin';
 import './UsersDirectory.css';
 import { AppText, AppTextInput } from "../components/base";
+import PullToRefresh from '../components/PullToRefresh';
 
 export default function UsersDirectory() {
   const { t, i18n } = useTranslation();
-  const { currentUser, isGuest } = useAuth();
+  const { currentUser, userProfile, isGuest } = useAuth();
   const rtl = i18n.language === 'ar';
-  const inputRef = useRef(null);
   const loadMoreRef = useRef(null);
+
+  const [genderFilter, setGenderFilter] = useState('all');
+  const [geoScope, setGeoScope] = useState('global');
+  const [userLocation, setUserLocation] = useState(null);
 
   const viewerUid = currentUser?.uid || currentUser?.id;
   const canBrowse = Boolean(viewerUid && !isGuest);
+  const { openGiftPicker, giftModal } = useProfileGiftPicker();
+
+  useEffect(() => {
+    if (!navigator.geolocation) return undefined;
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      },
+      () => setUserLocation(null)
+    );
+    return undefined;
+  }, []);
+
+  const filterContext = useDirectoryFilterContext(userProfile, userLocation);
 
   const {
     users,
@@ -29,16 +56,22 @@ export default function UsersDirectory() {
     query,
     setQuery,
     isSearchMode,
-    loadMore
+    loadMore,
+    refresh,
   } = useUserDirectory({
     excludeUid: viewerUid,
     enabled: canBrowse
   });
 
-  useEffect(() => {
-    if (!canBrowse) return;
-    inputRef.current?.focus();
-  }, [canBrowse]);
+  const filteredUsers = useMemo(
+    () =>
+      filterDirectoryUsers(users, {
+        genderFilter,
+        geoScope,
+        ...filterContext,
+      }),
+    [users, genderFilter, geoScope, filterContext]
+  );
 
   useEffect(() => {
     if (!hasMore || loading || loadingMore) return undefined;
@@ -57,6 +90,11 @@ export default function UsersDirectory() {
   }, [hasMore, loadMore, loading, loadingMore]);
 
   const clearQuery = () => setQuery('');
+
+  const handleRefresh = useCallback(async () => {
+    document.querySelector('.app-main')?.scrollTo({ top: 0, behavior: 'smooth' });
+    await refresh();
+  }, [refresh]);
 
   if (!canBrowse) {
     return (
@@ -83,12 +121,12 @@ export default function UsersDirectory() {
   }
 
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <div className="users-directory-page" dir={rtl ? 'rtl' : 'ltr'}>
             <div className="users-directory-toolbar">
                 <div className="users-directory-field">
                     <FaSearch className="users-directory-field-icon" aria-hidden />
                     <AppTextInput
-            ref={inputRef}
             className="users-directory-field-input"
             type="search"
             enterKeyHint="search"
@@ -116,26 +154,34 @@ export default function UsersDirectory() {
             </div>
 
             <header className="users-directory-header">
-                <div className="users-directory-header-row">
-                    <AppText as="h1" className="users-directory-title">
-                        <FaUsers aria-hidden /> {t('user_directory_title', 'Members directory')}
-                    </AppText>
-                    <Link
+                <div className="users-directory-header-row users-directory-header-row--end">
+                    <div className="users-directory-header-actions">
+                      <Link
             to="/search"
             className="users-directory-feed-link"
             title={t('user_directory_feed_view', 'Swipe discovery')}>
-            
-                        <LuSparkles size={18} aria-hidden />
+                        <LuSparkles aria-hidden />
                         <AppText as="span">{t('user_directory_feed_view', 'Swipe view')}</AppText>
-                    </Link>
+                      </Link>
+                      <InboxHubLink
+            className="users-directory-inbox-link"
+            tab="activity"
+            showLabel
+            label={t('inbox_tab_activity', 'Activity')}
+          />
+                    </div>
                 </div>
-                <AppText as="p" className="users-directory-subtitle">
-                    {t(
-            'user_directory_subtitle',
-            'Discover members, send private invites, or send a gift.'
-          )}
-                </AppText>
             </header>
+
+            {!isSearchMode ?
+        <UserDirectoryFilters
+          genderFilter={genderFilter}
+          onGenderFilterChange={setGenderFilter}
+          geoScope={geoScope}
+          onGeoScopeChange={setGeoScope}
+          userProfile={userProfile}
+        /> :
+        null}
 
             <main className="users-directory-main">
                 {!isSearchMode && loading && users.length === 0 ?
@@ -162,15 +208,24 @@ export default function UsersDirectory() {
                     </AppText> :
         null}
 
-                {users.length > 0 ?
+                {!loading && !error && users.length > 0 && filteredUsers.length === 0 ?
+        <AppText as="p" className="users-directory-message">
+                        {t(
+            'user_directory_no_filter_matches',
+            'No members match these filters. Try All or Global.'
+          )}
+                    </AppText> :
+        null}
+
+                {filteredUsers.length > 0 ?
         <div className="users-directory-grid">
-                        {users.map((user) =>
-          <UserDirectoryCard key={user.id} user={user} currentUser={currentUser} />
+                        {filteredUsers.map((user) =>
+          <UserDirectoryCard key={user.id} user={user} currentUser={currentUser} onGift={openGiftPicker} />
           )}
                     </div> :
         null}
 
-                {hasMore ?
+                {hasMore && !isSearchMode ?
         <div className="users-directory-load-more" ref={loadMoreRef}>
                         <button
             type="button"
@@ -185,6 +240,8 @@ export default function UsersDirectory() {
                     </div> :
         null}
             </main>
-        </div>);
+            {giftModal}
+        </div>
+    </PullToRefresh>);
 
 }

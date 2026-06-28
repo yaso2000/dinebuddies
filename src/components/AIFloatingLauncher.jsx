@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FaMagic, FaTimes } from 'react-icons/fa';
+import { FaPenAlt, FaTimes } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import AIGenerateBar from './AIGenerateBar';
 import './AIFloatingLauncher.css';
@@ -82,8 +82,8 @@ export default function AIFloatingLauncher({
 
                 <div className="ai-floating-sheet__handle" aria-hidden />
                 <header className="ai-floating-sheet__header">
-                    <AppText as="h2" id="ai-floating-sheet-title" className="ai-floating-sheet__title">
-                        <FaMagic aria-hidden />
+                    <AppText as="h2" id="ai-floating-sheet-title" className="ai-floating-sheet__title ai-floating-sheet__title--text">
+                        <FaPenAlt aria-hidden />
                         {t('ai_floating_sheet_title')}
                     </AppText>
                     <button
@@ -123,7 +123,7 @@ export default function AIFloatingLauncher({
 
   return (
     <div
-      className={`ai-floating-launcher${compact ? ' ai-floating-launcher--compact' : ''}${iconOnly ? ' ai-floating-launcher--icon' : ''}${className ? ` ${className}` : ''}`}>
+      className={`ai-floating-launcher ai-floating-launcher--text-brand${compact ? ' ai-floating-launcher--compact' : ''}${iconOnly ? ' ai-floating-launcher--icon' : ''}${className ? ` ${className}` : ''}`}>
 
             <button
         type="button"
@@ -135,7 +135,7 @@ export default function AIFloatingLauncher({
         aria-label={t('ai_floating_open_btn')}
         title={t('ai_floating_open_btn')}>
 
-                <FaMagic className="ai-floating-launcher__trigger-icon" aria-hidden />
+                <FaPenAlt className="ai-floating-launcher__trigger-icon" aria-hidden />
                 {!iconOnly ? t('ai_floating_open_btn') : null}
             </button>
             {disabledHint ?

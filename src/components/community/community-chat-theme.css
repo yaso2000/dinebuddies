@@ -1,7 +1,9 @@
 /**
  * Community chat follows the global app theme (html[data-theme] via ThemeContext).
- * Maps chat-specific surfaces onto app design tokens — no separate chat theme toggle.
+ * Zone palettes: data-cchat-zone-theme on .community-chat-root (see community-chat-zone-themes.css).
  */
+@import './community-chat-zone-themes.css';
+@import './community-chat-guest-frame-textures.css';
 
 .community-chat-root {
     --cchat-surface: var(--bg-secondary);
@@ -12,36 +14,94 @@
     --cchat-text: var(--text-main);
     --cchat-text-muted: var(--text-muted);
     --cchat-text-subtle: color-mix(in srgb, var(--text-muted) 88%, transparent);
-    --cchat-bubble-in-bg: color-mix(in srgb, var(--bg-card) 82%, var(--text-main) 18%);
-    --cchat-bubble-in-border: color-mix(in srgb, var(--text-main) 22%, transparent);
-    --cchat-bubble-in-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
-    --cchat-bubble-in-text: var(--text-main);
-    --cchat-composer-bg: color-mix(in srgb, var(--bg-card) 94%, transparent);
+    --cchat-zone-composer-bg: var(--bg-card);
     --cchat-input-row-bg: var(--bg-input);
     --cchat-input-row-border: var(--border-color);
     --cchat-control-bg: var(--bg-card);
     --cchat-control-text: var(--text-main);
     --cchat-pinned-bg: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
     --cchat-pinned-border: var(--border-color);
-    --cchat-banner-frame-bg: var(--bg-card);
-    --cchat-banner-frame-border: var(--border-color);
     --cchat-hover: var(--hover-overlay);
     --cchat-header-btn-bg: var(--bg-card);
     --cchat-header-btn-border: var(--border-color);
     --cchat-pattern-fill: %23ffffff;
+
+    /* Default zone tokens (theme preset "default" + fallbacks for base CSS) */
+    --cchat-zone-header-bg: var(--cchat-shell-bg);
+    --cchat-zone-header-border: var(--cchat-border);
+    --cchat-zone-header-text: var(--cchat-text);
+    --cchat-zone-header-text-muted: var(--cchat-text-muted);
+
+    --cchat-zone-banner-frame-bg: var(--bg-card);
+    --cchat-zone-banner-frame-border: var(--cchat-border);
+    --cchat-zone-banner-placeholder-bg:
+        radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--primary) 14%, transparent) 0%, transparent 55%),
+        linear-gradient(160deg, color-mix(in srgb, var(--text-main) 6%, transparent) 0%, var(--cchat-surface) 100%);
+    --cchat-zone-banner-title-text: #ffffff;
+    --cchat-zone-banner-title-border: rgba(255, 255, 255, 0.18);
+    --cchat-zone-banner-body-text: #ffffff;
+    --cchat-zone-banner-text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+
+    --cchat-zone-spotlight-bg: #1e293b;
+    --cchat-zone-spotlight-border: #64748b;
+    --cchat-zone-spotlight-text: #ffffff;
+    --cchat-zone-spotlight-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+
+    --cchat-zone-guest-frame-bg: var(--bg-secondary);
+    --cchat-zone-guest-frame-border: var(--cchat-border);
+    --cchat-zone-guest-frame-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+
+    --cchat-zone-incoming-bg: var(--bg-card);
+    --cchat-zone-incoming-border: var(--border-color);
+    --cchat-zone-incoming-text: var(--cchat-text);
+    --cchat-zone-incoming-time: var(--cchat-text-muted);
+    --cchat-zone-incoming-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+
+    --cchat-zone-outgoing-bg: #e86e2e;
+    --cchat-zone-outgoing-border: #c9561a;
+    --cchat-zone-outgoing-text: #ffffff;
+    --cchat-zone-outgoing-time: #ffedd5;
+    --cchat-zone-outgoing-shadow: 0 2px 8px rgba(232, 110, 46, 0.28);
+
+    --cchat-zone-host-bg: var(--primary);
+    --cchat-zone-host-border: transparent;
+    --cchat-zone-host-text: #ffffff;
+
+    --cchat-zone-composer-bg: var(--cchat-composer-bg);
+    --cchat-zone-composer-border: var(--cchat-border);
+    --cchat-zone-composer-input-bg: var(--cchat-input-row-bg);
+    --cchat-zone-composer-input-border: var(--cchat-input-row-border);
+    --cchat-zone-composer-text: var(--cchat-text);
+    --cchat-zone-composer-placeholder: var(--cchat-text-subtle);
+
+    /* Legacy aliases */
+    --cchat-bubble-in-bg: var(--cchat-zone-incoming-bg);
+    --cchat-bubble-in-border: var(--cchat-zone-incoming-border);
+    --cchat-bubble-in-shadow: var(--cchat-zone-incoming-shadow);
+    --cchat-bubble-in-text: var(--cchat-zone-incoming-text);
+    --cchat-banner-frame-bg: var(--cchat-zone-banner-frame-bg);
+    --cchat-banner-frame-border: var(--cchat-zone-banner-frame-border);
 }
 
 [data-theme='light'] .community-chat-root {
-    --cchat-bubble-in-bg: #ffffff;
-    --cchat-bubble-in-border: rgba(15, 23, 42, 0.16);
-    --cchat-bubble-in-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    --cchat-zone-incoming-bg: #ffffff;
+    --cchat-zone-incoming-border: rgba(15, 23, 42, 0.16);
+    --cchat-zone-incoming-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    --cchat-zone-banner-title-text: #0f172a;
+    --cchat-zone-banner-body-text: #334155;
+    --cchat-zone-banner-text-shadow: none;
+    --cchat-zone-spotlight-bg: #ffffff;
+    --cchat-zone-spotlight-border: rgba(15, 23, 42, 0.16);
+    --cchat-zone-spotlight-text: #0f172a;
     --cchat-pattern-fill: %230f172a;
 }
 
 [data-theme='dark'] .community-chat-root {
-    --cchat-bubble-in-bg: rgba(255, 255, 255, 0.14);
-    --cchat-bubble-in-border: rgba(255, 255, 255, 0.22);
-    --cchat-bubble-in-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+    --cchat-zone-incoming-bg: #2e2e3a;
+    --cchat-zone-incoming-border: #4b5563;
+    --cchat-zone-incoming-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+    --cchat-zone-guest-frame-bg: #18181f;
+    --cchat-pattern-fill: %23ffffff;
 }
 
 /* Surfaces */
@@ -63,42 +123,42 @@
     background: var(--cchat-surface-alt);
 }
 
-.community-chat-root .community-guest-chat--center {
-    border-top-color: var(--cchat-border);
-    background: color-mix(in srgb, var(--cchat-surface) 92%, var(--bg-input) 8%);
+/* ② Guest frame */
+.community-chat-root .community-guest-chat__frame {
+    border-color: var(--cchat-zone-guest-frame-border);
+    background: var(--cchat-zone-guest-frame-bg);
+    box-shadow: var(--cchat-zone-guest-frame-shadow);
 }
 
-/* Header + pattern */
+/* Header */
 .community-chat-root.chat-screen::before {
     opacity: 0.04;
     background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1h2v2H1V1zm4 0h2v2H5V1zm4 0h2v2H9V1z' fill='var(--cchat-pattern-fill)' fill-opacity='1' fill-rule='evenodd'/%3E%3C/svg%3E");
 }
 
 .community-chat-root .chat-header {
-    background: var(--cchat-shell-bg);
-    border-bottom-color: var(--cchat-border);
-    color: var(--cchat-text);
+    background: var(--cchat-zone-header-bg);
+    border-bottom-color: var(--cchat-zone-header-border);
+    color: var(--cchat-zone-header-text);
+}
+
+.community-chat-root .chat-header .header-title {
+    color: var(--cchat-zone-header-text);
+}
+
+.community-chat-root .chat-header .header-subtitle {
+    color: var(--cchat-zone-header-text-muted);
+}
+
+.community-chat-root .chat-header .community-chat-header__avatar {
+    flex-shrink: 0;
 }
 
 .community-chat-root .header-close-btn,
 .community-chat-root .header-back-btn {
     background: var(--cchat-header-btn-bg);
     border-color: var(--cchat-header-btn-border);
-    color: var(--cchat-text);
-}
-
-.community-chat-root .input-area {
-    border-top-color: var(--cchat-border);
-    background: var(--cchat-composer-bg) !important;
-}
-
-.community-chat-root .input-wrapper {
-    background: var(--cchat-input-row-bg);
-    border-color: var(--cchat-input-row-border);
-}
-
-.community-chat-root .composer-icon-btn:hover {
-    background: var(--cchat-hover);
+    color: var(--cchat-zone-header-text);
 }
 
 /* Pinned bar */
@@ -122,36 +182,64 @@
     color: var(--cchat-text-subtle);
 }
 
-/* Banner frame */
+/* ① Banner frame + text defaults */
 .community-chat-root .community-main-chat__banner-wrap {
-    background: var(--cchat-banner-frame-bg);
-    border-color: var(--cchat-banner-frame-border);
+    background: var(--cchat-zone-banner-frame-bg);
+    border-color: var(--cchat-zone-banner-frame-border);
 }
 
 .community-chat-root .community-main-chat__banner-placeholder {
     color: var(--cchat-text-muted);
-    background:
-        radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--primary) 14%, transparent) 0%, transparent 55%),
-        linear-gradient(160deg, color-mix(in srgb, var(--text-main) 6%, transparent) 0%, var(--cchat-surface) 100%);
+    background: var(--cchat-zone-banner-placeholder-bg);
+}
+
+.community-chat-root .community-main-chat__banner-text-title {
+    border-bottom-color: var(--cchat-zone-banner-title-border);
+}
+
+.community-chat-root .community-main-chat__banner-text-title p,
+.community-chat-root .community-main-chat__banner-text-body p {
+    color: var(--cchat-zone-banner-body-text);
+    text-shadow: var(--cchat-zone-banner-text-shadow);
+}
+
+.community-chat-root .community-main-chat__banner-text-title p {
+    color: var(--cchat-zone-banner-title-text);
+}
+
+/* ④ Host spotlight on banner */
+.community-chat-root .community-host-banner-messages__bubble:not(.community-host-banner-messages__bubble--image):not(.community-host-banner-messages__bubble--emoji) {
+    color: var(--cchat-zone-spotlight-text);
+    background: var(--cchat-zone-spotlight-bg);
+    border-color: var(--cchat-zone-spotlight-border);
+    box-shadow:
+        var(--cchat-zone-spotlight-shadow),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.community-chat-root .community-host-banner-messages__bubble--emoji {
+    color: var(--cchat-zone-spotlight-text);
+    background: color-mix(in srgb, var(--cchat-zone-spotlight-bg) 88%, transparent);
+    border-color: var(--cchat-zone-spotlight-border);
 }
 
 .community-chat-root .community-center-stage__hint {
     color: var(--cchat-text-subtle);
 }
 
-/* Messages */
+/* ⑥ Incoming bubbles */
 .community-chat-root .community-main-chat__bubble:not(.community-main-chat__bubble--outgoing):not(.community-main-chat__bubble--host):not(.community-main-chat__bubble--emoji):not(.community-main-chat__bubble--image) {
-    color: var(--cchat-bubble-in-text);
-    background: var(--cchat-bubble-in-bg);
-    border: 1px solid var(--cchat-bubble-in-border);
-    box-shadow: var(--cchat-bubble-in-shadow);
+    color: var(--cchat-zone-incoming-text);
+    background: var(--cchat-zone-incoming-bg);
+    border: 1px solid var(--cchat-zone-incoming-border);
+    box-shadow: var(--cchat-zone-incoming-shadow);
 }
 
 .community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) {
-    background: var(--cchat-bubble-in-bg);
-    color: var(--cchat-bubble-in-text);
-    border: 1px solid var(--cchat-bubble-in-border);
-    box-shadow: var(--cchat-bubble-in-shadow);
+    background: var(--cchat-zone-incoming-bg);
+    color: var(--cchat-zone-incoming-text);
+    border: 1px solid var(--cchat-zone-incoming-border);
+    box-shadow: var(--cchat-zone-incoming-shadow);
 }
 
 .community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) .community-main-chat__bubble-segment:not(:first-child)::before {
@@ -170,7 +258,31 @@
 
 .community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) .community-main-chat__bubble-time,
 .community-chat-root .community-main-chat__message:not(.community-main-chat__message--outgoing):not(.community-main-chat__message--host) .community-main-chat__bubble-time {
-    color: var(--cchat-text-muted);
+    color: var(--cchat-zone-incoming-time);
+    opacity: 1;
+}
+
+/* ⑤ Outgoing + host thread bubbles */
+.community-chat-root .community-main-chat__bubble--outgoing,
+.community-chat-root .community-main-chat__message--outgoing .community-main-chat__bubble:not(.community-main-chat__bubble--emoji):not(.community-main-chat__bubble--image) {
+    color: var(--cchat-zone-outgoing-text);
+    background: var(--cchat-zone-outgoing-bg);
+    border: 1px solid var(--cchat-zone-outgoing-border);
+    box-shadow: var(--cchat-zone-outgoing-shadow);
+}
+
+.community-chat-root .community-main-chat__bubble--host,
+.community-chat-root .community-main-chat__message--host .community-main-chat__bubble:not(.community-main-chat__bubble--emoji):not(.community-main-chat__bubble--image) {
+    color: var(--cchat-zone-host-text);
+    background: var(--cchat-zone-host-bg);
+    border: 1px solid var(--cchat-zone-host-border);
+}
+
+.community-chat-root .community-main-chat__bubble--outgoing .community-main-chat__bubble-time,
+.community-chat-root .community-main-chat__message--outgoing .community-main-chat__bubble-time,
+.community-chat-root .community-main-chat__bubble--host .community-main-chat__bubble-time,
+.community-chat-root .community-main-chat__message--host .community-main-chat__bubble-time {
+    color: var(--cchat-zone-outgoing-time);
     opacity: 1;
 }
 
@@ -188,18 +300,18 @@
     background: var(--cchat-hover);
 }
 
-/* Composer */
+/* ③ Composer */
 .community-chat-root .community-main-chat__composer {
     flex-shrink: 0;
     position: relative;
     z-index: 5;
-    border-top-color: var(--cchat-border);
-    background: var(--cchat-composer-bg);
+    border-top: 1px solid var(--cchat-zone-composer-border);
+    background: var(--cchat-zone-composer-bg);
 }
 
 .community-chat-root .community-composer-bar .community-main-chat__input-row {
-    background: var(--cchat-input-row-bg);
-    border-color: var(--cchat-input-row-border);
+    background: var(--cchat-zone-composer-input-bg);
+    border-color: var(--cchat-zone-composer-input-border);
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--cchat-text) 4%, transparent);
 }
 
@@ -210,15 +322,29 @@
 }
 
 .community-chat-root .community-main-chat__input {
-    color: var(--cchat-text);
+    color: var(--cchat-zone-composer-text);
 }
 
 .community-chat-root .community-main-chat__input::placeholder {
-    color: var(--cchat-text-subtle);
+    color: var(--cchat-zone-composer-placeholder);
 }
 
 .community-chat-root .community-composer-bar__reply-snippet {
     color: var(--cchat-text-muted);
+}
+
+.community-chat-root .input-area {
+    border-top-color: var(--cchat-zone-composer-border);
+    background: var(--cchat-zone-composer-bg) !important;
+}
+
+.community-chat-root .input-wrapper {
+    background: var(--cchat-zone-composer-input-bg);
+    border-color: var(--cchat-zone-composer-input-border);
+}
+
+.community-chat-root .composer-icon-btn:hover {
+    background: var(--cchat-hover);
 }
 
 /* Participants */

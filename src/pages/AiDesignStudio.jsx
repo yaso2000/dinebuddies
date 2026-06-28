@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaChevronDown, FaDownload, FaMagic, FaTimes, FaWallet } from 'react-icons/fa';
+import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
+import { FaArrowLeft, FaChevronDown, FaDownload, FaImages, FaTimes, FaWallet } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -46,6 +47,7 @@ function previewFrameClass(aspectRatio) {
 export default function AiDesignStudio() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { goBack } = useAppBackNavigation();
   const { showToast } = useToast();
   const { currentUser, userProfile, updateProfile } = useAuth();
   const userId = currentUser?.uid || null;
@@ -352,7 +354,7 @@ export default function AiDesignStudio() {
                 <button
           type="button"
           className="ai-design-studio__back ios-tap-target"
-          onClick={() => navigate(-1)}
+          onClick={goBack}
           aria-label={t('back')}>
           
                     <FaArrowLeft aria-hidden />
@@ -430,7 +432,7 @@ export default function AiDesignStudio() {
                             </> :
 
             <>
-                                <FaMagic aria-hidden />
+                                <FaImages aria-hidden />
                                 {t('ai_design_studio_generate', {
                 cost: AI_IMAGE_GENERATION_CREDITS,
                 defaultValue: `Generate image (${AI_IMAGE_GENERATION_CREDITS} credits)`

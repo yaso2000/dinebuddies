@@ -983,9 +983,11 @@ const CreateInvitation = () => {
         countryCode: placeData.countryCode || prev.countryCode,
         restaurantId: isDbVenue ? placeData.restaurantId || prev.restaurantId : null,
         restaurantName: isDbVenue ? (placeData.restaurantName || name || '').trim() : '',
+        placeId: placeData.placeId || prev.placeId || null,
         title: generateTitle(name || address || 'Venue'),
         ...(isDbVenue ? { isDineBuddiesVenue: true } : {}),
-        ...(isDbVenue && placeData.image ? { image: placeData.image } : {})
+        ...(isDbVenue && placeData.image ? { image: placeData.image } : {}),
+        ...(placeData.matchedFromGoogle ? { venueMatchedFromGoogle: true } : {})
       };
     });
   };
@@ -1418,7 +1420,7 @@ const CreateInvitation = () => {
                         </div>
                         <AppText as="p" style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '10px 0 0', lineHeight: 1.4 }}>
                             {t('create_section_geo_search_note', {
-                defaultValue: 'Use DineBuddies venues or Google Places; city and country context refine suggestions.'
+                defaultValue: 'One search bar: DineBuddies venues in your city first, then Google Places if not listed.'
               })}
                         </AppText>
                     </div>

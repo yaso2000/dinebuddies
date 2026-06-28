@@ -406,6 +406,60 @@
     );
 }
 
+.theme-personal-dating .premium-glass-card,
+.theme-personal-dating .private-details-card-hero__glow {
+    border-color: rgba(236, 72, 153, 0.2);
+}
+.theme-personal-dating .premium-glass-card {
+    box-shadow: 0 10px 40px rgba(236, 72, 153, 0.15) !important;
+}
+.theme-personal-dating .private-details-card-hero__glow {
+    background: radial-gradient(
+        ellipse 90% 70% at 50% 40%,
+        rgba(236, 72, 153, 0.45),
+        transparent 72%
+    );
+}
+.theme-personal-dating .vip-btn-primary {
+    background: linear-gradient(135deg, #ec4899 0%, #be185d 100%) !important;
+    box-shadow: 0 10px 25px rgba(236, 72, 153, 0.3) !important;
+    border: 1px solid rgba(236, 72, 153, 0.5) !important;
+}
+
+.theme-personal-friendship .premium-glass-card {
+    border-color: rgba(45, 212, 191, 0.22) !important;
+    box-shadow: 0 10px 40px rgba(13, 148, 136, 0.12) !important;
+}
+.theme-personal-friendship .private-details-card-hero__glow {
+    background: radial-gradient(
+        ellipse 90% 70% at 50% 40%,
+        rgba(45, 212, 191, 0.4),
+        transparent 72%
+    );
+}
+.theme-personal-friendship .vip-btn-primary {
+    background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%) !important;
+    box-shadow: 0 10px 25px rgba(13, 148, 136, 0.28) !important;
+    border: 1px solid rgba(45, 212, 191, 0.45) !important;
+}
+
+.theme-personal-social .premium-glass-card {
+    border-color: rgba(139, 92, 246, 0.22) !important;
+    box-shadow: 0 10px 40px rgba(99, 102, 241, 0.14) !important;
+}
+.theme-personal-social .private-details-card-hero__glow {
+    background: radial-gradient(
+        ellipse 90% 70% at 50% 40%,
+        rgba(139, 92, 246, 0.42),
+        transparent 72%
+    );
+}
+.theme-personal-social .vip-btn-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%) !important;
+    box-shadow: 0 10px 25px rgba(139, 92, 246, 0.3) !important;
+    border: 1px solid rgba(139, 92, 246, 0.5) !important;
+}
+
 .private-details-card-hero__card {
     position: relative;
     z-index: 1;
@@ -654,6 +708,38 @@
 
 .private-theme .private-occasion-chip--selected .private-occasion-chip__icon {
     color: var(--luxury-gold, #fbbf24);
+}
+
+.private-theme .private-invitee-recipient-preview {
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.private-theme .private-invitee-recipient-preview__label {
+    margin: 0 0 8px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.private-theme .private-invitee-recipient-preview__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.private-theme .private-invitee-recipient-preview__chip {
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(236, 72, 153, 0.12);
+    border: 1px solid rgba(236, 72, 153, 0.24);
+    color: var(--text-main);
 }
 
 .private-theme .personal-invite-categories {

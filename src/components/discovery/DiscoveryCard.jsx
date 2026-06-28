@@ -12,6 +12,7 @@ import {
   likeDiscoveryProfile,
   unlikeDiscoveryProfile,
 } from '../../utils/discoveryProfile';
+import { showLikeCooldownWarning } from '../../utils/connectionActionCooldown';
 import { isFollowing as checkIsFollowing } from '../../utils/followHelpers';
 import { checkCanMessage } from '../../utils/chatHelpers';
 import { profileShowsLikeButton, connectionKindToCelebrationType, tryCelebrateConnectionComplete } from '../../utils/connectConnection';
@@ -34,9 +35,9 @@ export default function DiscoveryCard({
   onGreeting,
   isTop = true
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { showToast } = useToast();
+  const { showToast, showPersistentWarning } = useToast();
   const { currentUser, userProfile } = useAuth();
   const { toggleFollow, currentUser: invitationUser } = useInvitations();
   const { celebrateMatch } = useMatchCelebration();
@@ -152,6 +153,10 @@ export default function DiscoveryCard({
 
       triggerBurst(setLikeBurst);
       const result = await likeDiscoveryProfile(viewerUid, targetUser, userProfile || currentUser);
+      if (result?.reason === 'cooldown') {
+        showLikeCooldownWarning(showPersistentWarning, i18n, result.cancelledAtMs, result.retryAtMs);
+        return;
+      }
       if (!result?.ok) {
         showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
         return;

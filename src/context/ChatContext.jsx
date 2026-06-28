@@ -17,10 +17,12 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../firebase/config';
 import { useAuth } from './AuthContext';
+import { useInvitations } from './InvitationContext';
 import { useToast } from './ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { notifyNewMessage } from '../utils/notificationHelpers';
 import { asUidArray, messagingRestrictedBetweenUsers } from '../utils/userSocialLists';
+import { checkCanMessage, resolveCanMessageMap } from '../utils/chatHelpers';
 
 const ChatContext = createContext();
 
@@ -34,8 +36,10 @@ export const useChat = () => {
 
 export const ChatProvider = ({ children }) => {
     const { currentUser, userProfile } = useAuth();
+    const { currentUser: invitationUser } = useInvitations();
     const { showToast } = useToast();
     const createOrGetConversationCallableRef = useRef(null);
+    const conversationEnsureCacheRef = useRef(new Map());
     if (!createOrGetConversationCallableRef.current) {
         createOrGetConversationCallableRef.current = httpsCallable(getFunctions(), 'createOrGetConversation');
     }
@@ -65,7 +69,6 @@ export const ChatProvider = ({ children }) => {
             conversationsQuery,
             async (snapshot) => {
                 const convos = [];
-                let totalUnread = 0;
 
                 const myBlocked = new Set(asUidArray(userProfile?.blockedUserIds));
                 const myMuted = new Set(asUidArray(userProfile?.mutedUserIds));
@@ -99,6 +102,7 @@ export const ChatProvider = ({ children }) => {
                                     isOnline: userData.isOnline || false,
                                     lastSeen: userData.lastSeen || null,
                                     isSystemAccount: isSupport,
+                                    following: userData.following || [],
                                 };
                                 userProfileCache.current.set(otherUserId, otherUser);
                             }
@@ -108,7 +112,6 @@ export const ChatProvider = ({ children }) => {
                     // Calculate unread count
                     const unreadBy = data.unreadBy || [];
                     const isUnread = unreadBy.includes(currentUser.uid);
-                    if (isUnread) totalUnread++;
 
                     convos.push({
                         id: docSnap.id,
@@ -118,9 +121,28 @@ export const ChatProvider = ({ children }) => {
                     });
                 }
 
-                setConversations(convos);
-                conversationsRef.current = convos;
-                setUnreadCount(totalUnread);
+                const viewerFollowing =
+                    invitationUser?.following || userProfile?.following || [];
+                const permissionTargets = convos
+                    .filter((c) => c.otherUser?.uid && !c.otherUser?.isSystemAccount && !c.isSupportThread)
+                    .map((c) => ({ id: c.otherUser.uid, following: c.otherUser.following || [] }));
+                const permissionMap = await resolveCanMessageMap(
+                    currentUser.uid,
+                    permissionTargets,
+                    viewerFollowing
+                );
+                const gatedConvos = convos.filter((c) => {
+                    const otherId = c.otherUser?.uid;
+                    if (!otherId) return false;
+                    if (c.otherUser?.isSystemAccount || c.isSupportThread) return true;
+                    return permissionMap[otherId] === true;
+                });
+
+                setConversations(gatedConvos);
+                conversationsRef.current = gatedConvos;
+                setUnreadCount(
+                    gatedConvos.reduce((sum, c) => sum + (c.isUnread ? 1 : 0), 0)
+                );
                 setLoading(false);
             },
             (error) => {
@@ -131,37 +153,55 @@ export const ChatProvider = ({ children }) => {
         );
 
         return () => unsubscribe();
-    }, [currentUser?.uid, userProfile?.blockedUserIds, userProfile?.mutedUserIds]);
+    }, [
+        currentUser?.uid,
+        userProfile?.blockedUserIds,
+        userProfile?.mutedUserIds,
+        userProfile?.following,
+        invitationUser?.following,
+    ]);
 
-    // Create or get conversation (stable reference to avoid effect re-runs and 429 rate limit)
+    // Create or get conversation — deduped per pair so parallel callers share one request.
     const getOrCreateConversation = useCallback(async (otherUserId) => {
-        if (!currentUser?.uid) return null;
+        if (!currentUser?.uid || !otherUserId) return null;
 
-        // 1. FAST PATH: Check local cache first to avoid slow Cloud Function cold starts
-        const existing = conversationsRef.current.find(c => 
-            c.participants && c.participants.includes(otherUserId)
-        );
-        if (existing) {
-            return existing.id;
-        }
+        const pairKey = [currentUser.uid, otherUserId].sort().join('_');
+        const cache = conversationEnsureCacheRef.current;
+        const cached = cache.get(pairKey);
+        if (cached?.conversationId) return cached.conversationId;
+        if (cached?.promise) return cached.promise;
 
-        // 2. SLOW PATH: Fallback to Cloud Function securely
-        try {
-            const result = await createOrGetConversationCallableRef.current({ otherUserId });
-            return result?.data?.conversationId || null;
-        } catch (error) {
-            const code = error?.code || error?.message || '';
-            const msg = error?.message || '';
-            console.error('Error creating conversation:', code, msg, error);
-            if (error?.code === 'functions/unauthenticated') {
-                showToast('Please sign in to start a conversation.', 'error');
-            } else if (error?.code === 'functions/resource-exhausted') {
-                showToast('Please wait a moment and try again.', 'error');
-            } else {
-                showToast('Failed to start conversation. Try again.', 'error');
+        const promise = (async () => {
+            try {
+                const result = await createOrGetConversationCallableRef.current({ otherUserId });
+                return result?.data?.conversationId || null;
+            } catch (error) {
+                cache.delete(pairKey);
+                const code = error?.code || error?.message || '';
+                const msg = error?.message || '';
+                console.error('Error creating conversation:', code, msg, error);
+                if (error?.code === 'functions/failed-precondition') {
+                    return null;
+                }
+                if (error?.code === 'functions/unauthenticated') {
+                    showToast('Please sign in to start a conversation.', 'error');
+                } else if (error?.code === 'functions/resource-exhausted') {
+                    showToast('Please wait a moment and try again.', 'error');
+                } else {
+                    showToast('Failed to start conversation. Try again.', 'error');
+                }
+                return null;
             }
-            return null;
+        })();
+
+        cache.set(pairKey, { promise });
+        const conversationId = await promise;
+        if (conversationId) {
+            cache.set(pairKey, { conversationId });
+        } else {
+            cache.delete(pairKey);
         }
+        return conversationId;
     }, [currentUser?.uid, showToast]);
 
     // Send message
@@ -175,15 +215,35 @@ export const ChatProvider = ({ children }) => {
             const otherUserIdPre = convoDataPre?.participants?.find((id) => id !== currentUser.uid);
             if (otherUserIdPre) {
                 const otherSnap = await getDoc(doc(db, 'users', otherUserIdPre));
+                const otherData = otherSnap.data() || {};
                 const { restricted } = messagingRestrictedBetweenUsers(
                     userProfile,
                     currentUser.uid,
-                    otherSnap.data(),
+                    otherData,
                     otherUserIdPre
                 );
                 if (restricted) {
                     showToast('Messaging is not available with this user.', 'error');
                     return null;
+                }
+                const viewerFollowing =
+                    invitationUser?.following || userProfile?.following || [];
+                const isSupportPeer =
+                    userProfile?.isSystemAccount === true || otherData.isSystemAccount === true;
+                if (!isSupportPeer) {
+                    const allowed = await checkCanMessage(
+                        currentUser.uid,
+                        otherUserIdPre,
+                        viewerFollowing,
+                        otherData.following || []
+                    );
+                    if (!allowed) {
+                        showToast(
+                            'Messaging is locked. A mutual connection is required.',
+                            'error'
+                        );
+                        return null;
+                    }
                 }
             }
 

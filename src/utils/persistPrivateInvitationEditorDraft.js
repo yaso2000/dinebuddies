@@ -3,6 +3,11 @@ import { db } from '../firebase/config';
 import { processInvitationMedia } from '../services/mediaService';
 import { rememberPrivateDraftCreateKind } from './socialInvitationDraft';
 import { resolveCardStructureFromBackgroundId } from './cardStructure';
+import { normalizePersonalInviteCategory } from '../constants/personalInviteCategories';
+import {
+    getDefaultPrivateCardBackgroundId,
+    isPrivateBackgroundIdForCategory,
+} from '../components/Invitations/privateCard/privateCardBackgrounds';
 
 /**
  * Create or update a private/private invite Firestore draft from the editor.
@@ -54,6 +59,12 @@ export async function persistPrivateInvitationEditorDraft({
         initialRsvps[friendId] = 'pending';
     });
 
+    const inviteCategory = normalizePersonalInviteCategory(formData.personalInviteCategory);
+    let safeCardBackgroundId = cardGradientId ? null : cardBackgroundId || null;
+    if (safeCardBackgroundId && !isPrivateBackgroundIdForCategory(safeCardBackgroundId, inviteCategory)) {
+        safeCardBackgroundId = getDefaultPrivateCardBackgroundId(inviteCategory);
+    }
+
     const baseDraft = {
         ...formData,
         ...mediaFields,
@@ -62,10 +73,10 @@ export async function persistPrivateInvitationEditorDraft({
         cardCopyOffsetY,
         cardCopyWidthPct,
         cardCopyFontScale,
-        cardBackgroundId: cardGradientId ? null : cardBackgroundId || null,
+        cardBackgroundId: safeCardBackgroundId,
         cardGradientId: cardGradientId || null,
         cardGradientDecorationId: null,
-        cardStructure: cardGradientId ? null : resolveCardStructureFromBackgroundId(cardBackgroundId),
+        cardStructure: cardGradientId ? null : resolveCardStructureFromBackgroundId(safeCardBackgroundId),
         rsvps: initialRsvps,
         type,
         status: 'draft',
@@ -84,6 +95,11 @@ export async function persistPrivateInvitationEditorDraft({
             privateCardShowHostAndMessage,
             privateCardTextBackdropTone,
         });
+        if (formData?.personalInviteCategory != null) {
+            baseDraft.personalInviteCategory = normalizePersonalInviteCategory(
+                formData.personalInviteCategory
+            );
+        }
         rememberPrivateDraftCreateKind('private');
     }
 

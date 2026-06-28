@@ -27,6 +27,7 @@ import {
 '../utils/postsFeedScope';
 // Removed redundant FeaturedPostCard. PostCard now natively handles featured_posts when post._isFeatured is true.
 import { AppText, AppTextInput } from "../components/base";
+import PullToRefresh from '../components/PullToRefresh';
 const PostsFeed = () => {
   const { t } = useTranslation();
   const location = useLocation();
@@ -490,6 +491,11 @@ const PostsFeed = () => {
     return <PostCard key={post.id} post={post} showInChat={false} />;
   };
 
+  const handleRefresh = useCallback(async () => {
+    document.querySelector('.app-main')?.scrollTo({ top: 0, behavior: 'smooth' });
+    await new Promise((resolve) => window.setTimeout(resolve, 400));
+  }, []);
+
   if (loading) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
@@ -500,6 +506,7 @@ const PostsFeed = () => {
   }
 
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <div>
             {/* Stories */}
             <StoriesBar onStoryClick={setViewingStory} />
@@ -639,7 +646,8 @@ const PostsFeed = () => {
                     </div>
                 </div>
       }
-        </div>);
+        </div>
+    </PullToRefresh>);
 
 };
 

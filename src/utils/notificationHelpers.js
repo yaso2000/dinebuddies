@@ -59,15 +59,45 @@ export const notifyProfileLiked = (profileOwnerId, likerUser) => {
     });
 };
 
-export const notifyMutualProfileMatch = (profileOwnerId, matchedUser) => {
+const CONNECT_NOTIFICATION_COPY = {
+    dating: {
+        title: 'Dating match!',
+        message: (name) => `You and ${name} connected for dating`,
+    },
+    acquaintance: {
+        title: 'New acquaintance!',
+        message: (name) => `You and ${name} connected`,
+    },
+    friendship: {
+        title: 'New friendship!',
+        message: (name) => `You and ${name} became friends`,
+    },
+};
+
+/** Connection complete — visual/inbox notification (dating | acquaintance | friendship). */
+export const notifyConnectConnectionComplete = (recipientUserId, otherUser, connectionKind = 'dating') => {
+    const kind = CONNECT_NOTIFICATION_COPY[connectionKind] ? connectionKind : 'acquaintance';
+    const copy = CONNECT_NOTIFICATION_COPY[kind];
+    const name = otherUser?.name || otherUser?.display_name || 'Someone';
     fireNotification({
-        userId: profileOwnerId,
-        type: 'like',
-        title: "It's a match!",
-        message: `You and ${matchedUser.name || 'Someone'} liked each other!`,
-        actionUrl: `/profile/${matchedUser.id}`,
-        metadata: { source: 'discovery_feed', likerId: matchedUser.id, mutual: true },
+        userId: recipientUserId,
+        type: kind === 'dating' ? 'like' : 'connect',
+        title: copy.title,
+        message: copy.message(name),
+        actionUrl: `/profile/${otherUser?.id || ''}`,
+        metadata: {
+            source: 'connect',
+            connectionKind: kind,
+            mutual: true,
+            otherUserId: otherUser?.id || null,
+            senderId: otherUser?.id || null,
+        },
     });
+};
+
+/** @deprecated Use notifyConnectConnectionComplete(..., 'dating') */
+export const notifyMutualProfileMatch = (profileOwnerId, matchedUser) => {
+    notifyConnectConnectionComplete(profileOwnerId, matchedUser, 'dating');
 };
 
 export const notifyProfileGreeting = (profileOwnerId, senderUser) => {

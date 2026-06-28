@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import AppBackButton from '../components/AppBackButton';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -84,9 +85,7 @@ const BlockedUsersSettings = () => {
   return (
     <div className="settings-page">
             <div className="settings-header">
-                <button type="button" onClick={() => navigate('/settings')} className="back-btn" aria-label={t('back', 'Back')}>
-                    <FaArrowLeft style={i18n.language === 'ar' ? {} : { transform: 'rotate(180deg)' }} />
-                </button>
+                <AppBackButton fallback="/settings" />
                 <AppText as="h1">{t('settings_blocked_users', 'Blocked users')}</AppText>
                 <div style={{ width: '40px' }} />
             </div>

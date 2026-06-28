@@ -59,6 +59,13 @@ export interface GooglePlacesPreviewPayload extends GooglePlacesMinimalDetails {
     previewCoverImage?: string | null;
 }
 
+export interface BusinessImportDuplicateMatch {
+    docId: string;
+    name: string;
+    matchReason: 'phone' | 'coordinates' | 'address';
+    googlePlaceId?: string | null;
+}
+
 export interface ImportFromGooglePreviewSuccess {
     status: 'ok';
     action: 'preview';
@@ -69,6 +76,9 @@ export interface ImportFromGooglePreviewSuccess {
     alreadyExisted?: boolean;
     docId?: string;
     photoWarning?: { code: string; message: string };
+    duplicateMatches?: BusinessImportDuplicateMatch[];
+    duplicateMergeTarget?: string;
+    duplicateMergeReason?: BusinessImportDuplicateMatch['matchReason'];
 }
 
 export interface ImportFromGooglePublishSuccess {
@@ -79,6 +89,9 @@ export interface ImportFromGooglePublishSuccess {
     collection?: 'restaurants';
     alreadyExisted?: boolean;
     refreshed?: boolean;
+    mergedFromDuplicate?: boolean;
+    duplicateMergeReason?: BusinessImportDuplicateMatch['matchReason'];
+    duplicateMatches?: BusinessImportDuplicateMatch[];
     directorySynced?: boolean;
     photoWarning?: { code: string; message: string };
 }

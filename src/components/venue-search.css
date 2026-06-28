@@ -12,6 +12,106 @@
   z-index: 8;
 }
 
+/* ── Invitation create: venue / location card (social + private) ── */
+.invitation-venue-location-section {
+  margin: 1.35rem 0 1.5rem;
+  padding: 1rem 1rem 1.1rem;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--luxury-gold, #fbbf24) 42%, var(--border-color));
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--luxury-gold, #fbbf24) 9%, var(--bg-card)) 0%,
+    var(--bg-card) 55%
+  );
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.14),
+    inset 0 1px 0 color-mix(in srgb, var(--luxury-gold, #fbbf24) 18%, transparent);
+}
+
+[data-theme='light'] .invitation-venue-location-section {
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--luxury-gold, #fbbf24) 14%, #fff) 0%,
+    var(--bg-card, #fff) 60%
+  );
+  box-shadow:
+    0 8px 24px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.invitation-venue-location-section__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--luxury-gold, #fbbf24) 35%, var(--border-color));
+}
+
+.invitation-venue-location-section__icon {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  color: var(--luxury-gold, #fbbf24);
+  background: color-mix(in srgb, var(--luxury-gold, #fbbf24) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--luxury-gold, #fbbf24) 35%, transparent);
+}
+
+.invitation-venue-location-section__heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.invitation-venue-location-section__title {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--text-main);
+  line-height: 1.3;
+}
+
+.invitation-venue-location-section__subtitle {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.invitation-venue-location-section__required {
+  flex-shrink: 0;
+  align-self: flex-start;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--luxury-gold, #fbbf24);
+  background: color-mix(in srgb, var(--luxury-gold, #fbbf24) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--luxury-gold, #fbbf24) 38%, transparent);
+}
+
+.invitation-venue-location-section__body .venue-search-hint {
+  margin-top: 0;
+}
+
+.invitation-venue-location-section__body .input-field {
+  border-color: color-mix(in srgb, var(--luxury-gold, #fbbf24) 28%, var(--border-color));
+  background: var(--bg-input, var(--bg-body));
+}
+
+.invitation-venue-location-section + .form-group,
+.invitation-venue-location-section + .mb-4,
+.invitation-venue-location-section + .private-ai-text-fields {
+  margin-top: 0.25rem;
+}
+
 .venue-location-picker {
   position: relative;
   z-index: 1;
@@ -31,6 +131,23 @@
   color: var(--text-muted);
   margin: 0 0 8px 0;
   line-height: 1.35;
+}
+
+.venue-search-dropdown__section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem 0.25rem;
+  font-size: calc(0.68rem + 2px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.venue-location-picker--unified .venue-search-segment {
+  display: none;
 }
 
 .venue-search-dropdown {

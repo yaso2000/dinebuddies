@@ -9,14 +9,18 @@ export default function CommunityFullChatView({ room, bannerMediaActive = true }
 
   return (
     <div className="community-full-chat">
-      <CommunityTopMediaPanel room={room} bannerMediaActive={bannerMediaActive} />
-      <CommunityPinnedHostBar
-        messages={messages}
-        partnerId={partnerId}
-        pendingReplyTo={pendingReplyTo}
-        isHost={isHost}
-        onUnpinHostMessage={isHost ? unpinHostMessage : undefined}
-      />
+      {room.bannerVisible !== false ? (
+        <>
+          <CommunityTopMediaPanel room={room} bannerMediaActive={bannerMediaActive} />
+          <CommunityPinnedHostBar
+            messages={messages}
+            partnerId={partnerId}
+            pendingReplyTo={pendingReplyTo}
+            isHost={isHost}
+            onUnpinHostMessage={isHost ? unpinHostMessage : undefined}
+          />
+        </>
+      ) : null}
       <CommunityGuestChatBody room={room} className="community-guest-chat--expanded" />
     </div>
   );

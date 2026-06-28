@@ -9,7 +9,7 @@ import {
 import { pickAiOutputLanguage } from '../../src/utils/aiOutputLanguage.js';
 
 const INVITATION_SUB_TYPES = new Set(['public', 'private', 'date']);
-const TEXT_POST_TYPES = new Set(['regular_post', 'featured_post', 'animated_post', 'invitation', 'design_studio']);
+const TEXT_POST_TYPES = new Set(['regular_post', 'featured_post', 'animated_post', 'invitation', 'design_studio', 'text_assistant']);
 const GENERATION_PACKAGES = new Set(['text', 'image', 'invitation_bundle']);
 const ASPECT_RATIOS = new Set(['1:1', '4:5', '9:16', '16:9']);
 const DESIGN_STUDIO_CATEGORIES = new Set([

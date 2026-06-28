@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { adminApi } from '../api';
+import AdminCreateDemoPostForm from '../components/AdminCreateDemoPostForm';
 import { AppText } from '../../components/base';
 
 export default function PostsPage() {
@@ -72,6 +73,8 @@ export default function PostsPage() {
     <>
       <AppText as="h1" className="db-h1">{t('admin_posts_title')}</AppText>
       <AppText as="p" className="db-lead">{t('admin_posts_lead')}</AppText>
+
+      <AdminCreateDemoPostForm onCreated={() => load(null)} />
 
       <div className="db-panel">
         {loading ? (

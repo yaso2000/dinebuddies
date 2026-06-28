@@ -4,6 +4,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { uploadDemoUserAdminImage } from '../utils/demoUserImageUpload';
 import { AppText } from '../../components/base';
+import DemoUserAiImageTrigger from './DemoUserAiImageTrigger';
+import './AdminAiControls.css';
 
 /**
  * Local file upload for admin demo user photos (avatar, cover, gallery).
@@ -14,6 +16,7 @@ export default function DemoUserImageUpload({
   kind = 'avatar',
   onChange,
   disabled = false,
+  aiImageGenerate = null,
 }) {
   const { t } = useTranslation();
   const { showToast } = useToast();
@@ -54,10 +57,19 @@ export default function DemoUserImageUpload({
 
   return (
     <div style={{ display: 'grid', gap: '0.5rem' }}>
-      {label ? (
-        <label className="db-label" htmlFor={inputId}>
-          {label}
-        </label>
+      {label || aiImageGenerate ? (
+        <div className="admin-ai-label-row">
+          {label ? (
+            <label className="db-label" htmlFor={inputId} style={{ margin: 0 }}>
+              {label}
+            </label>
+          ) : (
+            <span />
+          )}
+          {aiImageGenerate ? (
+            <DemoUserAiImageTrigger kind={kind} disabled={disabled} {...aiImageGenerate} />
+          ) : null}
+        </div>
       ) : null}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>

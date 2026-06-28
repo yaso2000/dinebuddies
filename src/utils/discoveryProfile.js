@@ -1,13 +1,20 @@
-import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, deleteDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '../firebase/config';
 
 import { getSafeAvatar } from './avatarUtils';
 import { normalizeDiningPersona, normalizeJoinReasons } from '../constants/privateProfileOptions';
+import { normalizeLookingFor, getLookingForLabel } from '../constants/personalInviteCategories';
 import { resolveSwipeProfilePhotoUrl } from './profileGallery';
 import { getPrivateInviteeDisplayName } from './privateInviteAvailability';
-import { notifyProfileGreeting, notifyMutualProfileMatch } from './notificationHelpers';
+import { notifyProfileGreeting, notifyConnectConnectionComplete } from './notificationHelpers';
+import { CONNECTION_KIND } from './connectConnection';
 import { USER_DIRECTORY_DEFAULT_SWIPE_PHOTO } from './userDirectory';
+import {
+  checkLikeRelikeAllowed,
+  clearLikeCooldown,
+  recordLikeCancelled,
+} from './connectionActionCooldown';
 
 
 
@@ -21,7 +28,15 @@ export function primeDiscoveryActionStatus(viewerId, targetId, patch) {
     if (!viewerId || !targetId) return;
     const key = `${viewerId}:${targetId}`;
     const prev = actionStatusCache.get(key) || { liked: false, greetedToday: false };
-    actionStatusCache.set(key, { ...prev, ...patch });
+    const next = { ...prev, ...patch, dayKey: patch.dayKey ?? prev.dayKey ?? getUtcDayKey() };
+    actionStatusCache.set(key, next);
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+            new CustomEvent('discovery-action-status', {
+                detail: { viewerId, targetId, ...next },
+            })
+        );
+    }
 }
 
 function isPermissionDenied(err) {
@@ -80,6 +95,13 @@ export async function getDiscoveryActionStatus(viewerId, targetId) {
         liked: likeSnap.exists(),
         greetedToday: greetingSnap.exists(),
     };
+    const freshCache = actionStatusCache.get(key);
+    if (freshCache && freshCache.liked !== result.liked) {
+        return {
+            liked: freshCache.liked,
+            greetedToday: freshCache.greetedToday ?? result.greetedToday,
+        };
+    }
     actionStatusCache.set(key, { ...result, dayKey });
     return result;
 }
@@ -120,6 +142,8 @@ export function mapDirectoryUserToDiscoveryProfile(user) {
 
     const name = getPrivateInviteeDisplayName(user) || 'User';
     const joinReasons = normalizeJoinReasons(user.joinReasons);
+    const includeDating = true;
+    const lookingFor = normalizeLookingFor(user.lookingFor, { includeDating });
     const personaTags = normalizeDiningPersona(user.diningPersona);
     const interestTags = Array.isArray(user.interests)
         ? user.interests.map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 4)
@@ -139,6 +163,7 @@ export function mapDirectoryUserToDiscoveryProfile(user) {
         ageCategory: user.ageRange || user.ageCategory || (user.age ? String(user.age) : ''),
         profilePhoto,
         joinReasons,
+        lookingFor,
         interests,
         city: user.city || '',
         country: user.country || '',
@@ -200,10 +225,10 @@ export async function checkIsMutualMatch(userId1, userId2) {
 
     if (!like1to2Snap.exists() || !like2to1Snap.exists()) return false;
 
-
-
-    return like1to2Snap.data()?.mutual === true && like2to1Snap.data()?.mutual === true;
-
+    const d1 = like1to2Snap.data();
+    const d2 = like2to1Snap.data();
+    // Match completes when the second like is sent; reverse `mutual` may update async.
+    return d1?.mutual === true || d2?.mutual === true;
 }
 
 
@@ -222,10 +247,23 @@ export async function checkIsMutualMatch(userId1, userId2) {
 
  */
 
-export async function likeDiscoveryProfile(likerId, targetUser, likerProfile) {
+export async function likeDiscoveryProfile(likerId, targetUser, likerProfile, options = {}) {
+    const { skipCooldown = false } = options;
     const targetId = targetUser?.id;
     if (!likerId || !targetId || likerId === targetId) {
         throw new Error('discovery_like_invalid');
+    }
+
+    if (!skipCooldown) {
+        const allowed = await checkLikeRelikeAllowed(likerId, targetId);
+        if (!allowed.ok) {
+            return {
+                ok: false,
+                reason: allowed.reason,
+                cancelledAtMs: allowed.cancelledAtMs,
+                retryAtMs: allowed.retryAtMs,
+            };
+        }
     }
 
     const likeRef = getDiscoveryLikeRef(targetId, likerId);
@@ -259,17 +297,82 @@ export async function likeDiscoveryProfile(likerId, targetUser, likerProfile) {
 
     primeDiscoveryActionStatus(likerId, targetId, { liked: true });
 
+    if (!skipCooldown) {
+        void clearLikeCooldown(likerId, targetId).catch(() => {});
+    }
+
     if (isMatch) {
         if (reverseSnap.data()?.mutual !== true) {
-            void updateDoc(reverseLikeRef, { mutual: true }).catch((e) => {
+            try {
+                await updateDoc(reverseLikeRef, { mutual: true });
+            } catch (e) {
                 console.warn('[discoveryProfile] reverse mutual update', e?.message || e);
-            });
+            }
         }
-        notifyMutualProfileMatch(targetId, likerPayload);
-        return { ok: true, already: false, mutual: true, match: true };
+        notifyConnectConnectionComplete(targetId, likerPayload, CONNECTION_KIND.DATING);
+        notifyConnectConnectionComplete(likerId, {
+            id: targetId,
+            name: getPrivateInviteeDisplayName(targetUser) || 'Someone',
+            avatar: getSafeAvatar(targetUser),
+        }, CONNECTION_KIND.DATING);
+        return { ok: true, already: false, mutual: true, match: true, connectionKind: CONNECTION_KIND.DATING };
     }
 
     return { ok: true, already: false, mutual: false };
+}
+
+/**
+ * Remove a discovery like (toggle off). Clears mutual flag on the reverse doc when needed.
+ */
+export async function unlikeDiscoveryProfile(likerId, targetUser, options = {}) {
+    const { skipCooldown = false } = options;
+    const targetId = targetUser?.id;
+    if (!likerId || !targetId || likerId === targetId) {
+        return { ok: false, reason: 'invalid' };
+    }
+
+    const likeRef = getDiscoveryLikeRef(targetId, likerId);
+    const reverseLikeRef = getDiscoveryLikeRef(likerId, targetId);
+
+    const [likeSnap, reverseSnap] = await Promise.all([
+        getDoc(likeRef),
+        getDoc(reverseLikeRef),
+    ]);
+
+    if (!likeSnap.exists()) {
+        primeDiscoveryActionStatus(likerId, targetId, { liked: false });
+        return { ok: true, already: false, removed: false };
+    }
+
+    const wasMutual =
+        likeSnap.data()?.mutual === true ||
+        (reverseSnap.exists() && reverseSnap.data()?.mutual === true);
+
+    try {
+        await deleteDoc(likeRef);
+    } catch (err) {
+        if (isPermissionDenied(err)) {
+            return { ok: false, reason: 'permission_denied' };
+        }
+        console.error('[discoveryProfile] unlike delete failed', err?.code, err?.message);
+        throw err;
+    }
+
+    if (reverseSnap.exists() && reverseSnap.data()?.mutual === true) {
+        try {
+            await updateDoc(reverseLikeRef, { mutual: false });
+        } catch (err) {
+            console.warn('[discoveryProfile] unlike mutual reset', err?.message || err);
+        }
+    }
+
+    primeDiscoveryActionStatus(likerId, targetId, { liked: false });
+
+    if (!skipCooldown) {
+        void recordLikeCancelled(likerId, targetId).catch(() => {});
+    }
+
+    return { ok: true, removed: true, wasMutual };
 }
 
 /**

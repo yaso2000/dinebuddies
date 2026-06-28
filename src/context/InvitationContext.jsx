@@ -37,12 +37,19 @@ import {
 import i18n from '../i18n';
 import { getInvitationLatLng } from '../utils/invitationCoords';
 import { followUser, unfollowUser } from '../utils/followHelpers';
+import { showFollowCooldownWarning } from '../utils/connectionActionCooldown';
+import {
+    isConnectionComplete,
+    resolveConnectionKind,
+} from '../utils/connectConnection';
+import { notifyConnectConnectionComplete } from '../utils/notificationHelpers';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import { DEFAULT_BUSINESS_COVER } from '../utils/businessCoverImage';
 import { fetchIpLocation, detectUserLocationContext, detectLiveUserGps } from '../utils/locationUtils';
 import { deleteInvitationAndStorage } from '../utils/storageCleanup';
 import { maybeAwardBusinessHostingPoints } from '../services/businessLikeService';
 import { filterInviteesWhoAcceptAuthor, asUidArray } from '../utils/userSocialLists';
+import { filterInviteesFollowedBySender } from '../utils/privateInviteAvailability';
 import {
     getTotalDineCredits,
     SOCIAL_INVITATION_PUBLISH_CREDITS,
@@ -56,7 +63,7 @@ import {
 } from '../utils/invitationRules';
 import { cannotCreateInvitations } from '../utils/accountRole';
 import { getCallableErrorReason } from '../utils/callableErrorDetails';
-import { resolveInviteCategory } from '../utils/inviteCategory';
+import { resolveInviteCategory, isPrivateHostedInvitation } from '../utils/inviteCategory';
 import { getHostedInvitationDetailsPath } from '../utils/hostedInvitationRoutes';
 
 const InvitationContext = createContext(null);
@@ -77,7 +84,7 @@ const INVITATION_ERROR_MESSAGES = {
 
 export const InvitationProvider = ({ children }) => {
     const { currentUser, userProfile: firebaseProfile, updateUserProfile, isGuest } = useAuth();
-    const { showToast } = useToast();
+    const { showToast, showPersistentWarning } = useToast();
     const [invitations, setInvitations] = useState([]);
     const [privateInvitations, setPrivateInvitations] = useState([]);
     const [restaurants, setRestaurants] = useState([]);
@@ -85,6 +92,8 @@ export const InvitationProvider = ({ children }) => {
     const [detectedCountry, setDetectedCountry] = useState(null);
     /** Optimistic following[] until Firestore snapshot catches up (toggleFollow must not pre-write). */
     const [optimisticFollowing, setOptimisticFollowing] = useState(null);
+    /** Optimistic joinedCommunities[] until Firestore snapshot catches up after join/leave. */
+    const [optimisticJoinedCommunities, setOptimisticJoinedCommunities] = useState(null);
     const functions = getFunctions(app, FUNCTIONS_REGION);
     const publishPrivateInvitationDraftCallable = httpsCallable(functions, 'publishPrivateInvitationDraft');
     const getPrivateInvitationSharePreviewCallable = httpsCallable(
@@ -689,8 +698,26 @@ export const InvitationProvider = ({ children }) => {
                 createdAt: serverTimestamp()
             });
             const requestedInvitees = Array.isArray(inviteData.invitedFriends) ? inviteData.invitedFriends : [];
-            if (requestedInvitees.length) {
-                const { allowed, skipped } = await filterInviteesWhoAcceptAuthor(creatorUid, requestedInvitees);
+            let inviteeIds = requestedInvitees;
+            if (inviteeIds.length && isPrivateHostedInvitation(newInvite)) {
+                const following = firebaseProfile?.following ?? currentUser?.following ?? [];
+                const { allowed: followed, skipped: notFollowed } = filterInviteesFollowedBySender(
+                    following,
+                    inviteeIds
+                );
+                if (notFollowed.length) {
+                    showToast(
+                        i18n.t(
+                            'private_invite_follow_required',
+                            'Follow members first to send them a private invite.'
+                        ),
+                        'info'
+                    );
+                }
+                inviteeIds = followed;
+            }
+            if (inviteeIds.length) {
+                const { allowed, skipped } = await filterInviteesWhoAcceptAuthor(creatorUid, inviteeIds);
                 inviteData = { ...inviteData, invitedFriends: allowed };
                 if (skipped.length) {
                     showToast('Some people could not be invited (they blocked or muted you).', 'info');
@@ -1101,6 +1128,65 @@ export const InvitationProvider = ({ children }) => {
                 } catch (chatErr) {
                     console.error('Failed to send accept chat message:', chatErr);
                 }
+
+                if (hostId && hostId !== me) {
+                    try {
+                        const inviteeFollowing =
+                            optimisticFollowing ?? firebaseProfile?.following ?? currentUser?.following ?? [];
+                        if (!inviteeFollowing.includes(hostId)) {
+                            const hostSnap = await getDoc(doc(db, 'users', hostId));
+                            if (hostSnap.exists()) {
+                                const hostData = hostSnap.data() || {};
+                                if (hostData.role !== 'business') {
+                                    const followResult = await followUser(me, hostId, {
+                                        id: me,
+                                        name: responderName,
+                                        avatar: getSafeAvatar(firebaseProfile || currentUser),
+                                    }, { skipDailyLimit: true });
+                                    if (followResult.success) {
+                                        const nextFollowing = [...inviteeFollowing, hostId];
+                                        setOptimisticFollowing(nextFollowing);
+                                        const hostFollowsInvitee = (hostData.following || []).includes(me);
+                                        if (hostFollowsInvitee) {
+                                            const viewerProfile = { id: me, ...firebaseProfile, ...currentUser };
+                                            const targetProfile = { id: hostId, ...hostData };
+                                            const connectionComplete = await isConnectionComplete(
+                                                me,
+                                                hostId,
+                                                viewerProfile,
+                                                targetProfile,
+                                                nextFollowing,
+                                                hostData.following || []
+                                            );
+                                            if (connectionComplete) {
+                                                const connectionKind = resolveConnectionKind(
+                                                    viewerProfile,
+                                                    targetProfile
+                                                );
+                                                notifyConnectConnectionComplete(hostId, {
+                                                    id: me,
+                                                    name: responderName,
+                                                    avatar: getSafeAvatar(firebaseProfile || currentUser),
+                                                }, connectionKind);
+                                                notifyConnectConnectionComplete(me, {
+                                                    id: hostId,
+                                                    name:
+                                                        hostData.display_name ||
+                                                        hostData.displayName ||
+                                                        hostData.name ||
+                                                        'Someone',
+                                                    avatar: getSafeAvatar(hostData),
+                                                }, connectionKind);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch (followErr) {
+                        console.warn('[respondToPrivateInvitation] invite accept follow-back failed', followErr);
+                    }
+                }
             }
 
             if (status === 'declined') {
@@ -1209,6 +1295,12 @@ export const InvitationProvider = ({ children }) => {
 
     const effectiveFollowing = optimisticFollowing ?? firebaseProfile?.following ?? [];
 
+    const effectiveJoinedCommunities =
+        optimisticJoinedCommunities ??
+        firebaseProfile?.joinedCommunities ??
+        currentUser?.joinedCommunities ??
+        [];
+
     useEffect(() => {
         if (optimisticFollowing === null) return;
         const serverFollowing = firebaseProfile?.following ?? [];
@@ -1220,12 +1312,34 @@ export const InvitationProvider = ({ children }) => {
         }
     }, [firebaseProfile?.following, optimisticFollowing]);
 
+    useEffect(() => {
+        if (optimisticJoinedCommunities === null) return;
+        const serverJoined = firebaseProfile?.joinedCommunities ?? currentUser?.joinedCommunities ?? [];
+        const sameLength = optimisticJoinedCommunities.length === serverJoined.length;
+        const sameMembers =
+            sameLength && optimisticJoinedCommunities.every((id) => serverJoined.includes(id));
+        if (sameMembers) {
+            setOptimisticJoinedCommunities(null);
+        }
+    }, [firebaseProfile?.joinedCommunities, currentUser?.joinedCommunities, optimisticJoinedCommunities]);
+
+    const patchJoinedCommunitiesOptimistic = useCallback((partnerId, shouldBeJoined) => {
+        if (!partnerId) return;
+        setOptimisticJoinedCommunities((prev) => {
+            const base = prev ?? firebaseProfile?.joinedCommunities ?? currentUser?.joinedCommunities ?? [];
+            const has = base.includes(partnerId);
+            if (shouldBeJoined && !has) return [...base, partnerId];
+            if (!shouldBeJoined && has) return base.filter((id) => id !== partnerId);
+            return base;
+        });
+    }, [firebaseProfile?.joinedCommunities, currentUser?.joinedCommunities]);
+
     const toggleFollow = async (userId) => {
-        if (isGuest || !userId || userId === currentUser.id) return;
+        if (isGuest || !userId || userId === currentUser.id) return { ok: false };
 
         if (currentUser?.role === 'business' || currentUser?.isBusiness || firebaseProfile?.role === 'business') {
             showToast('Business accounts cannot follow other accounts.', 'error');
-            return;
+            return { ok: false };
         }
 
         const isCurrentlyFollowing = effectiveFollowing.includes(userId);
@@ -1237,38 +1351,91 @@ export const InvitationProvider = ({ children }) => {
         setOptimisticFollowing(nextFollowing);
 
         try {
-            if (!isCurrentlyFollowing) {
-                const targetUserDoc = await getDoc(doc(db, 'users', userId));
-                if (!targetUserDoc.exists()) {
+            if (isCurrentlyFollowing) {
+                const result = await unfollowUser(viewerUid, userId);
+                if (!result.success) {
                     setOptimisticFollowing(null);
-                    return;
+                    return { ok: false };
                 }
-                const targetRole = targetUserDoc.data()?.role || 'user';
-                if (targetRole === 'business') {
-                    setOptimisticFollowing(null);
-                    return;
-                }
+                return { ok: true };
             }
 
-            if (isCurrentlyFollowing) {
-                const ok = await unfollowUser(viewerUid, userId);
-                if (!ok) setOptimisticFollowing(null);
-            } else {
-                const result = await followUser(
-                    viewerUid,
-                    userId,
-                    {
-                        id: viewerUid,
-                        name: firebaseProfile?.display_name || currentUser.displayName,
-                        avatar: getSafeAvatar({ ...currentUser, ...firebaseProfile })
-                    },
-                    { skipAlreadyCheck: true }
-                );
-                if (!result.success) setOptimisticFollowing(null);
+            const targetUserDoc = await getDoc(doc(db, 'users', userId));
+            if (!targetUserDoc.exists()) {
+                setOptimisticFollowing(null);
+                return { ok: false };
             }
+            const targetData = targetUserDoc.data() || {};
+            const targetRole = targetData.role || 'user';
+            if (targetRole === 'business') {
+                setOptimisticFollowing(null);
+                return { ok: false };
+            }
+
+            const targetAlreadyFollowsViewer = (targetData.following || []).includes(viewerUid);
+
+            const result = await followUser(
+                viewerUid,
+                userId,
+                {
+                    id: viewerUid,
+                    name: firebaseProfile?.display_name || currentUser.displayName,
+                    avatar: getSafeAvatar({ ...currentUser, ...firebaseProfile })
+                },
+                { skipAlreadyCheck: true }
+            );
+            if (!result.success) {
+                setOptimisticFollowing(null);
+                if (result.reason === 'cooldown' || result.message === 'cooldown') {
+                    showFollowCooldownWarning(
+                        showPersistentWarning,
+                        i18n,
+                        result.cancelledAtMs,
+                        result.retryAtMs
+                    );
+                    return { ok: false, reason: 'cooldown', ...result };
+                }
+                return { ok: false };
+            }
+
+            const viewerProfile = { id: viewerUid, ...firebaseProfile, ...currentUser };
+            const targetProfile = { id: userId, ...targetData };
+            const connectionComplete = await isConnectionComplete(
+                viewerUid,
+                userId,
+                viewerProfile,
+                targetProfile,
+                nextFollowing,
+                targetData.following || []
+            );
+
+            let connectionKind = null;
+            if (connectionComplete) {
+                connectionKind = resolveConnectionKind(viewerProfile, targetProfile);
+                const viewerPayload = {
+                    id: viewerUid,
+                    name: firebaseProfile?.display_name || currentUser.displayName || 'Someone',
+                    avatar: getSafeAvatar({ ...currentUser, ...firebaseProfile }),
+                };
+                const targetPayload = {
+                    id: userId,
+                    name: targetData.display_name || targetData.displayName || targetData.name || 'Someone',
+                    avatar: getSafeAvatar(targetData),
+                };
+                notifyConnectConnectionComplete(userId, viewerPayload, connectionKind);
+                notifyConnectConnectionComplete(viewerUid, targetPayload, connectionKind);
+            }
+
+            return {
+                ok: true,
+                mutualFollow: targetAlreadyFollowsViewer,
+                connectionComplete,
+                connectionKind,
+            };
         } catch (error) {
             setOptimisticFollowing(null);
             console.error('Error in toggleFollow:', error);
+            return { ok: false };
         }
     };
 
@@ -1350,9 +1517,12 @@ export const InvitationProvider = ({ children }) => {
 
     const joinCommunity = async (partnerId) => {
         if (!partnerId || !currentUser) return false;
+        const userId = currentUser.uid || currentUser.id;
+        if (!userId) return false;
+        if (effectiveJoinedCommunities.includes(partnerId)) return true;
+
+        patchJoinedCommunitiesOptimistic(partnerId, true);
         try {
-            const userId = currentUser.uid || currentUser.id;
-            if (!userId) return false;
             await setCommunityMembershipCallable({ partnerId, action: 'join' });
             void addUserNotification({
                 userId: partnerId,
@@ -1365,6 +1535,7 @@ export const InvitationProvider = ({ children }) => {
             addNotification('🎉 Success!', 'You have joined the community successfully.', 'success');
             return true;
         } catch (error) {
+            patchJoinedCommunitiesOptimistic(partnerId, false);
             console.error('Error joining community:', error);
             const msg = String(error?.message || '');
             if (msg.includes('blocked') || error?.code === 'functions/permission-denied') {
@@ -1376,18 +1547,25 @@ export const InvitationProvider = ({ children }) => {
 
     const leaveCommunity = async (partnerId) => {
         if (!partnerId || !currentUser) return false;
+        const userId = currentUser.uid || currentUser.id;
+        if (!userId) return false;
+        if (!effectiveJoinedCommunities.includes(partnerId)) return true;
+
+        patchJoinedCommunitiesOptimistic(partnerId, false);
         try {
-            const userId = currentUser.uid || currentUser.id;
-            if (!userId) return false;
             await setCommunityMembershipCallable({ partnerId, action: 'leave' });
             addNotification('👋 Left', 'You have left the community.', 'info');
             return true;
-        } catch (error) { console.error('Error leaving community:', error); return false; }
+        } catch (error) {
+            patchJoinedCommunitiesOptimistic(partnerId, true);
+            console.error('Error leaving community:', error);
+            return false;
+        }
     };
 
     const toggleCommunity = async (partnerId) => {
-        if (!partnerId || !currentUser) return;
-        const isJoined = (firebaseProfile?.joinedCommunities || []).includes(partnerId);
+        if (!partnerId || !currentUser) return false;
+        const isJoined = effectiveJoinedCommunities.includes(partnerId);
         if (isJoined) return await leaveCommunity(partnerId);
         return await joinCommunity(partnerId);
     };
@@ -1479,8 +1657,8 @@ export const InvitationProvider = ({ children }) => {
 
     const extendedCurrentUser = useMemo(() => {
         if (!currentUser) return null;
-        return { ...currentUser, ...firebaseProfile, following: effectiveFollowing };
-    }, [currentUser, firebaseProfile, effectiveFollowing]);
+        return { ...currentUser, ...firebaseProfile, following: effectiveFollowing, joinedCommunities: effectiveJoinedCommunities };
+    }, [currentUser, firebaseProfile, effectiveFollowing, effectiveJoinedCommunities]);
 
     return (
         <InvitationContext.Provider value={{

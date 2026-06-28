@@ -115,8 +115,9 @@ const registerAffiliateAgentProfile = functions.https.onCall(async (data, contex
                 isProfileComplete: true,
                 isGuest: false,
                 reputation: typeof d.reputation === 'number' && Number.isFinite(d.reputation) ? d.reputation : 100,
-                freeCredits: typeof d.freeCredits === 'number' && Number.isFinite(d.freeCredits) ? d.freeCredits : 0,
+                freeCredits: 0,
                 paidCredits: typeof d.paidCredits === 'number' && Number.isFinite(d.paidCredits) ? d.paidCredits : 0,
+                savedCredits: typeof d.savedCredits === 'number' && Number.isFinite(d.savedCredits) ? d.savedCredits : 0,
                 pending_payouts:
                     typeof d.pending_payouts === 'number' && Number.isFinite(d.pending_payouts) ? d.pending_payouts : 0,
                 total_referred_users: 0,

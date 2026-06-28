@@ -8,7 +8,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { uploadImage, deleteImage } from '../utils/imageUpload';
 import { ImageUploadZone } from '../services/imageUploadZones';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
-import { FaArrowLeft, FaPhone, FaMapMarkerAlt, FaClock, FaGlobe, FaShareAlt, FaUserPlus, FaUsers, FaEdit, FaInstagram, FaTwitter, FaFacebook, FaExternalLinkAlt, FaShare, FaStar, FaImages, FaTimes, FaPlus, FaHeart, FaRegHeart, FaSave, FaEnvelope, FaCrown } from 'react-icons/fa';
+import { FaArrowLeft, FaPhone, FaMapMarkerAlt, FaClock, FaGlobe, FaShareAlt, FaUserPlus, FaUsers, FaEdit, FaInstagram, FaTwitter, FaFacebook, FaExternalLinkAlt, FaShare, FaStar, FaImages, FaTimes, FaPlus, FaHeart, FaRegHeart, FaSave, FaEnvelope, FaCrown, FaComments } from 'react-icons/fa';
 
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import { SiTiktok } from 'react-icons/si';
@@ -63,6 +63,10 @@ import { premiumOfferService } from '../services/premiumOfferService';
 import { useToast } from '../context/ToastContext';
 import { useBusinessRank } from '../hooks/useBusinessRank';
 import { goToLogin } from '../utils/goToLogin';
+import {
+  isJoinedToBusinessCommunity,
+  resolveBusinessCommunityId,
+} from '../utils/businessCommunityJoin';
 import BusinessClaimPanel from '../components/BusinessClaimPanel';
 import { formatPhoneForDisplay, phoneNumberLtrStyle, phoneToTelHref } from '../utils/phoneUtils';
 import {
@@ -73,7 +77,7 @@ import {
 '../utils/normalizeRestaurantBusinessProfile';
 import {
   googlePlaceTypesToCategoryBadges,
-  computeOpenNowFromBusinessHours } from
+  resolveBusinessOpenNow } from
 '../utils/googlePlacesBusiness';
 import './BusinessProfileHero.css';
 import { AppText, AppTextInput } from "../components/base";
@@ -200,7 +204,7 @@ const BusinessProfile = () => {
   const businessSignupVerifyToastRef = useRef(false);
   const { currentUser, userProfile, updateUserProfile, isGuest, loading: authLoading } = useAuth();
   const { setBrandColor } = useTheme();
-  const { joinCommunity, leaveCommunity } = useInvitations();
+  const { joinCommunity, currentUser: inviteCurrentUser } = useInvitations();
   const { t } = useTranslation();
   const { showToast } = useToast();
 
@@ -293,6 +297,13 @@ const BusinessProfile = () => {
   const [isMember, setIsMember] = useState(false);
   const [memberAvatars, setMemberAvatars] = useState([]); // photo_url for first 5 members
   const [joiningCommunity, setJoiningCommunity] = useState(false);
+  const joinedCommunities = inviteCurrentUser?.joinedCommunities || [];
+  const profileCommunityId = resolveBusinessCommunityId(joinedCommunities, {
+    ownerId: profileId,
+    businessId: profileId,
+  });
+  const effectiveIsMember =
+    isJoinedToBusinessCommunity(joinedCommunities, profileCommunityId) || isMember;
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [selectorState, setSelectorState] = useState(null);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -876,42 +887,38 @@ const BusinessProfile = () => {
 
 
 
-  const handleJoinCommunity = async () => {
-    if (!currentUser) {
-      goToLogin();
-      return;
-    }
-
+  const handleJoinCommunity = () => {
     if (userProfile?.isBusiness) {
       showToast(t('business_cannot_join_community'), 'error');
       return;
     }
+    if (joiningCommunity) return;
 
-    // Set flag BEFORE the optimistic update so snapshot won't override it
+    const authUser = currentUser || inviteCurrentUser;
+    const uid = authUser?.uid || authUser?.id;
+    if (!uid || authUser?.isGuest) {
+      goToLogin({ returnPath: location.pathname });
+      return;
+    }
+
+    const cid = profileCommunityId || profileId;
+    if (!cid) return;
+
+    if (effectiveIsMember) {
+      navigate(`/community/${cid}`);
+      return;
+    }
+
     joiningRef.current = true;
     setJoiningCommunity(true);
-
-    // Optimistic UI
-    const wasJoined = isMember;
-    setIsMember(!wasJoined);
-    setMemberCount((prev) => wasJoined ? Math.max(0, prev - 1) : prev + 1);
-
-    try {
-      if (wasJoined) {
-        await leaveCommunity(profileId);
-      } else {
-        await joinCommunity(profileId);
-      }
-    } catch (error) {
-      console.error('Error toggling community membership:', error);
-      // Revert on error
-      setIsMember(wasJoined);
-      setMemberCount((prev) => wasJoined ? prev + 1 : Math.max(0, prev - 1));
-    } finally {
-      setJoiningCommunity(false);
-      // Small delay then allow snapshot to sync naturally
-      setTimeout(() => {joiningRef.current = false;}, 1500);
-    }
+    void joinCommunity(cid)
+      .catch((error) => {
+        console.error('Error joining community:', error);
+      })
+      .finally(() => {
+        setJoiningCommunity(false);
+        setTimeout(() => { joiningRef.current = false; }, 800);
+      });
   };
 
   // Gallery Functions
@@ -1057,18 +1064,18 @@ const BusinessProfile = () => {
         address: business.businessInfo?.address || '',
         city: business.businessInfo?.city || ''
       } : undefined;
-      await toggleBusinessLike(businessId, userId, wasLiked, businessInfoForFavorite);
-    } catch (err) {
-      setUserLikedBusiness(wasLiked);
-      setBusiness((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          businessInfo: { ...(prev.businessInfo || {}), profileLikes: prevCount }
-        };
+      void toggleBusinessLike(businessId, userId, wasLiked, businessInfoForFavorite).catch((err) => {
+        setUserLikedBusiness(wasLiked);
+        setBusiness((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            businessInfo: { ...(prev.businessInfo || {}), profileLikes: prevCount }
+          };
+        });
+        console.warn('[like] profile toggle failed', { businessId, userId, err });
+        showToast(t('like_failed', 'Could not update like. Try again.'), 'error');
       });
-      console.warn('[like] profile toggle failed', { businessId, userId, err });
-      showToast(t('like_failed', 'Could not update like. Try again.'), 'error');
     } finally {
       setLikeInProgress(false);
     }
@@ -1624,13 +1631,13 @@ const BusinessProfile = () => {
     "@type": getSchemaType(businessInfo?.businessType),
     "name": business.display_name || 'DineBuddies Business',
     "image": [profileCoverUrl, getSafeAvatar(business)].filter(Boolean),
-    "url": typeof window !== "undefined" ? window.location.href : '',
+    "url": `https://www.dinebuddies.com/business/${profileId}`,
     "telephone": businessInfo?.phone || '',
     "address": {
       "@type": "PostalAddress",
       "streetAddress": businessInfo?.address || '',
       "addressLocality": businessInfo?.city || '',
-      "addressCountry": "AU"
+      "addressCountry": businessInfo?.countryCode || businessInfo?.country || ''
     },
     "description": businessInfo?.description || businessInfo?.tagline || `Discover ${business.display_name} on DineBuddies.`,
     "servesCuisine": businessInfo?.cuisineType || '',
@@ -1767,14 +1774,12 @@ const BusinessProfile = () => {
                                     </div>
                                     <div className="business-hero-badges">
                                         {(() => {
-                      const today = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
-                      const openFromGoogle =
-                      typeof business.openNow === 'boolean' ? business.openNow : null;
-                      const openFromHours = computeOpenNowFromBusinessHours(businessInfo.hours);
-                      const legacyOpen = businessInfo.workingHours?.[today]?.isOpen;
-                      const isOpen =
-                      openFromGoogle ?? (
-                      typeof legacyOpen === 'boolean' ? legacyOpen : openFromHours);
+                      const isOpen = resolveBusinessOpenNow({
+                        hours: businessInfo.hours,
+                        openingHours: businessInfo.openingHours || business.openingHours,
+                        workingHours: businessInfo.workingHours,
+                        openNow: business.openNow,
+                      });
                       const badgePill = (color, dot, label) =>
                       <AppText as="span"
                       style={{
@@ -1974,9 +1979,8 @@ const BusinessProfile = () => {
                 {/* Actions Row */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--profile-actions-gap)', width: '100%', marginBottom: 'var(--profile-stack-gap)' }}>
                     {currentUser?.uid !== profileId && !userProfile?.isBusiness &&
-          <button onClick={() => {if (isGuest) {goToLogin();return;}handleJoinCommunity();}} disabled={joiningCommunity} style={{ width: '100%', padding: '14px 16px', borderRadius: '16px', background: isMember ? 'var(--hover-overlay)' : 'var(--brand-primary)', border: isMember ? `1px solid var(--border-color)` : 'none', color: isMember ? 'var(--text-main)' : 'var(--text-on-brand)', fontWeight: '900', fontSize: '1.05rem', cursor: joiningCommunity ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s', boxShadow: isMember ? 'none' : '0 8px 24px color-mix(in srgb, var(--brand-primary) 30%, transparent)', opacity: joiningCommunity ? 0.7 : 1 }}>
-                            {joiningCommunity ? '...' :
-            <>
+          <button onClick={() => {if (isGuest) {goToLogin();return;}handleJoinCommunity();}} style={{ width: '100%', padding: '14px 16px', borderRadius: '16px', background: effectiveIsMember ? 'var(--hover-overlay)' : 'var(--brand-primary)', border: effectiveIsMember ? `1px solid var(--border-color)` : 'none', color: effectiveIsMember ? 'var(--text-main)' : 'var(--text-on-brand)', fontWeight: '900', fontSize: '1.05rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s', boxShadow: effectiveIsMember ? 'none' : '0 8px 24px color-mix(in srgb, var(--brand-primary) 30%, transparent)' }}>
+                            <>
                                     {/* Overlapping member avatars — always visible */}
                                     {memberCount > 0 && memberAvatars.length > 0 &&
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
@@ -2003,9 +2007,15 @@ const BusinessProfile = () => {
                                             </AppText>
                                         </div>
               }
-                                    {isMember ? `✓ ${t('community_member', 'Community Member')}` : `+ ${t('join_community', 'Join Community')}`}
+                                    {effectiveIsMember ? (
+                                      <>
+                                        <FaComments style={{ fontSize: '1.1rem' }} aria-hidden />
+                                        {t('business_grid_join_chat', 'Join chat')}
+                                      </>
+                                    ) : (
+                                      `+ ${t('join_community', 'Join Community')}`
+                                    )}
                                 </>
-            }
                         </button>
           }
                     {currentUser?.uid !== profileId && !userProfile?.isBusiness && !currentUser?.isGuest &&

@@ -1,5 +1,8 @@
 /**
  * Dine Credits — server-side ledger and spend helpers.
+ * Two wallets (never mixed on the client):
+ * - `paidCredits` — purchase / consumption wallet
+ * - `savedCredits` — gift receipts at 50% of sent value
  * Never expose raw balance updates to clients; use transactions + credit_transactions.
  */
 const admin = require('firebase-admin');
@@ -12,8 +15,8 @@ const FieldValue = admin.firestore.FieldValue;
 
 /** @typedef {'user'|'business'} AccountRole */
 
-const FREE_CREDITS_MONTHLY_GRANT = 10;
-const FREE_CREDITS_CAP = 20;
+/** Recipient receives this fraction of the gift amount sent from purchase wallet. */
+const GIFT_RECIPIENT_VALUE_RATE = 0.5;
 
 const CREDIT_COSTS = {
     /** Public invitations use the `invitations` collection and are not charged via this constant. */
@@ -57,7 +60,15 @@ function normalizeBusinessSubscriptionTier(raw) {
     return String(raw || 'free').trim().toLowerCase() === 'paid' ? 'paid' : 'free';
 }
 
+/** @param {number} giftSentAmount */
+function computeGiftSavedAmount(giftSentAmount) {
+    const sent = Math.floor(Number(giftSentAmount));
+    if (!Number.isFinite(sent) || sent <= 0) return 0;
+    return Math.max(0, Math.floor(sent * GIFT_RECIPIENT_VALUE_RATE));
+}
+
 /**
+ * Spend from purchase wallet (`paidCredits`) only.
  * @param {FirebaseFirestore.Transaction} tx
  * @param {FirebaseFirestore.DocumentReference} userRef
  * @param {Record<string, unknown>} userData
@@ -69,33 +80,25 @@ function normalizeBusinessSubscriptionTier(raw) {
  *   reason: string,
  *   relatedId?: string|null,
  * }} args
- * @returns {{ freeUsed: number, paidUsed: number, balanceType: string }}
+ * @returns {{ paidUsed: number, balanceType: string }}
  */
 function spendCreditsInTransaction(tx, userRef, userData, args) {
     const { uid, accountRole, amount, type, reason, relatedId } = args;
     const n = Math.floor(Number(amount));
     if (!Number.isFinite(n) || n <= 0) {
-        return { freeUsed: 0, paidUsed: 0, balanceType: 'none' };
+        return { paidUsed: 0, balanceType: 'none' };
     }
 
-    let free = Math.max(0, Math.floor(Number(userData.freeCredits) || 0));
     let paid = Math.max(0, Math.floor(Number(userData.paidCredits) || 0));
-    const total = free + paid;
-    if (total < n) {
+    if (paid < n) {
         const err = new Error('INSUFFICIENT_CREDITS');
         err.code = 'INSUFFICIENT_CREDITS';
         throw err;
     }
 
-    const fromFree = Math.min(free, n);
-    const fromPaid = n - fromFree;
-    free -= fromFree;
-    paid -= fromPaid;
-
-    const balanceType = fromFree > 0 && fromPaid > 0 ? 'mixed' : fromFree > 0 ? 'free' : 'paid';
+    paid -= n;
 
     tx.update(userRef, {
-        freeCredits: free,
         paidCredits: paid,
         totalCreditsSpent: FieldValue.increment(n),
         updatedAt: FieldValue.serverTimestamp(),
@@ -107,15 +110,16 @@ function spendCreditsInTransaction(tx, userRef, userData, args) {
         accountRole,
         type,
         amount: -n,
-        balanceType,
+        balanceType: 'paid',
+        wallet: 'purchase',
         reason: String(reason || '').slice(0, 200),
         relatedId: relatedId ? String(relatedId).slice(0, 200) : null,
         createdAt: FieldValue.serverTimestamp(),
-        freeUsed: fromFree,
-        paidUsed: fromPaid,
+        paidUsed: n,
+        freeUsed: 0,
     });
 
-    return { freeUsed: fromFree, paidUsed: fromPaid, balanceType };
+    return { paidUsed: n, balanceType: 'paid', freeUsed: 0 };
 }
 
 /**
@@ -148,6 +152,7 @@ function grantPaidCreditsInTransaction(tx, userRef, userData, args) {
         type: args.type,
         amount: n,
         balanceType: 'paid',
+        wallet: 'purchase',
         reason: String(args.reason || '').slice(0, 200),
         relatedId: args.relatedId ? String(args.relatedId).slice(0, 200) : null,
         createdAt: FieldValue.serverTimestamp(),
@@ -155,36 +160,47 @@ function grantPaidCreditsInTransaction(tx, userRef, userData, args) {
 }
 
 /**
- * Monthly free grant for regular users only (not business/partner).
+ * Credit savings wallet from a received gift (50% of sent amount).
  * @param {FirebaseFirestore.Transaction} tx
  * @param {FirebaseFirestore.DocumentReference} userRef
  * @param {Record<string, unknown>} userData
- * @param {string} uid
+ * @param {{
+ *   uid: string,
+ *   accountRole: AccountRole,
+ *   credits: number,
+ *   type: string,
+ *   reason: string,
+ *   relatedId?: string|null,
+ *   giftSentAmount?: number|null,
+ * }} args
  */
-function grantMonthlyFreeBonusInTransaction(tx, userRef, userData, uid) {
-    const current = Math.max(0, Math.floor(Number(userData.freeCredits) || 0));
-    const next = Math.min(FREE_CREDITS_CAP, current + FREE_CREDITS_MONTHLY_GRANT);
-    if (next === current) return;
+function grantSavedCreditsInTransaction(tx, userRef, userData, args) {
+    const n = Math.floor(Number(args.credits));
+    if (!Number.isFinite(n) || n <= 0) return;
 
     tx.update(userRef, {
-        freeCredits: next,
+        savedCredits: Math.max(0, Math.floor(Number(userData.savedCredits) || 0)) + n,
+        totalSavedCreditsEarned: FieldValue.increment(n),
         updatedAt: FieldValue.serverTimestamp(),
     });
+
     const ledgerRef = db.collection('credit_transactions').doc();
     tx.set(ledgerRef, {
-        userId: uid,
-        accountRole: 'user',
-        type: 'monthly_bonus',
-        amount: next - current,
-        balanceType: 'free',
-        reason: 'monthly_free_allowance',
-        relatedId: null,
+        userId: args.uid,
+        accountRole: args.accountRole,
+        type: args.type,
+        amount: n,
+        balanceType: 'saved',
+        wallet: 'savings',
+        reason: String(args.reason || '').slice(0, 200),
+        relatedId: args.relatedId ? String(args.relatedId).slice(0, 200) : null,
+        giftSentAmount: args.giftSentAmount != null ? Math.floor(Number(args.giftSentAmount)) : null,
         createdAt: FieldValue.serverTimestamp(),
     });
 }
 
 /**
- * Admin-only free credit grant (never touches paidCredits).
+ * Admin grant to purchase wallet (replaces legacy free-credit grants).
  * @param {FirebaseFirestore.Transaction} tx
  * @param {FirebaseFirestore.DocumentReference} userRef
  * @param {Record<string, unknown>} userData
@@ -192,33 +208,24 @@ function grantMonthlyFreeBonusInTransaction(tx, userRef, userData, uid) {
  * @param {number} amount
  * @param {{ reason?: string, adminUid?: string }} meta
  */
-function grantFreeCreditsInTransaction(tx, userRef, userData, uid, amount, meta = {}) {
+function grantAdminPaidCreditsInTransaction(tx, userRef, userData, uid, amount, meta = {}) {
     const n = Math.floor(Number(amount));
     if (!Number.isFinite(n) || n <= 0) {
         throw new Error('INVALID_AMOUNT');
     }
-    const current = Math.max(0, Math.floor(Number(userData.freeCredits) || 0));
-    const next = current + n;
     const accountRole = isBusinessUserDoc(userData) ? 'business' : 'user';
+    const paidBefore = Math.max(0, Math.floor(Number(userData.paidCredits) || 0));
 
-    tx.update(userRef, {
-        freeCredits: next,
-        updatedAt: FieldValue.serverTimestamp(),
-    });
-
-    const ledgerRef = db.collection('credit_transactions').doc();
-    tx.set(ledgerRef, {
-        userId: uid,
+    grantPaidCreditsInTransaction(tx, userRef, userData, {
+        uid,
         accountRole,
-        type: 'admin_grant_free',
-        amount: n,
-        balanceType: 'free',
-        reason: String(meta.reason || 'admin_grant').slice(0, 200),
+        credits: n,
+        type: 'admin_grant_paid',
+        reason: meta.reason ? String(meta.reason).slice(0, 200) : 'admin_grant',
         relatedId: meta.adminUid ? String(meta.adminUid).slice(0, 128) : null,
-        createdAt: FieldValue.serverTimestamp(),
     });
 
-    return { freeCreditsAfter: next, freeCreditsBefore: current };
+    return { paidCreditsAfter: paidBefore + n, paidCreditsBefore: paidBefore };
 }
 
 function isRegularUserDoc(d) {
@@ -239,17 +246,17 @@ function isBusinessUserDoc(d) {
 module.exports = {
     db,
     FieldValue,
-    FREE_CREDITS_MONTHLY_GRANT,
-    FREE_CREDITS_CAP,
+    GIFT_RECIPIENT_VALUE_RATE,
     CREDIT_COSTS,
     CREDIT_PACKAGES,
     priceIdToCreditPackage,
     getBusinessMonthlyPriceId,
     normalizeBusinessSubscriptionTier,
+    computeGiftSavedAmount,
     spendCreditsInTransaction,
     grantPaidCreditsInTransaction,
-    grantMonthlyFreeBonusInTransaction,
-    grantFreeCreditsInTransaction,
+    grantSavedCreditsInTransaction,
+    grantAdminPaidCreditsInTransaction,
     isRegularUserDoc,
     isBusinessUserDoc,
 };

@@ -123,5 +123,58 @@ export function computeOpenNowFromBusinessHours(hours) {
     const today = hours[dayName];
     if (!today || today.closed) return false;
     if (!today.open || !today.close) return null;
+    if (today.close <= today.open) {
+        return currentTime >= today.open || currentTime < today.close;
+    }
     return currentTime >= today.open && currentTime < today.close;
+}
+
+/**
+ * Legacy `workingHours` shape uses `isOpen` per day instead of `closed`.
+ * @param {Record<string, { isOpen?: boolean, open?: string, close?: string }>|null|undefined} workingHours
+ */
+export function computeOpenNowFromLegacyWorkingHours(workingHours) {
+    if (!workingHours || typeof workingHours !== 'object') return null;
+    const now = new Date();
+    const dayName = DAY_KEYS[now.getDay()];
+    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const today = workingHours[dayName];
+    if (!today || today.isOpen === false) return false;
+    if (!today.open || !today.close) return null;
+    if (today.close <= today.open) {
+        return currentTime >= today.open || currentTime < today.close;
+    }
+    return currentTime >= today.open && currentTime < today.close;
+}
+
+/**
+ * Resolve live open/closed state. Prefer stored hours over stale Google `openNow`.
+ * @param {{
+ *   hours?: Record<string, { closed?: boolean, open?: string, close?: string }>|null,
+ *   openingHours?: { periods?: unknown[] }|null,
+ *   workingHours?: Record<string, { isOpen?: boolean, open?: string, close?: string }>|null,
+ *   openNow?: boolean|null,
+ * }} sources
+ * @returns {boolean|null}
+ */
+export function resolveBusinessOpenNow({
+    hours,
+    openingHours,
+    workingHours,
+    openNow,
+} = {}) {
+    const fromHours = computeOpenNowFromBusinessHours(hours);
+    if (typeof fromHours === 'boolean') return fromHours;
+
+    const fromOpeningHours = computeOpenNowFromBusinessHours(
+        openingHoursToBusinessHours(
+            openingHours && typeof openingHours === 'object' ? openingHours : null
+        )
+    );
+    if (typeof fromOpeningHours === 'boolean') return fromOpeningHours;
+
+    const fromLegacy = computeOpenNowFromLegacyWorkingHours(workingHours);
+    if (typeof fromLegacy === 'boolean') return fromLegacy;
+
+    return typeof openNow === 'boolean' ? openNow : null;
 }

@@ -30,6 +30,34 @@ const JOIN_REASON_PAIRS = [
 
 const INVITE_PREFS = ['any', 'any', 'any', 'male_only', 'female_only'];
 
+const LOOKING_FOR_VALID = new Set(['dating', 'friendship', 'social']);
+
+function normalizeLookingFor(raw, { includeDating = true } = {}) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const item of raw) {
+        let id = String(item || '').trim().toLowerCase();
+        if (id === 'icebreaker') id = 'social';
+        if (!LOOKING_FOR_VALID.has(id) || out.includes(id)) continue;
+        if (id === 'dating' && !includeDating) continue;
+        out.push(id);
+        if (out.length >= LOOKING_FOR_VALID.size) break;
+    }
+    return out;
+}
+
+function normalizeOpenToDating(raw) {
+    return raw === true;
+}
+
+function syncLookingForWithOpenToDating(lookingFor, openToDating) {
+    const normalized = normalizeLookingFor(lookingFor, { includeDating: true });
+    if (openToDating) {
+        return normalized.includes('dating') ? normalized : [...normalized, 'dating'];
+    }
+    return normalized.filter((id) => id !== 'dating');
+}
+
 /** Curated Unsplash sets — avatar (square), cover (landscape), gallery ×3 (portrait 9:16). */
 const PERSONA_MEDIA = [
     {
@@ -254,6 +282,8 @@ function normalizeDemoUserProfile(raw, index = 0) {
             .trim()
             .slice(0, 40),
         availableForPrivateInvite: raw.availableForPrivateInvite !== false,
+        openToDating: normalizeOpenToDating(raw.openToDating),
+        lookingFor: syncLookingForWithOpenToDating(raw.lookingFor, normalizeOpenToDating(raw.openToDating)),
         profileGallery,
     };
 }
@@ -434,6 +464,8 @@ function buildDemoUserDoc({
         firstDatePlaceHint: persona.firstDatePlaceHint,
         availableForPrivateInvite: persona.availableForPrivateInvite !== false,
         invitePreference: persona.invitePreference,
+        openToDating: persona.openToDating === true,
+        lookingFor: Array.isArray(persona.lookingFor) ? persona.lookingFor : [],
 
         city: geo.city,
         country: geo.countryName || '',
@@ -444,6 +476,7 @@ function buildDemoUserDoc({
         reputation: 80 + (persona.displayName.length * 3),
         freeCredits: 0,
         paidCredits: 0,
+        savedCredits: 0,
         followersCount: 5 + (uid.charCodeAt(uid.length - 1) % 40),
         following: [],
         isGuest: false,
@@ -488,6 +521,8 @@ function buildDemoUserDocFromAi({
         firstDatePlaceHint: aiUser.firstDatePlaceHint,
         invitePreference: aiUser.invitePreference,
         availableForPrivateInvite: aiUser.availableForPrivateInvite,
+        openToDating: aiUser.openToDating,
+        lookingFor: aiUser.lookingFor,
         media,
     };
     return buildDemoUserDoc({ uid, persona, geo, demoCityId, batchId, adminUid });

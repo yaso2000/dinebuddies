@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FaMagic, FaWallet } from 'react-icons/fa';
+import { FaImage, FaWallet } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../context/ToastContext';
@@ -166,12 +166,15 @@ export default function MagicCoverGeneratePanel({
   return (
     <>
             <div
-        className={`ai-generate-bar ai-generate-bar--magic magic-cover-panel${embedded ? ' ai-generate-bar--embedded' : ''}`}
+        className={`ai-generate-bar ai-generate-bar--magic ai-generate-bar--image magic-cover-panel${embedded ? ' ai-generate-bar--embedded' : ''}`}
         aria-busy={isBusy}
         style={embedded ? undefined : { marginBottom: 14 }}>
 
                 <div className="ai-generate-bar__magic-header">
-                    <AppText as="p" className="ai-generate-bar__magic-title">{t('magic_cover_cta_title')}</AppText>
+                    <AppText as="p" className="ai-generate-bar__magic-title">
+                        <FaImage className="ai-generate-bar__magic-title-icon" aria-hidden />
+                        {t('magic_cover_cta_title')}
+                    </AppText>
                     <AppText as="p" className="ai-generate-bar__magic-intro">{t('magic_cover_optional_intro')}</AppText>
                 </div>
 
@@ -244,7 +247,7 @@ export default function MagicCoverGeneratePanel({
                             </> :
 
             <>
-                                <FaMagic aria-hidden />
+                                <FaImage aria-hidden />
                                 {t('magic_cover_generate_cover_btn', {
                 cost: AI_IMAGE_GENERATION_CREDITS,
                 defaultValue: `Generate Cover with AI (Costs ${AI_IMAGE_GENERATION_CREDITS} credits)`

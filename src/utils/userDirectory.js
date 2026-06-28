@@ -11,6 +11,9 @@ import {
 import { db } from '../firebase/config';
 import { isConsumerDirectoryMember } from './consumerDirectory';
 import { mapPublicProfileDocToUserShape } from './publicProfileMap';
+import { normalizeLookingFor } from '../constants/personalInviteCategories';
+import { normalizeInvitePreference } from '../constants/privateProfileOptions';
+import { isUserOpenToDating, normalizeOpenToDating } from './openToDating';
 import { resolveProfileAvatarUrl, resolveProfileCoverUrl, resolveSwipeProfilePhotoUrl } from './profileGallery';
 
 export const USER_DIRECTORY_DEFAULT_COVER =
@@ -48,13 +51,19 @@ export function mapDirectoryUser(publicDoc, userDoc = null) {
         ageRange: u.ageRange || u.ageCategory || '',
         city: userPublic.city || u.city || '',
         country: userPublic.country || u.country || '',
+        countryCode: userPublic.countryCode || u.countryCode || u.country_code || '',
         diningPersona: Array.isArray(u.diningPersona) ? u.diningPersona.slice(0, 3) : [],
         joinReasons: Array.isArray(u.joinReasons) ? u.joinReasons.slice(0, 2) : [],
-        availableForPrivateInvite: u.availableForPrivateInvite,
+        lookingFor: normalizeLookingFor(u.lookingFor, {
+            includeDating: true,
+        }).slice(0, 3),
+        invitePreference: normalizeInvitePreference(u.invitePreference),
+        openToDating: isUserOpenToDating(u),
         gender: u.gender || null,
         profileType: 'user',
         role: u.role || publicDoc.accountRole || 'user',
         accountRole: publicDoc.accountRole || u.role || 'user',
+        isOnline: Boolean(u.isOnline),
     };
 }
 

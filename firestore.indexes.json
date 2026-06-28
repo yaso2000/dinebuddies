@@ -320,6 +320,15 @@
                 { "fieldPath": "status", "order": "ASCENDING" },
                 { "fieldPath": "publishedAt", "order": "DESCENDING" }
             ]
+        },
+        {
+            "collectionGroup": "profile_gifts",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "recipientId", "order": "ASCENDING" },
+                { "fieldPath": "status", "order": "ASCENDING" },
+                { "fieldPath": "createdAt", "order": "DESCENDING" }
+            ]
         }
     ],
     "fieldOverrides": []

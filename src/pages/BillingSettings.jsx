@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import AppBackButton from '../components/AppBackButton';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { FaArrowLeft, FaFileInvoice, FaDownload, FaCheckCircle, FaClock } from 'react-icons/fa';
@@ -99,9 +100,7 @@ const BillingSettings = () => {
     <div className="settings-page">
             {/* Header */}
             <div className="settings-header">
-                <button onClick={() => navigate('/settings')} className="back-btn">
-                    <FaArrowLeft />
-                </button>
+                <AppBackButton fallback="/settings" />
                 <AppText as="h1">Billing History</AppText>
                 <div style={{ width: '40px' }}></div>
             </div>

@@ -57,18 +57,12 @@ export async function spendAiCredits(uid, opts) {
  * @param {{ freeUsed: number, paidUsed: number } | null} charged
  */
 export async function refundAiCredits(db, userRef, charged) {
-    if (!charged || (charged.freeUsed <= 0 && charged.paidUsed <= 0)) {
+    if (!charged || charged.paidUsed <= 0) {
         return;
     }
 
-    const patch = {
+    await userRef.update({
+        paidCredits: FieldValue.increment(charged.paidUsed),
         updatedAt: FieldValue.serverTimestamp(),
-    };
-    if (charged.freeUsed > 0) {
-        patch.freeCredits = FieldValue.increment(charged.freeUsed);
-    }
-    if (charged.paidUsed > 0) {
-        patch.paidCredits = FieldValue.increment(charged.paidUsed);
-    }
-    await userRef.update(patch);
+    });
 }

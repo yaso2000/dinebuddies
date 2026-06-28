@@ -179,7 +179,7 @@ const InstallPrompt = () => {
 
                 <div style={{ display: 'flex', gap: '0.85rem', alignItems: 'flex-start', marginBottom: '0.85rem' }}>
                     <img
-            src="/icon-light-192.png"
+            src="/icon-dark-192.png"
             alt=""
             width={48}
             height={48}

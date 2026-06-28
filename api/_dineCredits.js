@@ -10,7 +10,7 @@ export function isBusinessUserDoc(d) {
 }
 
 /**
- * Spend Dine Credits (free pool first, then paid). Mirrors functions/creditsCore.js.
+ * Spend from purchase wallet (`paidCredits`) only. Mirrors functions/creditsCore.js.
  * @param {import('firebase-admin/firestore').Transaction} tx
  * @param {import('firebase-admin/firestore').Firestore} db
  * @param {import('firebase-admin/firestore').DocumentReference} userRef
@@ -23,24 +23,16 @@ export function spendCreditsInTransaction(tx, db, userRef, userData, args) {
         return { freeUsed: 0, paidUsed: 0, balanceType: 'none' };
     }
 
-    let free = Math.max(0, Math.floor(Number(userData.freeCredits) || 0));
     let paid = Math.max(0, Math.floor(Number(userData.paidCredits) || 0));
-    const total = free + paid;
-    if (total < n) {
+    if (paid < n) {
         const err = new Error('INSUFFICIENT_CREDITS');
         err.code = 'INSUFFICIENT_CREDITS';
         throw err;
     }
 
-    const fromFree = Math.min(free, n);
-    const fromPaid = n - fromFree;
-    free -= fromFree;
-    paid -= fromPaid;
-
-    const balanceType = fromFree > 0 && fromPaid > 0 ? 'mixed' : fromFree > 0 ? 'free' : 'paid';
+    paid -= n;
 
     tx.update(userRef, {
-        freeCredits: free,
         paidCredits: paid,
         totalCreditsSpent: FieldValue.increment(n),
         updatedAt: FieldValue.serverTimestamp(),
@@ -52,13 +44,14 @@ export function spendCreditsInTransaction(tx, db, userRef, userData, args) {
         accountRole,
         type,
         amount: -n,
-        balanceType,
+        balanceType: 'paid',
+        wallet: 'purchase',
         reason: String(reason || '').slice(0, 200),
         relatedId: relatedId ? String(relatedId).slice(0, 200) : null,
         createdAt: FieldValue.serverTimestamp(),
-        freeUsed: fromFree,
-        paidUsed: fromPaid,
+        paidUsed: n,
+        freeUsed: 0,
     });
 
-    return { freeUsed: fromFree, paidUsed: fromPaid, balanceType };
+    return { freeUsed: 0, paidUsed: n, balanceType: 'paid' };
 }

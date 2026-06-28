@@ -44,12 +44,42 @@ const UserAvatar = ({
     maxWidth,
     maxHeight,
     borderRadius,
+    flexShrink,
+    margin,
+    marginTop,
+    marginRight,
+    marginBottom,
+    marginLeft,
+    marginInline,
+    marginInlineStart,
+    marginInlineEnd,
+    marginBlock,
+    marginBlockStart,
+    marginBlockEnd,
+    alignSelf,
     ...restStyle
   } = style;
 
+  const wrapperLayout = {
+    ...(flexShrink != null ? { flexShrink } : {}),
+    ...(margin != null ? { margin } : {}),
+    ...(marginTop != null ? { marginTop } : {}),
+    ...(marginRight != null ? { marginRight } : {}),
+    ...(marginBottom != null ? { marginBottom } : {}),
+    ...(marginLeft != null ? { marginLeft } : {}),
+    ...(marginInline != null ? { marginInline } : {}),
+    ...(marginInlineStart != null ? { marginInlineStart } : {}),
+    ...(marginInlineEnd != null ? { marginInlineEnd } : {}),
+    ...(marginBlock != null ? { marginBlock } : {}),
+    ...(marginBlockStart != null ? { marginBlockStart } : {}),
+    ...(marginBlockEnd != null ? { marginBlockEnd } : {}),
+    ...(alignSelf != null ? { alignSelf } : {}),
+  };
+
   const wrapperStyle = {
     ...ringStyle,
-    flexShrink: 0,
+    ...wrapperLayout,
+    flexShrink: wrapperLayout.flexShrink ?? 0,
     overflow: 'hidden',
     ...(width != null ? { width } : {}),
     ...(height != null ? { height } : {}),
@@ -72,7 +102,6 @@ const UserAvatar = ({
     borderRadius: borderRadius ?? '50%',
     objectFit: 'cover',
     boxSizing: 'border-box',
-    flexShrink: 0,
     ...(gap > 0 ? { border: `${gap}px solid var(--avatar-inner-gap, var(--bg-body))` } : {}),
     ...(hasWrapperSize ?
     { width: '100%', height: '100%', minWidth: 0, minHeight: 0 } :

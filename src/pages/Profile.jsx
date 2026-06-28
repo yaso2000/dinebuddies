@@ -4,12 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { FaChevronRight, FaTimes, FaUser, FaStore, FaChartLine, FaGifts, FaEdit, FaSave, FaStar, FaCheckCircle, FaSignOutAlt, FaBirthdayCake, FaBan, FaQuestionCircle } from 'react-icons/fa';
+import { FaChevronRight, FaTimes, FaUser, FaStore, FaChartLine, FaGifts, FaEdit, FaSave, FaStar, FaCheckCircle, FaSignOutAlt, FaBirthdayCake, FaQuestionCircle } from 'react-icons/fa';
 import { uploadProfilePicture } from '../utils/imageUpload';
 import { getMutualFollowers } from '../utils/followHelpers';
 import ImageUpload from '../components/ImageUpload';
 // Profile Enhancements
-import { StatisticsCards, Achievements, CoverPhoto } from '../components/ProfileEnhancements';
+import { StatisticsCards, CoverPhoto } from '../components/ProfileEnhancements';
+import GiftShieldSection from '../components/gifts/GiftShieldSection';
 import { FavoritePlaces } from '../components/ProfileEnhancementsExtended';
 import { useTheme } from '../context/ThemeContext';
 import { FaSun, FaMoon } from 'react-icons/fa';
@@ -38,8 +39,19 @@ import {
   normalizeInvitePreference,
   normalizeFirstDatePlaceHint,
   normalizeJoinReasons,
-  getJoinReasonLabel } from
+  getJoinReasonLabel,
+  readInvitePreferenceForForm,
+  validatePrivateInviteProfileFields,
+} from
 '../constants/privateProfileOptions';
+import { normalizeLookingFor } from '../constants/personalInviteCategories';
+import {
+  isUserOpenToDating,
+  normalizeOpenToDating,
+  syncLookingForWithOpenToDating,
+} from '../utils/openToDating';
+import { getPurchaseCredits, getSavedCredits } from '../utils/walletCredits';
+import LookingForChips from '../components/profile/LookingForChips';
 import { readFavoritePlaces, mergeProfilePreserveFavoritePlaces, pickFavoritePlaces } from '../utils/favoritePlacesUtils';
 import { useInvitationArchives } from '../hooks/useInvitationArchives';
 import { sortInvitationsByDateDesc, formatArchiveDateRange, isPublicInvitationExpiredForArchive } from '../utils/invitationExpiry';
@@ -182,11 +194,14 @@ const Profile = () => {
         age: currentData.age || 25,
         ageCategory: currentData.ageCategory || '',
         phone: currentData.phone || '',
-        availableForPrivateInvite: currentData.availableForPrivateInvite !== false,
         diningPersona: normalizeDiningPersona(currentData.diningPersona),
-        invitePreference: normalizeInvitePreference(currentData.invitePreference),
+        invitePreference: readInvitePreferenceForForm(currentData),
         firstDatePlaceHint: normalizeFirstDatePlaceHint(currentData.firstDatePlaceHint),
         joinReasons: normalizeJoinReasons(currentData.joinReasons),
+        lookingFor: normalizeLookingFor(currentData.lookingFor, {
+          includeDating: true
+        }),
+        openToDating: isUserOpenToDating(currentData),
         profileGallery: media.profileGallery,
         directoryCoverIndex: media.directoryCoverIndex,
         cover_photo: media.cover_photo || ''
@@ -235,11 +250,14 @@ const Profile = () => {
     gender: userProfile?.gender || 'male',
     age: userProfile?.age || 18,
     ageCategory: userProfile?.ageCategory || '',
-    availableForPrivateInvite: userProfile?.availableForPrivateInvite !== false,
     diningPersona: normalizeDiningPersona(userProfile?.diningPersona),
-    invitePreference: normalizeInvitePreference(userProfile?.invitePreference),
+    invitePreference: readInvitePreferenceForForm(userProfile),
     firstDatePlaceHint: normalizeFirstDatePlaceHint(userProfile?.firstDatePlaceHint),
     joinReasons: normalizeJoinReasons(userProfile?.joinReasons),
+    lookingFor: normalizeLookingFor(userProfile?.lookingFor, {
+      includeDating: true
+    }),
+    openToDating: isUserOpenToDating(userProfile),
     profileGallery: normalizeProfileGallery(userProfile?.profileGallery),
     directoryCoverIndex: normalizeDirectoryCoverIndex(userProfile?.directoryCoverIndex),
     cover_photo: userProfile?.cover_photo || ''
@@ -432,11 +450,14 @@ const Profile = () => {
       age: source.age || prev.age || 25,
       ageCategory: source.ageCategory || prev.ageCategory || '',
       phone: source.phone || prev.phone || '',
-      availableForPrivateInvite: source.availableForPrivateInvite !== false,
       diningPersona: normalizeDiningPersona(source.diningPersona ?? prev.diningPersona),
-      invitePreference: normalizeInvitePreference(source.invitePreference ?? prev.invitePreference),
+      invitePreference: readInvitePreferenceForForm(source),
       firstDatePlaceHint: normalizeFirstDatePlaceHint(source.firstDatePlaceHint ?? prev.firstDatePlaceHint),
       joinReasons: normalizeJoinReasons(source.joinReasons ?? prev.joinReasons),
+      lookingFor: normalizeLookingFor(source.lookingFor ?? prev.lookingFor, {
+        includeDating: true
+      }),
+      openToDating: isUserOpenToDating(source),
       profileGallery: media.profileGallery,
       directoryCoverIndex: media.directoryCoverIndex,
       cover_photo: media.cover_photo || ''
@@ -460,6 +481,31 @@ const Profile = () => {
       return;
     }
 
+    const privateInviteCheck = validatePrivateInviteProfileFields({
+      invitePreference: formData.invitePreference,
+      lookingFor: formData.lookingFor,
+    });
+    if (!privateInviteCheck.ok) {
+      if (privateInviteCheck.code === 'invite_preference_required') {
+        showToast(
+          t(
+            'profile_private_invite_gender_pref_required',
+            'Choose who can send you private invites (gender preference).'
+          ),
+          'error'
+        );
+      } else {
+        showToast(
+          t(
+            'profile_private_invite_looking_for_required',
+            'Select at least one option under Looking for.'
+          ),
+          'error'
+        );
+      }
+      return;
+    }
+
     setIsSaving(true);
     setUploadProgress(0);
 
@@ -476,27 +522,27 @@ const Profile = () => {
       const payload = {
         name: trimmedName,
         bio: formData.bio,
-        availableForPrivateInvite: formData.availableForPrivateInvite,
+        availableForPrivateInvite: true,
         avatar: finalAvatar,
         diningPersona: normalizeDiningPersona(formData.diningPersona),
         firstDatePlaceHint: normalizeFirstDatePlaceHint(formData.firstDatePlaceHint),
         joinReasons: normalizeJoinReasons(formData.joinReasons, {
-          includePrivateOnly: formData.availableForPrivateInvite
-        })
+          includePrivateOnly: true,
+        }),
+        lookingFor: syncLookingForWithOpenToDating(
+          formData.lookingFor,
+          normalizeOpenToDating(formData.openToDating)
+        ),
+        openToDating: normalizeOpenToDating(formData.openToDating),
+        invitePreference: normalizeInvitePreference(formData.invitePreference),
       };
 
-      if (formData.availableForPrivateInvite) {
-        payload.invitePreference = normalizeInvitePreference(formData.invitePreference);
-        const gallerySave = buildProfileGallerySavePayload(
-          formData.profileGallery,
-          formData.directoryCoverIndex ?? profileMedia.directoryCoverIndex ?? 0
-        );
-        payload.profileGallery = gallerySave.profileGallery;
-        payload.directoryCoverIndex = gallerySave.directoryCoverIndex;
-      } else {
-        payload.profileGallery = ['', '', ''];
-        payload.directoryCoverIndex = 0;
-      }
+      const gallerySave = buildProfileGallerySavePayload(
+        formData.profileGallery,
+        formData.directoryCoverIndex ?? profileMedia.directoryCoverIndex ?? 0
+      );
+      payload.profileGallery = gallerySave.profileGallery;
+      payload.directoryCoverIndex = gallerySave.directoryCoverIndex;
 
       payload.cover_photo = String(
         formData.cover_photo || profileMedia.cover_photo || ''
@@ -521,10 +567,11 @@ const Profile = () => {
         name: trimmedName,
         bio: payload.bio ?? prev.bio,
         avatar: finalAvatar,
-        availableForPrivateInvite: payload.availableForPrivateInvite,
         diningPersona: payload.diningPersona ?? prev.diningPersona,
         firstDatePlaceHint: payload.firstDatePlaceHint ?? prev.firstDatePlaceHint,
         joinReasons: payload.joinReasons ?? prev.joinReasons,
+        lookingFor: payload.lookingFor ?? prev.lookingFor,
+        openToDating: payload.openToDating ?? prev.openToDating,
         invitePreference: payload.invitePreference ?? prev.invitePreference,
         profileGallery: nextMedia.profileGallery,
         directoryCoverIndex: nextMedia.directoryCoverIndex,
@@ -715,83 +762,35 @@ const Profile = () => {
                                     <AppTextInput as="textarea" className="ui-form-field" value={formData.bio} onChange={(e) => setFormData({ ...formData, bio: e.target.value })} placeholder={t('profile_bio_placeholder')} maxLength={150} style={{ textAlign: 'center', fontSize: '0.88rem', minHeight: '72px', resize: 'vertical' }} />
                                 </div>
 
-                                <div className="form-group profile-private-pref-card">
-                                    <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-                                        <div className="profile-private-pref-card__title">
-                                            {t('private_invitation_preference_title', 'Private Invite preference')}
-                                        </div>
-                                        <div className="profile-private-pref-card__desc">
-                                            {t('private_invitation_preference_desc', 'Control whether others can send you private invites.')}
-                                        </div>
-                                    </div>
-                                    <div className="profile-private-pref-card__actions">
-                                        <button
-                      type="button"
-                      className="profile-private-pref-card__action"
-                      onClick={() => setFormData((prev) => ({ ...prev, availableForPrivateInvite: true }))}
-                      style={{
-                        border: formData.availableForPrivateInvite ? '2px solid #16a34a' : '1px solid var(--border-color)',
-                        background: formData.availableForPrivateInvite ? 'rgba(22,163,74,0.16)' : 'var(--bg-card)',
-                        color: formData.availableForPrivateInvite ? 'var(--text-main)' : 'var(--text-muted)',
-                        cursor: 'pointer'
-                      }}>
-                      
-                                            <FaCheckCircle
-                        className="profile-private-pref-card__action-icon profile-private-pref-card__action-icon--accept"
-                        color={formData.availableForPrivateInvite ? '#16a34a' : 'currentColor'}
-                        aria-hidden />
-                      
-                                            {t('private_invites_accept', 'Accept Private Invites')}
-                                        </button>
-                                        <button
-                      type="button"
-                      className="profile-private-pref-card__action"
-                      onClick={() =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        availableForPrivateInvite: false,
-                        joinReasons: prev.joinReasons.filter((id) => id !== 'open_to_dating')
-                      }))
-                      }
-                      style={{
-                        border: !formData.availableForPrivateInvite ? '2px solid #ef4444' : '1px solid var(--border-color)',
-                        background: !formData.availableForPrivateInvite ? 'rgba(239,68,68,0.16)' : 'var(--bg-card)',
-                        color: !formData.availableForPrivateInvite ? 'var(--text-main)' : 'var(--text-muted)',
-                        cursor: 'pointer'
-                      }}>
-                      
-                                            <FaBan
-                        className="profile-private-pref-card__action-icon profile-private-pref-card__action-icon--reject"
-                        color={!formData.availableForPrivateInvite ? '#ef4444' : 'currentColor'}
-                        aria-hidden />
-                      
-                                            {t('private_invites_reject', 'Reject')}
-                                        </button>
-                                    </div>
-                                </div>
-
                                 <PrivateProfileFields
                   diningPersona={formData.diningPersona}
                   invitePreference={formData.invitePreference}
                   firstDatePlaceHint={formData.firstDatePlaceHint}
                   joinReasons={formData.joinReasons}
-                  showInvitePreference={formData.availableForPrivateInvite}
+                  lookingFor={formData.lookingFor}
+                  openToDating={formData.openToDating}
+                  showInvitePreference
+                  requireInviteFields
                   onChange={({
                     diningPersona,
                     invitePreference,
                     firstDatePlaceHint,
-                    joinReasons
+                    joinReasons,
+                    lookingFor,
+                    openToDating
                   }) =>
                   setFormData((prev) => ({
                     ...prev,
                     diningPersona,
                     invitePreference,
                     firstDatePlaceHint,
-                    joinReasons
+                    joinReasons,
+                    lookingFor,
+                    openToDating
                   }))
                   } />
                 
-                                {formData.availableForPrivateInvite && currentUser?.uid ?
+                                {currentUser?.uid ?
                 <ProfileGalleryEditor
                   userId={currentUser.uid}
                   slots={formData.profileGallery}
@@ -816,6 +815,19 @@ const Profile = () => {
               <>
                                 <AppText as="h1" style={{ fontSize: '1.6rem', fontWeight: '900', marginTop: '0.75rem', marginBottom: '0.15rem', color: 'var(--text-main)' }}>{realtimeUser.name}</AppText>
                                 <AppText as="p" style={{ color: 'var(--text-muted)', marginBottom: '0.4rem', fontSize: '0.85rem' }}>{realtimeUser.bio || t('active_member')}</AppText>
+                                {Array.isArray(realtimeUser.lookingFor) &&
+                realtimeUser.lookingFor.length > 0 &&
+                <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.72rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                                            {t('profile_looking_for_title', 'Looking for')}
+                                        </div>
+                                        <LookingForChips
+                    ids={realtimeUser.lookingFor}
+                    includeDating
+                    className="profile-looking-for-chips"
+                    chipClassName="profile-looking-for-chip" />
+                                    </div>
+                }
                                 {Array.isArray(realtimeUser.joinReasons) &&
                 realtimeUser.joinReasons.length > 0 &&
                 <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
@@ -876,7 +888,7 @@ const Profile = () => {
                                         {realtimeUser.firstDatePlaceHint}
                                     </AppText> :
                 null}
-                                {realtimeUser.availableForPrivateInvite !== false && profileUid ?
+                                {profileUid ?
                 <ProfileGalleryEditor
                   userId={profileUid}
                   slots={profileMedia.profileGallery}
@@ -1033,16 +1045,21 @@ const Profile = () => {
                                 {!userProfile?.isBusiness &&
                   <div className="profile-subscription-quota-card" style={{ width: '100%' }}>
                                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                                            {t('dine_credits', 'Dine Credits')}
+                                            {t('purchase_wallet_title', 'Purchase wallet')}
                                         </div>
                                         <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                            {Math.max(0, Number(userProfile?.freeCredits) || 0) +
-                      Math.max(0, Number(userProfile?.paidCredits) || 0)}
+                                            {getPurchaseCredits(userProfile)}
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '8px', marginBottom: '4px' }}>
+                                            {t('savings_wallet_title', 'Savings wallet')}
+                                        </div>
+                                        <div style={{ fontSize: '1rem', fontWeight: '800', color: '#f472b6' }}>
+                                            {getSavedCredits(userProfile)}
                                         </div>
                                         <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '6px', lineHeight: 1.35 }}>
                                             {t(
                         'dine_credits_use_hint',
-                        'Used for private & date invites, AI, and boosts. Free pool is used first.'
+                        'Purchase wallet: invites, AI, gifts. Savings wallet: gifts received (50% value).'
                       )}
                                         </div>
                                         <button
@@ -1122,8 +1139,11 @@ const Profile = () => {
                     {/* 📊 STATISTICS CARDS */}
                     <StatisticsCards userId={profileUid} />
 
-                    {/* 🏆 ACHIEVEMENTS */}
-                    <Achievements userId={profileUid} />
+                    {/* 🛡️ GIFT SHIELDS */}
+                    <GiftShieldSection
+                        userId={profileUid}
+                        totalSavedCreditsEarned={userProfile?.totalSavedCreditsEarned ?? realtimeUser?.totalSavedCreditsEarned}
+                    />
                     </div>
 
                     <FavoritePlaces

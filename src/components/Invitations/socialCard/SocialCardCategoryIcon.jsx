@@ -16,8 +16,23 @@ function SvgWrap({ children, categoryId }) {
 
 }
 
-export default function SocialCardCategoryIcon({ categoryId = 'social' }) {
+export default function SocialCardCategoryIcon({ categoryId = 'social', personalIntent = false }) {
   const id = typeof categoryId === 'string' ? categoryId.toLowerCase() : 'social';
+
+  if (personalIntent && (id === 'social' || id === 'icebreaker')) {
+    return (
+      <SvgWrap categoryId="social">
+        <path
+          d="M14 28c0-6 4-10 10-10s10 4 10 10"
+          stroke="currentColor"
+          strokeWidth="2"
+          fill="none"
+        />
+        <path d="M18 14h12M21 10h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="24" cy="28" r="2" fill="currentColor" className="private-card-cat-spark" />
+      </SvgWrap>
+    );
+  }
 
   switch (id) {
     case 'birthday':

@@ -1,13 +1,14 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { FaArrowLeft } from 'react-icons/fa';
 import '../pages/MyCommunity.css';
+import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
 
 /**
  * Business dashboard pages: fixed subheader + inner scroll column (mobile swipe scroll).
  */import { AppText } from "./base";
 export default function BusinessDashboardShell({ title, icon, onBack, backTo = '/my-community', rightSlot, children }) {
-  const navigate = useNavigate();
+  const { goBack } = useAppBackNavigation({ fallback: backTo });
+  const handleBack = () => (onBack ? onBack() : goBack());
 
   return (
     <div className="page-container my-community-page">
@@ -15,7 +16,7 @@ export default function BusinessDashboardShell({ title, icon, onBack, backTo = '
                 <button
           type="button"
           className="back-btn"
-          onClick={() => onBack ? onBack() : navigate(backTo)}>
+          onClick={handleBack}>
           
                     <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
                 </button>

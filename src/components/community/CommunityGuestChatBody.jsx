@@ -86,29 +86,31 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
 
   return (
     <div className={rootClass} dir={contentDir}>
-      <CommunityChatMessages
-        messages={messages}
-        currentUserId={currentUserId}
-        partnerId={partnerId}
-        isHost={isHost}
-        onReplyToMessage={isHost ? handleReply : undefined}
-        onMuteMember={isHost ? handleMute : undefined}
-        onDeleteMessage={handleDelete}
-        onPinHostMessage={isHost ? handlePin : undefined}
-        onUnpinHostMessage={isHost ? handleUnpin : undefined}
-        onShowOnBanner={isHost ? handleShowOnBanner : undefined}
-        onHideFromBanner={isHost ? handleHideFromBanner : undefined}
-        variant="normal"
-      />
+      <div className="community-guest-chat__frame">
+        <CommunityChatMessages
+          messages={messages}
+          currentUserId={currentUserId}
+          partnerId={partnerId}
+          isHost={isHost}
+          onReplyToMessage={isHost ? handleReply : undefined}
+          onMuteMember={isHost ? handleMute : undefined}
+          onDeleteMessage={handleDelete}
+          onPinHostMessage={isHost ? handlePin : undefined}
+          onUnpinHostMessage={isHost ? handleUnpin : undefined}
+          onShowOnBanner={isHost ? handleShowOnBanner : undefined}
+          onHideFromBanner={isHost ? handleHideFromBanner : undefined}
+          variant="normal"
+        />
 
-      {isMutedInChat ? (
-        <div className="community-main-chat__muted" role="status">
-          {t(
-            'community_chat_muted_notice',
-            'You are muted in this chat and cannot send messages.'
-          )}
-        </div>
-      ) : null}
+        {isMutedInChat ? (
+          <div className="community-main-chat__muted" role="status">
+            {t(
+              'community_chat_muted_notice',
+              'You are muted in this chat and cannot send messages.'
+            )}
+          </div>
+        ) : null}
+      </div>
 
       <div className="community-main-chat__composer">
         <CommunityChatComposer

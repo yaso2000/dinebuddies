@@ -21,5 +21,8 @@ export function getAiUserPromptDefaultEn(postType, subType) {
     if (postType === 'design_studio') {
         return 'Modern social media graphic';
     }
+    if (postType === 'text_assistant') {
+        return 'How can I use DineBuddies invitations and Connect?';
+    }
     return 'Short friendly community post';
 }

@@ -1,8 +1,10 @@
 /**
  * Publish costs for private / private invites — must match `functions/creditsCore.js` CREDIT_COSTS.
- * Spending uses the unified Dine Credits wallet (`freeCredits` + `paidCredits`), same as AI.
+ * Spending uses the purchase wallet (`paidCredits`) only.
  * Public invitations (`invitations` collection) = 0 credits (not listed here).
  */
+export { getTotalDineCredits, getPurchaseCredits } from './walletCredits';
+
 export const SOCIAL_INVITATION_PUBLISH_CREDITS = 90;
 export const PRIVATE_INVITATION_PUBLISH_CREDITS = 185;
 export const INVITATION_BOOST_CREDITS = 50;
@@ -29,12 +31,6 @@ export function isPrivateInvitationDoc(inv) {
 
 export function getPrivateInvitationPublishCost(inv) {
     return isPrivateInvitationDoc(inv) ? PRIVATE_INVITATION_PUBLISH_CREDITS : SOCIAL_INVITATION_PUBLISH_CREDITS;
-}
-
-export function getTotalDineCredits(userProfile) {
-    const free = Math.max(0, Number(userProfile?.freeCredits) || 0);
-    const paid = Math.max(0, Number(userProfile?.paidCredits) || 0);
-    return free + paid;
 }
 
 /** @param {Record<string, unknown>|null|undefined} inv */

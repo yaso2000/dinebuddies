@@ -4,19 +4,23 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { useTranslation } from 'react-i18next';
 
-import { LuInbox, LuLayoutGrid } from 'react-icons/lu';
+import { LuLayoutGrid } from 'react-icons/lu';
 
-import { FaArrowLeft } from 'react-icons/fa';
+import AppBackButton from '../components/AppBackButton';
+import { APP_HOME_PATH } from '../utils/appRouteShell';
 
 import DiscoveryFeed from '../components/discovery/DiscoveryFeed';
+import InboxHubLink from '../components/discovery/InboxHubLink';
 
 import { useAuth } from '../context/AuthContext';
 
 import { useToast } from '../context/ToastContext';
 
 import { useDiscoveryProfiles } from '../hooks/useDiscoveryProfiles';
+import { useProfileGiftPicker } from '../hooks/useProfileGiftPicker';
 
 import { likeDiscoveryProfile, sendDiscoveryGreeting } from '../utils/discoveryProfile';
+import { showLikeCooldownWarning } from '../utils/connectionActionCooldown';
 
 import { goToLogin } from '../utils/goToLogin';
 
@@ -28,11 +32,11 @@ import { AppText } from "../components/base";
 
 export default function DiscoveryPage() {
 
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const navigate = useNavigate();
 
-  const { showToast } = useToast();
+  const { showToast, showPersistentWarning } = useToast();
 
   const { currentUser, userProfile, isGuest } = useAuth();
 
@@ -41,6 +45,7 @@ export default function DiscoveryPage() {
   const viewerUid = currentUser?.uid || currentUser?.id;
 
   const { profiles, loading, loadingMore, hasMore, loadMore, canLoad } = useDiscoveryProfiles();
+  const { openGiftPicker, giftModal } = useProfileGiftPicker();
 
 
 
@@ -79,11 +84,15 @@ export default function DiscoveryPage() {
           );
           return { ok: false, limited: true };
         }
+        if (result?.reason === 'cooldown') {
+          showLikeCooldownWarning(showPersistentWarning, i18n, result.cancelledAtMs, result.retryAtMs);
+          return { ok: false, limited: true };
+        }
         if (!result?.ok) {
           showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
           return { ok: false };
         }
-        return { ok: true };
+        return { ok: true, mutual: result.mutual === true || result.match === true };
       } catch (err) {
         console.error('[Discovery] like', err);
         showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
@@ -92,7 +101,7 @@ export default function DiscoveryPage() {
 
     },
 
-    [currentUser, showToast, t, userProfile, viewerUid]
+    [currentUser, i18n, showPersistentWarning, showToast, t, userProfile, viewerUid]
 
   );
 
@@ -140,23 +149,16 @@ export default function DiscoveryPage() {
 
 
 
-  const handleGift = useCallback(() => {
-
-    showToast(
-
-      t(
-
-        'user_directory_gift_coming_soon',
-
-        'Gifts are coming soon — we will add them in a future update.'
-
-      ),
-
-      'info'
-
-    );
-
-  }, [showToast, t]);
+  const handleGift = useCallback(
+    (profile) => {
+      if (!viewerUid) {
+        goToLogin({ returnPath: '/search' });
+        return;
+      }
+      openGiftPicker(profile);
+    },
+    [openGiftPicker, viewerUid]
+  );
 
 
 
@@ -194,19 +196,12 @@ export default function DiscoveryPage() {
 
       <div className="discovery-shell__chrome discovery-shell__chrome--start">
 
-        <button
-
-          type="button"
-
+        <AppBackButton
           className="discovery-icon-btn"
-
-          onClick={() => navigate('/posts-feed')}
-
-          aria-label="Back to feed">
-
-          <FaArrowLeft style={{ transform: 'scaleX(-1)' }} />
-
-        </button>
+          fallback={APP_HOME_PATH}
+          iconStyle={{ transform: 'scaleX(-1)' }}
+          ariaLabel="Back to feed"
+        />
 
       </div>
 
@@ -249,34 +244,18 @@ export default function DiscoveryPage() {
       <div className="discovery-shell__chrome discovery-shell__chrome--end">
 
         <Link
-
           to="/search/list"
-
-          className="discovery-icon-btn"
-
+          className="discovery-icon-btn discovery-icon-btn--cards"
           aria-label="List view"
-
           title={t('user_directory_list_view', 'Card view')}>
-
-          <LuLayoutGrid size={20} />
-
+          <LuLayoutGrid aria-hidden />
         </Link>
 
-        <Link
-
-          to="/search/inbox"
-
-          className="discovery-icon-btn"
-
-          aria-label="Inbox"
-
-          title="Inbox">
-
-          <LuInbox size={20} />
-
-        </Link>
+        <InboxHubLink className="discovery-icon-btn" tab="activity" />
 
       </div>
+
+      {giftModal}
 
     </div>);
 

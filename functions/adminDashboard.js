@@ -2,7 +2,7 @@
  * Admin dashboard callables — moderation, credits, invitations (server-trusted).
  */
 const functions = require('firebase-functions');
-const { grantFreeCreditsInTransaction } = require('./creditsCore');
+const { grantAdminPaidCreditsInTransaction } = require('./creditsCore');
 const { inferInviteCategory } = require('./inviteCategory');
 const {
     DEMO_COUNT_MAX,
@@ -14,6 +14,10 @@ const {
     listDemoCitySummaries,
     listDemoUserProfiles,
 } = require('./demoUsersCore');
+const {
+    createDemoUserPost,
+    createDemoUserPublicInvitation,
+} = require('./adminDemoContent');
 
 const INVITE_PAGE_MAX = 50;
 const INVITE_SCAN_MAX = 2500;
@@ -138,7 +142,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         }
 
         const userRef = db.collection('users').doc(targetUid);
-        let freeAfter = 0;
+        let paidAfter = 0;
 
         await db.runTransaction(async (tx) => {
             const snap = await tx.get(userRef);
@@ -146,14 +150,14 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
                 throw new functions.https.HttpsError('not-found', 'User not found.');
             }
             const d = snap.data() || {};
-            const result = grantFreeCreditsInTransaction(tx, userRef, d, targetUid, amount, {
+            const result = grantAdminPaidCreditsInTransaction(tx, userRef, d, targetUid, amount, {
                 reason: note ? `admin_grant:${note}` : 'admin_grant',
                 adminUid: requesterUid,
             });
-            freeAfter = result.freeCreditsAfter;
+            paidAfter = result.paidCreditsAfter;
         });
 
-        return { success: true, targetUid, amount, freeCredits: freeAfter };
+        return { success: true, targetUid, amount, paidCredits: paidAfter, freeCredits: paidAfter };
     });
 
     exportsObj.adminListInvitations = functions.https.onCall(async (data, context) => {
@@ -879,6 +883,8 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         return { items, hasNext, lastId: items.length ? items[items.length - 1].id : null };
     });
 
+    const demoUserFnOpts = { timeoutSeconds: 540, memory: '1GB' };
+
     exportsObj.adminListDemoUsers = functions.https.onCall(async (data, context) => {
         await assertAdminContext(context);
         const cities = await listDemoCitySummaries(db);
@@ -929,10 +935,29 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         const countryCode = asTrimmedString(data?.countryCode).toUpperCase().slice(0, 2);
         const countryName = asTrimmedString(data?.countryName || data?.country);
         const stateName = asTrimmedString(data?.stateName || data?.state);
+        const scope = asTrimmedString(data?.scope).toLowerCase() || 'full';
         if (!city || countryCode.length !== 2) {
             throw new functions.https.HttpsError('invalid-argument', 'city and countryCode are required.');
         }
         try {
+            if (scope === 'bio') {
+                const profileIn = data?.profile && typeof data.profile === 'object' ? data.profile : {};
+                const { callGeminiForDemoBio } = require('./demoUsersGemini');
+                const result = await callGeminiForDemoBio({
+                    city,
+                    state: stateName,
+                    country: countryName || countryCode,
+                    countryCode,
+                    gender: asTrimmedString(profileIn.gender),
+                    ageCategory: asTrimmedString(profileIn.ageCategory || profileIn.age_category),
+                    displayName: asTrimmedString(profileIn.displayName || profileIn.display_name),
+                    existingBio: asTrimmedString(profileIn.bio),
+                    diningPersona: Array.isArray(profileIn.diningPersona) ? profileIn.diningPersona : [],
+                    userPrompt: asTrimmedString(data?.userPrompt),
+                });
+                return { profile: { bio: result.bio } };
+            }
+
             const { callGeminiForDemographics } = require('./demoUsersGemini');
             const rows = await callGeminiForDemographics({
                 city,
@@ -949,6 +974,66 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
             );
         }
     });
+
+    exportsObj.adminGenerateDemoUserImage = functions
+        .runWith(demoUserFnOpts)
+        .https.onCall(async (data, context) => {
+            const { requesterUid } = await assertAdminContext(context);
+            const kind = asTrimmedString(data?.kind).toLowerCase();
+            if (kind !== 'avatar' && kind !== 'cover') {
+                throw new functions.https.HttpsError(
+                    'invalid-argument',
+                    'kind must be "avatar" or "cover".'
+                );
+            }
+            try {
+                const { generateDemoUserImage } = require('./demoUsersImagen');
+                return await generateDemoUserImage({
+                    adminUid: requesterUid,
+                    kind,
+                    profile: data?.profile || {},
+                    geo: {
+                        city: asTrimmedString(data?.city),
+                        stateName: asTrimmedString(data?.stateName || data?.state),
+                        countryName: asTrimmedString(data?.countryName || data?.country),
+                        countryCode: asTrimmedString(data?.countryCode).toUpperCase().slice(0, 2),
+                    },
+                    userPrompt: asTrimmedString(data?.userPrompt),
+                    coverScene: asTrimmedString(data?.coverScene),
+                });
+            } catch (err) {
+                throw new functions.https.HttpsError(
+                    'invalid-argument',
+                    err?.message || 'Failed to generate demo user image.'
+                );
+            }
+        });
+
+    exportsObj.adminGenerateDemoUserCharacterPair = functions
+        .runWith(demoUserFnOpts)
+        .https.onCall(async (data, context) => {
+            const { requesterUid } = await assertAdminContext(context);
+            try {
+                const { generateDemoUserCharacterPair } = require('./demoUsersImagen');
+                return await generateDemoUserCharacterPair({
+                    adminUid: requesterUid,
+                    profile: data?.profile || {},
+                    geo: {
+                        city: asTrimmedString(data?.city),
+                        stateName: asTrimmedString(data?.stateName || data?.state),
+                        countryName: asTrimmedString(data?.countryName || data?.country),
+                        countryCode: asTrimmedString(data?.countryCode).toUpperCase().slice(0, 2),
+                    },
+                    userPrompt: asTrimmedString(data?.userPrompt),
+                    coverScene: asTrimmedString(data?.coverScene) || 'cafe',
+                });
+            } catch (err) {
+                throw new functions.https.HttpsError(
+                    'invalid-argument',
+                    err?.message || 'Failed to generate demo user character pair.'
+                );
+            }
+        });
 
     exportsObj.adminDeleteDemoUser = functions.https.onCall(async (data, context) => {
         await assertAdminContext(context);
@@ -1012,8 +1097,6 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         }
     }
 
-    const demoUserFnOpts = { timeoutSeconds: 540, memory: '1GB' };
-
     exportsObj.adminCreateDemoUsers = functions
         .runWith(demoUserFnOpts)
         .https.onCall(async (data, context) => {
@@ -1040,6 +1123,30 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         const batchId = asTrimmedString(data?.batchId) || null;
         const result = await wipeDemoUsers(db, { demoCityId, batchId });
         return result;
+    });
+
+    exportsObj.adminCreateDemoPost = functions.https.onCall(async (data, context) => {
+        const { requesterUid } = await assertAdminContext(context);
+        try {
+            return await createDemoUserPost(db, admin, data || {}, requesterUid);
+        } catch (err) {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                err?.message || 'Failed to create demo post.'
+            );
+        }
+    });
+
+    exportsObj.adminCreateDemoPublicInvitation = functions.https.onCall(async (data, context) => {
+        const { requesterUid } = await assertAdminContext(context);
+        try {
+            return await createDemoUserPublicInvitation(db, admin, data || {}, requesterUid);
+        } catch (err) {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                err?.message || 'Failed to create demo public invitation.'
+            );
+        }
     });
 }
 

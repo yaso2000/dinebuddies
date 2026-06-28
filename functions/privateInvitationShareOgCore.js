@@ -1,5 +1,11 @@
 const DEFAULT_SITE_ORIGIN = 'https://www.dinebuddies.com';
 const DEFAULT_OG_IMAGE_PATH = '/icon-light-512.png';
+const {
+    encodePublicAssetPath,
+    resolveLegacyPersonalTemplateFileStem,
+    resolvePersonalInviteBackgroundDir,
+    resolvePersonalTemplateAssetPath,
+} = require('./privateInviteTemplateAssets');
 
 const OCCASION_TYPE_TO_CATEGORY_ID = {
     Dating: 'dating',
@@ -50,19 +56,6 @@ function resolveOccasionCategoryId(occasionType) {
     return OCCASION_TYPE_TO_CATEGORY_ID[occasionType.trim()] || 'social';
 }
 
-function resolvePersonalTemplateFileStem(bgId) {
-    if (!bgId || typeof bgId !== 'string') return null;
-    if (bgId.startsWith('dating-')) return bgId;
-    if (bgId.startsWith('private-')) return `dating-${bgId.slice('private-'.length)}`;
-    return bgId;
-}
-
-function resolvePersonalInviteBackgroundDir(inv) {
-    const raw = String(inv?.personalInviteCategory || '').trim().toLowerCase();
-    if (raw === 'friendship' || raw === 'icebreaker' || raw === 'dating') return raw;
-    return 'dating';
-}
-
 function resolveTemplateBackgroundUrl(inv, siteOrigin) {
     const bgId = inv?.cardBackgroundId;
     if (!bgId || typeof bgId !== 'string') return null;
@@ -73,7 +66,11 @@ function resolveTemplateBackgroundUrl(inv, siteOrigin) {
         String(inv.occasionType || '').trim().toLowerCase() === 'dating' ||
         String(inv.personalInviteCategory || '').length > 0;
     if (isPersonal) {
-        const stem = resolvePersonalTemplateFileStem(bgId);
+        const assetPath = resolvePersonalTemplateAssetPath(bgId);
+        if (assetPath) {
+            return `${origin}/${encodePublicAssetPath(assetPath)}`;
+        }
+        const stem = resolveLegacyPersonalTemplateFileStem(bgId);
         if (!stem) return null;
         const dir = resolvePersonalInviteBackgroundDir(inv);
         return `${origin}/private-invitation-templates/backgrounds/${dir}/${encodeURIComponent(stem)}.webp`;

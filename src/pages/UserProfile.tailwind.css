@@ -124,6 +124,17 @@
     transform: scale(0.98);
 }
 
+.user-profile-action--like {
+    background: linear-gradient(135deg, #ff6b8a 0%, #ff4757 100%);
+    color: #fff;
+}
+
+.user-profile-action--like.is-liked {
+    background: rgba(255, 71, 87, 0.18);
+    color: #ff4757;
+    border: 1px solid rgba(255, 71, 87, 0.35);
+}
+
 .user-profile-action--follow {
     background: var(--bg-card);
     color: var(--text-main);
@@ -197,6 +208,16 @@
     background: color-mix(in srgb, var(--primary) 10%, var(--bg-card));
     border-color: color-mix(in srgb, var(--primary) 25%, var(--border-color));
     color: var(--text-main);
+}
+
+.user-profile-looking-pill {
+    border-radius: 9999px;
+    padding: 0.4rem 0.85rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    background: color-mix(in srgb, #ec4899 10%, var(--bg-card));
+    color: var(--text-main);
+    border: 1px solid color-mix(in srgb, #ec4899 28%, var(--border-color));
 }
 
 .user-profile-meetup-hint {
@@ -405,11 +426,13 @@
     position: absolute;
     bottom: 0.25rem;
     right: 0.25rem;
-    height: 0.875rem;
-    width: 0.875rem;
+    height: 1rem;
+    width: 1rem;
     border-radius: 9999px;
     border: 2px solid var(--bg-body);
     background: var(--color-success);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55);
+    animation: online-status-pulse 1.8s ease-out infinite;
 }
 
 @media (max-width: 1023px) {

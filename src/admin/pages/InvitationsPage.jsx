@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { adminApi } from '../api';
+import AdminCreateDemoInvitationForm from '../components/AdminCreateDemoInvitationForm';
 import { AppText } from "../../components/base";
 
 const TYPE_TABS = [
@@ -69,6 +70,8 @@ export default function InvitationsPage() {
     <>
             <AppText as="h1" className="db-h1">{t('admin_invitations_title')}</AppText>
             <AppText as="p" className="db-lead">{t('admin_invitations_lead')}</AppText>
+
+            <AdminCreateDemoInvitationForm onCreated={() => load(null)} />
 
             <div className="db-tabs">
                 {TYPE_TABS.map((tab) =>

@@ -158,7 +158,7 @@ export default function SocialInvitationCoverRightRail({
   committingStashId = null,
   /** @type {'private'|'dating'} */
   templateVariant = 'private',
-  /** Personal invite intent folder: dating | friendship | icebreaker */
+  /** Personal invite intent folder: dating | friendship | social */
   personalInviteCategory = 'dating'
 }) {
   const { t } = useTranslation();

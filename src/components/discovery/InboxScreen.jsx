@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { doc, getDoc } from 'firebase/firestore';
@@ -9,6 +9,7 @@ import {
   LuMessageCircle,
   LuSparkles,
   LuUtensilsCrossed,
+  LuX,
 } from 'react-icons/lu';
 import { db } from '../../firebase/config';
 import { useChat } from '../../context/ChatContext';
@@ -24,6 +25,7 @@ import {
   INBOX_CHAT_PREVIEW_LIMIT,
 } from '../../utils/inboxFormat';
 import { getPrivateInviteeDisplayName } from '../../utils/privateInviteAvailability';
+import DeleteSwipeRow from '../DeleteSwipeRow';
 import './inbox.css';
 import { AppText } from '../base';
 
@@ -259,12 +261,25 @@ function InvitesTab() {
 function ActivityTab() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { notifications, loading, markAsRead } = useNotifications();
+  const { notifications, loading, markAsRead, deleteNotification } = useNotifications();
+  const [openSwipeId, setOpenSwipeId] = useState(null);
 
   const activityItems = useMemo(
     () => notifications.filter(isInboxActivityNotification).slice(0, 25),
     [notifications]
   );
+
+  useEffect(() => {
+    if (!openSwipeId) return undefined;
+    const close = (e) => {
+      if (e.target.closest('.delete-swipe__action')) return;
+      const row = e.target.closest('.delete-swipe');
+      if (row?.dataset?.swipeId === openSwipeId) return;
+      setOpenSwipeId(null);
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [openSwipeId]);
 
   const formatTime = useCallback(
     (notif) => formatInboxRelativeTime(notif.createdAt, t),
@@ -283,17 +298,42 @@ function ActivityTab() {
       if (notif.type === 'greeting') {
         return t('inbox_activity_greeting', '{{name}} waved hi 👋', { name });
       }
+      if (notif.type === 'connect') {
+        return notif.message || notif.title || '';
+      }
       return notif.message || notif.title || '';
     },
     [t]
   );
 
+  const resolveActorId = useCallback(
+    (notif) =>
+      notif.fromUserId || notif.metadata?.senderId || notif.metadata?.likerId || null,
+    []
+  );
+
+  const removeItem = useCallback(
+    (notif) => {
+      setOpenSwipeId(null);
+      deleteNotification(notif.id, notif._collection || 'notifications');
+    },
+    [deleteNotification]
+  );
+
   const handleOpen = useCallback(
     (notif) => {
+      if (openSwipeId === notif.id) {
+        setOpenSwipeId(null);
+        return;
+      }
+      if (openSwipeId) {
+        setOpenSwipeId(null);
+        return;
+      }
       if (!notif.read) {
         markAsRead(notif.id, notif._collection || 'notifications');
       }
-      const uid = notif.fromUserId || notif.metadata?.senderId || notif.metadata?.likerId;
+      const uid = resolveActorId(notif);
       if (!uid) return;
       if (notif.type === 'like' && notif.metadata?.mutual) {
         navigate(`/chat/${uid}`);
@@ -301,7 +341,7 @@ function ActivityTab() {
       }
       navigate(`/profile/${uid}`);
     },
-    [markAsRead, navigate]
+    [markAsRead, navigate, openSwipeId, resolveActorId]
   );
 
   if (loading) return <InboxLoading />;
@@ -319,16 +359,46 @@ function ActivityTab() {
         <ul className="inbox-list">
           {activityItems.map((item) => (
             <li key={`${item._collection || 'n'}-${item.id}`}>
-              <button
-                type="button"
-                className={`inbox-activity-row inbox-row--button${!item.read ? ' inbox-activity-row--unread' : ''}`}
-                onClick={() => handleOpen(item)}
+              <DeleteSwipeRow
+                rowId={item.id}
+                isOpen={openSwipeId === item.id}
+                onOpenChange={(open) => setOpenSwipeId(open ? item.id : null)}
+                onDelete={() => removeItem(item)}
+                className={!item.read ? 'inbox-activity-swipe--unread' : ''}
               >
-                <AppText as="span" className="inbox-activity-row__text">
-                  {activityLabel(item)}
-                </AppText>
-                <AppText as="span" className="inbox-row__meta">{formatTime(item)}</AppText>
-              </button>
+                <div
+                  className={`inbox-activity-row${!item.read ? ' inbox-activity-row--unread' : ''}`}
+                  onClick={() => handleOpen(item)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleOpen(item);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <AppText as="span" className="inbox-activity-row__text">
+                    {activityLabel(item)}
+                  </AppText>
+                  <div className="inbox-activity-row__tail">
+                    <AppText as="span" className="inbox-row__meta">{formatTime(item)}</AppText>
+                    <button
+                      type="button"
+                      className="inbox-activity-row__dismiss"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        removeItem(item);
+                      }}
+                      aria-label={t('delete', 'Delete')}
+                      title={t('delete', 'Delete')}
+                    >
+                      <LuX size={16} aria-hidden />
+                    </button>
+                  </div>
+                </div>
+              </DeleteSwipeRow>
             </li>
           ))}
         </ul>
@@ -337,12 +407,23 @@ function ActivityTab() {
   );
 }
 
+const INBOX_TABS = new Set(['chats', 'invites', 'activity']);
+
 /**
  * Discovery inbox — action queue (invites), chat preview, social activity.
  */
 export default function InboxScreen({ defaultTab = 'invites' }) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const [searchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const initialTab = INBOX_TABS.has(tabFromUrl) ? tabFromUrl : defaultTab;
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  useEffect(() => {
+    if (INBOX_TABS.has(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
   const { pending, synced } = usePendingInvitesForMe();
   const { notifications } = useNotifications();
 

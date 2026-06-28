@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import AppBackButton from '../components/AppBackButton';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
@@ -70,9 +71,7 @@ const PasswordSettings = () => {
     <div className="settings-page">
             {/* Header */}
             <div className="settings-header">
-                <button onClick={() => navigate('/settings')} className="back-btn">
-                    <FaArrowLeft />
-                </button>
+                <AppBackButton fallback="/settings" />
                 <AppText as="h1">{t('password_settings_title', 'Password Settings')}</AppText>
                 <div style={{ width: '40px' }}></div>
             </div>

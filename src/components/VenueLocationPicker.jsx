@@ -1,330 +1,395 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { FaMapMarkerAlt, FaSearch, FaStore, FaStar, FaGlobe, FaTimes } from 'react-icons/fa';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { FaSearch, FaStore, FaGlobe, FaTimes, FaMapMarkerAlt } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { collection, query, where, getDocs, limit } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import LocationAutocomplete from './LocationAutocomplete';
+import { searchPublishedAppVenues } from '../utils/appVenueDirectory';
 import { sortDineBuddiesVenues } from '../utils/invitationVenueSearch';
 import { extractCityTokenFromAddress } from '../utils/locationUtils';
+import { resolveAppVenueFromGoogleSelection } from '../utils/resolveAppVenueFromGoogleSelection';
+import {
+  fetchGooglePlaceDetails,
+  fetchGoogleVenuePredictions,
+  newPlacesSessionToken,
+  resolveCitySearchBbox,
+} from '../utils/unifiedVenueSearch';
+import { PLACES_AUTOCOMPLETE_DEBOUNCE_MS } from '../utils/placesCostControl';
+import { useToast } from '../context/ToastContext';
 import './venue-search.css';
+import { AppText, AppTextInput } from './base';
 
 /**
- * VenueLocationPicker
- * Toggle between DineBuddies registered venues and Google Places search.
- *
- * Props mirror LocationAutocomplete:
- *   value, onChange, onSelect, city, countryCode, userLat, userLng, className
- *
- * When a DineBuddies venue is selected, onSelect receives the same shape as
- * LocationAutocomplete plus:
- *   { restaurantId, restaurantName, image, avatar, isDineBuddiesVenue: true }
- */import { AppText, AppTextInput } from "./base";
+ * Unified venue search — one bar, DineBuddies results first (same city),
+ * Google Places only when nothing matches in the app directory.
+ */
 const VenueLocationPicker = ({
   value,
   onChange,
   onSelect,
   city,
   countryCode,
+  region,
   userLat,
   userLng,
-  /** Invitation venue type (Restaurant, Cafe, …) — ranks matching partners & Google predictions. */
   invitationType,
   className = '',
-  compact = false
+  compact = false,
 }) => {
-  const { t } = useTranslation();
-  const [source, setSource] = useState('dinebuddies'); // 'dinebuddies' | 'google'
-  const [dbQuery, setDbQuery] = useState('');
+  const { t, i18n } = useTranslation();
+  const { showToast } = useToast();
   const [dbResults, setDbResults] = useState([]);
-  const [dbLoading, setDbLoading] = useState(false);
-  const [showDbDropdown, setShowDbDropdown] = useState(false);
+  const [googleResults, setGoogleResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [googleResolving, setGoogleResolving] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
   const wrapperRef = useRef(null);
   const debounceRef = useRef(null);
+  const searchRunRef = useRef(0);
+  const sessionTokenRef = useRef(newPlacesSessionToken());
+  const cityBboxRef = useRef(null);
 
-  // When parent prefills `location` (offers, deep links), mirror it into the DineBuddies field.
+  const lang = typeof i18n.language === 'string' ? i18n.language.split('-')[0] : 'en';
+  const query = String(value ?? '');
+
   useEffect(() => {
-    if (source !== 'dinebuddies') return;
-    const v = String(value ?? '').trim();
-    if (!v) return;
-    setDbQuery((prev) => String(prev ?? '').trim() === v ? prev : String(value ?? ''));
-  }, [source, value]);
+    let cancelled = false;
+    cityBboxRef.current = null;
+    (async () => {
+      const bbox = await resolveCitySearchBbox({
+        city,
+        countryCode,
+        region,
+        userLat,
+        userLng,
+      });
+      if (!cancelled) cityBboxRef.current = bbox;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [city, countryCode, region, userLat, userLng]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
-        setShowDbDropdown(false);
+        setShowDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Search DineBuddies venues
-  const searchDineBuddies = async (q) => {
-    if (!q || q.length < 2) {
-      setDbResults([]);
-      setShowDbDropdown(false);
-      return;
-    }
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    },
+    []
+  );
 
-    setDbLoading(true);
-    setShowDbDropdown(true);
+  const rotateSessionToken = useCallback(() => {
+    sessionTokenRef.current = newPlacesSessionToken();
+  }, []);
 
-    try {
-      const qLower = q.toLowerCase();
+  const runUnifiedSearch = useCallback(
+    async (q) => {
+      const trimmed = String(q || '').trim();
+      if (trimmed.length < 2) {
+        setDbResults([]);
+        setGoogleResults([]);
+        setSearchError('');
+        setShowDropdown(false);
+        setLoading(false);
+        return;
+      }
 
-      // Query published business profiles
-      const snap = await getDocs(
-        query(
-          collection(db, 'public_profiles'),
-          where('profileType', '==', 'business'),
-          where('businessPublic.isPublished', '==', true),
-          limit(30)
-        )
-      );
+      const runId = ++searchRunRef.current;
+      const isStale = () => runId !== searchRunRef.current;
 
-      const results = [];
-      snap.forEach((doc) => {
-        const data = doc.data();
-        const info = data.businessPublic || {};
-        const name = (data.displayName || '').toLowerCase();
-        const address = (info.address || info.city || '').toLowerCase();
-        const cityField = (info.city || '').toLowerCase();
+      setLoading(true);
+      setShowDropdown(true);
+      setSearchError('');
+      setGoogleResults([]);
 
-        // Basic partial match filter
-        if (name.includes(qLower) || address.includes(qLower) || cityField.includes(qLower)) {
-          results.push({
-            id: doc.id,
-            name: data.displayName || 'Venue',
-            address: info.address || info.city || '',
-            city: info.city || '',
-            lat: info.lat,
-            lng: info.lng,
-            image: info.coverImage || '',
-            avatar: data.avatarUrl || '',
-            businessType: info.businessType || 'Restaurant',
-            rating: null
-          });
+      try {
+        const dbRows = await searchPublishedAppVenues({
+          queryText: trimmed,
+          city,
+          countryCode,
+          scope: 'local',
+          userLat,
+          userLng,
+          maxResults: 10,
+        });
+        if (isStale()) return;
+
+        const ranked = sortDineBuddiesVenues(dbRows, city, invitationType, userLat, userLng);
+        setDbResults(ranked);
+
+        if (ranked.length === 0) {
+          try {
+            const google = await fetchGoogleVenuePredictions({
+              input: trimmed,
+              city,
+              countryCode,
+              region,
+              userLat,
+              userLng,
+              invitationType,
+              sessionToken: sessionTokenRef.current,
+              lang,
+              bbox: cityBboxRef.current,
+            });
+            if (isStale()) return;
+            setGoogleResults(google);
+            if (!google.length) {
+              setSearchError(
+                city
+                  ? t('venue_no_results_in_city', {
+                      city,
+                      defaultValue: 'No venues found in {{city}}.',
+                    })
+                  : t('location_no_results', 'No matching places. Try a different name.')
+              );
+            }
+          } catch (err) {
+            if (isStale()) return;
+            console.error('[VenueLocationPicker] Google search failed:', err);
+            setGoogleResults([]);
+            setSearchError(
+              err instanceof Error ? err.message : t('location_search_failed', 'Search failed')
+            );
+          }
+        } else {
+          setGoogleResults([]);
         }
-      });
+      } catch (err) {
+        if (isStale()) return;
+        console.error('[VenueLocationPicker] DB search failed:', err);
+        setDbResults([]);
+        setSearchError(t('location_search_failed', 'Search failed'));
+      } finally {
+        if (!isStale()) setLoading(false);
+      }
+    },
+    [city, countryCode, region, userLat, userLng, invitationType, lang, t]
+  );
 
-      const ranked = sortDineBuddiesVenues(results, city, invitationType, userLat, userLng);
-      setDbResults(ranked.slice(0, 10));
-    } catch (err) {
-      console.error('DineBuddies venue search error:', err);
-      setDbResults([]);
-    } finally {
-      setDbLoading(false);
-    }
-  };
-
-  const handleDbInput = (e) => {
+  const handleInput = (e) => {
+    onChange(e);
     const val = e.target.value;
-    setDbQuery(val);
-
-    // Sync with parent onChange so the form value stays consistent
-    onChange({ target: { value: val, name: 'location' } });
-
     clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => searchDineBuddies(val), 350);
+    debounceRef.current = setTimeout(() => runUnifiedSearch(val), PLACES_AUTOCOMPLETE_DEBOUNCE_MS);
   };
 
   const handleDbSelect = (venue) => {
-    setDbQuery(venue.name);
-    setShowDbDropdown(false);
-
-    // Update parent form value
+    setShowDropdown(false);
+    setDbResults([]);
+    setGoogleResults([]);
     onChange({ target: { value: venue.name, name: 'location' } });
-
-    // Call parent onSelect with enriched data
     onSelect({
       name: venue.name,
       fullAddress: venue.address,
       lat: venue.lat,
       lng: venue.lng,
-      city: venue.city || extractCityTokenFromAddress(venue.address) || '',
+      city: venue.city || extractCityTokenFromAddress(venue.address) || city || '',
+      countryCode: venue.countryCode || countryCode || '',
       restaurantId: venue.id,
       restaurantName: venue.name,
       image: venue.image,
-      avatar: venue.avatar,
+      avatar: venue.image,
       isDineBuddiesVenue: true,
-      photos: venue.image ? [venue.image] : []
+      photos: venue.image ? [venue.image] : [],
     });
   };
 
-  const clearSelection = () => {
-    setDbQuery('');
-    onChange({ target: { value: '', name: 'location' } });
-    setDbResults([]);
-    setShowDbDropdown(false);
-  };
+  const handleGoogleSelect = async (place) => {
+    setShowDropdown(false);
+    setGoogleResolving(true);
+    try {
+      const details = await fetchGooglePlaceDetails({
+        placeId: place.placeId,
+        sessionToken: sessionTokenRef.current,
+        countryCode,
+        lang,
+      });
+      rotateSessionToken();
 
-  const switchSource = (newSource) => {
-    setSource(newSource);
-    setDbQuery('');
-    setDbResults([]);
-    setShowDbDropdown(false);
-    // Clear parent value too
-    onChange({ target: { value: '', name: 'location' } });
-  };
+      const label = details.name || details.fullAddress || place.name;
+      onChange({ target: { value: label, name: 'location' } });
 
-  return (
-    <div ref={wrapperRef} className={`venue-location-picker${compact ? ' venue-location-picker--compact' : ''}`}>
-            {/* Toggle */}
-            <div className={`venue-search-segment${compact ? ' venue-search-segment--compact' : ''}`}>
-                <button
-          type="button"
-          onClick={() => switchSource('dinebuddies')}
-          className={`venue-search-segment__btn venue-search-segment__btn--db${source === 'dinebuddies' ? ' venue-search-segment__btn--active' : ''}`}
-          title={t('dinbuddies_venues', 'DineBuddies Venues')}
-          aria-label={t('dinbuddies_venues', 'DineBuddies Venues')}>
-          
-                    <AppText as="span" className="venue-search-segment__icon-badge venue-search-segment__icon-badge--db">
-                        <FaStore aria-hidden />
-                    </AppText>
-                    <AppText as="span" className="venue-search-segment__label">
-                        {t('dinbuddies_venues_short', 'db places')}
-                    </AppText>
-                </button>
+      const resolved = await resolveAppVenueFromGoogleSelection({
+        ...details,
+        name: details.name || place.name,
+      });
 
-                <button
-          type="button"
-          onClick={() => switchSource('google')}
-          className={`venue-search-segment__btn venue-search-segment__btn--google${source === 'google' ? ' venue-search-segment__btn--active' : ''}`}
-          title={t('google_places', 'Google Places')}
-          aria-label={t('google_places', 'Google Places')}>
-          
-                    <AppText as="span" className="venue-search-segment__icon-badge venue-search-segment__icon-badge--google">
-                        <FaGlobe aria-hidden />
-                    </AppText>
-                    <AppText as="span" className="venue-search-segment__label">
-                        {t('google_places_short', 'Google places')}
-                    </AppText>
-                </button>
-            </div>
-
-            {source === 'google' && !compact &&
-      <AppText as="p" className="venue-search-hint">
-                    {t('venue_google_search_hint', 'Search by Google Places within your detected city.')}
-                </AppText>
+      if (resolved?.isDineBuddiesVenue && resolved?.matchedFromGoogle) {
+        showToast(
+          t(
+            'venue_resolved_to_dinebuddies',
+            'This place is listed on DineBuddies — linked to the official venue.'
+          ),
+          'success'
+        );
       }
 
-            {/* DineBuddies search input */}
-            {source === 'dinebuddies' &&
+      onSelect(resolved);
+    } catch (err) {
+      console.error('[VenueLocationPicker] Google select failed:', err);
+      showToast(t('location_search_failed', 'Search failed'), 'error');
+    } finally {
+      setGoogleResolving(false);
+      setDbResults([]);
+      setGoogleResults([]);
+    }
+  };
+
+  const clearSelection = () => {
+    searchRunRef.current += 1;
+    onChange({ target: { value: '', name: 'location' } });
+    setDbResults([]);
+    setGoogleResults([]);
+    setSearchError('');
+    setShowDropdown(false);
+    rotateSessionToken();
+  };
+
+  const cityLabel = String(city || '').trim();
+  const placeholder = cityLabel
+    ? t('venue_unified_search_placeholder', {
+        city: cityLabel,
+        defaultValue: 'Search venues in {{city}}…',
+      })
+    : t('search_dineBuddies_venue', 'Search registered venues on DineBuddies...');
+
+  const showGoogleSection = dbResults.length === 0 && googleResults.length > 0;
+  const showEmpty =
+    !loading &&
+    query.trim().length >= 2 &&
+    dbResults.length === 0 &&
+    googleResults.length === 0;
+
+  return (
+    <div
+      ref={wrapperRef}
+      className={`venue-location-picker venue-location-picker--unified${compact ? ' venue-location-picker--compact' : ''}`}
+    >
+      {!compact && cityLabel ? (
+        <AppText as="p" className="venue-search-hint">
+          {t('venue_unified_search_hint', {
+            city: cityLabel,
+            defaultValue: 'DineBuddies venues in {{city}} first — Google if not listed.',
+          })}
+        </AppText>
+      ) : null}
+
       <div style={{ position: 'relative' }}>
-                    <AppTextInput
+        <AppTextInput
           type="text"
           name="location"
-          value={dbQuery}
-          onChange={handleDbInput}
-          onFocus={() => dbQuery.length >= 2 && setShowDbDropdown(true)}
-          placeholder={t('search_dineBuddies_venue', 'Search registered venues on DineBuddies...')}
+          value={query}
+          onChange={handleInput}
+          onFocus={() => query.trim().length >= 2 && setShowDropdown(true)}
+          placeholder={placeholder}
           className={`input-field ${className}`}
           autoComplete="off"
           required
-          style={{ paddingRight: dbQuery ? '36px' : undefined }} />
-        
+          style={{ paddingRight: query ? '36px' : undefined }}
+        />
 
-                    {/* Loading spinner or clear button */}
-                    <div style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)' }}>
-                        {dbLoading ?
-          <FaSearch style={{ opacity: 0.4, fontSize: '0.85rem', animation: 'spin 1s linear infinite' }} /> :
-          dbQuery ?
-          <FaTimes
-            style={{ opacity: 0.5, cursor: 'pointer', fontSize: '0.85rem' }}
-            onClick={clearSelection} /> :
+        <div style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)' }}>
+          {loading || googleResolving ? (
+            <FaSearch
+              style={{ opacity: 0.4, fontSize: '0.85rem', animation: 'spin 1s linear infinite' }}
+            />
+          ) : query ? (
+            <FaTimes
+              style={{ opacity: 0.5, cursor: 'pointer', fontSize: '0.85rem' }}
+              onClick={clearSelection}
+            />
+          ) : null}
+        </div>
 
-          null
-          }
+        {showDropdown && (
+          <div className="venue-search-dropdown venue-search-dropdown--tight">
+            {loading && (
+              <div className="venue-search-dropdown__message">
+                {t('searching', 'Searching...')}
+              </div>
+            )}
+
+            {!loading && dbResults.length > 0 && (
+              <>
+                <AppText as="div" className="venue-search-dropdown__section-title">
+                  <FaStore aria-hidden /> {t('venue_search_section_dinebuddies', 'DineBuddies')}
+                </AppText>
+                {dbResults.map((venue) => (
+                  <div
+                    key={venue.id}
+                    onClick={() => handleDbSelect(venue)}
+                    className="venue-search-row"
+                    role="option"
+                  >
+                    <div className="venue-search-partner-thumb">
+                      {venue.image ? (
+                        <img
+                          src={venue.image}
+                          alt={venue.name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <FaStore style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }} />
+                      )}
                     </div>
+                    <div className="venue-search-row__body">
+                      <div className="venue-search-row__title">{venue.name}</div>
+                      <div className="venue-search-row__subtitle">
+                        {venue.address || venue.city}
+                      </div>
+                    </div>
+                    <div className="venue-search-badge">DB ✓</div>
+                  </div>
+                ))}
+              </>
+            )}
 
-                    {/* Dropdown */}
-                    {showDbDropdown &&
-        <div className="venue-search-dropdown venue-search-dropdown--tight">
-                            {dbLoading &&
-          <div className="venue-search-dropdown__message">
-                                    {t('searching', 'Searching...')}
-                                </div>
-          }
+            {!loading && showGoogleSection && (
+              <>
+                <AppText as="div" className="venue-search-dropdown__section-title">
+                  <FaGlobe aria-hidden /> {t('venue_search_section_google', 'Google Places')}
+                </AppText>
+                {googleResults.map((place) => (
+                  <div
+                    key={place.placeId}
+                    onClick={() => handleGoogleSelect(place)}
+                    className="venue-search-row venue-search-row--google"
+                    role="option"
+                  >
+                    <div className="venue-search-icon">
+                      <FaMapMarkerAlt style={{ color: '#0ea5e9' }} />
+                    </div>
+                    <div className="venue-search-row__body">
+                      <div className="venue-search-row__title venue-search-row__title--google">
+                        {place.name}
+                      </div>
+                      <div className="venue-search-row__subtitle venue-search-row__subtitle--google">
+                        {place.address || place.full_description}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
 
-                            {!dbLoading && dbResults.length === 0 && dbQuery.length >= 2 &&
-          <div className="venue-search-dropdown__message">
-                                    <div style={{ marginBottom: 6 }}>😕 {t('no_venues_found', 'No registered venues found')}</div>
-                                    <div className="venue-search-dropdown__message-sub">
-                                        {t('try_osm_places_hint', 'Search all places (OpenStreetMap) for unregistered venues')}
-                                    </div>
-                                </div>
-          }
-
-                            {dbResults.map((venue) =>
-          <div
-            key={venue.id}
-            onClick={() => handleDbSelect(venue)}
-            className="venue-search-row">
-            
-                                    {/* Venue avatar/image */}
-                                    <div className="venue-search-partner-thumb">
-                                        {venue.avatar || venue.image ?
-              <img
-                src={venue.avatar || venue.image}
-                alt={venue.name}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> :
-
-              <FaStore style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }} />
-              }
-                                    </div>
-
-                                    <div className="venue-search-row__body">
-                                        <div className="venue-search-row__title">{venue.name}</div>
-                                        <div className="venue-search-row__subtitle">
-                                            {venue.address || venue.city}
-                                        </div>
-                                    </div>
-
-                                    <div className="venue-search-badge">DB ✓</div>
-                                </div>
-          )}
-
-                            {/* Hint to switch to Google */}
-                            {!dbLoading &&
-          <div
-            onClick={() => switchSource('google')}
-            className="venue-search-footer-hint">
-            
-                                    <FaGlobe style={{ color: 'var(--text-muted)', fontSize: '1rem' }} />
-                                    <div>
-                                        <div className="venue-search-footer-hint__title">
-                                            {t('switch_to_google', 'Search Google Places instead')}
-                                        </div>
-                                        <div className="venue-search-footer-hint__subtitle">
-                                            {t('for_unregistered_venues', 'For venues not yet on DineBuddies')}
-                                        </div>
-                                    </div>
-                                </div>
-          }
-                        </div>
-        }
-                </div>
-      }
-
-            {/* Mount Google field only when active — avoids hidden `required` input (browser "not focusable" bug). */}
-            {source === 'google' &&
-      <LocationAutocomplete
-        value={value}
-        onChange={onChange}
-        onSelect={onSelect}
-        city={city}
-        countryCode={countryCode}
-        userLat={userLat}
-        userLng={userLng}
-        invitationType={invitationType}
-        className={className}
-        useGooglePlacesMinimal />
-
-      }
-        </div>);
-
+            {showEmpty && (
+              <div className="venue-search-dropdown__message">
+                {searchError ||
+                  t('no_venues_found', 'No registered venues found')}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default VenueLocationPicker;

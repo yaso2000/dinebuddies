@@ -1,4 +1,32 @@
-/* Inbox — explicit styles (Tailwind not loaded on /search/inbox). */
+/* Inbox — theme-aware (day / night via global --bg-* / --text-* tokens). */
+
+.inbox-hub-link {
+    position: relative;
+    text-decoration: none;
+}
+
+.inbox-hub-link__badge {
+    position: absolute;
+    top: -3px;
+    inset-inline-end: -3px;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.25rem;
+    border-radius: 999px;
+    background: var(--primary);
+    color: var(--text-on-brand, #fff);
+    font-size: 0.625rem;
+    font-weight: 800;
+    line-height: 1.1rem;
+    text-align: center;
+    border: 2px solid var(--bg-main);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.discovery-icon-btn.inbox-hub-link .inbox-hub-link__badge {
+    top: 4px;
+    inset-inline-end: 4px;
+}
 
 .inbox-shell {
     display: flex;
@@ -8,8 +36,8 @@
     min-height: 100vh;
     min-height: 100dvh;
     margin: 0 auto;
-    background: #0a0a0a;
-    color: #fff;
+    background: var(--bg-main);
+    color: var(--text-main);
 }
 
 .inbox-header {
@@ -17,7 +45,8 @@
     align-items: center;
     gap: 0.75rem;
     padding: max(0.75rem, env(safe-area-inset-top)) 1rem 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-card);
 }
 
 .inbox-back {
@@ -28,9 +57,16 @@
     width: 2.5rem;
     height: 2.5rem;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
+    border: 1px solid var(--border-color);
+    background: var(--bg-hover);
+    color: var(--text-main);
     text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.inbox-back:hover {
+    background: color-mix(in srgb, var(--primary) 10%, var(--bg-hover));
+    border-color: color-mix(in srgb, var(--primary) 28%, var(--border-color));
 }
 
 .inbox-header__title {
@@ -38,13 +74,15 @@
     font-size: 1.25rem;
     font-weight: 800;
     line-height: 1.2;
+    color: var(--text-heading, var(--text-main));
 }
 
 .inbox-tabs {
     display: flex;
     gap: 0.35rem;
     padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-card);
 }
 
 .inbox-tab {
@@ -57,28 +95,35 @@
     gap: 0.2rem;
     min-width: 0;
     padding: 0.5rem 0.25rem;
-    border: none;
+    border: 1px solid transparent;
     border-radius: 0.75rem;
     background: transparent;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted);
     font-size: 0.625rem;
     font-weight: 600;
     line-height: 1.2;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.inbox-tab:hover {
+    color: var(--text-main);
+    background: var(--bg-hover);
 }
 
 .inbox-tab--active {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: color-mix(in srgb, var(--primary) 12%, var(--bg-card));
+    border-color: color-mix(in srgb, var(--primary) 30%, var(--border-color));
+    color: var(--text-main);
 }
 
 .inbox-tab--highlight {
-    box-shadow: inset 0 0 0 1px rgba(232, 110, 46, 0.35);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent);
 }
 
 .inbox-tab--highlight.inbox-tab--active {
-    color: #e86e2e;
+    color: var(--primary);
 }
 
 .inbox-tab__dot {
@@ -88,7 +133,7 @@
     width: 0.4rem;
     height: 0.4rem;
     border-radius: 999px;
-    background: #e86e2e;
+    background: var(--primary);
 }
 
 .inbox-body {
@@ -97,6 +142,7 @@
     -webkit-overflow-scrolling: touch;
     padding: 1rem;
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    background: var(--bg-main);
 }
 
 .inbox-list {
@@ -114,8 +160,9 @@
     gap: 0.75rem;
     padding: 0.75rem;
     border-radius: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    box-shadow: var(--shadow-premium, none);
 }
 
 .inbox-row--start {
@@ -123,8 +170,8 @@
 }
 
 .inbox-row--premium {
-    border-color: rgba(232, 110, 46, 0.4);
-    background: rgba(232, 110, 46, 0.1);
+    border-color: color-mix(in srgb, var(--primary) 42%, var(--border-color));
+    background: color-mix(in srgb, var(--primary) 10%, var(--bg-card));
 }
 
 .inbox-avatar {
@@ -133,7 +180,8 @@
     height: 3rem;
     border-radius: 999px;
     object-fit: cover;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--bg-elevated, var(--bg-secondary));
+    border: 1px solid var(--border-color);
 }
 
 .inbox-row__main {
@@ -151,7 +199,7 @@
 .inbox-row__title {
     font-size: 0.875rem;
     font-weight: 700;
-    color: #fff;
+    color: var(--text-heading, var(--text-main));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -167,13 +215,13 @@
 .inbox-row__meta {
     flex-shrink: 0;
     font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-muted);
 }
 
 .inbox-row__preview {
     margin: 0.15rem 0 0;
     font-size: 0.8125rem;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--text-secondary, var(--text-muted));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -182,7 +230,7 @@
 .inbox-row__sub {
     margin: 0.2rem 0 0;
     font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--text-secondary, var(--text-muted));
 }
 
 .inbox-badge {
@@ -194,8 +242,8 @@
     height: 1.25rem;
     padding: 0 0.35rem;
     border-radius: 999px;
-    background: #e86e2e;
-    color: #fff;
+    background: var(--primary);
+    color: var(--text-on-brand, #fff);
     font-size: 0.625rem;
     font-weight: 700;
 }
@@ -204,8 +252,8 @@
     min-width: 1.1rem;
     padding: 0 0.25rem;
     border-radius: 999px;
-    background: rgba(232, 110, 46, 0.85);
-    color: #fff;
+    background: color-mix(in srgb, var(--primary) 88%, #000);
+    color: var(--text-on-brand, #fff);
     font-size: 0.625rem;
     font-weight: 800;
     line-height: 1.25rem;
@@ -227,7 +275,7 @@
     text-align: center;
     font-size: 0.875rem;
     line-height: 1.5;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--text-muted);
 }
 
 .inbox-view-all {
@@ -238,20 +286,26 @@
     margin: 0.75rem 1rem 1.25rem;
     padding: 0.75rem 1rem;
     border-radius: 0.875rem;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.06);
-    color: #fff;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-main);
     font-size: 0.875rem;
     font-weight: 700;
     text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.inbox-view-all:hover {
+    background: var(--bg-hover);
+    border-color: color-mix(in srgb, var(--primary) 28%, var(--border-color));
 }
 
 .inbox-view-all__badge {
     min-width: 1.25rem;
     padding: 0 0.35rem;
     border-radius: 999px;
-    background: #e86e2e;
-    color: #fff;
+    background: var(--primary);
+    color: var(--text-on-brand, #fff);
     font-size: 0.6875rem;
     font-weight: 800;
     line-height: 1.35rem;
@@ -265,7 +319,7 @@
     margin: 0;
     padding: 0.75rem 1rem;
     font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-muted);
     text-align: center;
 }
 
@@ -284,27 +338,84 @@
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--text-muted);
 }
 
 .inbox-section--gifts {
     padding-top: 0.25rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid var(--border-color);
 }
 
-.inbox-activity-row--unread {
-    border-color: rgba(232, 110, 46, 0.35);
-    background: rgba(232, 110, 46, 0.08);
+/* ── Activity rows: delete-only swipe + dismiss (X) ── */
+.delete-swipe {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    border-radius: 1rem;
+    direction: ltr;
+}
+
+.delete-swipe__actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 80px;
+    display: flex;
+    z-index: 0;
+}
+
+.delete-swipe__action {
+    flex: 1;
+    min-height: 100%;
+    border: none;
+    padding: 0 0.25rem;
+    background: #fe2c55;
+    color: #fff;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.2;
+    transition: filter 0.15s ease;
+}
+
+.delete-swipe__action:active {
+    filter: brightness(0.92);
+}
+
+.delete-swipe__slide {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    background: transparent;
+    will-change: transform;
+    transition: transform 0.22s cubic-bezier(0.25, 0.8, 0.25, 1);
+    touch-action: pan-y;
+}
+
+.delete-swipe--dragging .delete-swipe__slide {
+    transition: none;
+    touch-action: none;
+}
+
+.delete-swipe__front {
+    width: 100%;
+    box-sizing: border-box;
+    background: transparent;
 }
 
 .inbox-icon-gift {
     flex-shrink: 0;
-    color: #e86e2e;
+    color: var(--primary);
 }
 
 .inbox-icon-dining {
     flex-shrink: 0;
-    color: #34d399;
+    color: var(--color-success, #34d399);
 }
 
 .inbox-activity-row {
@@ -312,13 +423,104 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
+    width: 100%;
     padding: 0.75rem;
     border-radius: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    cursor: pointer;
+    text-align: inherit;
+    font: inherit;
+    color: var(--text-main);
+    box-sizing: border-box;
+    box-shadow: var(--shadow-premium, none);
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.inbox-activity-row--unread {
+    border-color: color-mix(in srgb, var(--primary) 38%, var(--border-color));
+    background: color-mix(in srgb, var(--primary) 9%, var(--bg-card));
 }
 
 .inbox-activity-row__text {
+    flex: 1;
+    min-width: 0;
     font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.85);
+    color: var(--text-secondary, var(--text-main));
+}
+
+.inbox-activity-row__tail {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.inbox-activity-row__dismiss {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.inbox-activity-row__dismiss:hover {
+    background: color-mix(in srgb, var(--color-danger, #ef4444) 14%, var(--bg-card));
+    color: var(--color-danger, #ef4444);
+}
+
+.inbox-activity-row__dismiss:active {
+    transform: scale(0.94);
+}
+
+/* ── Light theme: brighter cards, sharper borders ── */
+[data-theme='light'] .inbox-shell,
+[data-theme='light'] .inbox-body {
+    background: var(--bg-main);
+}
+
+[data-theme='light'] .inbox-header,
+[data-theme='light'] .inbox-tabs {
+    background: #ffffff;
+}
+
+[data-theme='light'] .inbox-row,
+[data-theme='light'] .inbox-activity-row {
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, 0.12);
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme='light'] .inbox-row--premium,
+[data-theme='light'] .inbox-activity-row--unread {
+    background: color-mix(in srgb, var(--primary) 7%, #ffffff);
+    border-color: color-mix(in srgb, var(--primary) 32%, rgba(15, 23, 42, 0.12));
+}
+
+[data-theme='light'] .inbox-view-all {
+    background: #ffffff;
+}
+
+[data-theme='light'] .inbox-activity-row__dismiss:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+/* ── Dark theme: subtle glass cards ── */
+[data-theme='dark'] .inbox-header,
+[data-theme='dark'] .inbox-tabs {
+    background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+}
+
+[data-theme='dark'] .inbox-row,
+[data-theme='dark'] .inbox-activity-row {
+    background: color-mix(in srgb, var(--bg-card) 88%, transparent);
 }

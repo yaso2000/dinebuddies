@@ -1,29 +1,30 @@
 import React from 'react';
+import AppBackButton from '../components/AppBackButton';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { FaArrowLeft } from 'react-icons/fa';
 import ProSubscription from './business-pro/ProSubscription';
+import { getPurchaseCredits, getSavedCredits } from '../utils/walletCredits';
 import './SettingsPages.css';
 
 /**
- * Consumer accounts: no subscription tiers — only Dine Credits.
+ * Consumer accounts: purchase + savings wallets.
  * Business accounts: Free vs Paid ($29/mo) + link to credits wallet.
- */import { AppText } from "../components/base";
+ */
+import { AppText } from "../components/base";
 const SubscriptionSettings = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { userProfile, isBusiness } = useAuth();
 
-  const freeCr = Math.max(0, Number(userProfile?.freeCredits) || 0);
-  const paidCr = Math.max(0, Number(userProfile?.paidCredits) || 0);
+  const purchaseCr = getPurchaseCredits(userProfile);
+  const savedCr = getSavedCredits(userProfile);
 
   return (
     <div className="settings-page">
             <div className="settings-header">
-                <button type="button" onClick={() => navigate('/settings')} className="back-btn">
-                    <FaArrowLeft />
-                </button>
+                <AppBackButton fallback="/settings" />
                 <AppText as="h1">{t('subscription_billing', 'Subscription & billing')}</AppText>
                 <div style={{ width: 40 }} />
             </div>
@@ -35,13 +36,13 @@ const SubscriptionSettings = () => {
                         <AppText as="p" className="settings-description">
                             {t(
               'consumer_no_plans',
-              'Your Dine Credits pay for private invites, date invites, AI, and boosts — one balance (free + paid; free is used first). Partners use the same credit model from their wallet. Final per-use prices may be tuned later.'
+              'Your purchase wallet pays for private invites, AI, boosts, and sending gifts. Gifts you receive accumulate in your savings wallet at half the sent value — the two never mix.'
             )}
                         </AppText>
                         <div style={{ marginTop: 12, fontWeight: 800 }}>
-                            {t('credits_balance_short', 'Credits')}: {freeCr + paidCr}{' '}
+                            {t('purchase_wallet_title', 'Purchase wallet')}: {purchaseCr}{' '}
                             <AppText as="span" style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                                ({t('free', 'free')} {freeCr} + {t('paid', 'paid')} {paidCr})
+                                · {t('savings_wallet_title', 'Savings wallet')}: {savedCr}
                             </AppText>
                         </div>
                         <button

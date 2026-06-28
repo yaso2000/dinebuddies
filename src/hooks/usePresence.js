@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
-import { ref, set, onDisconnect, serverTimestamp, get } from 'firebase/database';
+import { useEffect, useState } from 'react';
+import { ref, set, onDisconnect, serverTimestamp, get, onValue } from 'firebase/database';
 import { rtdb } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { setUserOnline, setUserOffline } from '../utils/chatUtils';
 
 /**
  * Presence tracking using Firebase Realtime Database.
@@ -32,6 +33,7 @@ export const usePresence = () => {
                 online: true,
                 lastSeen: serverTimestamp()
             });
+            await setUserOnline(uid);
         };
 
         goOnline().catch(err => console.warn('Presence online failed:', err));
@@ -42,6 +44,7 @@ export const usePresence = () => {
                 online: false,
                 lastSeen: serverTimestamp()
             }).catch(() => {});
+            setUserOffline(uid).catch(() => {});
         };
     }, [currentUser?.uid]);
 
@@ -54,9 +57,11 @@ export const usePresence = () => {
         const handleVisibilityChange = () => {
             if (document.hidden) {
                 set(presenceRef, { online: false, lastSeen: serverTimestamp() }).catch(() => {});
+                setUserOffline(uid).catch(() => {});
             } else {
                 onDisconnect(presenceRef).set({ online: false, lastSeen: serverTimestamp() });
                 set(presenceRef, { online: true, lastSeen: serverTimestamp() }).catch(() => {});
+                setUserOnline(uid).catch(() => {});
             }
         };
 
@@ -74,6 +79,7 @@ export const usePresence = () => {
             // onDisconnect() already registered above handles this server-side.
             // This is a best-effort synchronous fallback for same-tab navigation.
             set(presenceRef, { online: false, lastSeen: serverTimestamp() }).catch(() => {});
+            setUserOffline(uid).catch(() => {});
         };
 
         window.addEventListener('beforeunload', handleBeforeUnload);
@@ -95,3 +101,34 @@ export const getUserPresence = async (uid) => {
         return { online: false, lastSeen: null };
     }
 };
+
+/**
+ * Live online status for another member (RTDB presence).
+ * @param {string | null | undefined} uid
+ * @param {{ fallback?: boolean }} [options]
+ */
+export function useUserPresence(uid, { fallback = false } = {}) {
+    const [online, setOnline] = useState(Boolean(fallback));
+
+    useEffect(() => {
+        if (!uid) {
+            setOnline(false);
+            return undefined;
+        }
+
+        setOnline(Boolean(fallback));
+        const presenceRef = ref(rtdb, `presence/${uid}`);
+        const unsub = onValue(
+            presenceRef,
+            (snap) => {
+                const val = snap.val();
+                setOnline(Boolean(val?.online));
+            },
+            () => setOnline(Boolean(fallback))
+        );
+
+        return unsub;
+    }, [uid, fallback]);
+
+    return online;
+}
