@@ -79,6 +79,10 @@ const REPORT_ALLOWED_KEYS = new Set([
     'metadata'
 ]);
 
+function isConfiguredSuperOwner(uid, email) {
+    return SUPER_OWNER_UIDS.includes(uid) || SUPER_OWNER_EMAILS.includes(String(email || '').toLowerCase());
+}
+
 function assertAllowedKeys(data, allowedKeys, label) {
     const payload = data && typeof data === 'object' ? data : {};
     const unknownKeys = Object.keys(payload).filter((key) => !allowedKeys.has(key));
@@ -256,12 +260,8 @@ async function assertAdminContext(context) {
     }
     const requesterUid = context.auth.uid;
     const requesterEmail = (context.auth.token.email || '').toLowerCase();
-    const isSuperOwner = SUPER_OWNER_UIDS.includes(requesterUid) || SUPER_OWNER_EMAILS.includes(requesterEmail);
+    const isSuperOwner = isConfiguredSuperOwner(requesterUid, requesterEmail) || context.auth.token.superOwner === true;
     if (isSuperOwner || context.auth.token.admin === true) return { requesterUid, isSuperOwner };
-
-    const requesterDoc = await db.collection('users').doc(requesterUid).get();
-    const requesterRole = requesterDoc.exists ? requesterDoc.data()?.role : null;
-    if (requesterRole === 'admin') return { requesterUid, isSuperOwner: false };
 
     throw new functions.https.HttpsError('permission-denied', 'Admin privileges required.');
 }
@@ -1172,7 +1172,7 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
 
     const requesterUid = context.auth.uid;
     const requesterEmail = (context.auth.token.email || '').toLowerCase();
-    const isSuperOwner = SUPER_OWNER_UIDS.includes(requesterUid) || SUPER_OWNER_EMAILS.includes(requesterEmail);
+    const isSuperOwner = isConfiguredSuperOwner(requesterUid, requesterEmail) || context.auth.token.superOwner === true;
     if (!isSuperOwner) {
         throw new functions.https.HttpsError('permission-denied', 'Only super owners can grant admin role.');
     }
@@ -1189,9 +1189,14 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
         adminGrantedBy: requesterUid
     }, { merge: true });
 
-    // Set both 'admin' and 'superOwner' Custom Claims for token-based rule evaluation.
-    // superOwner allows the user to pass isSuperOwner() checks in firestore.rules.
-    await admin.auth().setCustomUserClaims(targetUid, { admin: true, superOwner: isSuperOwner });
+    const targetUser = await admin.auth().getUser(targetUid);
+    const currentClaims = targetUser.customClaims || {};
+    const targetIsConfiguredSuperOwner = isConfiguredSuperOwner(targetUid, targetUser.email);
+    await admin.auth().setCustomUserClaims(targetUid, {
+        ...currentClaims,
+        admin: true,
+        superOwner: currentClaims.superOwner === true || targetIsConfiguredSuperOwner,
+    });
 
     return { success: true, targetUid };
 });
