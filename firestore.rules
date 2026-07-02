@@ -17,8 +17,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() &&
              (request.auth.token.admin == true ||
-              request.auth.token.role == 'admin' ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+              request.auth.token.role == 'admin');
     }
 
     // Super owner check via Custom Claims only (no hardcoded emails or UIDs).
@@ -101,6 +100,163 @@ service cloud.firestore {
              (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
+
+    function ownerServerManagedUserFields() {
+      return [
+        'adminGrantedAt',
+        'adminGrantedBy',
+        'aiCreditsUsedThisMonth',
+        'aiLastResetMonth',
+        'banned',
+        'bannedAt',
+        'communityMembers',
+        'currentPlan',
+        'freeCredits',
+        'joinedCommunities',
+        'lastCreditGrantedAt',
+        'lastPrivateResetMonth',
+        'moderationNotes',
+        'offerCredits',
+        'offerSlotCredits',
+        'ownedCommunities',
+        'paidCredits',
+        'purchasedPrivateCredits',
+        'reputation',
+        'stripeCustomerId',
+        'stripeSubscriptionId',
+        'subscriptionEndDate',
+        'subscriptionId',
+        'subscriptionStartDate',
+        'subscriptionStatus',
+        'subscriptionTier',
+        'totalCreditsPurchased',
+        'totalCreditsSpent',
+        'usedPrivateCreditsThisMonth',
+        'usedPrivateCreditsThisWeek',
+        'weeklyPrivateQuota'
+      ];
+    }
+
+    function ownerAllowedUserFields() {
+      return [
+        'accountType',
+        'authEmail',
+        'avatar',
+        'avatarUrl',
+        'bio',
+        'blockedUserIds',
+        'businessInfo',
+        'businessProfileSetupPending',
+        'city',
+        'country',
+        'countryCode',
+        'created_at',
+        'created_time',
+        'displayName',
+        'display_name',
+        'email',
+        'emailVerified',
+        'fcmTokens',
+        'followersCount',
+        'following',
+        'isBusiness',
+        'isGuest',
+        'isOnline',
+        'isProfileComplete',
+        'lastSeen',
+        'last_active_time',
+        'location',
+        'mutedUserIds',
+        'name',
+        'pendingBusinessRegistration',
+        'phone',
+        'photoURL',
+        'photo_url',
+        'registrationIntent',
+        'role',
+        'shortDescription',
+        'uid',
+        'updatedAt',
+        'website'
+      ];
+    }
+
+    function hasProtectedBusinessInfoWrite() {
+      return request.resource.data.get('businessInfo', {}).keys().hasAny(['customLimits']);
+    }
+
+    function hasProtectedBusinessInfoUpdate() {
+      return request.resource.data.get('businessInfo', {})
+        .diff(resource.data.get('businessInfo', {}))
+        .affectedKeys()
+        .hasAny(['customLimits']);
+    }
+
+    function hasOwnerServerManagedUserWrite() {
+      return request.resource.data.keys().hasAny(ownerServerManagedUserFields()) ||
+             hasProtectedBusinessInfoWrite();
+    }
+
+    function hasOwnerServerManagedUserUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(ownerServerManagedUserFields()) ||
+             hasProtectedBusinessInfoUpdate();
+    }
+
+    function hasOwnerRoleOrAccountTypeUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'accountType']);
+    }
+
+    function hasValidAuthEmailMirror() {
+      return (!request.resource.data.keys().hasAny(['emailVerified']) ||
+              request.resource.data.emailVerified == request.auth.token.email_verified) &&
+             (!request.resource.data.keys().hasAny(['authEmail']) ||
+              request.resource.data.authEmail == request.auth.token.email);
+    }
+
+    function isSafePersonalUserWrite() {
+      return request.resource.data.keys().hasOnly(ownerAllowedUserFields()) &&
+             !hasOwnerServerManagedUserWrite() &&
+             hasValidAuthEmailMirror() &&
+             (!request.resource.data.keys().hasAny(['role']) || request.resource.data.role == 'user') &&
+             !request.resource.data.keys().hasAny(['accountType']);
+    }
+
+    function isSafeBusinessUserWrite() {
+      return request.resource.data.keys().hasOnly(ownerAllowedUserFields()) &&
+             !hasOwnerServerManagedUserWrite() &&
+             hasValidAuthEmailMirror() &&
+             (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
+             (!request.resource.data.keys().hasAny(['accountType']) ||
+              request.resource.data.accountType == 'business') &&
+             request.resource.data.keys().hasAny(['businessInfo']);
+    }
+
+    function isSafeOwnerUserCreate() {
+      return isSafePersonalUserWrite() || isSafeBusinessUserWrite();
+    }
+
+    function isSafeOwnerUserUpdate() {
+      return request.resource.data.keys().hasOnly(ownerAllowedUserFields()) &&
+             !hasOwnerServerManagedUserUpdate() &&
+             !hasOwnerRoleOrAccountTypeUpdate() &&
+             hasValidAuthEmailMirror();
+    }
+
+    function isSafeBusinessSignupUpdate() {
+      return isSafeBusinessUserWrite() &&
+             !request.resource.data.diff(resource.data).affectedKeys().hasAny(ownerServerManagedUserFields());
+    }
+
+    function isPrivateInvitationAuthor(data) {
+      return data.authorId == request.auth.uid ||
+             (data.author != null && data.author.id == request.auth.uid);
+    }
+
+    function isPublishingPrivateInvitation() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return (changed.hasAny(['status']) && request.resource.data.status == 'published') ||
+             changed.hasAny(['publishedAt']);
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -112,26 +268,27 @@ service cloud.firestore {
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId && isSafeOwnerUserCreate();
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
       // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user';
+                       request.resource.data.role == 'user' &&
+                       isSafePersonalUserWrite();
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
-                       request.resource.data.keys().hasAny(['businessInfo']);
+                       request.resource.data.keys().hasAny(['businessInfo']) &&
+                       isSafeBusinessSignupUpdate();
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
+      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent() && isSafeBusinessSignupUpdate();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
+      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile() && isSafeBusinessSignupUpdate();
       allow update: if isOwner(userId) && 
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
+                       isSafeOwnerUserUpdate();
       allow update: if isAdmin();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&
@@ -280,14 +437,16 @@ service cloud.firestore {
 
       // Any signed-in user can create (author must be self)
       allow create: if isSignedIn() &&
-                       (request.resource.data.authorId == request.auth.uid ||
-                        request.resource.data.author.id == request.auth.uid);
+                       isPrivateInvitationAuthor(request.resource.data) &&
+                       request.resource.data.status == 'draft' &&
+                       !request.resource.data.keys().hasAny(['publishedAt']);
 
       // Host can update freely; invited friends can update only their RSVP
       allow update: if isSignedIn() &&
-                       (resource.data.authorId == request.auth.uid ||
-                        (resource.data.author != null &&
-                         resource.data.author.id == request.auth.uid) ||
+                       ((
+                         isPrivateInvitationAuthor(resource.data) &&
+                         !isPublishingPrivateInvitation()
+                        ) ||
                         (request.auth.uid in resource.data.invitedFriends &&
                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
                          request.resource.data.rsvps.diff(resource.data.rsvps).affectedKeys().hasOnly([request.auth.uid])));
