@@ -10,6 +10,9 @@
     "build": "vite build",
     "build:firebase": "node scripts/ensure-maps-key-for-build.mjs && vite build",
     "vercel-build": "node scripts/vercel-build.mjs",
+    "test:security:unit": "node scripts/test-security-unit.mjs",
+    "test:security:rules": "npx -y firebase-tools@latest emulators:exec --only firestore,storage \"node scripts/test-security-rules.mjs\"",
+    "test:critical-security": "npm run test:security:unit && npm run test:security:rules",
     "deploy:predist": "npx vercel --prod -b VERCEL_PREDIST=1",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
@@ -49,6 +52,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",
