@@ -599,8 +599,10 @@
     width: 100%;
     max-width: none;
     /* Fallback height — attachChatShellToVisualViewport overrides via inline styles on keyboard */
-    height: 100dvh;
-    max-height: 100dvh;
+    height: 100lvh;
+    height: -webkit-fill-available;
+    max-height: 100lvh;
+    max-height: -webkit-fill-available;
     min-height: 0;
     margin: 0;
     padding:
@@ -1701,7 +1703,7 @@ body:has(.community-chat-fullscreen) {
 
 .community-main-chat__composer {
     flex-shrink: 0;
-    padding: 0.5rem 0.75rem max(0.5rem, env(safe-area-inset-bottom));
+    padding: 0.5rem 0.75rem max(0.5rem, var(--chat-composer-safe-bottom, env(safe-area-inset-bottom)));
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(8, 12, 20, 0.72);
     backdrop-filter: blur(14px);

@@ -737,7 +737,7 @@ const InvitationChatRoom = () => {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            paddingBottom: 'max(8px, env(safe-area-inset-bottom))'
+            paddingBottom: 'max(8px, var(--chat-composer-safe-bottom, env(safe-area-inset-bottom)))'
           }}>
                 <div className="input-wrapper" style={{
               flex: 1, display: 'flex', alignItems: 'center',

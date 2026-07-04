@@ -716,7 +716,7 @@ const Chat = () => {
             flexDirection: composerBlocked ? 'column' : 'row',
             alignItems: 'center',
             gap: '8px',
-            paddingBottom: 'max(8px, env(safe-area-inset-bottom))'
+            paddingBottom: 'max(8px, var(--chat-composer-safe-bottom, env(safe-area-inset-bottom)))'
           }}>
                 {messagingRestricted &&
             <div style={{
