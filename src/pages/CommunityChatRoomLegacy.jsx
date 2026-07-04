@@ -722,7 +722,7 @@ const CommunityChatRoomLegacy = () => {
             display: isMutedInChat ? 'none' : 'flex',
             alignItems: 'center',
             gap: '8px',
-            paddingBottom: 'max(8px, env(safe-area-inset-bottom))'
+            paddingBottom: 'max(8px, var(--chat-composer-safe-bottom, env(safe-area-inset-bottom)))'
           }}>
                 {/* Input Wrapper */}
                 <div className="input-wrapper" style={{

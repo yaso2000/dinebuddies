@@ -10,6 +10,7 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 import EmojiPickerPortal, { isTouchOrCoarsePointer } from './EmojiPickerPortal';
 import '../pages/CommunityChatRoom.css';
+import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
 import { AppText, AppTextInput } from "./base";
 
 const GroupChat = ({ collectionPath, height = '500px' }) => {
@@ -34,6 +35,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const emojiBtnRef = useRef(null);
+  const containerRef = useRef(null);
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
@@ -47,6 +49,12 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isFullScreen) return undefined;
+    const { detach } = attachChatShellToVisualViewport(() => containerRef.current);
+    return detach;
+  }, [isFullScreen]);
 
   // Subscribe to messages
   useEffect(() => {
@@ -241,13 +249,16 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
     right: 0,
     bottom: 0,
     width: '100%',
-    height: '100dvh', // Force dynamic viewport height
-    zIndex: 9999999, // Max z-index
-    background: '#0b1220', // Solid background
+    height: '100lvh',
+    maxHeight: '-webkit-fill-available',
+    zIndex: 9999999,
+    background: '#0b1220',
     display: 'flex',
     flexDirection: 'column',
     margin: 0,
-    padding: 0
+    padding: 0,
+    boxSizing: 'border-box',
+    overflow: 'hidden'
   } : {
     height: height,
     display: 'flex',
@@ -259,7 +270,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
   };
 
   return (
-    <div className="group-chat-container" style={containerStyle}>
+    <div ref={containerRef} className="group-chat-container chat-root" style={containerStyle}>
             {/* Header Control */}
             <div style={{
         padding: '12px 16px',

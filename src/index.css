@@ -772,6 +772,26 @@ body {
     position: relative;
     top: auto;
   }
+
+  /*
+   * When the vv-shell pins bottom above the home indicator, composer bars must not
+   * add env(safe-area-inset-bottom) again — that double-counting clips the input row.
+   */
+  .chat-vv-shell {
+    --chat-composer-safe-bottom: 0px;
+  }
+
+  .chat-vv-shell .community-main-chat__composer {
+    padding-bottom: 0.5rem;
+  }
+
+  .chat-vv-shell .input-area {
+    padding-bottom: 10px;
+  }
+
+  .chat-vv-shell.community-chat-fullscreen.community-chat-root {
+    padding-bottom: 0;
+  }
 }
 
 /* Chat composer + emoji: in-flow column at bottom */

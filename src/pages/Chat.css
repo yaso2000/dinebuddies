@@ -680,7 +680,7 @@ html {
     padding: 10px 12px;
     z-index: 100;
     border-top: 1px solid var(--border-color);
-    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    padding-bottom: max(10px, var(--chat-composer-safe-bottom, env(safe-area-inset-bottom)));
 }
 
 .chat-input-inner {

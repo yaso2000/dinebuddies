@@ -62,6 +62,30 @@ function isKeyboardOpenByViewport(vv) {
     return window.innerHeight - vv.height > 100;
 }
 
+/** Resolved safe-area insets (px) for pinning the shell above the home indicator. */
+let safeAreaProbe;
+function readSafeAreaInsetsPx() {
+    if (typeof document === 'undefined') {
+        return { top: 0, right: 0, bottom: 0, left: 0 };
+    }
+    if (!safeAreaProbe) {
+        safeAreaProbe = document.createElement('div');
+        safeAreaProbe.setAttribute('aria-hidden', 'true');
+        safeAreaProbe.style.cssText =
+            'position:fixed;visibility:hidden;pointer-events:none;inset:0;padding:' +
+            'env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) ' +
+            'env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);';
+        document.documentElement.appendChild(safeAreaProbe);
+    }
+    const cs = getComputedStyle(safeAreaProbe);
+    return {
+        top: parseFloat(cs.paddingTop) || 0,
+        right: parseFloat(cs.paddingRight) || 0,
+        bottom: parseFloat(cs.paddingBottom) || 0,
+        left: parseFloat(cs.paddingLeft) || 0,
+    };
+}
+
 function lockPageScroll() {
     const prevBodyOverflow = document.body.style.overflow;
     const prevHtmlOverflow = document.documentElement.style.overflow;
@@ -110,16 +134,28 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
         const override =
             overrideRaw != null && Number.isFinite(overrideRaw) ? Math.round(overrideRaw) : null;
 
+        const keyboardOpen = isKeyboardOpenByViewport(vv);
+        const { bottom: sab } = readSafeAreaInsetsPx();
+
         if (isAppleWebKitTouch()) {
             let h = Math.max(1, Math.min(vv.height, innerH));
             if (override != null) h = Math.max(1, Math.min(override, innerH));
             el.style.left = '0px';
             el.style.right = '0px';
-            el.style.top = '0px';
             el.style.width = '100%';
-            el.style.height = `${Math.round(h)}px`;
-            el.style.maxHeight = `${Math.round(h)}px`;
-            el.style.bottom = 'auto';
+            el.style.top = '0px';
+
+            if (keyboardOpen) {
+                // Shrink above the keyboard; home indicator is covered by the keyboard band.
+                el.style.bottom = 'auto';
+                el.style.height = `${Math.round(h)}px`;
+                el.style.maxHeight = `${Math.round(h)}px`;
+            } else {
+                // Pin above the home indicator instead of a fixed height that clips the composer.
+                el.style.bottom = `${Math.round(sab)}px`;
+                el.style.height = 'auto';
+                el.style.maxHeight = 'none';
+            }
         } else {
             const w = Math.max(1, Math.min(vv.width, innerW - vv.offsetLeft));
             let h = Math.max(1, Math.min(vv.height, innerH - vv.offsetTop));
@@ -131,13 +167,24 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
             ) {
                 h = Math.max(h, androidPinnedShellHeight);
             }
-            el.style.left = `${vv.offsetLeft}px`;
-            el.style.top = `${vv.offsetTop}px`;
-            el.style.width = `${w}px`;
-            el.style.height = `${h}px`;
-            el.style.maxHeight = `${h}px`;
-            el.style.right = 'auto';
-            el.style.bottom = 'auto';
+
+            if (!keyboardOpen && sab > 0) {
+                el.style.left = '0px';
+                el.style.right = '0px';
+                el.style.top = '0px';
+                el.style.width = '100%';
+                el.style.bottom = `${Math.round(sab)}px`;
+                el.style.height = 'auto';
+                el.style.maxHeight = 'none';
+            } else {
+                el.style.left = `${vv.offsetLeft}px`;
+                el.style.top = `${vv.offsetTop}px`;
+                el.style.width = `${w}px`;
+                el.style.height = `${h}px`;
+                el.style.maxHeight = `${h}px`;
+                el.style.right = 'auto';
+                el.style.bottom = 'auto';
+            }
         }
         if (onViewportChange) onViewportChange(vv);
     };
