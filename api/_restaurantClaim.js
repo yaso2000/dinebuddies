@@ -11,7 +11,13 @@ export function restaurantDocIsUnclaimed(data) {
 
 /**
  * Firestore transaction: flip ownership on restaurants/{restaurantId}.
- * @param {{ restaurantId: string; firebaseUid: string; standardizedPhone: string }} input
+ * @param {{
+ *   restaurantId: string;
+ *   firebaseUid: string;
+ *   standardizedPhone?: string;
+ *   verificationMethod?: 'phone' | 'google_business_profile';
+ *   skipPhoneMatch?: boolean;
+ * }} input
  * @returns {Promise<FirebaseFirestore.DocumentData>}
  */
 export async function claimRestaurantOwnershipTransaction(input) {
@@ -20,8 +26,16 @@ export async function claimRestaurantOwnershipTransaction(input) {
     const restaurantId = String(input.restaurantId || '').trim();
     const firebaseUid = String(input.firebaseUid || '').trim();
     const standardizedPhone = String(input.standardizedPhone || '').trim();
+    const verificationMethod = input.verificationMethod === 'google_business_profile'
+        ? 'google_business_profile'
+        : 'phone';
+    const skipPhoneMatch =
+        verificationMethod === 'google_business_profile' || input.skipPhoneMatch === true;
 
-    if (!restaurantId || !firebaseUid || !standardizedPhone) {
+    if (!restaurantId || !firebaseUid) {
+        throw Object.assign(new Error('INVALID_CLAIM_PAYLOAD'), { code: 'invalid-request' });
+    }
+    if (!skipPhoneMatch && !standardizedPhone) {
         throw Object.assign(new Error('INVALID_CLAIM_PAYLOAD'), { code: 'invalid-request' });
     }
 
@@ -43,19 +57,29 @@ export async function claimRestaurantOwnershipTransaction(input) {
             String(data.businessInfo?.phone || '').trim() ||
             String(data.phone || '').trim();
 
-        if (!docPhone || docPhone !== standardizedPhone) {
+        if (!skipPhoneMatch && (!docPhone || docPhone !== standardizedPhone)) {
             throw Object.assign(new Error('PHONE_MISMATCH'), { code: 'phone-mismatch' });
         }
 
-        tx.update(ref, {
+        const phoneToStore = standardizedPhone || docPhone || '';
+
+        const updatePayload = {
             isClaimed: true,
             ownerId: firebaseUid,
             claimedAt: FieldValue.serverTimestamp(),
             'businessInfo.isClaimed': true,
-            'businessInfo.phone_verified': true,
-            'businessInfo.phone_claimed': true,
-            'businessInfo.standardized_phone': standardizedPhone,
-        });
+            'businessInfo.phone_verified': skipPhoneMatch ? false : true,
+            'businessInfo.phone_claimed': skipPhoneMatch ? false : true,
+        };
+        if (phoneToStore) {
+            updatePayload['businessInfo.standardized_phone'] = phoneToStore;
+        }
+        if (skipPhoneMatch) {
+            updatePayload['businessInfo.google_business_verified'] = true;
+            updatePayload.claimVerificationMethod = 'google_business_profile';
+        }
+
+        tx.update(ref, updatePayload);
 
         return data;
     });
@@ -69,14 +93,17 @@ export async function claimRestaurantOwnershipTransaction(input) {
  * @param {string} firebaseUid
  * @param {string} email
  * @param {string} standardizedPhone
+ * @param {{ verificationMethod?: 'phone' | 'google_business_profile' }} [opts]
  */
 export function buildUserProfileFromClaimedRestaurant(
     restaurantData,
     restaurantId,
     firebaseUid,
     email,
-    standardizedPhone
+    standardizedPhone,
+    opts = {}
 ) {
+    const googleVerified = opts.verificationMethod === 'google_business_profile';
     const bi =
         restaurantData.businessInfo && typeof restaurantData.businessInfo === 'object'
             ? { ...restaurantData.businessInfo }
@@ -91,10 +118,11 @@ export function buildUserProfileFromClaimedRestaurant(
     const mergedBusinessInfo = {
         ...bi,
         businessName,
-        standardized_phone: standardizedPhone,
+        standardized_phone: standardizedPhone || bi.standardized_phone || restaurantData.standardized_phone || '',
         isClaimed: true,
-        phone_verified: true,
-        phone_claimed: true,
+        phone_verified: !googleVerified,
+        phone_claimed: !googleVerified,
+        google_business_verified: googleVerified,
         phone: bi.phone || restaurantData.phone || standardizedPhone,
         placeId: bi.placeId || restaurantData.googlePlaceId || restaurantId,
         website: bi.website || restaurantData.website || '',

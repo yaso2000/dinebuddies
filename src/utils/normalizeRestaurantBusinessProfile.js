@@ -131,5 +131,8 @@ export function businessShowsClaimCta(business) {
     if (!business || typeof business !== 'object') return false;
     if (business._sourceCollection !== 'restaurants') return false;
     if (business.isClaimed === true) return false;
-    return Boolean(resolveBusinessClaimPhoneE164(business));
+    if (Boolean(resolveBusinessClaimPhoneE164(business))) return true;
+    const placeId =
+        String(business.googlePlaceId || business.businessInfo?.placeId || business.uid || '').trim();
+    return Boolean(placeId);
 }

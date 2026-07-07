@@ -6,6 +6,10 @@ import {
     claimRestaurantOwnershipTransaction,
     buildUserProfileFromClaimedRestaurant,
 } from './_restaurantClaim.js';
+import {
+    loadGoogleBusinessClaimSession,
+} from './_googleBusinessClaimSessions.js';
+import { userManagesGooglePlace } from './_googleBusinessProfileLocations.js';
 
 /**
  * @param {string | null | undefined} phone
@@ -311,5 +315,117 @@ export async function completeBusinessEmailSignup(input) {
         flow: 'new',
         claimedFromBusinessId: null,
         claimedFromRestaurantId: null,
+    };
+}
+
+/**
+ * Claim an admin-imported restaurant after Google Business Profile ownership verification.
+ * @param {{
+ *   firebaseUid: string;
+ *   email: string;
+ *   restaurantId: string;
+ *   googleClaimSessionId: string;
+ *   referredBy?: string | null,
+ * }} input
+ */
+export async function completeBusinessGoogleClaimSignup(input) {
+    ensureFirebaseAdmin();
+    const db = getFirestore();
+    const auth = getAuth();
+
+    const firebaseUid = String(input.firebaseUid || '').trim();
+    const email = String(input.email || '').trim().toLowerCase();
+    const restaurantId = String(input.restaurantId || '').trim();
+    const sessionId = String(input.googleClaimSessionId || '').trim();
+
+    if (!firebaseUid || !email || !restaurantId || !sessionId) {
+        throw Object.assign(new Error('INVALID_COMPLETE_PAYLOAD'), { code: 'invalid-request' });
+    }
+
+    const session = await loadGoogleBusinessClaimSession(sessionId);
+    if (!session) {
+        throw Object.assign(new Error('SESSION_NOT_FOUND'), { code: 'session-not-found' });
+    }
+    if (session.restaurantId !== restaurantId) {
+        throw Object.assign(new Error('SESSION_RESTAURANT_MISMATCH'), { code: 'invalid-request' });
+    }
+
+    const userRecord = await auth.getUser(firebaseUid);
+    const accountEmail = String(userRecord.email || '').trim().toLowerCase();
+    if (!accountEmail || accountEmail !== email) {
+        throw Object.assign(new Error('EMAIL_MISMATCH'), { code: 'invalid-request' });
+    }
+
+    if (!session.placeVerified || session.verifiedPlaceId !== session.googlePlaceId) {
+        const accessToken = session.accessToken;
+        if (!accessToken) {
+            throw Object.assign(new Error('SESSION_NOT_AUTHENTICATED'), { code: 'session-not-authenticated' });
+        }
+        const check = await userManagesGooglePlace(accessToken, session.googlePlaceId);
+        if (!check.managed) {
+            throw Object.assign(new Error('PLACE_NOT_MANAGED'), { code: 'place-not-managed' });
+        }
+    }
+
+    if (!session.accessToken) {
+        throw Object.assign(new Error('SESSION_NOT_AUTHENTICATED'), { code: 'session-not-authenticated' });
+    }
+
+    const restaurantSnap = await db.collection('restaurants').doc(restaurantId).get();
+    if (!restaurantSnap.exists) {
+        throw Object.assign(new Error('RESTAURANT_NOT_FOUND'), { code: 'restaurant-not-found' });
+    }
+    const preData = restaurantSnap.data() || {};
+    const docPlaceId = String(preData.googlePlaceId || restaurantId).trim();
+    if (docPlaceId !== session.googlePlaceId) {
+        throw Object.assign(new Error('PLACE_MISMATCH'), { code: 'place-mismatch' });
+    }
+
+    const docPhone =
+        String(preData.standardized_phone || '').trim() ||
+        String(preData.businessInfo?.standardized_phone || '').trim() ||
+        String(preData.businessInfo?.phone || '').trim() ||
+        String(preData.phone || '').trim();
+
+    const claimData = await claimRestaurantOwnershipTransaction({
+        restaurantId,
+        firebaseUid,
+        standardizedPhone: docPhone,
+        verificationMethod: 'google_business_profile',
+    });
+
+    const userPayload = buildUserProfileFromClaimedRestaurant(
+        claimData,
+        restaurantId,
+        firebaseUid,
+        email,
+        docPhone,
+        { verificationMethod: 'google_business_profile' }
+    );
+
+    const userPayloadOut = {
+        ...userPayload,
+        businessInfo: {
+            ...userPayload.businessInfo,
+            google_business_verified: true,
+            googleClaimSessionId: sessionId,
+        },
+        claimVerificationMethod: 'google_business_profile',
+        created_at: FieldValue.serverTimestamp(),
+        last_active_time: FieldValue.serverTimestamp(),
+    };
+    if (input.referredBy) {
+        userPayloadOut.referred_by = input.referredBy;
+    }
+
+    await db.collection('users').doc(firebaseUid).set(userPayloadOut, { merge: true });
+
+    return {
+        uid: firebaseUid,
+        email,
+        flow: 'claim',
+        claimedFromBusinessId: restaurantId,
+        claimedFromRestaurantId: restaurantId,
+        verificationMethod: 'google_business_profile',
     };
 }

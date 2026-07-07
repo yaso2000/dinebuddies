@@ -1843,6 +1843,11 @@ const BusinessProfile = () => {
                 <BusinessClaimPanel
                   variant="hero"
                   restaurantId={profileId}
+                  googlePlaceId={
+                    business.googlePlaceId ||
+                    business.businessInfo?.placeId ||
+                    profileId
+                  }
                   businessName={businessInfo.businessName || business.display_name}
                   businessPhoneE164={resolveBusinessClaimPhoneE164(business)} />
 
