@@ -8,6 +8,7 @@ import { db } from '../firebase/config';
 import { IoMale, IoFemale, IoMaleFemale } from 'react-icons/io5';
 import { FaUser } from 'react-icons/fa';
 import { updateProfile as updateAuthProfile } from 'firebase/auth';
+import { buildDefaultProfileMediaPatch } from '../constants/defaultProfileMedia';
 
 /**
  * Full-screen onboarding — only mounted when AuthContext consumerShellGate === 'needs_onboarding'.
@@ -74,6 +75,17 @@ export default function ProfileCompletionModal() {
         photoURL: currentUser.photoURL || userProfile.photoURL || '',
         photo_url: currentUser.photoURL || userProfile.photoURL || ''
       };
+
+      Object.assign(
+        updateData,
+        buildDefaultProfileMediaPatch({
+          uid: currentUser.uid,
+          gender: formData.gender,
+          email: currentUser.email,
+          photo_url: updateData.photo_url,
+          cover_photo: userProfile?.cover_photo || '',
+        })
+      );
 
       const userRef = doc(db, 'users', currentUser.uid);
       await setDoc(userRef, updateData, { merge: true });

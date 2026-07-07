@@ -1,11 +1,19 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { PayPalScriptProvider } from '@paypal/react-paypal-js';
 import app from '../../firebase/config';
 import { FaCheck, FaExternalLinkAlt } from 'react-icons/fa';
-import { BUSINESS_PAID_PLAN_DISPLAY } from '../../config/stripeCommerce';
+import { BUSINESS_PAID_PLAN_DISPLAY, STRIPE_PUBLISHABLE_CONFIGURED } from '../../config/stripeCommerce';
+import {
+  PAYPAL_CLIENT_CONFIGURED,
+  PAYPAL_CLIENT_ID,
+  PAYPAL_CURRENCY,
+  PAYPAL_TEST_MODE,
+} from '../../config/paypalCommerce';
+import PayPalBusinessPlanButton from '../../components/PayPalBusinessPlanButton';
 import {
   BUSINESS_FREE_PLAN_FEATURE_KEYS,
   BUSINESS_PAID_PLAN_FEATURE_KEYS,
@@ -23,6 +31,26 @@ const ProSubscription = () => {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(null);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState(() => {
+    if (STRIPE_PUBLISHABLE_CONFIGURED) return 'stripe';
+    if (PAYPAL_CLIENT_CONFIGURED) return 'paypal';
+    return 'stripe';
+  });
+  const payPalScriptOptions = useMemo(
+    () => ({
+      clientId: PAYPAL_CLIENT_ID,
+      currency: PAYPAL_CURRENCY,
+      intent: 'capture',
+      components: 'buttons',
+    }),
+    []
+  );
+  const upgradePaymentMethods = useMemo(() => {
+    const methods = [];
+    if (STRIPE_PUBLISHABLE_CONFIGURED) methods.push('stripe');
+    if (PAYPAL_CLIENT_CONFIGURED) methods.push('paypal');
+    return methods;
+  }, []);
 
   const normalized = normalizeBusinessTier(userProfile?.subscriptionTier);
   const isPaid = normalized === 'paid';
@@ -137,20 +165,85 @@ const ProSubscription = () => {
                         {t('biz_plan_btn_current', 'Current Plan')}
                     </button> :
         showUpgradeOnPaidCard ?
-        <button
-          type="button"
-          onClick={handleUpgrade}
-          disabled={loading === 'paid'}
-          className="ui-btn ui-btn--primary"
-          style={{
-            padding: '12px',
-            fontSize: '0.875rem',
-            fontWeight: 800,
-            opacity: loading === 'paid' ? 0.65 : 1
-          }}>
-
-                        {loading === 'paid' ? t('loading', 'Loading...') : `${t('biz_plan_upgrade_cta', 'Upgrade to Paid')} →`}
-                    </button> :
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {upgradePaymentMethods.length > 1 ?
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              padding: 4,
+              borderRadius: 12,
+              background: 'var(--hover-overlay)',
+            }}>
+            {upgradePaymentMethods.includes('stripe') ?
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('stripe')}
+              style={{
+                flex: 1,
+                border: 'none',
+                borderRadius: 10,
+                padding: '8px 10px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                background:
+                  paymentMethod === 'stripe' ?
+                  'linear-gradient(135deg, var(--primary), var(--primary-hover))' :
+                  'transparent',
+                color: paymentMethod === 'stripe' ? '#fff' : 'var(--text-main)',
+              }}>
+              {t('payment_method_card', 'Card')}
+            </button> :
+            null}
+            {upgradePaymentMethods.includes('paypal') ?
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('paypal')}
+              style={{
+                flex: 1,
+                border: 'none',
+                borderRadius: 10,
+                padding: '8px 10px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                background:
+                  paymentMethod === 'paypal' ?
+                  'linear-gradient(135deg, #0070ba, #003087)' :
+                  'transparent',
+                color: paymentMethod === 'paypal' ? '#fff' : 'var(--text-main)',
+              }}>
+              PayPal
+            </button> :
+            null}
+          </div> :
+          null}
+          {paymentMethod === 'paypal' && PAYPAL_CLIENT_CONFIGURED ?
+          <PayPalScriptProvider options={payPalScriptOptions}>
+            <PayPalBusinessPlanButton
+              disabled={loading === 'paid'}
+              onSuccess={() => window.location.reload()}
+            />
+          </PayPalScriptProvider> :
+          <button
+            type="button"
+            onClick={handleUpgrade}
+            disabled={loading === 'paid'}
+            className="ui-btn ui-btn--primary"
+            style={{
+              padding: '12px',
+              fontSize: '0.875rem',
+              fontWeight: 800,
+              opacity: loading === 'paid' ? 0.65 : 1,
+            }}>
+            {loading === 'paid' ? t('loading', 'Loading...') : `${t('biz_plan_upgrade_cta', 'Upgrade to Paid')} →`}
+          </button>
+          }
+          {paymentMethod === 'paypal' && PAYPAL_TEST_MODE ?
+          <AppText as="p" style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            {t('biz_plan_paypal_monthly_note', 'PayPal pays for one month. Renew manually each month or use Card for auto-billing.')}
+          </AppText> :
+          null}
+        </div> :
 
         <button
           type="button"

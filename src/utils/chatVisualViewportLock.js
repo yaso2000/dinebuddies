@@ -3,9 +3,8 @@
  *
  * - **Android (Chrome):** use `offsetLeft` / `offsetTop` + `vv.width` / `vv.height` (matches how
  *   Chrome maps the visual viewport — same pattern as your working Android screenshot).
- * - **Apple WebKit:** `offsetTop` often pushes the whole shell down, leaving a void under the
- *   status bar; pin `top: 0`, `left: 0`, `width: 100%`, and only set `height = vv.height` so the
- *   shell fills from the top of the layout viewport to the top of the keyboard band.
+ * - **Apple WebKit:** reset scroll; `top = offsetTop` (when > 0 the visual band already clears the
+ *   status bar), `height = vv.height`, full width. Header safe-area padding only when `offsetTop === 0`.
  *
  * Inner layout stays flex: header flex-shrink-0, body flex:1 min-height:0, footer flex-shrink-0.
  * On iOS, also handle `visualViewport` **scroll** (rubber-band / pan): reset document scroll and
@@ -43,7 +42,7 @@ const COMPOSER_ROOT_SELECTOR =
     '.community-composer-bar, .community-main-chat__composer, .input-area, .chat-footer-stack, .chat-input-area';
 
 const COMPOSER_FIELD_SELECTOR =
-    'input.message-input, textarea.message-input, .community-main-chat__input';
+    'input.message-input, textarea.message-input, .community-main-chat__input, .chat-input-field';
 
 function isComposerField(el) {
     if (!el || typeof el.matches !== 'function') return false;
@@ -110,6 +109,44 @@ function clearShellInlineGeometry(el) {
         el.style[prop] = '';
     }
     el.style.maxHeight = '';
+    el.style.transform = '';
+}
+
+function applyVisualViewportShellGeometry(el, vv, innerH, innerW, override, androidCompose, androidPinnedShellHeight) {
+    if (isAppleWebKitTouch()) {
+        resetDocumentScroll();
+        const offsetTop = Math.max(0, Math.round(vv.offsetTop));
+        let h = Math.max(1, Math.round(vv.height));
+        if (override != null) h = Math.max(1, Math.min(override, innerH));
+        el.style.left = '0px';
+        el.style.top = `${offsetTop}px`;
+        el.style.width = '100%';
+        el.style.height = `${h}px`;
+        el.style.maxHeight = `${h}px`;
+        el.style.right = 'auto';
+        el.style.bottom = 'auto';
+        el.style.transform = '';
+        return;
+    }
+
+    const w = Math.max(1, Math.min(vv.width, innerW - vv.offsetLeft));
+    let h = Math.max(1, Math.min(vv.height, innerH - vv.offsetTop));
+    if (override != null) h = Math.max(1, Math.min(override, innerH - vv.offsetTop));
+    if (
+        androidCompose &&
+        androidPinnedShellHeight != null &&
+        isComposerField(document.activeElement)
+    ) {
+        h = Math.max(h, androidPinnedShellHeight);
+    }
+    el.style.left = `${vv.offsetLeft}px`;
+    el.style.top = `${vv.offsetTop}px`;
+    el.style.width = `${w}px`;
+    el.style.height = `${h}px`;
+    el.style.maxHeight = `${h}px`;
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+    el.style.transform = '';
 }
 
 function lockPageScroll() {
@@ -160,8 +197,6 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
         const override =
             overrideRaw != null && Number.isFinite(overrideRaw) ? Math.round(overrideRaw) : null;
 
-        const { bottom: sab } = readSafeAreaInsetsPx();
-
         // Keyboard closed: drop inline geometry so CSS (100dvh + safe-area) owns the shell again.
         // Android Chrome often keeps a stale visualViewport.offsetTop after dismiss; using it shrinks
         // the shell to the bottom band only and hides the in-flow chat header.
@@ -177,59 +212,38 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
 
         el.classList.add('chat-vv-shell');
 
-        if (isAppleWebKitTouch()) {
-            let h = Math.max(1, Math.min(vv.height, innerH));
-            if (override != null) h = Math.max(1, Math.min(override, innerH));
-            el.style.left = '0px';
-            el.style.right = '0px';
-            el.style.width = '100%';
-            el.style.top = '0px';
-
-            if (keyboardOpen) {
-                // Shrink above the keyboard; home indicator is covered by the keyboard band.
-                el.style.bottom = 'auto';
-                el.style.height = `${Math.round(h)}px`;
-                el.style.maxHeight = `${Math.round(h)}px`;
-            } else {
-                // Pin above the home indicator instead of a fixed height that clips the composer.
-                el.style.bottom = `${Math.round(sab)}px`;
-                el.style.height = 'auto';
-                el.style.maxHeight = 'none';
-            }
-        } else {
-            const w = Math.max(1, Math.min(vv.width, innerW - vv.offsetLeft));
-            let h = Math.max(1, Math.min(vv.height, innerH - vv.offsetTop));
-            if (override != null) h = Math.max(1, Math.min(override, innerH - vv.offsetTop));
-            if (
-                androidCompose &&
-                androidPinnedShellHeight != null &&
-                isComposerField(document.activeElement)
-            ) {
-                h = Math.max(h, androidPinnedShellHeight);
-            }
-
-            if (!keyboardOpen && sab > 0) {
-                el.style.left = '0px';
-                el.style.right = '0px';
-                el.style.top = '0px';
-                el.style.width = '100%';
-                el.style.bottom = `${Math.round(sab)}px`;
-                el.style.height = 'auto';
-                el.style.maxHeight = 'none';
-            } else {
-                el.style.left = `${vv.offsetLeft}px`;
-                el.style.top = `${vv.offsetTop}px`;
-                el.style.width = `${w}px`;
-                el.style.height = `${h}px`;
-                el.style.maxHeight = `${h}px`;
-                el.style.right = 'auto';
-                el.style.bottom = 'auto';
-            }
-        }
+        applyVisualViewportShellGeometry(
+            el,
+            vv,
+            innerH,
+            innerW,
+            override,
+            androidCompose,
+            androidPinnedShellHeight
+        );
         if (onViewportChange) onViewportChange(vv);
     };
 
+    const scheduleIosComposerResync = () => {
+        const run = () => {
+            resetDocumentScroll();
+            sync();
+        };
+        run();
+        requestAnimationFrame(run);
+        window.setTimeout(run, 50);
+        window.setTimeout(run, 120);
+        window.setTimeout(run, 280);
+    };
+
     const onComposerFocusIn = (event) => {
+        const inComposer =
+            isComposerField(event.target) || isInsideComposerRoot(event.target);
+
+        if (isAppleWebKitTouch() && inComposer) {
+            scheduleIosComposerResync();
+        }
+
         if (!androidCompose || !isComposerField(event.target)) return;
         if (isKeyboardOpenByViewport(vv)) {
             androidPinnedShellHeight = Math.max(

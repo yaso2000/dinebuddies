@@ -2,7 +2,11 @@
  * Admin dashboard callables — moderation, credits, invitations (server-trusted).
  */
 const functions = require('firebase-functions');
-const { grantAdminPaidCreditsInTransaction } = require('./creditsCore');
+const {
+    grantAdminPaidCreditsInTransaction,
+    creditBalanceResetPatch,
+    userHasAnyCreditBalance,
+} = require('./creditsCore');
 const { inferInviteCategory } = require('./inviteCategory');
 const {
     DEMO_COUNT_MAX,
@@ -159,6 +163,75 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
 
         return { success: true, targetUid, amount, paidCredits: paidAfter, freeCredits: paidAfter };
     });
+
+    /** Wipe all user credit balances (paid + saved + legacy free). Does not change subscription tiers. */
+    exportsObj.adminResetAllCredits = functions
+        .runWith({ timeoutSeconds: 540, memory: '1GB' })
+        .https.onCall(async (data, context) => {
+            const { requesterUid } = await assertAdminContext(context);
+            const confirmPhrase = asTrimmedString(data?.confirmPhrase);
+            if (confirmPhrase !== 'RESET ALL CREDITS') {
+                throw new functions.https.HttpsError(
+                    'invalid-argument',
+                    'confirmPhrase must be exactly: RESET ALL CREDITS'
+                );
+            }
+
+            const dryRun = data?.dryRun === true;
+            const resetPatch = creditBalanceResetPatch();
+            let scanned = 0;
+            let updated = 0;
+            let hadBalance = 0;
+
+            const usersSnap = await db.collection('users').get();
+            scanned = usersSnap.size;
+
+            const batchSize = 400;
+            let batch = db.batch();
+            let batchCount = 0;
+
+            for (const docSnap of usersSnap.docs) {
+                const d = docSnap.data() || {};
+                if (!userHasAnyCreditBalance(d)) continue;
+                hadBalance += 1;
+                if (dryRun) continue;
+
+                batch.set(
+                    docSnap.ref,
+                    {
+                        ...resetPatch,
+                        creditsResetAt: admin.firestore.FieldValue.serverTimestamp(),
+                        creditsResetBy: requesterUid,
+                    },
+                    { merge: true }
+                );
+                batchCount += 1;
+                updated += 1;
+
+                if (batchCount >= batchSize) {
+                    await batch.commit();
+                    batch = db.batch();
+                    batchCount = 0;
+                }
+            }
+
+            if (!dryRun && batchCount > 0) {
+                await batch.commit();
+            }
+
+            if (!dryRun) {
+                await db.collection('admin_audit_log').add({
+                    action: 'reset_all_credits',
+                    adminUid: requesterUid,
+                    scanned,
+                    updated,
+                    hadBalance,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+            }
+
+            return { success: true, dryRun, scanned, updated, hadBalance };
+        });
 
     exportsObj.adminListInvitations = functions.https.onCall(async (data, context) => {
         await assertAdminContext(context);

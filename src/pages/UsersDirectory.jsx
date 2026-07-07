@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { FaSearch, FaTimes } from 'react-icons/fa';
+import { FaFilter, FaSearch, FaTimes } from 'react-icons/fa';
 import { LuSparkles } from 'react-icons/lu';
 import InboxHubLink from '../components/discovery/InboxHubLink';
 import { useAuth } from '../context/AuthContext';
@@ -26,6 +26,7 @@ export default function UsersDirectory() {
   const [genderFilter, setGenderFilter] = useState('all');
   const [geoScope, setGeoScope] = useState('global');
   const [userLocation, setUserLocation] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const viewerUid = currentUser?.uid || currentUser?.id;
   const canBrowse = Boolean(viewerUid && !isGuest);
@@ -91,6 +92,22 @@ export default function UsersDirectory() {
 
   const clearQuery = () => setQuery('');
 
+  const activeFiltersLabel = useMemo(() => {
+    const gender =
+      genderFilter === 'male'
+        ? t('gender_male', 'Male')
+        : genderFilter === 'female'
+          ? t('gender_female', 'Female')
+          : t('filter_all', 'All');
+    const geo =
+      geoScope === 'city'
+        ? t('my_city', 'My city')
+        : geoScope === 'country'
+          ? t('my_country', 'My country')
+          : t('feed_scope_global', t('global', 'Global'));
+    return `${gender} · ${geo}`;
+  }, [genderFilter, geoScope, t]);
+
   const handleRefresh = useCallback(async () => {
     document.querySelector('.app-main')?.scrollTo({ top: 0, behavior: 'smooth' });
     await refresh();
@@ -151,30 +168,49 @@ export default function UsersDirectory() {
                         </button> :
           null}
                 </div>
-            </div>
 
-            <header className="users-directory-header">
-                <div className="users-directory-header-row users-directory-header-row--end">
-                    <div className="users-directory-header-actions">
+                <div className="users-directory-toolbar__actions">
                       <Link
             to="/search"
             className="users-directory-feed-link"
             title={t('user_directory_feed_view', 'Swipe discovery')}>
                         <LuSparkles aria-hidden />
-                        <AppText as="span">{t('user_directory_feed_view', 'Swipe view')}</AppText>
+                        <AppText as="span" className="users-directory-feed-link__label">
+                          {t('user_directory_feed_view', 'Swipe view')}
+                        </AppText>
                       </Link>
                       <InboxHubLink
-            className="users-directory-inbox-link"
+            className="users-directory-inbox-link inbox-hub-link"
             tab="activity"
-            showLabel
+            showLabel={false}
             label={t('inbox_tab_activity', 'Activity')}
           />
-                    </div>
+                      {!isSearchMode ?
+          <button
+            type="button"
+            className={`users-directory-filters-toggle${filtersOpen ? ' users-directory-filters-toggle--open' : ''}`}
+            onClick={() => setFiltersOpen((open) => !open)}
+            aria-expanded={filtersOpen}
+            aria-controls="users-directory-filters-panel"
+            title={t('user_directory_toggle_filters', 'Filters')}>
+                        <FaFilter aria-hidden />
+                        <AppText as="span" className="users-directory-filters-toggle__label">
+                          {t('user_directory_toggle_filters', 'Filters')}
+                        </AppText>
+                        {!filtersOpen ?
+            <AppText as="span" className="users-directory-filters-toggle__summary">
+                          {activeFiltersLabel}
+                        </AppText> :
+            null}
+                      </button> :
+          null}
                 </div>
-            </header>
+            </div>
 
             {!isSearchMode ?
         <UserDirectoryFilters
+          id="users-directory-filters-panel"
+          expanded={filtersOpen}
           genderFilter={genderFilter}
           onGenderFilterChange={setGenderFilter}
           geoScope={geoScope}

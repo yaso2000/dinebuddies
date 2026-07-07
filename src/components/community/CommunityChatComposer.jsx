@@ -5,6 +5,7 @@ import { AppText, AppTextInput } from '../base';
 import EmojiPicker from '../EmojiPicker';
 import { getAppBidiFieldProps, getAppTextDirection, prepareBidiDisplayText } from '../../utils/bidiText';
 import { preventComposerControlBlur } from '../../utils/chatVisualViewportLock';
+import { handleEmojiButtonClick, shouldUseAppEmojiPicker, showComposerEmojiButton } from '../../utils/emojiInputMode';
 
 /** Shared message composer — text, emoji picker, and image attach. */
 export default function CommunityChatComposer({
@@ -95,7 +96,7 @@ export default function CommunityChatComposer({
         </div>
       ) : null}
 
-      {showEmojiPicker ? (
+      {showEmojiPicker && shouldUseAppEmojiPicker() ? (
         <div ref={emojiWrapRef} className="community-composer-bar__emoji-wrap">
           <EmojiPicker
             onEmojiSelect={handleEmojiSelect}
@@ -105,6 +106,7 @@ export default function CommunityChatComposer({
       ) : null}
 
       <div className="community-main-chat__input-row">
+        <div className="chat-composer-input community-composer-bubble">
         <div className="community-main-chat__attachments">
           <button
             type="button"
@@ -125,6 +127,7 @@ export default function CommunityChatComposer({
             className="community-main-chat__file-input"
             onChange={(event) => void handleImagePick(event)}
           />
+          {showComposerEmojiButton() ? (
           <button
             type="button"
             className={`community-main-chat__attach-btn${showEmojiPicker ? ' community-main-chat__attach-btn--active' : ''}`}
@@ -134,16 +137,19 @@ export default function CommunityChatComposer({
             disabled={isMutedInChat}
             onPointerDown={preventComposerControlBlur}
             onMouseDown={preventComposerControlBlur}
-            onClick={() => setShowEmojiPicker((open) => !open)}
+            onClick={() => {
+              handleEmojiButtonClick({ inputRef, setPickerOpen: setShowEmojiPicker });
+            }}
           >
             <FaSmile size={16} aria-hidden />
           </button>
+          ) : null}
         </div>
 
         <AppTextInput
           ref={inputRef}
           type="text"
-          className="community-main-chat__input"
+          className="community-main-chat__input chat-input-field"
           placeholder={t('message_placeholder', 'Type a message…')}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -159,9 +165,10 @@ export default function CommunityChatComposer({
           lang={inputBidiProps.lang}
           style={inputBidiProps.style}
         />
+        </div>
         <button
           type="button"
-          className="community-main-chat__send-btn"
+          className="community-main-chat__send-btn chat-send-btn"
           aria-label={t('send', 'Send')}
           disabled={composerDisabled || !draft.trim()}
           onPointerDown={preventComposerControlBlur}

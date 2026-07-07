@@ -599,7 +599,7 @@ export const SocialLinks = ({ userId }) => {
       setEditing(false);
     } catch (error) {
       console.error('Error saving social links:', error);
-      showToast('Failed to save links', 'error');
+      showToast(t('profile_links_save_failed', 'Failed to save links'), 'error');
     }
   };
 

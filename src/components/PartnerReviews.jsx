@@ -3,12 +3,14 @@ import { collection, query, where, orderBy, limit, getDocs, addDoc, serverTimest
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useTranslation } from 'react-i18next';
 import { FaStar, FaRegStar, FaStarHalfAlt, FaUserCircle } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 import { AppText, AppTextInput } from "./base";
 
 const PartnerReviews = ({ partnerId, partnerName }) => {
+  const { t } = useTranslation();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
   const [reviews, setReviews] = useState([]);
@@ -81,24 +83,24 @@ const PartnerReviews = ({ partnerId, partnerName }) => {
     e.preventDefault();
 
     if (!currentUser) {
-      showToast('Please login to leave a review', 'error');
+      showToast(t('review_login_required', 'Please sign in to leave a review'), 'error');
       return;
     }
 
     if (currentUser.uid === partnerId) {
-      showToast('You cannot review your own business', 'error');
+      showToast(t('review_own_business', 'You cannot review your own business'), 'error');
       return;
     }
 
     // Check if user has already reviewed
     const hasUserReviewed = reviews.some((r) => r.userId === currentUser.uid);
     if (hasUserReviewed) {
-      showToast('You have already reviewed this business. You can only submit one review per business.', 'error');
+      showToast(t('already_reviewed', 'You have already reviewed this business'), 'error');
       return;
     }
 
     if (!newReview.comment.trim()) {
-      showToast('Please write a comment', 'error');
+      showToast(t('please_write_comment', 'Please write a comment'), 'error');
       return;
     }
 
@@ -125,10 +127,10 @@ const PartnerReviews = ({ partnerId, partnerName }) => {
       // Refresh reviews
       await fetchReviews();
 
-      showToast('Review submitted successfully!', 'success');
+      showToast(t('review_submitted_success', 'Review submitted successfully!'), 'success');
     } catch (error) {
       console.error('Error submitting review:', error);
-      showToast('Failed to submit review. Please try again.', 'error');
+      showToast(t('review_submit_failed', 'Failed to submit review'), 'error');
     } finally {
       setSubmitting(false);
     }

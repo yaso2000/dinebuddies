@@ -15,10 +15,10 @@ import { AI_USER_PROMPT_MAX_CHARS } from '../constants/aiPromptLimits';
 import './AiTextStudio.css';
 
 const STARTER_KEYS = [
-  'ai_text_starter_invite',
-  'ai_text_starter_connect',
-  'ai_text_starter_credits',
-  'ai_text_starter_bio',
+  'ai_text_starter_first_date',
+  'ai_text_starter_boundaries',
+  'ai_text_starter_communication',
+  'ai_text_starter_rejection',
 ];
 
 function createTurnId() {
@@ -123,6 +123,9 @@ export default function AiTextStudio() {
         <div className="ai-text-studio__title-block">
           <AppText as="h1">{t('ai_text_studio_title')}</AppText>
           <AppText as="p">{t('ai_text_studio_subtitle')}</AppText>
+          <AppText as="p" className="ai-text-studio__disclaimer">
+            {t('ai_text_studio_disclaimer')}
+          </AppText>
         </div>
       </header>
 

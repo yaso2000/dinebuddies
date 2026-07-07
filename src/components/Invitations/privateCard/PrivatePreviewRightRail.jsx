@@ -1,12 +1,18 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaCamera, FaImages, FaTimes } from 'react-icons/fa';
-import { getPrivateCardBackgroundOptions, resolvePrivateCardBackgroundUrlCandidates } from './socialCardBackgrounds';
+import {
+  getPrivateCardBackgroundOptions,
+  resolvePrivateCardBackgroundUrlCandidates,
+} from './privateCardBackgrounds';
 import './PrivatePreviewRightRail.css';
 import { AppText } from "../../base";
 
-function TemplateThumb({ optionId, selected, onClick, title }) {
-  const candidates = useMemo(() => resolvePrivateCardBackgroundUrlCandidates(optionId), [optionId]);
+function TemplateThumb({ optionId, personalInviteCategory, selected, onClick, title }) {
+  const candidates = useMemo(
+    () => resolvePrivateCardBackgroundUrlCandidates(optionId, personalInviteCategory),
+    [optionId, personalInviteCategory]
+  );
   const [idx, setIdx] = useState(0);
   const url = candidates[idx];
 
@@ -66,6 +72,7 @@ function MediaThumb({ selected, children, onClear, showClear }) {
 export default function PrivatePreviewRightRail({
   mode,
   cardBackgroundId,
+  personalInviteCategory = 'dating',
   /** When set (e.g. private invites), template tab highlights this id instead of `cardBackgroundId`. */
   templateSelectedId = null,
   onTemplateSelect,
@@ -75,7 +82,7 @@ export default function PrivatePreviewRightRail({
   const { t } = useTranslation();
   const libraryInputRef = useRef(null);
   const captureInputRef = useRef(null);
-  const templateOptions = getPrivateCardBackgroundOptions();
+  const templateOptions = getPrivateCardBackgroundOptions(personalInviteCategory);
 
   const railLabel =
   mode === 'template' ?
@@ -133,6 +140,7 @@ export default function PrivatePreviewRightRail({
             <TemplateThumb
               key={opt.id}
               optionId={opt.id}
+              personalInviteCategory={personalInviteCategory}
               selected={selected}
               onClick={() => onTemplateSelect(opt.id)}
               title={

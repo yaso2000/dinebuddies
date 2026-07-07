@@ -19,6 +19,7 @@ import {
 } from '../../utils/openToDating';
 import './PrivateProfileFields.css';
 import { AppText, AppTextInput } from "../base";
+import { shouldUseAppEmojiPicker, showComposerEmojiButton } from '../../utils/emojiInputMode';
 
 const INVITE_PREF_ICONS = {
   any: FaUsers,
@@ -49,6 +50,7 @@ export default function PrivateProfileFields({
   const [pickedEmoji, setPickedEmoji] = useState(null);
   const [emojiWasPicked, setEmojiWasPicked] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const useDesktopEmojiPicker = shouldUseAppEmojiPicker();
 
   const emit = (patch) =>
   onChange({
@@ -93,9 +95,14 @@ export default function PrivateProfileFields({
 
   const addCustomTag = () => {
     const trimmed = customTag.trim();
-    if (!emojiWasPicked || trimmed.length < 2) return;
-    const emoji = pickedEmoji || DEFAULT_CUSTOM_EMOJI;
-    const fullTag = `${emoji} ${trimmed}`.slice(0, 28);
+    if (trimmed.length < 2) return;
+
+    const fullTag = useDesktopEmojiPicker
+      ? `${pickedEmoji || DEFAULT_CUSTOM_EMOJI} ${trimmed}`.slice(0, 28)
+      : trimmed.slice(0, 28);
+
+    if (useDesktopEmojiPicker && !emojiWasPicked) return;
+
     if (diningPersona.some((item) => item.toLowerCase() === fullTag.toLowerCase())) {
       setCustomTag('');
       setPickedEmoji(null);
@@ -114,7 +121,7 @@ export default function PrivateProfileFields({
   };
 
   const canAddCustom =
-  emojiWasPicked &&
+  (useDesktopEmojiPicker ? emojiWasPicked : true) &&
   customTag.trim().length >= 2 &&
   diningPersona.length < DINING_PERSONA_MAX_TAGS;
 
@@ -329,6 +336,7 @@ export default function PrivateProfileFields({
             <div className="private-profile-fields__custom-row">
                 <div className="private-profile-fields__custom-tag-row">
                     <div className="private-profile-fields__emoji-wrap">
+                        {showComposerEmojiButton() ? (
                         <button
               type="button"
               className="private-profile-fields__emoji-btn"
@@ -338,7 +346,8 @@ export default function PrivateProfileFields({
               
                             {pickedEmoji ?? DEFAULT_CUSTOM_EMOJI}
                         </button>
-                        {showEmojiPicker ?
+                        ) : null}
+                        {showEmojiPicker && useDesktopEmojiPicker ?
             <div className="private-profile-fields__emoji-popover">
                                 <EmojiPicker
                 onEmojiSelect={(emoji) => {
@@ -362,7 +371,11 @@ export default function PrivateProfileFields({
                 addCustomTag();
               }
             }}
-            placeholder={t('private_profile_custom_tag_placeholder', 'Add your own…')}
+            placeholder={
+              useDesktopEmojiPicker
+                ? t('private_profile_custom_tag_placeholder', 'Add your own…')
+                : t('private_profile_custom_tag_mobile_placeholder', 'Add emoji + text from keyboard…')
+            }
             maxLength={24} />
           
                 </div>

@@ -46,12 +46,22 @@ export const DEFAULT_BANNER_BODY_SLOT_POS = [
 ];
 
 export const BANNER_BG_PRESETS = [
-    { id: 'midnight', color: '#0f2744', color2: '#1e3a5f' },
-    { id: 'ember', color: '#7c2d12', color2: '#c2410c' },
-    { id: 'violet', color: '#4c1d95', color2: '#7c3aed' },
-    { id: 'forest', color: '#14532d', color2: '#22c55e' },
-    { id: 'slate', color: '#1e293b', color2: '#475569' },
-    { id: 'brand', color: '#c2410c', color2: '#f97316' },
+    { id: 'midnight', color: '#0f2744', color2: '#1e3a5f', label: 'Midnight' },
+    { id: 'ember', color: '#7c2d12', color2: '#c2410c', label: 'Ember' },
+    { id: 'violet', color: '#4c1d95', color2: '#7c3aed', label: 'Violet' },
+    { id: 'forest', color: '#14532d', color2: '#22c55e', label: 'Forest' },
+    { id: 'slate', color: '#1e293b', color2: '#475569', label: 'Slate' },
+    { id: 'brand', color: '#c2410c', color2: '#f97316', label: 'Sunset' },
+    { id: 'ocean', color: '#0c4a6e', color2: '#0284c7', label: 'Ocean' },
+    { id: 'rose', color: '#831843', color2: '#f43f5e', label: 'Rose' },
+    { id: 'lavender', color: '#312e81', color2: '#a78bfa', label: 'Lavender' },
+    { id: 'gold', color: '#78350f', color2: '#fbbf24', label: 'Gold' },
+    { id: 'neon', color: '#0f172a', color2: '#22d3ee', label: 'Neon' },
+    { id: 'cherry', color: '#450a0a', color2: '#dc2626', label: 'Cherry' },
+    { id: 'mint', color: '#064e3b', color2: '#34d399', label: 'Mint' },
+    { id: 'royal', color: '#1e1b4b', color2: '#6366f1', label: 'Royal' },
+    { id: 'peach', color: '#9a3412', color2: '#fdba74', label: 'Peach' },
+    { id: 'night', color: '#020617', color2: '#334155', label: 'Night' },
 ];
 
 export function sanitizeBannerAxis(value, fallback = 50, min = BANNER_AXIS_EDGE_MARGIN, max = 100 - BANNER_AXIS_EDGE_MARGIN) {

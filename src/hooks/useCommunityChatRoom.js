@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     addDoc,
     collection,
     deleteDoc,
     doc,
+    getDoc,
     getDocs,
     onSnapshot,
     orderBy,
@@ -16,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useTranslation } from 'react-i18next';
-import app, { db } from '../firebase/config';
+import app, { auth, db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
@@ -64,6 +65,7 @@ import {
     uploadInvitationMagicCoverFromApiBytes,
 } from '../utils/clientInvitationAiCoverUpload';
 import { AI_IMAGE_GENERATION_CREDITS } from '../utils/aiCreditCosts';
+import { syncMessageReceiptDocs } from '../utils/chatMessageReceipts';
 
 /**
  * Real-time community chat room state (messages + single-slot banner + membership).
@@ -90,8 +92,11 @@ export function useCommunityChatRoom(partnerId) {
     const [bannerVisibleSaving, setBannerVisibleSaving] = useState(false);
     const [guestFrameBackgroundUploading, setGuestFrameBackgroundUploading] = useState(false);
     const [guestFrameBackgroundGenerating, setGuestFrameBackgroundGenerating] = useState(false);
+    const [isDisplaySession, setIsDisplaySession] = useState(false);
+    const latestMessageDocsRef = useRef([]);
+    const readReceiptTimeoutRef = useRef(null);
 
-    const uid = currentUser?.uid;
+    const uid = auth.currentUser?.uid ?? currentUser?.uid;
     const isHost = Boolean(partnerId && uid && uid === partnerId);
     const functions = getFunctions(app, 'us-central1');
     const joinedCommunities =
@@ -100,13 +105,46 @@ export function useCommunityChatRoom(partnerId) {
         [];
 
     const isMember = useMemo(() => {
+        if (isDisplaySession) return true;
         if (!partnerId || !uid) return false;
         if (isBlockedFromCommunity) return false;
         if (uid === partnerId) return true;
         if (joinedCommunities.includes(partnerId)) return true;
         const members = Array.isArray(partner?.communityMembers) ? partner.communityMembers : [];
         return members.includes(uid);
-    }, [partnerId, uid, isBlockedFromCommunity, joinedCommunities, partner?.communityMembers]);
+    }, [partnerId, uid, isBlockedFromCommunity, joinedCommunities, partner?.communityMembers, isDisplaySession]);
+
+    useEffect(() => {
+        if (!partnerId || !uid) {
+            setIsDisplaySession(false);
+            return undefined;
+        }
+
+        const firebaseUser = auth.currentUser;
+        if (!firebaseUser || firebaseUser.uid !== uid) {
+            setIsDisplaySession(false);
+            return undefined;
+        }
+
+        let cancelled = false;
+        void firebaseUser
+            .getIdTokenResult()
+            .then((result) => {
+                if (cancelled) return;
+                const claims = result?.claims || {};
+                setIsDisplaySession(
+                    claims.communityDisplay === true &&
+                        String(claims.communityDisplayPartnerId || '') === partnerId
+                );
+            })
+            .catch(() => {
+                if (!cancelled) setIsDisplaySession(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [uid, partnerId]);
 
     const bannerDisplay = useMemo(
         () => resolveCommunityBannerDisplay(banner, partner),
@@ -146,10 +184,13 @@ export function useCommunityChatRoom(partnerId) {
 
     // Partner profile + moderation (users/{partnerId}, fallback restaurants/{partnerId})
     useEffect(() => {
-        if (!partnerId || !currentUser || !userProfile) {
+        if (!partnerId || !currentUser) {
             setLoading(false);
             return undefined;
         }
+
+        let cancelled = false;
+        let unsubPartner = () => {};
 
         const applyPartnerModeration = (partnerData) => {
             if (!partnerData) return;
@@ -172,42 +213,58 @@ export function useCommunityChatRoom(partnerId) {
             setIsMutedInChat(uid !== partnerId && mutedIds.includes(uid));
         };
 
-        let unsubRestaurant = () => {};
+        setLoading(true);
 
-        const unsubUser = onSnapshot(
-            doc(db, 'users', partnerId),
-            (snap) => {
-                if (snap.exists()) {
-                    unsubRestaurant();
-                    unsubRestaurant = () => {};
-                    applyPartnerModeration(snap.data());
+        void (async () => {
+            try {
+                const userRef = doc(db, 'users', partnerId);
+                const restaurantRef = doc(db, 'restaurants', partnerId);
+                const [userSnap, restaurantSnap] = await Promise.all([
+                    getDoc(userRef),
+                    getDoc(restaurantRef),
+                ]);
+                if (cancelled) return;
+
+                const partnerRef = userSnap.exists()
+                    ? userRef
+                    : restaurantSnap.exists()
+                      ? restaurantRef
+                      : null;
+
+                if (!partnerRef) {
+                    setPartner(null);
                     setLoading(false);
                     return;
                 }
 
-                unsubRestaurant = onSnapshot(
-                    doc(db, 'restaurants', partnerId),
-                    (restSnap) => {
-                        if (restSnap.exists()) applyPartnerModeration(restSnap.data());
+                if (userSnap.exists()) {
+                    applyPartnerModeration(userSnap.data());
+                } else if (restaurantSnap.exists()) {
+                    applyPartnerModeration(restaurantSnap.data());
+                }
+
+                unsubPartner = onSnapshot(
+                    partnerRef,
+                    (snap) => {
+                        if (snap.exists()) applyPartnerModeration(snap.data());
                         setLoading(false);
                     },
                     (err) => {
-                        console.error('[useCommunityChatRoom] restaurant partner snapshot', err);
+                        console.error('[useCommunityChatRoom] partner snapshot', err);
                         setLoading(false);
                     }
                 );
-            },
-            (err) => {
-                console.error('[useCommunityChatRoom] partner snapshot', err);
-                setLoading(false);
+            } catch (err) {
+                console.error('[useCommunityChatRoom] partner resolve', err);
+                if (!cancelled) setLoading(false);
             }
-        );
+        })();
 
         return () => {
-            unsubUser();
-            unsubRestaurant();
+            cancelled = true;
+            unsubPartner();
         };
-    }, [partnerId, currentUser, userProfile, uid]);
+    }, [partnerId, currentUser, uid]);
 
     // Single-slot banner on communities/{partnerId}
     useEffect(() => {
@@ -228,7 +285,7 @@ export function useCommunityChatRoom(partnerId) {
         );
 
         return unsub;
-    }, [partnerId, isMember]);
+    }, [partnerId, isMember, uid]);
 
     // Messages subcollection
     useEffect(() => {
@@ -243,11 +300,49 @@ export function useCommunityChatRoom(partnerId) {
         );
 
         const unsub = onSnapshot(q, (snapshot) => {
+            latestMessageDocsRef.current = snapshot.docs;
             setMessages(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+            if (uid) {
+                void syncMessageReceiptDocs({
+                    db,
+                    messageDocs: snapshot.docs,
+                    viewerId: uid,
+                    markRead: false,
+                });
+            }
         });
 
         return unsub;
-    }, [partnerId, isMember]);
+    }, [partnerId, isMember, uid]);
+
+    useEffect(() => {
+        if (readReceiptTimeoutRef.current) {
+            clearTimeout(readReceiptTimeoutRef.current);
+            readReceiptTimeoutRef.current = null;
+        }
+        if (!isMember || !partnerId || !uid || messages.length === 0 || isDisplaySession) {
+            return undefined;
+        }
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+            return undefined;
+        }
+
+        readReceiptTimeoutRef.current = setTimeout(() => {
+            void syncMessageReceiptDocs({
+                db,
+                messageDocs: latestMessageDocsRef.current,
+                viewerId: uid,
+                markRead: true,
+            });
+        }, 900);
+
+        return () => {
+            if (readReceiptTimeoutRef.current) {
+                clearTimeout(readReceiptTimeoutRef.current);
+                readReceiptTimeoutRef.current = null;
+            }
+        };
+    }, [isMember, messages, partnerId, uid, isDisplaySession]);
 
     const memberIdsKey = (partner?.communityMembers || []).join(',');
 
@@ -508,6 +603,9 @@ export function useCommunityChatRoom(partnerId) {
                         '',
                     createdAt: serverTimestamp(),
                     type,
+                    status: 'sent',
+                    deliveredTo: [],
+                    readBy: [],
                     pinned: false,
                     bannerSpotlight: false,
                     spotlightX: sanitizeBannerAxis(spotlightDefault.x),
@@ -1007,6 +1105,7 @@ export function useCommunityChatRoom(partnerId) {
         isMember,
         isBlockedFromCommunity,
         isHost,
+        isDisplaySession,
         isMutedInChat,
         partner,
         messages,

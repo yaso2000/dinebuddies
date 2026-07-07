@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { isAdminIdentity } from '../utils/adminAccess';
 import { auth } from '../firebase/config';
@@ -22,6 +23,7 @@ const fullPageSpinner =
 
 /** No auto-redirect to `/` — that fought HomeRouter and caused admin ↔ home flicker loops. */
 function AdminAccessDenied() {
+  const { t } = useTranslation();
   return (
     <div
       style={{
@@ -37,12 +39,12 @@ function AdminAccessDenied() {
         gap: '1rem'
       }}>
       
-            <AppText as="h1" style={{ margin: 0, fontSize: '1.25rem' }}>Access denied</AppText>
+            <AppText as="h1" style={{ margin: 0, fontSize: '1.25rem' }}>{t('access_denied')}</AppText>
             <AppText as="p" style={{ margin: 0, maxWidth: 420, color: '#94a3b8', lineHeight: 1.5 }}>
-                This account does not have admin panel access. You were not sent to the home feed automatically to avoid redirect loops.
+                {t('admin_access_denied_body')}
             </AppText>
             <Link to="/posts-feed" replace style={{ color: '#E86E2E', fontWeight: 700, textDecoration: 'none' }}>
-                Go to app feed
+                {t('go_to_app_feed')}
             </Link>
         </div>);
 

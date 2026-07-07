@@ -6,6 +6,7 @@ const functions = getFunctions(app, 'us-central1');
 const LONG_RUNNING_ADMIN_CALLS = new Set([
     'adminGenerateDemoUserImage',
     'adminGenerateDemoUserCharacterPair',
+    'adminResetAllCredits',
 ]);
 
 async function call(name, payload) {
@@ -21,6 +22,10 @@ export const adminApi = {
         call('adminSetUserFreezeStatus', { targetUid, frozen, freezeDays }),
     grantFreeCredits: (targetUid, amount, note = '') =>
         call('adminGrantFreeCredits', { targetUid, amount, note }),
+    resetAllCredits: (confirmPhrase, dryRun = false) =>
+        call('adminResetAllCredits', { confirmPhrase, dryRun }),
+    setUserSubscriptionTier: (targetUid, subscriptionTier, isBusinessUser = false) =>
+        call('adminSetUserSubscriptionTier', { targetUid, subscriptionTier, isBusinessUser }),
     deletePartner: (targetUid) => call('adminDeletePartner', { targetUid }),
     listInvitations: (opts = {}) => call('adminListInvitations', opts),
     moderateInvitation: (invitationId, action, inviteType = 'public') =>

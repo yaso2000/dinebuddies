@@ -15,9 +15,11 @@ import { normalizeLookingFor } from '../constants/personalInviteCategories';
 import { normalizeInvitePreference } from '../constants/privateProfileOptions';
 import { isUserOpenToDating, normalizeOpenToDating } from './openToDating';
 import { resolveProfileAvatarUrl, resolveProfileCoverUrl, resolveSwipeProfilePhotoUrl } from './profileGallery';
+import { readFavoritePlaces } from './favoritePlacesUtils';
 
-export const USER_DIRECTORY_DEFAULT_COVER =
-    'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&h=600&fit=crop';
+import { DEFAULT_PROFILE_COVER_FALLBACK } from '../constants/defaultProfileMedia';
+
+export const USER_DIRECTORY_DEFAULT_COVER = DEFAULT_PROFILE_COVER_FALLBACK;
 
 /** Neutral portrait fallback for dating swipe cards (never food/venue). */
 export const USER_DIRECTORY_DEFAULT_SWIPE_PHOTO =
@@ -49,6 +51,8 @@ export function mapDirectoryUser(publicDoc, userDoc = null) {
         directoryCoverIndex: u.directoryCoverIndex ?? 0,
         bio: String(u.bio || u.shortBio || '').slice(0, 120),
         ageRange: u.ageRange || u.ageCategory || '',
+        ageCategory: u.ageCategory || u.ageRange || '',
+        favoritePlaces: readFavoritePlaces(u),
         city: userPublic.city || u.city || '',
         country: userPublic.country || u.country || '',
         countryCode: userPublic.countryCode || u.countryCode || u.country_code || '',

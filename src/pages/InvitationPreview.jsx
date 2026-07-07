@@ -11,6 +11,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { AppText } from "../components/base";
+import { scheduleScrollPageToTop } from '../utils/scrollPageToTop';
 
 const InvitationPreview = () => {
   const { t, i18n } = useTranslation();
@@ -27,6 +28,11 @@ const InvitationPreview = () => {
   const [invitation, setInvitation] = useState(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (loading || !invitation?.id) return undefined;
+    return scheduleScrollPageToTop();
+  }, [loading, invitation?.id]);
 
   const templateStyles = invitation ? getTemplateStyle(
     invitation.templateType || 'classic',

@@ -61,10 +61,30 @@ import {
     INVITATION_ERROR_CODES,
     invitationErrorI18nKey,
 } from '../utils/invitationRules';
-import { cannotCreateInvitations } from '../utils/accountRole';
+import { cannotCreateInvitations, isBusinessUser } from '../utils/accountRole';
 import { getCallableErrorReason } from '../utils/callableErrorDetails';
 import { resolveInviteCategory, isPrivateHostedInvitation } from '../utils/inviteCategory';
 import { getHostedInvitationDetailsPath } from '../utils/hostedInvitationRoutes';
+
+/** Read live following[] from Firestore — avoids stale cache / stuck optimistic state. */
+async function readLiveFollowing(viewerUid, profileFallback = []) {
+    const fallback = asUidArray(profileFallback);
+    if (!viewerUid) return fallback;
+    try {
+        const snap = await getDoc(doc(db, 'users', viewerUid));
+        if (snap.exists()) return asUidArray(snap.data()?.following);
+    } catch (err) {
+        console.warn('[toggleFollow] readLiveFollowing', err?.message || err);
+    }
+    return fallback;
+}
+
+function canTargetAcceptFollows(targetData) {
+    if (!targetData || typeof targetData !== 'object') return false;
+    const role = String(targetData.role || 'user').toLowerCase();
+    if (role === 'business' || role === 'partner' || targetData.isBusiness === true) return false;
+    return targetData.privacySettings?.allowFollowing !== false;
+}
 
 const InvitationContext = createContext(null);
 
@@ -1293,7 +1313,10 @@ export const InvitationProvider = ({ children }) => {
         setInvitations(prev => prev.map(inv => inv.id === invId ? { ...inv, pendingChangeApproval: (inv.pendingChangeApproval || []).filter(id => id !== currentUser.id) } : inv));
     };
 
-    const effectiveFollowing = optimisticFollowing ?? firebaseProfile?.following ?? [];
+    const effectiveFollowing =
+        optimisticFollowing !== null
+            ? asUidArray(optimisticFollowing)
+            : asUidArray(firebaseProfile?.following);
 
     const effectiveJoinedCommunities =
         optimisticJoinedCommunities ??
@@ -1303,11 +1326,21 @@ export const InvitationProvider = ({ children }) => {
 
     useEffect(() => {
         if (optimisticFollowing === null) return;
-        const serverFollowing = firebaseProfile?.following ?? [];
-        const sameLength = optimisticFollowing.length === serverFollowing.length;
+        const serverFollowing = asUidArray(firebaseProfile?.following);
+        const opt = asUidArray(optimisticFollowing);
+        const sameLength = opt.length === serverFollowing.length;
         const sameMembers =
-            sameLength && optimisticFollowing.every((id) => serverFollowing.includes(id));
+            sameLength && opt.every((id) => serverFollowing.includes(id));
         if (sameMembers) {
+            setOptimisticFollowing(null);
+            return;
+        }
+        // Recover from stale optimistic built before profile snapshot loaded (subset of server).
+        const optimisticIsStrictSubset =
+            opt.length > 0 &&
+            opt.length < serverFollowing.length &&
+            opt.every((id) => serverFollowing.includes(id));
+        if (optimisticIsStrictSubset) {
             setOptimisticFollowing(null);
         }
     }, [firebaseProfile?.following, optimisticFollowing]);
@@ -1335,19 +1368,25 @@ export const InvitationProvider = ({ children }) => {
     }, [firebaseProfile?.joinedCommunities, currentUser?.joinedCommunities]);
 
     const toggleFollow = async (userId) => {
-        if (isGuest || !userId || userId === currentUser.id) return { ok: false };
+        const viewerUid = currentUser?.uid || currentUser?.id;
+        if (!userId || !viewerUid || userId === viewerUid) return { ok: false };
 
-        if (currentUser?.role === 'business' || currentUser?.isBusiness || firebaseProfile?.role === 'business') {
+        if (isGuest || !auth.currentUser) {
+            showToast(i18n.t('sign_in_required', 'Please sign in first.'), 'info');
+            return { ok: false, reason: 'auth' };
+        }
+
+        if (isBusinessUser(firebaseProfile)) {
             showToast('Business accounts cannot follow other accounts.', 'error');
             return { ok: false };
         }
 
-        const isCurrentlyFollowing = effectiveFollowing.includes(userId);
-        const viewerUid = currentUser.uid || currentUser.id;
+        const liveFollowing = await readLiveFollowing(viewerUid, firebaseProfile?.following);
+        const isCurrentlyFollowing = liveFollowing.includes(userId);
 
         const nextFollowing = isCurrentlyFollowing
-            ? effectiveFollowing.filter((id) => id !== userId)
-            : [...effectiveFollowing, userId];
+            ? liveFollowing.filter((id) => id !== userId)
+            : [...liveFollowing, userId];
         setOptimisticFollowing(nextFollowing);
 
         try {
@@ -1355,6 +1394,10 @@ export const InvitationProvider = ({ children }) => {
                 const result = await unfollowUser(viewerUid, userId);
                 if (!result.success) {
                     setOptimisticFollowing(null);
+                    showToast(
+                        i18n.t('discovery_follow_failed', 'Could not follow. Try again.'),
+                        'error'
+                    );
                     return { ok: false };
                 }
                 return { ok: true };
@@ -1363,13 +1406,27 @@ export const InvitationProvider = ({ children }) => {
             const targetUserDoc = await getDoc(doc(db, 'users', userId));
             if (!targetUserDoc.exists()) {
                 setOptimisticFollowing(null);
+                showToast(
+                    i18n.t('follow_target_not_found', 'This account cannot be followed right now.'),
+                    'error'
+                );
                 return { ok: false };
             }
             const targetData = targetUserDoc.data() || {};
-            const targetRole = targetData.role || 'user';
-            if (targetRole === 'business') {
+            if (!canTargetAcceptFollows(targetData)) {
                 setOptimisticFollowing(null);
-                return { ok: false };
+                if ((targetData.role || 'user') === 'business') {
+                    showToast(
+                        i18n.t('follow_business_not_allowed', 'Business accounts cannot be followed.'),
+                        'info'
+                    );
+                } else {
+                    showToast(
+                        i18n.t('follow_not_allowed_privacy', 'This member is not accepting new followers.'),
+                        'info'
+                    );
+                }
+                return { ok: false, reason: 'privacy' };
             }
 
             const targetAlreadyFollowsViewer = (targetData.following || []).includes(viewerUid);
@@ -1395,7 +1452,25 @@ export const InvitationProvider = ({ children }) => {
                     );
                     return { ok: false, reason: 'cooldown', ...result };
                 }
-                return { ok: false };
+                if (result.reason === 'privacy' || result.reason === 'target_business') {
+                    showToast(
+                        i18n.t('follow_not_allowed_privacy', 'This member is not accepting new followers.'),
+                        'info'
+                    );
+                    return { ok: false, reason: result.reason };
+                }
+                if (result.reason === 'viewer_not_found') {
+                    showToast(
+                        i18n.t('follow_viewer_profile_missing', 'Complete your profile before following others.'),
+                        'error'
+                    );
+                    return { ok: false, reason: result.reason };
+                }
+                showToast(
+                    i18n.t('discovery_follow_failed', 'Could not follow. Try again.'),
+                    'error'
+                );
+                return { ok: false, reason: result.reason || result.message };
             }
 
             const viewerProfile = { id: viewerUid, ...firebaseProfile, ...currentUser };
@@ -1435,6 +1510,10 @@ export const InvitationProvider = ({ children }) => {
         } catch (error) {
             setOptimisticFollowing(null);
             console.error('Error in toggleFollow:', error);
+            showToast(
+                i18n.t('discovery_follow_failed', 'Could not follow. Try again.'),
+                'error'
+            );
             return { ok: false };
         }
     };

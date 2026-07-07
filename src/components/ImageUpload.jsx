@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { FaCamera, FaTimes } from 'react-icons/fa';
 import { useToast } from '../context/ToastContext';
+import { useTranslation } from 'react-i18next';
 import './ImageUpload.css';
 import { AppText } from "./base";
 
@@ -14,6 +15,7 @@ const ImageUpload = ({
   showPreview = true,
   allowRemove = true
 }) => {
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const [preview, setPreview] = useState(currentImage);
   const [isDragging, setIsDragging] = useState(false);
@@ -25,13 +27,13 @@ const ImageUpload = ({
     // Validate file type
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      showToast('Only JPG, PNG, and WebP images are allowed', 'error');
+      showToast(t('image_upload_type_error', 'Only JPG, PNG, and WebP images are allowed'), 'error');
       return;
     }
 
     // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
-      showToast('Image size must be less than 5MB', 'error');
+      showToast(t('image_upload_size_error', 'Image size must be less than 5MB'), 'error');
       return;
     }
 

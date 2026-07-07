@@ -4,11 +4,23 @@
  * - 2nd click (already joined): navigate to community chat
  */
 
-export function resolveBusinessCommunityId(joinedCommunities = [], { ownerId, businessId } = {}) {
+/**
+ * Resolve the Firestore community owner id for join / chat navigation.
+ * - Virtual Google imports: `restaurants/{placeId}` (not placeholder admin `ownerId`)
+ * - Claimed businesses with a real owner uid: prefer `ownerId` when distinct from doc id
+ * - Always prefer whichever id is already in `joinedCommunities`
+ */
+export function resolveBusinessCommunityId(
+  joinedCommunities = [],
+  { ownerId, businessId, isVirtual } = {}
+) {
   const joined = Array.isArray(joinedCommunities) ? joinedCommunities : [];
-  if (ownerId && joined.includes(ownerId)) return ownerId;
   if (businessId && joined.includes(businessId)) return businessId;
-  return ownerId || businessId || null;
+  if (ownerId && joined.includes(ownerId)) return ownerId;
+
+  if (isVirtual && businessId) return businessId;
+  if (ownerId && businessId && ownerId !== businessId) return ownerId;
+  return businessId || ownerId || null;
 }
 
 export function isJoinedToBusinessCommunity(joinedCommunities = [], communityId) {

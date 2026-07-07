@@ -8,7 +8,8 @@ import { FaPaperPlane, FaMicrophone, FaTrash, FaExpand, FaCompress, FaArrowDown,
 import { startRecording, uploadVoiceMessage, formatDuration } from '../utils/mediaUtils';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
-import EmojiPickerPortal, { isTouchOrCoarsePointer } from './EmojiPickerPortal';
+import EmojiPickerPortal from './EmojiPickerPortal';
+import { handleEmojiButtonClick, showComposerEmojiButton } from '../utils/emojiInputMode';
 import '../pages/CommunityChatRoom.css';
 import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
 import { AppText, AppTextInput } from "./base";
@@ -446,11 +447,14 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
 
           <>
                             {/* Emoji Button — desktop only */}
-                            {!isTouchOrCoarsePointer() &&
+                            {showComposerEmojiButton() ?
             <button
               ref={emojiBtnRef}
               type="button"
-              onClick={(e) => {e.stopPropagation();setShowEmojiPicker((prev) => !prev);}}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEmojiButtonClick({ inputRef, setPickerOpen: setShowEmojiPicker });
+              }}
               style={{
                 background: 'none', border: 'none',
                 fontSize: '1.3rem', cursor: 'pointer',
@@ -460,7 +464,7 @@ const GroupChat = ({ collectionPath, height = '500px' }) => {
               }}
               title="Emoji">
               😊</button>
-            }
+            : null}
 
                             <AppTextInput
               ref={inputRef}

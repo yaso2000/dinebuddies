@@ -61,6 +61,7 @@ import {
 } from '../utils/oauthRedirectFinish';
 import { createGoogleAuthProvider } from '../utils/googleAuthProvider';
 import { getFirebaseRedirectResultOnce, resetFirebaseRedirectBootstrap } from '../firebase/authBootstrap';
+import { getFirebaseOAuthHandlerUrl } from '../firebase/config';
 import { needsOAuthRedirectProfileFinish, shouldRunOAuthRedirectBootstrap } from '../utils/oauthRedirectState';
 import { adminSecurityService } from '../services/adminSecurityService';
 import {
@@ -194,11 +195,14 @@ export const AuthProvider = ({ children }) => {
     const lastAuthUidRef = useRef(null);
     /** After a server snapshot, ignore stale persisted-cache snapshots that would re-open onboarding. */
     const profileServerSyncedRef = useRef(false);
+    /** Prevents profile listener from wiping sync after signInWithEmail already bootstrapped this uid. */
+    const lastBootstrappedUidRef = useRef(null);
     const isSigningOutRef = useRef(false);
     const { showToast } = useToast();
 
     const markProfileSynced = (uid) => {
         profileServerSyncedRef.current = true;
+        if (uid) lastBootstrappedUidRef.current = uid;
         setProfileServerSynced(true);
         setLoading(false);
         if (uid && auth.currentUser?.uid === uid) {
@@ -208,6 +212,7 @@ export const AuthProvider = ({ children }) => {
 
     const resetSignedInSessionState = () => {
         profileServerSyncedRef.current = false;
+        lastBootstrappedUidRef.current = null;
         setProfileServerSynced(false);
         setUserProfile(null);
         setIsGuest(false);
@@ -277,6 +282,7 @@ export const AuthProvider = ({ children }) => {
                 if (!sameSignedInUser) {
                     setLoading(true);
                     profileServerSyncedRef.current = false;
+                    lastBootstrappedUidRef.current = null;
                     setProfileServerSynced(false);
                 }
             } else {
@@ -338,12 +344,17 @@ export const AuthProvider = ({ children }) => {
         const uid = currentUser?.uid;
         if (!uid) {
             profileServerSyncedRef.current = false;
+            lastBootstrappedUidRef.current = null;
             setProfileServerSynced(false);
             return;
         }
 
-        profileServerSyncedRef.current = false;
-        setProfileServerSynced(false);
+        const alreadyBootstrapped =
+            lastBootstrappedUidRef.current === uid && profileServerSyncedRef.current;
+        if (!alreadyBootstrapped) {
+            profileServerSyncedRef.current = false;
+            setProfileServerSynced(false);
+        }
         const userRef = doc(db, 'users', uid);
         let cancelled = false;
 
@@ -387,6 +398,7 @@ export const AuthProvider = ({ children }) => {
         }, 25000);
 
         (async () => {
+            if (alreadyBootstrapped) return;
             try {
                 const snap = await getDocFromServer(userRef);
                 if (cancelled) return;
@@ -782,6 +794,15 @@ export const AuthProvider = ({ children }) => {
 
     // Google Sign In
     const signInWithGoogle = async () => {
+        if (isInAppBrowser()) {
+            const openedExternal = openInExternalBrowser();
+            if (!openedExternal) {
+                const err = new Error('Please open the app in Chrome to use Google login.');
+                err.code = 'auth/in-app-browser';
+                throw err;
+            }
+            return null;
+        }
         try {
             const provider = createGoogleAuthProvider();
             const oauth = await firebaseOAuthPopupOrRedirect(provider);
@@ -1133,10 +1154,13 @@ export const AuthProvider = ({ children }) => {
 
         const pid = await resolveRedirectProviderId(user, result);
         if (!isKnownOAuthProviderId(pid)) {
+            const handler = getFirebaseOAuthHandlerUrl();
             stashOAuthRedirectError({
-                code: 'auth/embedded-oauth-redirect-lost',
+                code: peekOAuthRedirectProvider() === 'apple.com' ? 'auth/apple-config-mismatch' : 'auth/embedded-oauth-redirect-lost',
                 message:
-                    'Sign-in did not finish. Try again in Safari or Chrome. If Apple fails, verify Return URL https://dinebuddies.firebaseapp.com/__/auth/handler in Apple Developer.',
+                    peekOAuthRedirectProvider() === 'apple.com'
+                        ? `Apple sign-in did not finish. In Apple Developer → Services ID, add Return URL exactly: ${handler}`
+                        : 'Sign-in did not finish. Try again in Safari or Chrome.',
             });
             clearOAuthRedirectPending();
             setLoading(false);
@@ -1252,15 +1276,32 @@ export const AuthProvider = ({ children }) => {
         };
     }, []);
 
-    // Finish Apple/Google redirect sign-in when session appears (no UI block — LoginHub stays interactive).
+    // Finish Apple/Google/Facebook redirect sign-in when session appears (no UI block — LoginHub stays interactive).
     useEffect(() => {
         if (!shouldRunOAuthRedirectBootstrap() && !hasFirebaseAuthReturnInUrl()) {
             return undefined;
         }
 
         let cancelled = false;
+
+        const tryFinishRedirect = async (result) => {
+            let user = result?.user || auth.currentUser;
+            if (!user) {
+                await auth.authStateReady();
+                user = auth.currentUser;
+            }
+            if (!user || oauthRedirectHandledRef.current.has(user.uid)) return false;
+
+            const finished = await completeOAuthRedirectUser(user, result);
+            if (finished) {
+                stripFirebaseAuthParamsFromUrl();
+            }
+            return finished;
+        };
+
         const loginTimeout = setTimeout(() => {
             if (cancelled) return;
+            if (auth.currentUser) return;
             clearOAuthRedirectPending();
             setLoading(false);
             stashOAuthRedirectError({
@@ -1268,23 +1309,13 @@ export const AuthProvider = ({ children }) => {
                 message:
                     'Sign-in took too long. Try again. For Apple on iPhone, use Safari (not WhatsApp or Instagram).',
             });
-        }, 20000);
+        }, 35000);
 
         (async () => {
             try {
                 const result = await getFirebaseRedirectResultOnce();
-                if (cancelled) return;
-
-                let user = result?.user || auth.currentUser;
-                if (!user) {
-                    await auth.authStateReady();
-                    user = auth.currentUser;
-                }
-                if (!user || oauthRedirectHandledRef.current.has(user.uid)) return;
-
-                const finished = await completeOAuthRedirectUser(user, result);
-                if (finished) {
-                    stripFirebaseAuthParamsFromUrl();
+                if (!cancelled) {
+                    await tryFinishRedirect(result);
                 }
             } catch (error) {
                 if (!cancelled) {
@@ -1297,11 +1328,29 @@ export const AuthProvider = ({ children }) => {
             }
         })();
 
+        // Backup: onAuthStateChanged can fire before getRedirectResult resolves — do not cancel on uid change.
+        const unsubAuth = onAuthStateChanged(auth, (user) => {
+            if (cancelled || !user || oauthRedirectHandledRef.current.has(user.uid)) return;
+            void (async () => {
+                try {
+                    const result = await getFirebaseRedirectResultOnce();
+                    if (!cancelled) {
+                        await tryFinishRedirect(result);
+                    }
+                } catch {
+                    if (!cancelled) {
+                        await tryFinishRedirect(null);
+                    }
+                }
+            })();
+        });
+
         return () => {
             cancelled = true;
             clearTimeout(loginTimeout);
+            unsubAuth();
         };
-    }, [currentUser?.uid]);
+    }, []);
 
     // Update user profile
     const updateUserProfile = async (updates) => {
@@ -1417,7 +1466,7 @@ export const AuthProvider = ({ children }) => {
         const uid = currentUser?.uid || auth.currentUser?.uid || null;
 
         clearOAuthRedirectPending();
-        resetFirebaseRedirectBootstrap();
+        resetFirebaseRedirectBootstrap({ force: true });
         dismissFacebookSdkOverlay();
         clearGuestModeForSignIn();
         markPostLogoutRedirect();
@@ -1449,6 +1498,7 @@ export const AuthProvider = ({ children }) => {
         isSigningOutRef.current = false;
         lastAuthUidRef.current = null;
         profileServerSyncedRef.current = false;
+        lastBootstrappedUidRef.current = null;
         setProfileServerSynced(false);
         setCurrentUser(null);
         setUserProfile(null);

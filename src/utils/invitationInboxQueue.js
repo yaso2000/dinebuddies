@@ -1,4 +1,5 @@
 import { isPrivateInvitationPublished } from './socialInvitationDraft';
+import { isPendingInviteForUser } from './inviteLanding';
 
 /** @param {unknown} v */
 export function normInvitationUid(v) {
@@ -28,22 +29,9 @@ export function buildPendingInvitationInboxQueue(invitations, viewerUid, closedI
     return invitations
         .filter((inv) => {
             if (!inv?.id) return false;
+            if (!isPendingInviteForUser(inv, uid)) return false;
             if (!isPrivateInvitationPublished(inv)) return false;
-
-            const hostId = normInvitationUid(inv.authorId || inv.author?.id);
-            if (hostId && hostId === uid) return false;
-
-            const invited = Array.isArray(inv.invitedFriends) ? inv.invitedFriends : [];
-            const isInvitee = invited.some((f) => normInvitationUid(f) === uid);
-            if (!isInvitee) return false;
-
-            const rsvp =
-                inv.rsvps?.[uid] ??
-                inv.rsvps?.[viewerUid];
-            if (rsvp && rsvp !== 'pending') return false;
-
             if (closedIds?.has(inv.id)) return false;
-
             return true;
         })
         .sort((a, b) => ts(a) - ts(b));

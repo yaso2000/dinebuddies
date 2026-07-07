@@ -341,7 +341,7 @@ const NotificationsSettings = () => {
   if (loading) {
     return (
       <div className="page-container">
-                <div className="loading-spinner">Loading...</div>
+                <div className="loading-spinner">{t('loading', 'Loading...')}</div>
             </div>);
 
   }

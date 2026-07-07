@@ -89,13 +89,44 @@ export function isMacSafariBrowser() {
     return /Safari/i.test(ua) && /Apple/i.test(vendor);
 }
 
+/** Installed PWA (Add to Home Screen) — OAuth popups break under COOP; use redirect. */
+export function isStandalonePwa() {
+    if (typeof window === 'undefined') return false;
+    try {
+        if (window.matchMedia?.('(display-mode: standalone)')?.matches) return true;
+    } catch {
+        /* ignore */
+    }
+    return Boolean(window.navigator?.standalone);
+}
+
+/** Android phone/tablet Chrome — popup OAuth is unreliable; use redirect like iOS. */
+export function isAndroidTouchDevice() {
+    if (typeof navigator === 'undefined') return false;
+    return /Android/i.test(navigator.userAgent || '');
+}
+
+export function isMobileTouchDevice() {
+    return isIosTouchDevice() || isAndroidTouchDevice();
+}
+
+/**
+ * Firebase OAuth redirect (not popup):
+ * - iOS, Mac Safari, installed PWA → redirect (popup unreliable)
+ * - Android Chrome → popup (redirect + cross-origin authDomain breaks Google sign-in)
+ * - Desktop → popup first
+ */
 export function preferOAuthRedirectOnThisDevice() {
     if (isEmbeddedPreviewBrowser()) return false;
     if (isLocalDevHost()) return false;
-    return isIosTouchDevice() || isMacSafariBrowser();
+    if (isAndroidTouchDevice()) return false;
+    return isIosTouchDevice() || isMacSafariBrowser() || isStandalonePwa();
 }
 
-/** Use popup for all providers. Facebook on iOS uses Meta SDK — not Firebase redirect. */
+/**
+ * Popup first for all providers (original working flow).
+ * Redirect is only used as a desktop fallback when popup is blocked.
+ */
 export function preferOAuthRedirectForProvider(_providerId) {
     return false;
 }
@@ -221,6 +252,12 @@ function readOAuthRedirectStartedAt() {
     } catch {
         return null;
     }
+}
+
+/** True when an OAuth redirect was started recently (avoids stale-flag error banners). */
+export function isRecentOAuthRedirectAttempt(maxAgeMs = 120000) {
+    const started = readOAuthRedirectStartedAt();
+    return Boolean(started && Date.now() - started <= maxAgeMs);
 }
 
 /** Pending flag with auto-expire — stale flags were freezing the login page on iPhone. */

@@ -29,6 +29,7 @@ const CODE_TO_I18N_KEY = {
     'auth/operation-not-allowed': 'auth_operation_not_allowed',
     'auth/configuration-not-found': 'auth_configuration_not_found',
     'auth/embedded-oauth-redirect-lost': 'auth_embedded_oauth_redirect_lost',
+    'auth/apple-config-mismatch': 'auth_apple_config_mismatch',
     'auth/missing-email': 'auth_missing_email',
     'auth/invalid-email': 'auth_invalid_email',
     'permission-denied': 'auth_permission_denied',
@@ -70,10 +71,10 @@ export function getAuthErrorMessage(error) {
                 'Apple sign-in is not enabled yet. Enable it in Firebase Console → Authentication.'
             );
         }
-        if (error?.code === 'auth/internal-error' || error?.code === 'auth/invalid-credential') {
+        if (error?.code === 'auth/internal-error' || error?.code === 'auth/invalid-credential' || error?.code === 'auth/apple-config-mismatch') {
             return tAuth(
                 'auth_apple_config_mismatch',
-                'Apple Sign-In failed. In Apple Developer, set Return URL to your Firebase handler (run npm run oauth:apple-setup for the exact URL). Also verify Services ID and key in Firebase → Apple provider.'
+                'Apple Sign-In failed. In Apple Developer → Services ID, verify Return URL https://dinebuddies.firebaseapp.com/__/auth/handler'
             );
         }
         if (error?.code === 'auth/unauthorized-domain') {

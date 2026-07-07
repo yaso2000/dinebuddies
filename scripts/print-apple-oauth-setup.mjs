@@ -10,9 +10,15 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 dotenv.config({ path: resolve(root, '.env') });
 
 const projectId = process.env.VITE_FIREBASE_PROJECT_ID || 'dinebuddies';
-const authDomain = process.env.VITE_FIREBASE_AUTH_DOMAIN || `${projectId}.firebaseapp.com`;
+const envDomain = String(process.env.VITE_FIREBASE_AUTH_DOMAIN || '').trim();
+const authDomain =
+    envDomain && !envDomain.includes('your-')
+        ? envDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
+        : 'www.dinebuddies.com';
 
 const returnUrls = [
+    `https://www.dinebuddies.com/__/auth/handler`,
+    `https://dinebuddies.com/__/auth/handler`,
     `https://${authDomain}/__/auth/handler`,
     `https://${projectId}.firebaseapp.com/__/auth/handler`,
     `https://${projectId}.web.app/__/auth/handler`,
@@ -40,8 +46,10 @@ console.log('   Enable "Sign in with Apple" → Configure:');
 console.log('   Primary App ID: your iOS/macOS app id (if any)\n');
 console.log('   Domains and Subdomains (add ALL):');
 domains.forEach((d) => console.log('     ', d));
-console.log('\n   Return URLs (add ALL — must match exactly):');
+console.log('\n   Return URLs (add ALL — must match exactly; www.dinebuddies.com is REQUIRED for mobile):');
 returnUrls.forEach((u) => console.log('     ', u));
+console.log('\n   IMPORTANT: After enabling same-origin auth on www.dinebuddies.com, Apple MUST include');
+console.log('   https://www.dinebuddies.com/__/auth/handler — firebaseapp.com alone is not enough.\n');
 
 console.log('\n3) Firebase → Authentication → Settings → Authorized domains');
 console.log(`   https://console.firebase.google.com/project/${projectId}/authentication/settings`);

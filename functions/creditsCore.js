@@ -243,6 +243,32 @@ function isBusinessUserDoc(d) {
     );
 }
 
+/** Zero-value patch for all credit wallet + lifetime counters on users/{uid}. */
+function creditBalanceResetPatch() {
+    return {
+        paidCredits: 0,
+        savedCredits: 0,
+        freeCredits: 0,
+        totalCreditsPurchased: 0,
+        totalCreditsSpent: 0,
+        totalSavedCreditsEarned: 0,
+    };
+}
+
+/** @param {Record<string, unknown>|null|undefined} userData */
+function userHasAnyCreditBalance(userData) {
+    const d = userData || {};
+    const fields = [
+        d.paidCredits,
+        d.savedCredits,
+        d.freeCredits,
+        d.totalCreditsPurchased,
+        d.totalCreditsSpent,
+        d.totalSavedCreditsEarned,
+    ];
+    return fields.some((v) => Math.max(0, Math.floor(Number(v) || 0)) > 0);
+}
+
 module.exports = {
     db,
     FieldValue,
@@ -259,4 +285,6 @@ module.exports = {
     grantAdminPaidCreditsInTransaction,
     isRegularUserDoc,
     isBusinessUserDoc,
+    creditBalanceResetPatch,
+    userHasAnyCreditBalance,
 };

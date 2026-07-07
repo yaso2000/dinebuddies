@@ -103,7 +103,7 @@ const EnhancedReviews = ({
       setReplyingTo(null);
     } catch (error) {
       console.error('Error posting reply:', error);
-      showToast('Failed to post reply', 'error');
+      showToast(t('review_reply_failed', 'Failed to post reply'), 'error');
     } finally {
       setSubmittingReply(false);
     }

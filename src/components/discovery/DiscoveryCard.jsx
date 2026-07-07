@@ -26,6 +26,8 @@ import { AppText } from "../base";
 
 const SWIPE_X_SKIP_THRESHOLD = 100;
 const BURST_MS = 1400;
+const DOUBLE_ACTIVATE_MS = 320;
+const DOUBLE_ACTIVATE_PX = 22;
 
 export default function DiscoveryCard({
   profile,
@@ -57,6 +59,7 @@ export default function DiscoveryCard({
   const exitHandledRef = useRef(false);
   const draggingRef = useRef(false);
   const burstTimerRef = useRef(null);
+  const lastActivateRef = useRef({ at: 0, x: 0, y: 0 });
 
   const [likeBusy, setLikeBusy] = useState(false);
   const [greetingBusy, setGreetingBusy] = useState(false);
@@ -122,6 +125,41 @@ export default function DiscoveryCard({
     resetPosition();
   };
 
+  const isInteractiveTarget = useCallback((target) => {
+    if (!target?.closest) return false;
+    return Boolean(target.closest('.discovery-card__actions, button, a'));
+  }, []);
+
+  const handleNavigateActivate = useCallback(
+    (clientX, clientY) => {
+      if (!isTop || exitHandledRef.current || draggingRef.current) return;
+
+      const now = Date.now();
+      const prev = lastActivateRef.current;
+      const dt = now - prev.at;
+      const dist = Math.hypot(clientX - prev.x, clientY - prev.y);
+
+      if (prev.at && dt <= DOUBLE_ACTIVATE_MS && dist <= DOUBLE_ACTIVATE_PX) {
+        lastActivateRef.current = { at: 0, x: 0, y: 0 };
+        triggerSkip();
+        return;
+      }
+
+      lastActivateRef.current = { at: now, x: clientX, y: clientY };
+    },
+    [isTop, triggerSkip]
+  );
+
+  const handleCardPointerUp = useCallback(
+    (e) => {
+      if (!isTop) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (isInteractiveTarget(e.target)) return;
+      handleNavigateActivate(e.clientX, e.clientY);
+    },
+    [handleNavigateActivate, isInteractiveTarget, isTop]
+  );
+
   const handleToggleLike = async (e) => {
     e.stopPropagation();
     if (!isTop || likeBusy) return;
@@ -185,7 +223,13 @@ export default function DiscoveryCard({
     try {
       const wasFollowing = isFollowingUser;
       const result = await toggleFollow(profile.id);
-      if (result?.ok && result.connectionComplete && result.connectionKind) {
+      if (!result?.ok) {
+        if (result?.reason !== 'cooldown') {
+          showToast(t('discovery_follow_failed', 'Could not follow. Try again.'), 'error');
+        }
+        return;
+      }
+      if (result.connectionComplete && result.connectionKind) {
         setCanChat(true);
         celebrateMatch({
           type: connectionKindToCelebrationType(result.connectionKind),
@@ -193,7 +237,7 @@ export default function DiscoveryCard({
           otherId: profile.id,
           otherName: profile.name,
         });
-      } else if (result?.ok && wasFollowing) {
+      } else if (wasFollowing) {
         await refreshCanChat();
       }
     } catch (err) {
@@ -237,7 +281,10 @@ export default function DiscoveryCard({
       dragElastic={0.9}
       dragMomentum={false}
       onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}>
+      onDragEnd={handleDragEnd}
+      onPointerUp={handleCardPointerUp}
+      title={isTop ? t('discovery_double_tap_next', 'Double-click or double-tap for next profile') : undefined}
+      aria-label={isTop ? t('discovery_double_tap_next', 'Double-click or double-tap for next profile') : undefined}>
 
       <img
         src={profile.profilePhoto}
@@ -259,7 +306,7 @@ export default function DiscoveryCard({
       </div>
 
       <div className="discovery-card__actions discovery-card__actions--ghost">
-        {useDatingLike ?
+        {useDatingLike ? (
         <button
           type="button"
           className={`discovery-card__action discovery-card__action--ghost discovery-card__action--like${liked ? ' discovery-card__action--liked' : ' discovery-card__action--like-idle'}`}
@@ -269,7 +316,8 @@ export default function DiscoveryCard({
           onPointerDown={(e) => e.stopPropagation()}
           onClick={handleToggleLike}>
           <FaHeart size={26} />
-        </button> :
+        </button>
+        ) : (
         <button
           type="button"
           className={`discovery-card__action discovery-card__action--ghost discovery-card__action--follow${isFollowingUser ? ' discovery-card__action--following' : ''}`}
@@ -279,7 +327,8 @@ export default function DiscoveryCard({
           onPointerDown={(e) => e.stopPropagation()}
           onClick={handleFollow}>
           {isFollowingUser ? <FaUserCheck size={24} /> : <FaUserPlus size={24} />}
-        </button>}
+        </button>
+        )}
         <button
           type="button"
           className={`discovery-card__action discovery-card__action--ghost discovery-card__action--greeting${greetedToday ? ' discovery-card__action--greeted' : ''}`}

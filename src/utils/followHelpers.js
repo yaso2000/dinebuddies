@@ -1,16 +1,19 @@
+import app, { db } from '../firebase/config';
 import { doc, updateDoc, arrayUnion, arrayRemove, increment, getDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { notifyNewFollower } from './notificationHelpers';
 import { getSafeAvatar } from './avatarUtils';
 import { isHiddenFromConsumerApp } from './consumerSearchExclusions';
+import { getCallableErrorReason } from './callableErrorDetails';
 import {
   checkFollowRefollowAllowed,
   clearFollowCooldown,
   recordFollowCancelled,
 } from './connectionActionCooldown';
 
-const functions = getFunctions();
+const FUNCTIONS_REGION = 'us-central1';
+const functions = getFunctions(app, FUNCTIONS_REGION);
+const setUserFollowCallable = httpsCallable(functions, 'setUserFollow');
 const listUserNetworkCallable = httpsCallable(functions, 'listUserNetwork');
 const getFollowerCountCallable = httpsCallable(functions, 'getFollowerCount');
 
@@ -33,19 +36,150 @@ function callListUserNetwork(payload) {
     return promise;
 }
 
-const mapNetworkUser = (user) => ({
-    id: user?.id || user?.uid || '',
-    uid: user?.uid || user?.id || '',
-    name: user?.displayName || user?.display_name || 'User',
-    display_name: user?.displayName || user?.display_name || 'User',
-    avatar_url: user?.avatarUrl || user?.avatar_url || '',
-    photo_url: user?.avatarUrl || user?.avatar_url || '',
-    profileType: user?.profileType || 'user',
-    bio: '',
-    city: user?.city || '',
-    country: user?.country || '',
-    following: []
-});
+function isCallableUnavailable(error) {
+    const code = error?.code || '';
+    return (
+        code === 'functions/not-found' ||
+        code === 'functions/unavailable' ||
+        code === 'functions/deadline-exceeded' ||
+        code === 'functions/internal'
+    );
+}
+
+async function followViaDirectFirestore(currentUserId, targetUserId, currentUserData, { skipAlreadyCheck = false, skipCooldown = false } = {}) {
+    if (!skipCooldown) {
+        const allowed = await checkFollowRefollowAllowed(currentUserId, targetUserId);
+        if (!allowed.ok) {
+            return {
+                success: false,
+                message: allowed.reason === 'cooldown' ? 'cooldown' : 'follow_failed',
+                reason: allowed.reason,
+                cancelledAtMs: allowed.cancelledAtMs,
+                retryAtMs: allowed.retryAtMs,
+            };
+        }
+    }
+
+    const currentUserRef = doc(db, 'users', currentUserId);
+    const targetUserRef = doc(db, 'users', targetUserId);
+
+    let followerData = currentUserData;
+    if (!skipAlreadyCheck) {
+        const currentUserDoc = await getDoc(currentUserRef);
+        if (!currentUserDoc.exists()) {
+            return { success: false, message: 'viewer_not_found', reason: 'viewer_not_found' };
+        }
+        const currentUserFollowing = currentUserDoc.data()?.following || [];
+        if (currentUserFollowing.includes(targetUserId)) {
+            return { success: false, message: 'Already following' };
+        }
+        if (!followerData) {
+            followerData = {
+                id: currentUserId,
+                name: currentUserDoc.data()?.name || currentUserDoc.data()?.display_name || 'Someone',
+                avatar: getSafeAvatar(currentUserDoc.data()),
+            };
+        }
+    } else if (!followerData) {
+        followerData = {
+            id: currentUserId,
+            name: 'Someone',
+            avatar: getSafeAvatar(null),
+        };
+    }
+
+    await updateDoc(currentUserRef, { following: arrayUnion(targetUserId) });
+    try {
+        await updateDoc(targetUserRef, { followersCount: increment(1) });
+    } catch (counterErr) {
+        console.warn('[followUser] followersCount increment failed', counterErr?.message || counterErr);
+    }
+
+    void clearFollowCooldown(currentUserId, targetUserId).catch(() => {});
+
+    return { success: true, message: 'Followed successfully', followerData };
+}
+
+async function unfollowViaDirectFirestore(currentUserId, targetUserId) {
+    const currentUserRef = doc(db, 'users', currentUserId);
+    const targetUserRef = doc(db, 'users', targetUserId);
+
+    await updateDoc(currentUserRef, { following: arrayRemove(targetUserId) });
+    try {
+        await updateDoc(targetUserRef, { followersCount: increment(-1) });
+    } catch (counterErr) {
+        console.warn('[unfollowUser] followersCount decrement failed', counterErr?.message || counterErr);
+    }
+
+    void recordFollowCancelled(currentUserId, targetUserId).catch(() => {});
+
+    return { success: true };
+}
+
+function getCallableErrorDetails(error) {
+    if (!error || typeof error !== 'object') return null;
+    const details = error.details;
+    return details && typeof details === 'object' ? details : null;
+}
+
+function mapFollowCallableError(error) {
+    const reason = getCallableErrorReason(error);
+    const details = getCallableErrorDetails(error);
+    if (reason === 'cooldown' && details) {
+        return {
+            success: false,
+            message: 'cooldown',
+            reason: 'cooldown',
+            cancelledAtMs: details.cancelledAtMs,
+            retryAtMs: details.retryAtMs,
+        };
+    }
+    if (reason === 'privacy' || reason === 'target_business') {
+        return { success: false, message: reason, reason };
+    }
+    if (reason === 'target_not_found') {
+        return { success: false, message: 'target_not_found', reason: 'target_not_found' };
+    }
+    if (reason === 'viewer_not_found') {
+        return { success: false, message: 'viewer_not_found', reason: 'viewer_not_found' };
+    }
+    if (reason === 'viewer_business') {
+        return { success: false, message: 'viewer_business', reason: 'viewer_business' };
+    }
+    return {
+        success: false,
+        message: error?.message || 'follow_failed',
+        reason: reason || 'error',
+    };
+}
+
+const mapNetworkUser = (user) => {
+    const avatar =
+        user?.avatarUrl ||
+        user?.avatar_url ||
+        user?.photo_url ||
+        user?.photoURL ||
+        user?.avatar ||
+        '';
+    return {
+        id: user?.id || user?.uid || '',
+        uid: user?.uid || user?.id || '',
+        name: user?.displayName || user?.display_name || 'User',
+        display_name: user?.displayName || user?.display_name || 'User',
+        avatar_url: avatar,
+        photo_url: avatar,
+        photoURL: avatar,
+        avatar: avatar,
+        avatarUrl: avatar,
+        profileGallery: user?.profileGallery,
+        gender: user?.gender || null,
+        profileType: user?.profileType || 'user',
+        bio: '',
+        city: user?.city || '',
+        country: user?.country || '',
+        following: [],
+    };
+};
 
 const filterVisibleNetworkUsers = (users) =>
     (users || []).filter((user) => !isHiddenFromConsumerApp({ id: user?.id || user?.uid, role: user?.role, accountRole: user?.accountRole }));
@@ -149,97 +283,105 @@ export const getMutualFollowersCount = (user1Following = [], user2Following = []
 };
 
 /**
- * Follow a user
- * @param {{ skipAlreadyCheck?: boolean, skipCooldown?: boolean, skipDailyLimit?: boolean }} [options]
+ * Follow a user (server-side callable — reliable writes).
  */
 export const followUser = async (currentUserId, targetUserId, currentUserData = null, options = {}) => {
-    const { skipAlreadyCheck = false, skipDailyLimit = false } = options;
-    const skipCooldown = options.skipCooldown ?? skipDailyLimit;
+    const { skipAlreadyCheck = false, skipCooldown = false } = options;
     try {
-        if (!skipCooldown) {
-            const allowed = await checkFollowRefollowAllowed(currentUserId, targetUserId);
-            if (!allowed.ok) {
-                return {
-                    success: false,
-                    message: allowed.reason === 'cooldown' ? 'cooldown' : 'follow_failed',
-                    reason: allowed.reason,
-                    cancelledAtMs: allowed.cancelledAtMs,
-                    retryAtMs: allowed.retryAtMs,
-                };
-            }
+        if (!currentUserId || !targetUserId || currentUserId === targetUserId) {
+            return { success: false, message: 'invalid', reason: 'invalid' };
         }
 
-        const currentUserRef = doc(db, 'users', currentUserId);
-        const targetUserRef = doc(db, 'users', targetUserId);
-
-        let followerData = currentUserData;
         if (!skipAlreadyCheck) {
-            const currentUserDoc = await getDoc(currentUserRef);
+            const currentUserDoc = await getDoc(doc(db, 'users', currentUserId));
             const currentUserFollowing = currentUserDoc.data()?.following || [];
             if (currentUserFollowing.includes(targetUserId)) {
                 return { success: false, message: 'Already following' };
             }
+        }
+
+        try {
+            const result = await setUserFollowCallable({ targetUserId, action: 'follow' });
+            const data = result?.data || {};
+            if (!data.ok) {
+                return { success: false, message: data.reason || 'follow_failed', reason: data.reason };
+            }
+
+            let followerData = currentUserData;
             if (!followerData) {
+                const currentUserDoc = await getDoc(doc(db, 'users', currentUserId));
                 followerData = {
                     id: currentUserId,
-                    name: currentUserDoc.data()?.name || 'Someone',
-                    avatar: getSafeAvatar(currentUserDoc.data())
+                    name: currentUserDoc.data()?.name || currentUserDoc.data()?.display_name || 'Someone',
+                    avatar: getSafeAvatar(currentUserDoc.data()),
                 };
             }
-        } else if (!followerData) {
-            followerData = {
-                id: currentUserId,
-                name: 'Someone',
-                avatar: getSafeAvatar(null)
+
+            notifyNewFollower(targetUserId, followerData);
+
+            return {
+                success: true,
+                message: 'Followed successfully',
+                mutualFollow: data.mutualFollow === true,
             };
+        } catch (callableErr) {
+            if (!isCallableUnavailable(callableErr)) {
+                console.error('Error following user (callable):', callableErr);
+                return mapFollowCallableError(callableErr);
+            }
+            console.warn('[followUser] callable unavailable, falling back to Firestore', callableErr?.code);
         }
 
-        await updateDoc(currentUserRef, { following: arrayUnion(targetUserId) });
-        try {
-            await updateDoc(targetUserRef, { followersCount: increment(1) });
-        } catch (counterErr) {
-            console.warn('[followUser] followersCount increment failed', counterErr?.message || counterErr);
-        }
+        const direct = await followViaDirectFirestore(
+            currentUserId,
+            targetUserId,
+            currentUserData,
+            { skipAlreadyCheck, skipCooldown }
+        );
+        if (!direct.success) return direct;
 
-        if (!skipCooldown) {
-            void clearFollowCooldown(currentUserId, targetUserId).catch(() => {});
-        }
-
-        notifyNewFollower(targetUserId, followerData);
-
+        notifyNewFollower(targetUserId, direct.followerData || currentUserData);
         return { success: true, message: 'Followed successfully' };
     } catch (error) {
         console.error('Error following user:', error);
-        return { success: false, message: error.message };
+        if (error?.code === 'permission-denied') {
+            return { success: false, message: 'permission-denied', reason: 'permission-denied' };
+        }
+        return mapFollowCallableError(error);
     }
 };
 
 /**
- * Unfollow a user — always allowed; starts 24h refollow cooldown.
- * @param {{ skipCooldown?: boolean, skipDailyLimit?: boolean }} [options]
+ * Unfollow a user — always allowed; starts 24h refollow cooldown (server-side).
  */
-export const unfollowUser = async (currentUserId, targetUserId, options = {}) => {
-    const { skipDailyLimit = false } = options;
-    const skipCooldown = options.skipCooldown ?? skipDailyLimit;
+export const unfollowUser = async (currentUserId, targetUserId) => {
     try {
-        const currentUserRef = doc(db, 'users', currentUserId);
-        const targetUserRef = doc(db, 'users', targetUserId);
+        if (!currentUserId || !targetUserId || currentUserId === targetUserId) {
+            return { success: false, reason: 'invalid' };
+        }
 
-        await updateDoc(currentUserRef, { following: arrayRemove(targetUserId) });
         try {
-            await updateDoc(targetUserRef, { followersCount: increment(-1) });
-        } catch (counterErr) {
-            console.warn('[unfollowUser] followersCount decrement failed', counterErr?.message || counterErr);
+            const result = await setUserFollowCallable({ targetUserId, action: 'unfollow' });
+            const data = result?.data || {};
+            if (!data.ok) {
+                return { success: false, reason: data.reason || 'error' };
+            }
+            return { success: true };
+        } catch (callableErr) {
+            if (!isCallableUnavailable(callableErr)) {
+                console.error('Error unfollowing user (callable):', callableErr);
+                return mapFollowCallableError(callableErr);
+            }
+            console.warn('[unfollowUser] callable unavailable, falling back to Firestore', callableErr?.code);
         }
 
-        if (!skipCooldown) {
-            void recordFollowCancelled(currentUserId, targetUserId).catch(() => {});
-        }
-
-        return { success: true };
+        return unfollowViaDirectFirestore(currentUserId, targetUserId);
     } catch (error) {
         console.error('Error unfollowing user:', error);
-        return { success: false, reason: 'error' };
+        if (error?.code === 'permission-denied') {
+            return { success: false, reason: 'permission-denied' };
+        }
+        return mapFollowCallableError(error);
     }
 };
 

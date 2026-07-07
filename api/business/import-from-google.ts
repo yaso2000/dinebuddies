@@ -29,6 +29,7 @@ type ImportRequestBody = {
     action?: ImportAction;
     previewCoverImage?: string;
     forceCreate?: boolean;
+    languageCode?: string;
 };
 
 type VercelRequest = {
@@ -56,6 +57,12 @@ function readJsonBody(req: VercelRequest): ImportRequestBody {
         return req.body as ImportRequestBody;
     }
     return {};
+}
+
+function resolvePlacesLanguageCode(body: ImportRequestBody): string {
+    const raw = String(body.languageCode || '').trim().toLowerCase();
+    if (/^[a-z]{2}(-[a-z]{2})?$/.test(raw)) return raw.split('-')[0];
+    return 'en';
 }
 
 function buildPreviewPayload(details: Record<string, unknown>) {
@@ -107,6 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = readJsonBody(req);
     const placeId = String(body.placeId || '').trim();
     const action: ImportAction = body.action === 'publish' ? 'publish' : 'preview';
+    const languageCode = resolvePlacesLanguageCode(body);
 
     if (!placeId || placeId.length < 10) {
         return res.status(400).json({
@@ -118,7 +126,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
         if (action === 'preview') {
-            const previewResult = await fetchGooglePlacePreview(placeId);
+            const previewResult = await fetchGooglePlacePreview(placeId, { languageCode });
             const assessment = await assessBusinessImportDuplicates({
                 ...previewResult,
                 googlePlaceId: placeId,
@@ -150,6 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const existing = await loadExistingRestaurantForImport(placeId);
 
         const details = await fetchGooglePlaceMinimal(placeId, {
+            languageCode,
             preserveCoverUrl: existing
                 ? String(
                       (existing.data?.businessInfo as { coverImage?: string } | undefined)?.coverImage ||

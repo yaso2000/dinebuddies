@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import AppBackButton from '../components/AppBackButton';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { PayPalScriptProvider } from '@paypal/react-paypal-js';
 import {
   FaArrowLeft,
   FaWallet,
@@ -17,17 +18,29 @@ import {
   FaInfoCircle,
   FaPiggyBank
 } from 'react-icons/fa';
-import { DINE_CREDIT_PACKS } from '../config/stripeCommerce';
+import {
+  DINE_CREDIT_PACKS,
+  STRIPE_PUBLISHABLE_CONFIGURED
+} from '../config/stripeCommerce';
+import {
+  PAYPAL_CLIENT_CONFIGURED,
+  PAYPAL_CLIENT_ID,
+  PAYPAL_CURRENCY,
+  PAYPAL_TEST_MODE
+} from '../config/paypalCommerce';
 import StripeTestModeBanner from '../components/StripeTestModeBanner';
 import GooglePlayCommerceBanner from '../components/GooglePlayCommerceBanner';
+import PayPalCreditsButton from '../components/PayPalCreditsButton';
 import { useCreditsPurchase } from '../hooks/useCreditsPurchase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app from '../firebase/config';
+import { useToast } from '../context/ToastContext';
 import {
   AI_IMAGE_GENERATION_CREDITS,
   AI_INVITATION_BUNDLE_CREDITS,
   AI_TEXT_GENERATION_CREDITS
 } from '../utils/aiCreditCosts';
 import { getPurchaseCredits, getSavedCredits, GIFT_RECIPIENT_VALUE_RATE } from '../utils/walletCredits';
-import { isGooglePlayCommerce } from '../utils/commercePlatform';
 import './SettingsPages.css';
 import { AppText } from "../components/base";
 
@@ -52,6 +65,19 @@ export default function CreditsWallet() {
   const navigate = useNavigate();
   const { userProfile } = useAuth();
   const { buyPack, loadingId, isGooglePlay } = useCreditsPurchase();
+  const { showToast } = useToast();
+  const [restoringPayPal, setRestoringPayPal] = useState(false);
+  const webPaymentMethods = useMemo(() => {
+    const methods = [];
+    if (STRIPE_PUBLISHABLE_CONFIGURED) methods.push('stripe');
+    if (PAYPAL_CLIENT_CONFIGURED) methods.push('paypal');
+    return methods;
+  }, []);
+  const [paymentMethod, setPaymentMethod] = useState(() => {
+    if (isGooglePlay) return 'google_play';
+    if (!STRIPE_PUBLISHABLE_CONFIGURED && PAYPAL_CLIENT_CONFIGURED) return 'paypal';
+    return 'stripe';
+  });
 
   const purchaseBalance = getPurchaseCredits(userProfile);
   const savedBalance = getSavedCredits(userProfile);
@@ -59,6 +85,91 @@ export default function CreditsWallet() {
   const spent = Math.max(0, Number(userProfile?.totalCreditsSpent) || 0);
   const savedLifetime = Math.max(0, Number(userProfile?.totalSavedCreditsEarned) || 0);
   const giftPercent = Math.round(GIFT_RECIPIENT_VALUE_RATE * 100);
+  const usePayPalOnWeb = !isGooglePlay && paymentMethod === 'paypal' && PAYPAL_CLIENT_CONFIGURED;
+  const payPalScriptOptions = useMemo(
+    () => ({
+      clientId: PAYPAL_CLIENT_ID,
+      currency: PAYPAL_CURRENCY,
+      intent: 'capture',
+      components: 'buttons'
+    }),
+    []
+  );
+
+  const restorePayPalCredits = useCallback(async () => {
+    const orderId = window.prompt(
+      t(
+        'paypal_restore_prompt',
+        'Paste your PayPal order ID from the PayPal receipt email (starts with letters/numbers).'
+      )
+    );
+    if (!orderId?.trim()) return;
+    setRestoringPayPal(true);
+    try {
+      const fn = httpsCallable(
+        getFunctions(app, 'us-central1'),
+        'reconcilePayPalCreditsOrder'
+      );
+      const result = await fn({ orderId: orderId.trim() });
+      const credits = Number(result.data?.credits || 0);
+      showToast(
+        t('paypal_credits_added', '{{count}} credits added to your wallet.', { count: credits }),
+        'success'
+      );
+    } catch (error) {
+      console.error('[CreditsWallet/restorePayPal]', error);
+      showToast(
+        error?.message ||
+          t('paypal_restore_failed', 'Could not restore credits for that PayPal order.'),
+        'error'
+      );
+    } finally {
+      setRestoringPayPal(false);
+    }
+  }, [showToast, t]);
+  const packGrid = (
+    <div className="credits-wallet__pack-grid">
+      {PACKS.map((pack) => {
+        const Icon = pack.icon;
+        return (
+          <div
+            key={pack.id}
+            className={`settings-card credits-wallet__pack${pack.highlight ? ' credits-wallet__pack--highlight' : ''}`}>
+
+                        {pack.highlight ?
+            <AppText as="span" className="credits-wallet__badge">{t('best_value', 'Best value')}</AppText> :
+            null}
+                        <div className={`credits-wallet__pack-icon-wrap ${pack.accent}`}>
+                            <Icon className="credits-wallet__pack-icon" aria-hidden />
+                        </div>
+                        <div className="credits-wallet__pack-amount">
+                            {pack.credits.toLocaleString()}{' '}
+                            <AppText as="span" className="credits-wallet__pack-amount-unit">
+                                {t('credits_unit', 'credits')}
+                            </AppText>
+                        </div>
+                        <div className="credits-wallet__pack-price">{pack.price}</div>
+                        {pack.sub ?
+            <div className="credits-wallet__pack-sub">{t('best_value', pack.sub)}</div> :
+
+            <div className="credits-wallet__pack-sub credits-wallet__pack-sub--placeholder" />
+            }
+                        {usePayPalOnWeb ?
+            <PayPalCreditsButton pack={pack} disabled={loadingId !== null} /> :
+            <button
+              type="button"
+              className="credits-wallet__buy-btn"
+              disabled={loadingId !== null}
+              onClick={() => buyPack(pack)}>
+              
+                                {loadingId === pack.id ? t('loading', 'Loading…') : t('buy_now_short', 'Buy')}
+                            </button>
+            }
+                    </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="settings-page credits-wallet-page">
@@ -74,7 +185,8 @@ export default function CreditsWallet() {
             </div>
 
             <div className="settings-content credits-wallet__content">
-                {isGooglePlay ? <GooglePlayCommerceBanner /> : <StripeTestModeBanner />}
+                {isGooglePlay ? <GooglePlayCommerceBanner /> : null}
+                {!isGooglePlay && !usePayPalOnWeb ? <StripeTestModeBanner /> : null}
                 <div className="credits-wallet__column">
                     <section className="settings-card credits-wallet__balance credits-wallet__balance--elevated">
                         <div className="credits-wallet__balance-top">
@@ -224,46 +336,62 @@ export default function CreditsWallet() {
                   'buy_credits_lead_google_play',
                   'Pay with Google Play — credits go to your purchase wallet.'
                 )
-              : t('buy_credits_lead', 'Pay once — no subscription. Credits go to your purchase wallet.')}
+              : usePayPalOnWeb ?
+              t('buy_credits_lead_paypal', 'Pay once with PayPal — credits go to your purchase wallet.') :
+              t('buy_credits_lead', 'Pay once — no subscription. Credits go to your purchase wallet.')}
                         </AppText>
-                        <div className="credits-wallet__pack-grid">
-                            {PACKS.map((pack) => {
-                const Icon = pack.icon;
-                return (
-                  <div
-                    key={pack.id}
-                    className={`settings-card credits-wallet__pack${pack.highlight ? ' credits-wallet__pack--highlight' : ''}`}>
-                    
-                                        {pack.highlight ?
-                    <AppText as="span" className="credits-wallet__badge">{t('best_value', 'Best value')}</AppText> :
-                    null}
-                                        <div className={`credits-wallet__pack-icon-wrap ${pack.accent}`}>
-                                            <Icon className="credits-wallet__pack-icon" aria-hidden />
-                                        </div>
-                                        <div className="credits-wallet__pack-amount">
-                                            {pack.credits.toLocaleString()}{' '}
-                                            <AppText as="span" className="credits-wallet__pack-amount-unit">
-                                                {t('credits_unit', 'credits')}
-                                            </AppText>
-                                        </div>
-                                        <div className="credits-wallet__pack-price">{pack.price}</div>
-                                        {pack.sub ?
-                    <div className="credits-wallet__pack-sub">{t('best_value', pack.sub)}</div> :
-
-                    <div className="credits-wallet__pack-sub credits-wallet__pack-sub--placeholder" />
-                    }
-                                        <button
-                      type="button"
-                      className="credits-wallet__buy-btn"
-                      disabled={loadingId !== null}
-                      onClick={() => buyPack(pack)}>
-                      
-                                            {loadingId === pack.id ? t('loading', 'Loading…') : t('buy_now_short', 'Buy')}
-                                        </button>
-                                    </div>);
-
-              })}
-                        </div>
+                        {!isGooglePlay && webPaymentMethods.length > 1 ?
+            <div style={{ display: 'inline-flex', gap: 8, padding: 6, marginBottom: 16, borderRadius: 999, background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                                <button
+                type="button"
+                onClick={() => setPaymentMethod('stripe')}
+                style={{
+                  border: 'none',
+                  borderRadius: 999,
+                  padding: '10px 16px',
+                  cursor: 'pointer',
+                  fontWeight: 800,
+                  background: paymentMethod === 'stripe' ? 'linear-gradient(135deg, var(--primary), var(--primary-hover))' : 'transparent',
+                  color: paymentMethod === 'stripe' ? '#fff' : 'var(--text-main)'
+                }}>
+                                    {t('payment_method_card', 'Card')}
+                                </button>
+                                <button
+                type="button"
+                onClick={() => setPaymentMethod('paypal')}
+                style={{
+                  border: 'none',
+                  borderRadius: 999,
+                  padding: '10px 16px',
+                  cursor: 'pointer',
+                  fontWeight: 800,
+                  background: paymentMethod === 'paypal' ? 'linear-gradient(135deg, #0070ba, #003087)' : 'transparent',
+                  color: paymentMethod === 'paypal' ? '#fff' : 'var(--text-main)'
+                }}>
+                                    PayPal
+                                </button>
+                            </div> :
+            null}
+                        {!isGooglePlay && usePayPalOnWeb && PAYPAL_TEST_MODE ?
+            <div style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 14, border: '1px solid rgba(0, 112, 186, 0.22)', background: 'rgba(0, 112, 186, 0.08)', color: 'var(--text-secondary)', fontSize: '0.92rem', fontWeight: 600 }}>
+                                {t('paypal_test_mode_note', 'PayPal sandbox mode is active on this build.')}
+                            </div> :
+            null}
+                        {usePayPalOnWeb ?
+            <PayPalScriptProvider options={payPalScriptOptions}>
+                                {packGrid}
+                                <button
+                  type="button"
+                  className="ui-btn ui-btn--ghost credits-wallet__restore-paypal"
+                  onClick={restorePayPalCredits}
+                  disabled={restoringPayPal}
+                  style={{ marginTop: 12, width: '100%' }}>
+                                    {restoringPayPal
+                    ? t('paypal_restore_working', 'Restoring credits…')
+                    : t('paypal_restore_cta', 'Paid with PayPal but credits missing? Restore purchase')}
+                                </button>
+                            </PayPalScriptProvider> :
+            packGrid}
                     </section>
                 </div>
             </div>

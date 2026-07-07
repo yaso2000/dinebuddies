@@ -133,15 +133,14 @@ export const notifyInvitationRejected = (hostUserId, guestUser, invitationId) =>
     });
 };
 
-export const notifyNewMessage = (recipientUserId, senderUser, messagePreview) => {
-    fireNotification({
+export const notifyNewMessage = (recipientUserId, senderUser, messagePreview) =>
+    createNotification({
         userId: recipientUserId,
         type: 'message',
         title: 'New Message',
         message: `${senderUser.name || 'Someone'}: ${messagePreview}`,
         actionUrl: `/chat/${senderUser.id}`
     });
-};
 
 export const notifyInvitationReminder = (userId, invitation) => {
     fireNotification({

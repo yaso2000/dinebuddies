@@ -1,8 +1,8 @@
 /** قيمة القائمة بصيغة +20 لتتوافق مع formatToE164 */
 export const PHONE_COUNTRY_OPTIONS = [
-    { iso: 'EG', labelKey: 'phone_country_eg', labelFallback: 'مصر', dial: '20', flag: '🇪🇬' },
-    { iso: 'SA', labelKey: 'phone_country_sa', labelFallback: 'السعودية', dial: '966', flag: '🇸🇦' },
-    { iso: 'AE', labelKey: 'phone_country_ae', labelFallback: 'الإمارات', dial: '971', flag: '🇦🇪' },
+    { iso: 'EG', labelKey: 'phone_country_eg', labelFallback: 'Egypt', dial: '20', flag: '🇪🇬' },
+    { iso: 'SA', labelKey: 'phone_country_sa', labelFallback: 'Saudi Arabia', dial: '966', flag: '🇸🇦' },
+    { iso: 'AE', labelKey: 'phone_country_ae', labelFallback: 'United Arab Emirates', dial: '971', flag: '🇦🇪' },
     { iso: 'KW', labelKey: 'phone_country_kw', labelFallback: 'Kuwait', dial: '965', flag: '🇰🇼' },
     { iso: 'QA', labelKey: 'phone_country_qa', labelFallback: 'Qatar', dial: '974', flag: '🇶🇦' },
     { iso: 'BH', labelKey: 'phone_country_bh', labelFallback: 'Bahrain', dial: '973', flag: '🇧🇭' },

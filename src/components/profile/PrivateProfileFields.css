@@ -213,6 +213,20 @@
     flex-shrink: 0;
 }
 
+.private-profile-fields__native-emoji-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
 .private-profile-fields__emoji-btn {
     width: 42px;
     min-width: 42px;

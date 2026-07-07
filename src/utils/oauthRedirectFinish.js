@@ -1,4 +1,4 @@
-import { peekOAuthRedirectProvider } from './localDevAuth';
+import { peekOAuthRedirectPending, peekOAuthRedirectProvider } from './localDevAuth';
 
 /** @returns {'google' | 'apple' | 'facebook' | null} */
 export function oauthProviderIdToAuthProvider(providerId) {
@@ -17,12 +17,17 @@ export function isKnownOAuthProviderId(providerId) {
  */
 export async function resolveRedirectProviderId(user, result) {
     const stashed = peekOAuthRedirectProvider();
+    if (stashed && isKnownOAuthProviderId(stashed)) {
+        return stashed;
+    }
+
     let pid =
-        stashed ||
         result?.providerId ||
+        user?.providerData?.find((p) => isKnownOAuthProviderId(p?.providerId))?.providerId ||
         user?.providerData?.[0]?.providerId ||
         null;
-    if (pid) return pid;
+    if (pid && isKnownOAuthProviderId(pid)) return pid;
+
     if (!user?.reload) {
         if (peekOAuthRedirectPending() && stashed === 'apple.com') return 'apple.com';
         if (peekOAuthRedirectPending()) return peekOAuthRedirectProvider() || 'apple.com';
@@ -33,8 +38,11 @@ export async function resolveRedirectProviderId(user, result) {
     } catch {
         /* ignore */
     }
-    pid = user?.providerData?.[0]?.providerId || peekOAuthRedirectProvider() || null;
-    if (pid) return pid;
+    pid =
+        user?.providerData?.find((p) => isKnownOAuthProviderId(p?.providerId))?.providerId ||
+        peekOAuthRedirectProvider() ||
+        null;
+    if (pid && isKnownOAuthProviderId(pid)) return pid;
     if (peekOAuthRedirectPending()) {
         return peekOAuthRedirectProvider() || 'apple.com';
     }

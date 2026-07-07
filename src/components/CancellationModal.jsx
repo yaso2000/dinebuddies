@@ -16,7 +16,7 @@ const CancellationModal = ({ isOpen, onClose, onConfirm, invitationTitle }) => {
 
   const handleConfirm = async () => {
     if (!selectedReason) {
-      showToast('Please select a reason', 'error');
+      showToast(t('please_select_reason', 'Please select a reason'), 'error');
       return;
     }
 

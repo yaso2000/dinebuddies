@@ -10,6 +10,7 @@ import {
     markInviteLandingAttempted,
     usePendingInvitesForMe,
 } from '../hooks/usePendingInvitesForMe';
+import { markInviteInboxDismissed } from '../utils/inviteInboxDismissals';
 import { markInviteLandingConsumed } from '../utils/inviteLandingSession';
 import SocialInvitationCardPreview from '../components/Invitations/socialCard/SocialInvitationCardPreview';
 import { DEFAULT_FRAME_COLOR_ID } from '../components/Invitations/socialCard/socialCardFrameColors';
@@ -92,17 +93,27 @@ export default function InviteReceivedPage() {
         goFeed();
     }, [goFeed]);
 
-    const handleView = useCallback(() => {
+    const handleView = useCallback(async () => {
         if (!current?.id) return;
         dismissInviteLandingSession();
+        try {
+            if (viewerUid) {
+                await markInviteInboxDismissed(viewerUid, current.id, 'viewed');
+            }
+        } catch (err) {
+            console.error('[InviteReceivedPage] dismiss viewed failed', err);
+        }
         navigate(getHostedInvitationDetailsPath(current), { replace: true });
-    }, [current, navigate]);
+    }, [current, navigate, viewerUid]);
 
     const handleDecline = useCallback(async () => {
         if (!current?.id || typeof respondToPrivateInvitation !== 'function') return;
         setResponding(true);
         try {
-            await respondToPrivateInvitation(current.id, 'declined');
+            const ok = await respondToPrivateInvitation(current.id, 'declined');
+            if (ok && viewerUid) {
+                await markInviteInboxDismissed(viewerUid, current.id, 'declined');
+            }
             if (pending.length <= 1) {
                 goFeed();
             } else {
@@ -111,7 +122,7 @@ export default function InviteReceivedPage() {
         } finally {
             setResponding(false);
         }
-    }, [current?.id, respondToPrivateInvitation, pending.length, goFeed]);
+    }, [current?.id, respondToPrivateInvitation, pending.length, goFeed, viewerUid]);
 
     if (!synced || !canLoad || !current) {
         return (

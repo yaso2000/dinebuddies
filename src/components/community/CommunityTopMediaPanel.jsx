@@ -21,6 +21,7 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
     bannerDisplay,
     uploadingBanner,
     isHost,
+    loading: partnerLoading,
     updateBanner,
     pendingReplyTo,
     setBannerYoutube,
@@ -114,12 +115,22 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
       </div>
     );
   } else if (!hasVisualContent) {
-    bannerInner = (
-      <div className="community-main-chat__banner-placeholder">
-        <FaImage size={28} aria-hidden />
-        <AppText as="span">{t('community_banner_placeholder', 'Host Media Banner')}</AppText>
-      </div>
-    );
+    if (isHost) {
+      bannerInner = (
+        <div className="community-main-chat__banner-placeholder">
+          <FaImage size={28} aria-hidden />
+          <AppText as="span">{t('community_banner_placeholder', 'Host Media Banner')}</AppText>
+        </div>
+      );
+    } else {
+      bannerInner = (
+        <div
+          className="community-main-chat__banner-theme-placeholder"
+          aria-hidden={partnerLoading}
+          aria-busy={partnerLoading || undefined}
+        />
+      );
+    }
   } else {
     bannerInner = (
       <>

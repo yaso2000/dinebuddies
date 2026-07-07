@@ -57,7 +57,7 @@ const InvitationCard = ({ invitation }) => {
   const isPending = (requests || []).includes(currentUser?.id);
   const isAccepted = (joined || []).includes(currentUser?.id);
   const spotsLeft = Math.max(0, guestsNeeded - (joined || []).length);
-  const isFollowing = userProfile?.following?.includes(author?.id);
+  const isFollowing = currentUser?.following?.includes(author?.id);
 
   // Business accounts cannot interact with invitations
 

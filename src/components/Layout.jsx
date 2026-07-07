@@ -12,8 +12,6 @@ import {
   FaCog,
   FaEnvelope,
   FaUser,
-  FaClock,
-  FaFire,
   FaSignInAlt,
   FaTimes,
   FaLock,
@@ -35,14 +33,15 @@ import UnpublishedBusinessReminder from './UnpublishedBusinessReminder';
 import EmailVerificationBusinessBanner from './EmailVerificationBusinessBanner';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
-import { collection, query, orderBy, limit, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import AppRouteLoading from './AppRouteLoading';
 import AppShellLoading from './AppShellLoading';
-import RankingSidebarWidget from './RankingSidebarWidget';
+import DesktopRightSidebar from './DesktopRightSidebar';
 import PushNotificationPrompt from './PushNotificationPrompt';
 import PushSessionManager from './PushSessionManager';
 import InviteLandingGate from './Invitations/InviteLandingGate';
+import InviteInboxLiveGate from './Invitations/InviteInboxLiveGate';
 import { getAppRouteShell, APP_HOME_PATH } from '../utils/appRouteShell';
 import useStaleInvitationNotificationCleanup from '../hooks/useStaleInvitationNotificationCleanup';
 import { isBusinessUser } from '../utils/accountRole';
@@ -77,8 +76,6 @@ const Layout = ({ children }) => {
   usePresence();
   const invContext = useInvitations();
   const {
-    invitations = [],
-    getFollowingInvitations = () => [],
     canCreateSocialInvitation
   } = invContext || {};
   const { unreadCount: chatUnreadCount, conversations = [] } = useChat();
@@ -214,9 +211,6 @@ const Layout = ({ children }) => {
     };
   }, [location.pathname]);
 
-  // Right sidebar data
-  const [trendingPartners, setTrendingPartners] = useState([]);
-  const [recentCommunities, setRecentCommunities] = useState([]);
   const [joinedCommunityData, setJoinedCommunityData] = useState([]);
 
   // Auto-mark chat notifications as read when visiting chat pages or the messages inbox panel.
@@ -237,17 +231,6 @@ const Layout = ({ children }) => {
     return undefined;
   }, [location?.pathname, markMessageNotificationsAsRead]);
 
-  // Fetch trending partners for right sidebar
-  useEffect(() => {
-    try {
-      const q = query(collection(db, 'restaurants'), orderBy('rating', 'desc'), limit(4));
-      const unsub = onSnapshot(q, (snap) => {
-        setTrendingPartners(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      }, () => {});
-      return () => unsub();
-    } catch {return () => {};}
-  }, []);
-
   // Fetch communities the current user has JOINED (from userProfile.joinedCommunities)
   useEffect(() => {
     const ids = userProfile?.joinedCommunities;
@@ -263,7 +246,7 @@ const Layout = ({ children }) => {
           const bi = d.businessInfo || {};
           return {
             id: partnerId,
-            name: bi.businessName || d.display_name || d.name || 'Community',
+            name: bi.businessName || d.display_name || d.name || t('layout_community_fallback', 'Community'),
             logo: d.photo_url || d.photoURL || d.avatar || null,
             memberCount: d.communityMembers?.length || 0
           };
@@ -376,9 +359,6 @@ const Layout = ({ children }) => {
 
   const changeLanguage = (lang) => i18n.changeLanguage(lang);
 
-  // Latest invitations for right sidebar
-  const latestInvitations = invitations?.slice(0, 3) || [];
-
   // ── Contextual Chat Sidebar (conversations list for /chat/ & /messages) ──
   const ChatSidebar = () => {
     const { t: tl } = useTranslation();
@@ -396,7 +376,7 @@ const Layout = ({ children }) => {
                     💬 {tl('messages', 'Messages')}
                 </div>
                 {filteredConvos.length === 0 &&
-        <div style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>No conversations yet</div>
+        <div style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{t('no_conversations', 'No conversations yet')}</div>
         }
                 {filteredConvos.map((convo) => {
           const ou = convo.otherUser;
@@ -494,105 +474,6 @@ const Layout = ({ children }) => {
   null;
 
   // ── Right Sidebar Widgets ──────────────────────────────
-  const RightSidebar = () =>
-  <aside className="ds-right-sidebar">
-
-            {/* Top 3 Elite Ranking (desktop only) */}
-            <RankingSidebarWidget />
-
-            {/* Latest Invitations */}
-            {latestInvitations.length > 0 &&
-
-    <div className="ds-widget-card">
-                    <div className="ds-widget-header">
-                        <FaClock size={14} />
-                        <AppText as="span">{t('latest_invitations', 'Latest Invitations')}</AppText>
-                        <Link to="/invitations" className="ds-widget-see-all">{t('see_all', 'See all')}</Link>
-                    </div>
-                    {latestInvitations.map((inv) =>
-      <div
-        key={inv.id}
-        className="ds-widget-row"
-        onClick={() => navigate(`/invitation/${inv.id}`)}>
-        
-                            <img
-          src={inv.restaurantImage || inv.customImage || inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=80'}
-          alt={inv.title}
-          className="ds-widget-img-sq"
-          onError={(e) => {e.target.src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=80';}} />
-        
-                            <div className="ds-widget-info">
-                                <div className="ds-widget-title">{inv.title}</div>
-                                <div className="ds-widget-sub">{inv.restaurantName || inv.location || '—'}</div>
-                            </div>
-                        </div>
-      )}
-                </div>
-    }
-
-            {/* Trending Partners */}
-            {trendingPartners.length > 0 &&
-    <div className="ds-widget-card">
-                    <div className="ds-widget-header">
-                        <FaFire size={14} style={{ color: '#f97316' }} />
-                        <AppText as="span">{t('trending_partners', 'Trending Businesses')}</AppText>
-                        <Link to="/restaurants" className="ds-widget-see-all">{t('see_all', 'See all')}</Link>
-                    </div>
-                    {trendingPartners.map((r) =>
-      <div
-        key={r.id}
-        className="ds-widget-row"
-        onClick={() => navigate(`/restaurant/${r.id}`)}>
-        
-                            <img
-          src={r.image || r.logo}
-          alt={r.name}
-          className="ds-widget-img-sq"
-          style={{ borderRadius: '10px' }}
-          onError={(e) => {e.target.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${r.id}`;}} />
-        
-                            <div className="ds-widget-info">
-                                <div className="ds-widget-title">{r.name}</div>
-                                <div className="ds-widget-sub">⭐ {r.rating || '—'} · {r.cuisine || t('venue', 'Venue')}</div>
-                            </div>
-                        </div>
-      )}
-                </div>
-    }
-
-            {/* Communities */}
-            {recentCommunities.length > 0 &&
-    <div className="ds-widget-card">
-                    <div className="ds-widget-header">
-                        <FaUsers size={14} />
-                        <AppText as="span">{t('communities', 'Communities')}</AppText>
-                        <Link to="/messages?tab=communities" className="ds-widget-see-all">{t('see_all', 'See all')}</Link>
-                    </div>
-                    {recentCommunities.map((c) =>
-      <div
-        key={c.id}
-        className="ds-widget-row"
-        onClick={() => navigate(`/community/${c.id}`)}>
-        
-                            <div className="ds-widget-avatar" style={{ background: c.color || 'var(--primary)', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                {c.emoji || c.icon || '👥'}
-                            </div>
-                            <div className="ds-widget-info">
-                                <div className="ds-widget-title">{c.name}</div>
-                                <div className="ds-widget-sub">{c.membersCount || 0} {t('members', 'members')}</div>
-                            </div>
-                        </div>
-      )}
-                </div>
-    }
-
-            {/* Footer */}
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', paddingLeft: '4px', lineHeight: 2, display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                <AppText as="span" dir="ltr">© {new Date().getFullYear()} DineBuddies</AppText> ·{' '}
-                <Link to="/settings" style={{ color: 'var(--text-muted)' }}>{t('settings', 'Settings')}</Link>
-            </div>
-        </aside>;
-
 
   return (
     <div className="app-layout" dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
@@ -600,7 +481,10 @@ const Layout = ({ children }) => {
             <PushNotificationPrompt />
             <PushSessionManager />
             {currentUser?.uid && !isGuest && !isBusinessAccount &&
-      <InviteLandingGate />
+      <>
+        <InviteLandingGate />
+        <InviteInboxLiveGate />
+      </>
       }
             {/* ── HEADER ── hidden on mobile chat only (chat has its own bar) ── */}
             <header
@@ -618,6 +502,14 @@ const Layout = ({ children }) => {
               aria-label={t('ai_image_nav', 'AI Images')}>
               
                                 <FaImages />
+                            </Link>
+                            <Link
+              to="/ai-text-studio"
+              className={`notification-bell header-ai-studio-btn header-ai-studio-btn--text${isAiTextRoute ? ' active' : ''}`}
+              title={t('ai_text_nav', 'Relationship tips')}
+              aria-label={t('ai_text_nav', 'Relationship tips')}>
+              
+                                <FaPenAlt />
                             </Link>
                             {!isBusinessAccount &&
             <Link
@@ -823,7 +715,7 @@ const Layout = ({ children }) => {
                 </main>
 
                 {/* Column 3 — Right widgets */}
-                {!isAdminRoute && !isCommunityFullscreen && <RightSidebar />}
+                {!isAdminRoute && !isCommunityFullscreen && <DesktopRightSidebar />}
             </div>
 
             {/* ── MOBILE BOTTOM NAV (admin uses embedded nav in AdminLayout) ── */}

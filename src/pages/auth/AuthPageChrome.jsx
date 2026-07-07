@@ -44,8 +44,6 @@ export default function AuthPageChrome({
             </div>
 
             <div className="auth-page-chrome__toolbar">
-                <AuthShellLanguageToggle className="auth-page-chrome__lang" />
-
                 <div className="auth-page-chrome__toolbar-actions">
                     {showAccountSwitch && accountTab === 'personal' && onSwitchToBusiness ?
           <button
@@ -83,6 +81,7 @@ export default function AuthPageChrome({
                             <FaHandshake aria-hidden />
                         </Link> :
           null}
+                    <AuthShellLanguageToggle variant="compact" className="auth-page-chrome__lang" />
                     <AuthShellThemeToggle variant="corner" />
                 </div>
             </div>

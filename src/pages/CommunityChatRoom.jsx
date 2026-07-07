@@ -6,13 +6,14 @@ import { FaTimes } from 'react-icons/fa';
 import CommunityChatSwipePager from '../components/community/CommunityChatSwipePager';
 import CommunityFullChatView from '../components/community/CommunityFullChatView';
 import CommunityChatBannerToggle from '../components/community/CommunityChatBannerToggle';
+import CommunityChatLeaveButton from '../components/community/CommunityChatLeaveButton';
 import UserAvatar from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { useCommunityChatRoom } from '../hooks/useCommunityChatRoom';
 import { useDesktopShell } from '../hooks/useDesktopShell';
 import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
-import { attachChatShellToVisualViewport, isAppleWebKitTouch } from '../utils/chatVisualViewportLock';
+import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
 import {
   buildCommunityGuestFrameBackgroundStyle,
   getCommunityGuestFrameShellAttributes,
@@ -20,7 +21,11 @@ import {
 import './CommunityChatRoom.css';
 import '../components/community/community-chat-theme.css';
 import '../components/community/CommunityChatSwipePager.css';
+import '../styles/chatReferenceTheme.css';
 import { AppText } from '../components/base';
+import { useChatTheme } from '../hooks/useChatTheme';
+import ChatThemePicker from '../components/chat/ChatThemePicker';
+import CommunityChatCastLauncher from '../components/community/CommunityChatCastLauncher';
 
 export default function CommunityChatRoom() {
   const { t } = useTranslation();
@@ -39,6 +44,7 @@ export default function CommunityChatRoom() {
   const useMobileFullscreen = !isDesktopShell;
   const [joinStatus, setJoinStatus] = useState('idle');
   const joinAttemptRef = useRef(false);
+  const { themeId: chatThemeId, setThemeId: setChatThemeId, themeStyle: chatThemeStyle } = useChatTheme();
 
   const attemptJoin = useCallback(async () => {
     if (!partnerId || joinAttemptRef.current) return;
@@ -82,25 +88,8 @@ export default function CommunityChatRoom() {
 
   useEffect(() => {
     if (!useMobileFullscreen) return undefined;
-    const { detach, sync } = attachChatShellToVisualViewport(() => containerRef.current);
-
-    const resyncForComposer = (event) => {
-      if (!isAppleWebKitTouch()) return;
-      const target = event.target;
-      if (!target?.closest?.('.community-main-chat__composer, .community-composer-bar, .community-main-chat__input')) {
-        return;
-      }
-      requestAnimationFrame(() => {
-        sync();
-        window.setTimeout(sync, 120);
-      });
-    };
-
-    document.addEventListener('focusin', resyncForComposer);
-    return () => {
-      document.removeEventListener('focusin', resyncForComposer);
-      detach();
-    };
+    const { detach } = attachChatShellToVisualViewport(() => containerRef.current);
+    return detach;
   }, [useMobileFullscreen]);
 
   const closeChat = goBackFromCommunity;
@@ -134,8 +123,8 @@ export default function CommunityChatRoom() {
   );
 
   const shellInlineStyle = useMemo(
-    () => ({ ...zoneThemeInlineStyle, ...guestFrameBackgroundStyle }),
-    [zoneThemeInlineStyle, guestFrameBackgroundStyle]
+    () => ({ ...zoneThemeInlineStyle, ...guestFrameBackgroundStyle, ...chatThemeStyle }),
+    [zoneThemeInlineStyle, guestFrameBackgroundStyle, chatThemeStyle]
   );
 
   let shellContent;
@@ -145,7 +134,8 @@ export default function CommunityChatRoom() {
       ref={containerRef}
       className={`${shellClass} community-chat-join-gate`}
       data-cchat-zone-theme={zoneThemeId}
-      style={zoneThemeInlineStyle}
+      data-chat-theme={chatThemeId}
+      style={{ ...zoneThemeInlineStyle, ...chatThemeStyle }}
     >
       <button
         type="button"
@@ -172,7 +162,7 @@ export default function CommunityChatRoom() {
     </div>
   );
 
-  if (room.loading) {
+  if (room.loading && !canEnterChat) {
     shellContent = (
       <div
         ref={containerRef}
@@ -193,7 +183,7 @@ export default function CommunityChatRoom() {
         >
           <FaTimes size={18} />
         </button>
-        {t('inbox_loading', 'Loading…')}
+        {t('inbox_loading', 'Loadingâ€¦')}
       </div>
     );
   } else if (!canEnterChat) {
@@ -212,7 +202,7 @@ export default function CommunityChatRoom() {
         t('community_chat_join_retry_title', 'Could not open chat right now'),
         t(
           'community_chat_join_retry_hint',
-          'This is not a problem with your account. Tap try again — you can chat with other members once you are in.'
+          'This is not a problem with your account. Tap try again â€” you can chat with other members once you are in.'
         ),
         <button
           type="button"
@@ -232,10 +222,10 @@ export default function CommunityChatRoom() {
       );
     } else {
       shellContent = renderJoinGate(
-        t('community_chat_joining', 'Opening community chat…'),
+        t('community_chat_joining', 'Opening community chatâ€¦'),
         t(
           'community_chat_joining_hint',
-          'Hang tight — you will be able to chat with other members in a moment.'
+          'Hang tight â€” you will be able to chat with other members in a moment.'
         )
       );
     }
@@ -246,6 +236,7 @@ export default function CommunityChatRoom() {
         dir="ltr"
         className={shellClass}
         data-cchat-zone-theme={zoneThemeId}
+        data-chat-theme={chatThemeId}
         {...guestFrameShellAttrs}
         style={shellInlineStyle}
       >
@@ -273,6 +264,8 @@ export default function CommunityChatRoom() {
             <UserAvatar
               user={room.partner}
               alt=""
+              solidPlaceholder
+              noGenderRing
               className="community-chat-header__avatar"
               style={{
                 width: '40px',
@@ -313,12 +306,25 @@ export default function CommunityChatRoom() {
               </AppText>
             </div>
           </div>
-          <CommunityChatBannerToggle
-            checked={room.bannerVisible !== false}
-            disabled={room.bannerVisibleSaving || room.bannerToggleDisabled}
-            personal={!room.isHost}
-            onChange={(visible) => room.setCommunityChatBannerVisible(visible)}
-          />
+          <div className="community-chat-header__actions">
+            {room.isHost ? (
+              <CommunityChatCastLauncher partnerId={partnerId} disabled={room.loading} />
+            ) : null}
+            <ChatThemePicker value={chatThemeId} onChange={setChatThemeId} />
+            <CommunityChatBannerToggle
+              checked={room.bannerVisible !== false}
+              disabled={room.bannerVisibleSaving || room.bannerToggleDisabled}
+              personal={!room.isHost}
+              onChange={(visible) => room.setCommunityChatBannerVisible(visible)}
+            />
+            {!room.isHost && !isBusiness ? (
+              <CommunityChatLeaveButton
+                partnerId={partnerId}
+                partnerName={room.partner?.display_name}
+                onLeft={closeChat}
+              />
+            ) : null}
+          </div>
         </header>
 
         {isDesktopShell ? (
@@ -335,3 +341,4 @@ export default function CommunityChatRoom() {
   }
   return shellContent;
 }
+

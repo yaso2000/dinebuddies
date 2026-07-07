@@ -1031,7 +1031,7 @@ const InvitationDetails = () => {
             textAlign: 'center'
           }}>
                             <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎭</div>
-                            <AppText as="h3" style={{ marginBottom: '8px' }}>Welcome, New Member!</AppText>
+                            <AppText as="h3" style={{ marginBottom: '8px' }}>{t('invitation_welcome_new_member', 'Welcome, new member!')}</AppText>
                             <AppText as="p" style={{ color: 'var(--text-muted)', marginBottom: '20px', fontSize: '0.9rem', lineHeight: '1.5' }}>
                                 To ensure the best vibe for you (without asking every time), just let us know which age group you belong to! ✨
                             </AppText>

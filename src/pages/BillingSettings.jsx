@@ -3,10 +3,12 @@ import AppBackButton from '../components/AppBackButton';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { FaArrowLeft, FaFileInvoice, FaDownload, FaCheckCircle, FaClock } from 'react-icons/fa';
+import { useTranslation } from 'react-i18next';
 import './SettingsPages.css';
 import { AppText } from "../components/base";
 
 const BillingSettings = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { userProfile } = useAuth();
 
@@ -101,7 +103,7 @@ const BillingSettings = () => {
             {/* Header */}
             <div className="settings-header">
                 <AppBackButton fallback="/settings" />
-                <AppText as="h1">Billing History</AppText>
+                <AppText as="h1">{t('billing_history', 'Billing History')}</AppText>
                 <div style={{ width: '40px' }}></div>
             </div>
 
@@ -112,7 +114,7 @@ const BillingSettings = () => {
                         <FaFileInvoice style={{ color: '#10b981', fontSize: '1.5rem' }} />
                     </div>
 
-                    <AppText as="h2">Billing History</AppText>
+                    <AppText as="h2">{t('billing_history', 'Billing History')}</AppText>
                     <AppText as="p" className="settings-description">
                         View and download your past invoices
                     </AppText>
@@ -271,8 +273,7 @@ const BillingSettings = () => {
           }
 
                     <div className="settings-note" style={{ marginTop: '2rem' }}>
-                        <strong>Need help?</strong> If you have any questions about your billing,
-                        please contact our support team at support@dinebuddies.com
+                        <strong>{t('billing_need_help', 'Need help?')}</strong> {t('billing_support_contact', 'If you have any questions about your billing, please contact our support team at support@dinebuddies.com')}
                     </div>
                 </div>
             </div>

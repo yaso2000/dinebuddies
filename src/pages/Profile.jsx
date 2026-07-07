@@ -50,6 +50,7 @@ import {
   normalizeOpenToDating,
   syncLookingForWithOpenToDating,
 } from '../utils/openToDating';
+import { buildDefaultProfileMediaPatch } from '../constants/defaultProfileMedia';
 import { getPurchaseCredits, getSavedCredits } from '../utils/walletCredits';
 import LookingForChips from '../components/profile/LookingForChips';
 import { readFavoritePlaces, mergeProfilePreserveFavoritePlaces, pickFavoritePlaces } from '../utils/favoritePlacesUtils';
@@ -544,8 +545,24 @@ const Profile = () => {
       payload.profileGallery = gallerySave.profileGallery;
       payload.directoryCoverIndex = gallerySave.directoryCoverIndex;
 
+      const mediaPatch = buildDefaultProfileMediaPatch({
+        uid: currentUser?.uid,
+        gender: formData.gender || userProfile?.gender,
+        openToDating: payload.openToDating,
+        lookingFor: payload.lookingFor,
+        email: currentUser?.email,
+        photo_url: finalAvatar,
+        cover_photo: String(formData.cover_photo || profileMedia.cover_photo || '').trim(),
+      });
+      if (mediaPatch.photo_url) {
+        finalAvatar = mediaPatch.photo_url;
+        payload.avatar = finalAvatar;
+      }
       payload.cover_photo = String(
-        formData.cover_photo || profileMedia.cover_photo || ''
+        mediaPatch.cover_photo ||
+          formData.cover_photo ||
+          profileMedia.cover_photo ||
+          ''
       ).trim();
 
       await updateProfile(payload);

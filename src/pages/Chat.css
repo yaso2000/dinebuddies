@@ -169,6 +169,7 @@ html {
     /* sticks within the center column, not fixed to viewport */
     top: 0;
     z-index: 100;
+    overflow: visible;
     background: var(--header-bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -176,6 +177,15 @@ html {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
     color: var(--text-primary);
     flex-shrink: 0;
+}
+
+@media (max-width: 1023px) {
+    .chat-vv-shell > .chat-header {
+        height: auto;
+        min-height: 60px;
+        padding-top: env(safe-area-inset-top, 0px);
+        box-sizing: border-box;
+    }
 }
 
 /* .back-btn: use global definition from index.css (layout override below if needed) */
@@ -410,8 +420,7 @@ html {
     /* Bottom align avatars */
     max-width: 100%;
     position: relative;
-    margin-top: 6px;
-    /* Unified 6px spacing between different users */
+    margin-top: 2px;
     margin-bottom: 0;
 }
 
@@ -420,9 +429,37 @@ html {
     /* Keeps all messages at bottom even if few */
 }
 
-.message-wrapper.consecutive {
-    margin-top: 2px !important;
-    /* Close spacing for same-user group */
+.message-wrapper.message-group-middle,
+.message-wrapper.message-group-last,
+.message-wrapper.message-group-first,
+.message-wrapper.message-group-single {
+    margin-top: 2px;
+}
+
+@media (min-width: 1024px) {
+    .message-wrapper.message-group-first:not(:first-child),
+    .message-wrapper.message-group-single:not(:first-child) {
+        margin-top: 10px;
+    }
+}
+
+@media (max-width: 1023px) {
+    .message-wrapper,
+    .message-wrapper.message-group-single,
+    .message-wrapper.message-group-first,
+    .message-wrapper.message-group-middle,
+    .message-wrapper.message-group-last {
+        margin-top: 2px !important;
+    }
+
+    .message-wrapper:first-child {
+        margin-top: auto !important;
+    }
+
+    .message-wrapper.other .message-bubble,
+    .message-wrapper.own .message-bubble {
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+    }
 }
 
 .message-wrapper.other {

@@ -34,9 +34,9 @@ const HERO_CLAIM_BTN = {
 
 /**
  * Claim CTA for unclaimed `restaurants/{id}` admin imports (phone OTP + ownership transaction).
- * @param {{ restaurantId: string; businessName?: string; defaultDialCode?: string; variant?: 'default' | 'hero' }} props
+ * @param {{ restaurantId: string; businessName?: string; businessPhoneE164?: string; variant?: 'default' | 'hero' }} props
  */
-export default function BusinessClaimPanel({ restaurantId, businessName, defaultDialCode, variant = 'default' }) {
+export default function BusinessClaimPanel({ restaurantId, businessName, businessPhoneE164 = '', variant = 'default' }) {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -130,13 +130,13 @@ export default function BusinessClaimPanel({ restaurantId, businessName, default
         }
                     <AppText as="p" style={{ marginTop: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                         {t(
-            'claim_business_phone_hint',
-            'Verify the business phone via SMS to transfer ownership to your account.'
+            'claim_business_phone_locked_hint',
+            'Verify the Google Maps phone number for this business via SMS. The number cannot be changed.'
           )}
                     </AppText>
 
                     <BusinessPhoneFields
-          defaultDialCode={defaultDialCode || '61'}
+          lockedPhoneE164={businessPhoneE164}
           lockFieldsAfterSend={false}
           onVerified={(payload) => setPhoneVerification(payload)} />
         

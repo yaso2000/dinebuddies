@@ -119,7 +119,6 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
       await signInWithEmail(emailForAuth, password, { portal: AUTH_PORTAL.BUSINESS });
       clearPostLogoutRedirect();
       setJustLoggedIn(true);
-      navigate(resolveBusinessPostLoginPath(location.search), { replace: true });
     } catch (err) {
       const code = err?.code || '';
       if (code === 'unclaimed-ai-profile' || code === 'ai-unclaimed') {

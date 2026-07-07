@@ -14,11 +14,18 @@ import { getMessaging, isSupported } from 'firebase/messaging';
 
 const firebaseProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'dinebuddies';
 
-
-
-/** Apple Return URL: {project}.firebaseapp.com/__/auth/handler — do not use www.* here. */
-
+/**
+ * Keep Firebase default auth domain — Apple Return URL is registered at
+ * https://dinebuddies.firebaseapp.com/__/auth/handler in Apple Developer.
+ * Google on Android uses popup (not redirect); iOS/PWA use redirect via handler rewrite.
+ */
 const firebaseAuthDomain = `${firebaseProjectId}.firebaseapp.com`;
+
+export { firebaseAuthDomain };
+
+export function getFirebaseOAuthHandlerUrl() {
+    return `https://${firebaseAuthDomain}/__/auth/handler`;
+}
 
 
 

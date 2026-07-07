@@ -15,6 +15,9 @@ export default function CreditsPage() {
   const [loading, setLoading] = useState(false);
   const [granting, setGranting] = useState(false);
   const [msg, setMsg] = useState('');
+  const [resetPhrase, setResetPhrase] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [resetPreview, setResetPreview] = useState(null);
 
   const paid = Math.max(0, Math.floor(Number(selected?.paidCredits) || 0));
   const saved = Math.max(0, Math.floor(Number(selected?.savedCredits) || 0));
@@ -52,6 +55,62 @@ export default function CreditsPage() {
       setMsg(e.message || t('admin_failed'));
     } finally {
       setGranting(false);
+    }
+  };
+
+  const previewResetAll = async () => {
+    setResetting(true);
+    setMsg('');
+    try {
+      const res = await adminApi.resetAllCredits('RESET ALL CREDITS', true);
+      setResetPreview(res);
+      setMsg(
+        t('admin_reset_credits_preview', {
+          count: res.hadBalance ?? 0,
+          scanned: res.scanned ?? 0,
+          defaultValue: `Dry run: ${res.hadBalance ?? 0} accounts with balance (of ${res.scanned ?? 0} total).`,
+        })
+      );
+    } catch (e) {
+      setMsg(e.message || t('admin_failed'));
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const executeResetAll = async () => {
+    if (resetPhrase.trim() !== 'RESET ALL CREDITS') {
+      setMsg(t('admin_reset_credits_phrase_required', 'Type RESET ALL CREDITS to confirm.'));
+      return;
+    }
+    if (
+      !window.confirm(
+        t(
+          'admin_reset_credits_confirm',
+          'This zeros paid + savings credits for every user. Subscription tiers are unchanged. Continue?'
+        )
+      )
+    ) {
+      return;
+    }
+    setResetting(true);
+    setMsg('');
+    try {
+      const res = await adminApi.resetAllCredits('RESET ALL CREDITS', false);
+      setResetPreview(res);
+      setResetPhrase('');
+      setSelected(null);
+      setResults([]);
+      setMsg(
+        t('admin_reset_credits_done', {
+          count: res.updated ?? 0,
+          defaultValue: `Reset complete. Updated ${res.updated ?? 0} accounts.`,
+        })
+      );
+    } catch (e) {
+      setMsg(e.message || t('admin_failed'));
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -149,6 +208,46 @@ export default function CreditsPage() {
         }
                 </div>
       }
-        </>);
 
+            <div className="db-panel" style={{ marginTop: '1.5rem', padding: '1rem', borderColor: 'var(--db-danger)' }}>
+                <AppText as="h2" style={{ fontSize: '1.05rem', marginBottom: '0.35rem' }}>
+                    {t('admin_reset_all_credits_title', 'Reset all credits')}
+                </AppText>
+                <AppText as="p" className="db-hint" style={{ marginBottom: '0.75rem' }}>
+                    {t(
+                        'admin_reset_all_credits_lead',
+                        'Zeros purchase + savings wallets for every user. Business subscription tiers are not changed. Admin grants work again after reset.'
+                    )}
+                </AppText>
+                {resetPreview ?
+        <AppText as="p" style={{ marginBottom: '0.75rem', color: 'var(--db-muted)', fontSize: '0.9rem' }}>
+                        {t('admin_reset_credits_stats', {
+            scanned: resetPreview.scanned ?? 0,
+            hadBalance: resetPreview.hadBalance ?? 0,
+            updated: resetPreview.updated ?? 0,
+            defaultValue: `Scanned ${resetPreview.scanned ?? 0}, with balance ${resetPreview.hadBalance ?? 0}, updated ${resetPreview.updated ?? 0}.`,
+          })}
+                    </AppText> :
+        null}
+                <div className="db-toolbar" style={{ flexWrap: 'wrap' }}>
+                    <AppTextInput
+            className="db-input"
+            style={{ flex: 1, minWidth: 220 }}
+            placeholder={t('admin_reset_credits_phrase_placeholder', 'Type RESET ALL CREDITS')}
+            value={resetPhrase}
+            onChange={(e) => setResetPhrase(e.target.value)} />
+
+                    <button type="button" className="db-btn db-btn--ghost" onClick={previewResetAll} disabled={resetting}>
+                        {t('admin_reset_credits_dry_run', 'Preview count')}
+                    </button>
+                    <button type="button" className="db-btn db-btn--danger" onClick={executeResetAll} disabled={resetting}>
+                        {t('admin_reset_credits_execute', 'Reset all now')}
+                    </button>
+                </div>
+                {msg && !selected ?
+        <AppText as="p" style={{ marginTop: '0.75rem', color: 'var(--db-danger)' }}>{msg}</AppText> :
+        null}
+            </div>
+        </>
+  );
 }

@@ -1,5 +1,5 @@
-import React from 'react';
-import { getSafeAvatar, getGenderAvatarRingStyle } from '../utils/avatarUtils';
+import React, { useEffect, useState } from 'react';
+import { getSafeAvatar, getAvatarUrlOrNull, getGenderAvatarRingStyle } from '../utils/avatarUtils';
 import { AppText } from "./base";
 
 const DEFAULT_AVATAR_PX = 40;
@@ -17,10 +17,20 @@ const UserAvatar = ({
   ringWidth = 2,
   ringColorOverride,
   noGenderRing = false,
+  solidPlaceholder = false,
   innerGapWidth,
   ...props
 }) => {
-  const avatarSrc = src || getSafeAvatar(user);
+  const [imgFailed, setImgFailed] = useState(false);
+  const resolvedSrc =
+    src ||
+    (solidPlaceholder ? getAvatarUrlOrNull(user) : getSafeAvatar(user));
+  const showSolid = solidPlaceholder && (!resolvedSrc || imgFailed);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [resolvedSrc]);
+
   const altText = alt || user?.name || user?.display_name || user?.displayName || 'User Avatar';
 
   const ringStyle = noGenderRing ?
@@ -113,17 +123,34 @@ const UserAvatar = ({
       maxWidth: maxWidth ?? width ?? `${DEFAULT_AVATAR_PX}px`,
       maxHeight: maxHeight ?? height ?? `${DEFAULT_AVATAR_PX}px`
     }),
+    ...(solidPlaceholder ? { background: 'var(--bg-body)' } : {}),
     ...restStyle
   };
+
+  if (showSolid) {
+    return (
+      <AppText
+        as="span"
+        className={`user-avatar user-avatar--solid-placeholder${className ? ` ${className}` : ''}`}
+        style={{ ...wrapperStyle, background: 'var(--bg-body)' }}
+        aria-label={altText}
+        role="img"
+      />
+    );
+  }
 
   return (
     <AppText as="span" className={`user-avatar${className ? ` ${className}` : ''}`} style={wrapperStyle}>
             <img
-        src={avatarSrc}
+        src={resolvedSrc}
         className="user-avatar__img"
         alt={altText}
         style={imgStyle}
         onError={(e) => {
+          if (solidPlaceholder) {
+            setImgFailed(true);
+            return;
+          }
           e.target.onerror = null;
           e.target.src = getSafeAvatar(null);
         }}

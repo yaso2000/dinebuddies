@@ -4,6 +4,7 @@ import { FaMapMarkerAlt, FaSearch, FaStore } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { geocode, bboxFromCoords } from '../utils/locationUtils';
 import { resolveCountryIso2 } from '../utils/countryIso';
+import { languageForCountryCode } from '../utils/authGeoLanguage';
 import { PLACES_AUTOCOMPLETE_DEBOUNCE_MS } from '../utils/placesCostControl';
 import { sortAutocompletePredictionsForInvitation } from '../utils/invitationVenueSearch';
 import {
@@ -70,6 +71,8 @@ const LocationAutocomplete = ({
   useGooglePlacesMinimal = false,
   /** When true with Google minimal mode, bias autocomplete toward food/retail establishments (admin import). */
   googleBusinessSearch = false,
+  /** Override Google Places language (e.g. `ar`). When omitted, admin business search uses the selected country. */
+  placesLanguageCode,
   required: inputRequired = true,
   disabled = false
 }) => {
@@ -89,7 +92,10 @@ const LocationAutocomplete = ({
   const sessionTokenRef = useRef(newPlacesSessionToken());
 
   const countryIsoResolved = resolveCountryIso2(countryCode);
-  const lang = typeof i18n.language === 'string' ? i18n.language.split('-')[0] : 'en';
+  const uiLang = typeof i18n.language === 'string' ? i18n.language.split('-')[0] : 'en';
+  const placesLang =
+    (typeof placesLanguageCode === 'string' && placesLanguageCode.trim()) ||
+    (googleBusinessSearch && countryIsoResolved ? languageForCountryCode(countryIsoResolved) : uiLang);
 
   useEffect(() => {
     let cancelled = false;
@@ -179,7 +185,7 @@ const LocationAutocomplete = ({
       const params = new URLSearchParams({
         input: trimmedInput,
         sessionToken: sessionTokenRef.current,
-        languageCode: lang
+        languageCode: placesLang
       });
       if (countryIsoResolved) params.set('countryCode', countryIsoResolved);
       if (googleBusinessSearch) params.set('businessOnly', '1');
@@ -230,7 +236,7 @@ const LocationAutocomplete = ({
       );
       setLoading(false);
     },
-    [countryIsoResolved, lang, googleBusinessSearch, t, userLat, userLng, city, invitationType]
+    [countryIsoResolved, placesLang, googleBusinessSearch, t, userLat, userLng, city, invitationType]
   );
 
   const handleInput = (e) => {
@@ -290,7 +296,7 @@ const LocationAutocomplete = ({
         } else {
           const { features: raw } = await searchPhoton({
             query: trimmedInput,
-            lang,
+            lang: uiLang,
             limit: 14,
             bbox: bbox || undefined,
             lat: userLat != null ? Number(userLat) : undefined,
@@ -368,7 +374,7 @@ const LocationAutocomplete = ({
         const params = new URLSearchParams({
           placeId: place.placeId,
           sessionToken: sessionTokenRef.current,
-          languageCode: lang
+          languageCode: placesLang
         });
         if (countryIsoResolved) params.set('regionCode', countryIsoResolved);
         const response = await fetch(`${resolveApiUrl('/api/place-details')}?${params.toString()}`);

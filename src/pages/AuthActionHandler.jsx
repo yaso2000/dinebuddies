@@ -15,6 +15,7 @@ import { getAppOriginForEmailActions } from '../utils/emailActionSettings';
 import { normalizeUserProfile } from '../utils/userProfileNormalize';
 import { isBusinessUser } from '../utils/accountRole';
 import { goToLogin } from '../utils/goToLogin';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Parses Firebase Auth action query params from ?search and from hash (#/path?mode=...)
@@ -82,6 +83,7 @@ function isBusinessEmailVerificationContinueUrl(continueDecoded) {
 const AuthActionHandler = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const { mode, oobCode, continueUrlRaw } = useMemo(
     () => parseAuthActionParams(location.search, location.hash),
@@ -338,7 +340,7 @@ const AuthActionHandler = () => {
             border: '1px solid var(--border-color)'
           }}>
 
-                    <AppText as="h1" style={{ fontSize: '1.25rem', margin: '0 0 0.5rem', fontWeight: 700 }}>Set a new password</AppText>
+                    <AppText as="h1" style={{ fontSize: '1.25rem', margin: '0 0 0.5rem', fontWeight: 700 }}>{t('auth_set_new_password_title', 'Set a new password')}</AppText>
                     <AppText as="p" style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
                         Choose a strong password for your DineBuddies account.
                     </AppText>

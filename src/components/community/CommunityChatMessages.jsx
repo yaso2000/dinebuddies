@@ -7,6 +7,7 @@ import CommunityChatMessageMenu from './CommunityChatMessageMenu';
 import { useLongPress } from './useLongPress';
 import { getAppTextDirection, prepareBidiDisplayText } from '../../utils/bidiText';
 import { formatAppTime } from '../../utils/localeFormat';
+import { getMessageReceiptDisplay } from '../../utils/chatMessageReceipts';
 
 function isStackableText(message) {
   const type = message?.type || 'text';
@@ -114,6 +115,7 @@ function CommunityChatMessageSegment({
   const interactive = canReply || canMute || canPin || canUnpin || canShowOnBanner || canHideFromBanner || canDelete;
   const messageBidi = prepareBidiDisplayText(msg.text, language);
   const timeLabel = formatMessageTime(msg, language);
+  const receipt = outgoing ? getMessageReceiptDisplay(msg, msg.senderId) : null;
 
   const openMenu = () => {
     const rect = segmentRef.current?.getBoundingClientRect();
@@ -160,9 +162,9 @@ function CommunityChatMessageSegment({
               {timeLabel}
             </AppText>
           ) : null}
-          {outgoing ? (
-            <span className="community-main-chat__bubble-status" aria-hidden>
-              ✓✓
+          {receipt ? (
+            <span className={`community-main-chat__bubble-status community-main-chat__bubble-status--${receipt.state}`} aria-hidden>
+              {receipt.ticks}
             </span>
           ) : null}
         </div>
@@ -356,6 +358,7 @@ function CommunityChatMessageAtomic({
     perms.canDelete;
   const messageBidi = prepareBidiDisplayText(msg.text, language);
   const timeLabel = formatMessageTime(msg, language);
+  const receipt = getMessageReceiptDisplay(msg, currentUserId);
 
   const openMenu = () => {
     const rect = bubbleRef.current?.getBoundingClientRect();
@@ -427,6 +430,11 @@ function CommunityChatMessageAtomic({
                   <AppText as="span" className="community-main-chat__bubble-time" dir="ltr">
                     {timeLabel}
                   </AppText>
+                  {receipt ? (
+                    <span className={`community-main-chat__bubble-status community-main-chat__bubble-status--${receipt.state}`} aria-hidden>
+                      {receipt.ticks}
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -448,9 +456,9 @@ function CommunityChatMessageAtomic({
                   <AppText as="span" className="community-main-chat__bubble-time" dir="ltr">
                     {timeLabel}
                   </AppText>
-                  {alignRight ? (
-                    <span className="community-main-chat__bubble-status" aria-hidden>
-                      ✓✓
+                  {receipt ? (
+                    <span className={`community-main-chat__bubble-status community-main-chat__bubble-status--${receipt.state}`} aria-hidden>
+                      {receipt.ticks}
                     </span>
                   ) : null}
                 </div>

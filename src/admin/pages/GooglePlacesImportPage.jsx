@@ -8,6 +8,7 @@ import {
 import LocationAutocomplete from '../../components/LocationAutocomplete';
 import AdminPlacesGeoFilter from '../components/AdminPlacesGeoFilter';
 import { DEFAULT_BUSINESS_COVER } from '../../utils/businessCoverImage';
+import { languageForCountryCode } from '../../utils/authGeoLanguage';
 import '../../components/venue-search.css';
 import { AppText } from "../../components/base";
 
@@ -33,6 +34,8 @@ export default function GooglePlacesImportPage() {
   const [result, setResult] = useState(null);
   const [forceCreate, setForceCreate] = useState(false);
   const inFlightRef = useRef(false);
+
+  const placesLanguageCode = geo.countryCode ? languageForCountryCode(geo.countryCode) : 'en';
 
   const duplicateReasonLabel = useCallback(
     (reason) => {
@@ -75,7 +78,9 @@ export default function GooglePlacesImportPage() {
           return;
         }
         const token = await user.getIdToken();
-        const { ok, status, data } = await previewBusinessFromGoogle(id, token);
+        const { ok, status, data } = await previewBusinessFromGoogle(id, token, {
+          languageCode: placesLanguageCode,
+        });
 
         if (!ok || data?.status !== 'ok' || data.action !== 'preview') {
           const msg =
@@ -108,7 +113,7 @@ export default function GooglePlacesImportPage() {
         inFlightRef.current = false;
       }
     },
-    [t]
+    [t, placesLanguageCode]
   );
 
   const runPublish = useCallback(
@@ -131,7 +136,7 @@ export default function GooglePlacesImportPage() {
           id,
           previewCoverImage,
           token,
-          { forceCreate }
+          { forceCreate, languageCode: placesLanguageCode }
         );
 
         if (!ok || data?.status !== 'ok' || data.action !== 'publish') {
@@ -159,7 +164,7 @@ export default function GooglePlacesImportPage() {
         inFlightRef.current = false;
       }
     },
-    [preview, previewCoverImage, selected?.placeId, t, forceCreate]
+    [preview, previewCoverImage, selected?.placeId, t, forceCreate, placesLanguageCode]
   );
 
   const handlePlaceSelect = useCallback(

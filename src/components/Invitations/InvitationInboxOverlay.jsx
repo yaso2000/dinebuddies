@@ -17,6 +17,7 @@ import {
   normInvitationUid,
   shouldSuppressInvitationInbox } from
 '../../utils/invitationInboxQueue';
+import { markInviteInboxDismissed } from '../../utils/inviteInboxDismissals';
 import './InvitationInboxOverlay.css';
 import { AppText } from "../base";
 
@@ -217,28 +218,41 @@ export default function InvitationInboxOverlay({
     });
   }, []);
 
-  const handleView = useCallback(() => {
+  const handleView = useCallback(async () => {
     if (!current?.id) return;
     const id = current.id;
     removeFromQueue(id);
+    try {
+      if (sessionUid) {
+        await markInviteInboxDismissed(sessionUid, id, 'viewed');
+      }
+    } catch (err) {
+      console.error('[InvitationInboxOverlay] dismiss viewed failed', err);
+    }
     navigate(getHostedInvitationDetailsPath(current), { replace: true });
-  }, [current, navigate, removeFromQueue]);
+  }, [current, navigate, removeFromQueue, sessionUid]);
 
   const handleDecline = useCallback(async () => {
     if (!current?.id || !onRespond) return;
     const id = current.id;
-    // Update UI immediately: 1/6 ? 1/5 and show next card at same index
     removeFromQueue(id);
     setResponding(true);
     try {
       const ok = await onRespond(id, 'declined');
-      if (!ok) {
+      if (ok) {
+        if (sessionUid) {
+          await markInviteInboxDismissed(sessionUid, id, 'declined');
+        }
+      } else {
         restoreToQueue(id);
       }
+    } catch (err) {
+      console.error('[InvitationInboxOverlay] decline failed', err);
+      restoreToQueue(id);
     } finally {
       setResponding(false);
     }
-  }, [current?.id, onRespond, removeFromQueue, restoreToQueue]);
+  }, [current?.id, onRespond, removeFromQueue, restoreToQueue, sessionUid]);
 
   const onTouchStart = (e) => {
     const t = e.touches[0];

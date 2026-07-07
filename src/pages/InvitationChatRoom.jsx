@@ -14,8 +14,10 @@ import { startRecording, uploadVoiceMessage, uploadImage, formatDuration } from 
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
-import EmojiPickerPortal, { isTouchOrCoarsePointer } from '../components/EmojiPickerPortal';
+import EmojiPickerPortal from '../components/EmojiPickerPortal';
+import { handleEmojiButtonClick, shouldUseAppEmojiPicker, showComposerEmojiButton } from '../utils/emojiInputMode';
 import './CommunityChatRoom.css';
+import '../styles/chatReferenceTheme.css';
 import { createNotification } from '../utils/notificationHelpers';
 import { goToLogin } from '../utils/goToLogin';
 import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
@@ -24,6 +26,10 @@ import {
   getHostedInvitationDetailsPath } from
 '../utils/hostedInvitationRoutes';
 import { AppText, AppTextInput } from "../components/base";
+import { getMessageGroupPosition } from '../utils/chatMessageGrouping';
+import { getMessageReceiptDisplay, syncMessageReceiptDocs } from '../utils/chatMessageReceipts';
+import { useChatTheme } from '../hooks/useChatTheme';
+import ChatThemePicker from '../components/chat/ChatThemePicker';
 
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
@@ -33,6 +39,7 @@ const InvitationChatRoom = () => {
   const navigate = useNavigate();
   const { currentUser, userProfile, isGuest } = useAuth();
   const { showToast } = useToast();
+  const { themeId: chatThemeId, setThemeId: setChatThemeId, themeStyle: chatThemeStyle } = useChatTheme();
 
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState([]);
@@ -58,8 +65,9 @@ const InvitationChatRoom = () => {
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const emojiBtnRef = useRef(null);
-  const isTouchUi = isTouchOrCoarsePointer();
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const latestMessageDocsRef = useRef([]);
+  const readReceiptTimeoutRef = useRef(null);
 
   const containerRef = useRef(null);
   const composerRef = useRef(null);
@@ -187,16 +195,54 @@ const InvitationChatRoom = () => {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      latestMessageDocsRef.current = snapshot.docs;
       const msgs = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data()
       }));
       setMessages(msgs);
+      if (currentUser?.uid) {
+        void syncMessageReceiptDocs({
+          db,
+          messageDocs: snapshot.docs,
+          viewerId: currentUser.uid,
+          markRead: false
+        });
+      }
       setTimeout(scrollToBottom, 100);
     });
 
     return () => unsubscribe();
-  }, [invitationId, collectionName]);
+  }, [invitationId, collectionName, currentUser?.uid]);
+
+  useEffect(() => {
+    if (readReceiptTimeoutRef.current) {
+      clearTimeout(readReceiptTimeoutRef.current);
+      readReceiptTimeoutRef.current = null;
+    }
+    if (!invitationId || !collectionName || !currentUser?.uid || messages.length === 0) {
+      return undefined;
+    }
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      return undefined;
+    }
+
+    readReceiptTimeoutRef.current = setTimeout(() => {
+      void syncMessageReceiptDocs({
+        db,
+        messageDocs: latestMessageDocsRef.current,
+        viewerId: currentUser.uid,
+        markRead: true
+      });
+    }, 900);
+
+    return () => {
+      if (readReceiptTimeoutRef.current) {
+        clearTimeout(readReceiptTimeoutRef.current);
+        readReceiptTimeoutRef.current = null;
+      }
+    };
+  }, [collectionName, currentUser?.uid, invitationId, messages]);
 
   // Cleanup Audio
   useEffect(() => {
@@ -237,7 +283,10 @@ const InvitationChatRoom = () => {
         senderName: userProfile?.display_name || currentUser.displayName || 'User',
         senderAvatar: getSafeAvatar(userProfile || currentUser),
         createdAt: serverTimestamp(),
-        type: 'image'
+        type: 'image',
+        status: 'sent',
+        deliveredTo: [],
+        readBy: []
       });
       scrollToBottom();
     } catch (error) {
@@ -316,7 +365,10 @@ const InvitationChatRoom = () => {
         senderAvatar: getSafeAvatar(userProfile || currentUser),
         createdAt: serverTimestamp(),
         type: 'audio',
-        duration: recordingDuration
+        duration: recordingDuration,
+        status: 'sent',
+        deliveredTo: [],
+        readBy: []
       });
       scrollToBottom();
     } catch (error) {
@@ -351,7 +403,10 @@ const InvitationChatRoom = () => {
         senderName: userProfile?.display_name || currentUser.displayName || 'User',
         senderAvatar: getSafeAvatar(userProfile || currentUser),
         createdAt: serverTimestamp(),
-        type: 'text'
+        type: 'text',
+        status: 'sent',
+        deliveredTo: [],
+        readBy: []
       });
       setNewMessage('');
       scrollToBottom();
@@ -395,7 +450,7 @@ const InvitationChatRoom = () => {
   };
 
   if (loading) return (
-    <div dir="ltr" className="chat-screen" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div dir={i18n.dir()} className="chat-screen" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{t("loading_chat")}</div>
         </div>);
 
@@ -407,7 +462,13 @@ const InvitationChatRoom = () => {
   );
 
   return (
-    <div ref={containerRef} dir="ltr" className="chat-screen invitation-chat-root">
+    <div
+      ref={containerRef}
+      dir={i18n.dir()}
+      className="chat-screen invitation-chat-root"
+      data-chat-theme={chatThemeId}
+      style={chatThemeStyle}
+    >
 
             {/* Subtle dot-grid overlay for depth */}
             <div style={{
@@ -417,12 +478,12 @@ const InvitationChatRoom = () => {
         pointerEvents: 'none', zIndex: 0
       }} />
 
-            {/* ══════════  HEADER  ══════════ */}
+            {/* â•â•â•â•â•â•â•â•â•â•  HEADER  â•â•â•â•â•â•â•â•â•â• */}
             <header className="chat-header" style={{
         flexShrink: 0,
         position: 'relative',
         zIndex: 50,
-        overflow: 'hidden',
+        overflow: 'visible',
         background: 'var(--header-bg)',
         backdropFilter: 'blur(24px)',
         WebkitBackdropFilter: 'blur(24px)',
@@ -532,6 +593,7 @@ const InvitationChatRoom = () => {
                             {(invitation?.joinedMembers || invitation?.joined || []).length + 1}
                         </AppText>
                     </div>
+                    <ChatThemePicker value={chatThemeId} onChange={setChatThemeId} />
                 </div>
             </header>
 
@@ -563,7 +625,8 @@ const InvitationChatRoom = () => {
 
                 {messages.map((msg, index) => {
             const isMe = msg.senderId === currentUser.uid;
-            const isSequence = isConsecutive(msg, messages[index - 1]);
+            const groupPosition = getMessageGroupPosition(messages, index);
+            const showSenderAvatar = !isMe && (groupPosition === 'single' || groupPosition === 'first');
 
             // Reactions Logic
             const reactions = msg.reactions ? Object.values(msg.reactions) : [];
@@ -571,8 +634,8 @@ const InvitationChatRoom = () => {
             const hasReactions = reactions.length > 0;
 
             return (
-              <div key={msg.id} className={`message-row ${isMe ? 'outgoing' : 'incoming'} ${isSequence ? 'sequence' : 'first-of-group'}`}>
-                            {!isMe && !isSequence &&
+              <div key={msg.id} className={`message-row ${isMe ? 'outgoing' : 'incoming'} message-group-${groupPosition}`}>
+                            {!isMe && showSenderAvatar &&
                 <UserAvatar
                   src={msg.senderAvatar}
                   user={{ avatar: msg.senderAvatar }}
@@ -581,15 +644,14 @@ const InvitationChatRoom = () => {
                   style={{ width: 36, height: 36, minWidth: 36, minHeight: 36 }} />
 
                 }
-                            {/* Empty placeholder for alignment if sequence */}
-                            {!isMe && isSequence && <div style={{ width: '44px' }}></div>}
+                            {!isMe && !showSenderAvatar && <div className="sender-avatar-spacer" aria-hidden />}
 
                             <div
                   className={`bubble ${msg.type === 'audio' ? 'bubble-audio-transparent' : ''}`}
                   onClick={() => setActiveReactionId(activeReactionId === msg.id ? null : msg.id)}
                   style={{ position: 'relative', cursor: 'pointer' }}>
                   
-                                {!isMe && !isSequence &&
+                                {!isMe && showSenderAvatar &&
                   <div className="sender-name-small" style={{ fontSize: '0.75rem', marginBottom: '2px', color: 'var(--accent-color)', fontWeight: 'bold' }}>
                                         {msg.senderName}
                                     </div>
@@ -619,7 +681,15 @@ const InvitationChatRoom = () => {
                       }
                                     </div>
 
-                                    <AppText as="span" className="timestamp" style={{ margin: '0 0 0 auto', display: 'flex', flexShrink: 0 }}>{formatTime(msg.createdAt)}</AppText>
+                                    <div className="message-meta" style={{ margin: '0 0 0 auto', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                      <AppText as="span" className="timestamp" style={{ display: 'flex', flexShrink: 0 }}>{formatTime(msg.createdAt)}</AppText>
+                                      {(() => {
+                                        const receipt = getMessageReceiptDisplay(msg, currentUser?.uid);
+                                        return receipt ?
+                                        <AppText as="span" className={`message-status message-status--${receipt.state}`}>{receipt.ticks}</AppText> :
+                                        null;
+                                      })()}
+                                    </div>
                                 </div>
 
                                 {/* Reaction Badge */}
@@ -644,7 +714,7 @@ const InvitationChatRoom = () => {
                                             {emoji}
                                         </AppText>
                   )}
-                                    {!isTouchUi &&
+                                    {shouldUseAppEmojiPicker() &&
                   <div
                     className="reaction-popup-item"
                     style={{ background: '#374151', borderRadius: '50%', padding: '2px', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', cursor: 'pointer' }}
@@ -660,7 +730,7 @@ const InvitationChatRoom = () => {
                 }
 
                             {/* Extended Emoji Picker (desktop) */}
-                            {extendedReactionPicker === msg.id && !isTouchUi &&
+                            {extendedReactionPicker === msg.id && shouldUseAppEmojiPicker() &&
                 <div className="extended-reaction-picker" style={{ position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)', zIndex: 1001 }} onClick={(e) => e.stopPropagation()}>
                                     <Suspense fallback={<div style={{ width: 300, height: 350, background: '#111827' }} />}>
                                         <LazyEmojiPicker
@@ -727,23 +797,8 @@ const InvitationChatRoom = () => {
                     {t('image_upload_checking')}
                 </div>
           }
-            <div ref={composerRef} style={{
-            flexShrink: 0,
-            width: '100%',
-            boxSizing: 'border-box',
-            background: 'var(--bg-darker)',
-            borderTop: '1px solid var(--border-color)',
-            padding: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            paddingBottom: 'max(8px, var(--chat-composer-safe-bottom, env(safe-area-inset-bottom)))'
-          }}>
-                <div className="input-wrapper" style={{
-              flex: 1, display: 'flex', alignItems: 'center',
-              background: 'var(--composer-bg)', borderRadius: '24px', padding: '4px 12px',
-              border: '1px solid var(--border-color)'
-            }}>
+            <div ref={composerRef} className="chat-composer-row">
+                <div className="input-wrapper chat-composer-input">
                     {/* Image Input (Hidden) */}
                     <input
                 type="file"
@@ -775,18 +830,22 @@ const InvitationChatRoom = () => {
                   onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
                   autoComplete="off" />
                 
-                            {!isTouchUi &&
+                {showComposerEmojiButton() ?
                 <button
                   ref={emojiBtnRef}
                   type="button"
-                  onClick={() => setEmojiPickerOpen((o) => !o)}
-                  style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 8px', fontSize: '1.3rem', flexShrink: 0, display: 'flex', alignItems: 'center' }}
+                  className="composer-icon-btn chat-composer-icon-btn composer-icon-btn--emoji"
+                  onClick={() => handleEmojiButtonClick({ inputRef, setPickerOpen: setEmojiPickerOpen })}
                   title="Emoji">
                   
                                     😊
                                 </button>
-                }
-                            <button className="composer-icon-btn" onClick={handleImageClick} style={{ background: 'none', border: 'none', color: '#9ca3af', marginRight: '8px', cursor: 'pointer', display: 'flex' }}>
+                : null}
+                            <button
+                  type="button"
+                  className="composer-icon-btn chat-composer-icon-btn"
+                  onClick={handleImageClick}
+                  aria-label={t('attach_photo', { defaultValue: 'Attach photo' })}>
                                 <FaImage size={18} />
                             </button>
                         </>
@@ -794,13 +853,7 @@ const InvitationChatRoom = () => {
                 </div>
 
                 <button
-              className="send-btn-circle"
-              style={{
-                background: isRecording ? '#ef4444' : 'var(--primary)',
-                color: 'white', border: 'none', borderRadius: '50%',
-                width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
-              }}
+              className={`send-btn-circle chat-send-btn${isRecording ? ' chat-send-btn--recording' : ''}`}
               onMouseDown={(e) => {
                 e.preventDefault();
                 if (isRecording) handleStopRecording(true);else
@@ -811,14 +864,11 @@ const InvitationChatRoom = () => {
                 </button>
             </div>
 
-            {!isTouchUi &&
           <EmojiPickerPortal
             open={emojiPickerOpen}
             onClose={() => setEmojiPickerOpen(false)}
             anchorRef={emojiBtnRef}
             onEmojiClick={handleEmojiClick} />
-
-          }
             </div>
             </div>
         </div>);
@@ -827,3 +877,5 @@ const InvitationChatRoom = () => {
 };
 
 export default InvitationChatRoom;
+
+

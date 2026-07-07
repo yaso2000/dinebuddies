@@ -37,8 +37,23 @@ function stripeCommerceStatus() {
     };
 }
 
+function stripeCustomerModeLabel() {
+    return isStripeTestMode() ? 'test' : 'live';
+}
+
+function isStripeCustomerModeMismatchError(error) {
+    const msg = String(error?.message || '').toLowerCase();
+    return (
+        error?.code === 'resource_missing' ||
+        msg.includes('test mode') ||
+        msg.includes('live mode')
+    );
+}
+
 module.exports = {
     isStripeTestMode,
     stripeCommerceStatus,
     listConfiguredCreditPackages,
+    stripeCustomerModeLabel,
+    isStripeCustomerModeMismatchError,
 };

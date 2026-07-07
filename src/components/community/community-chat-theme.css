@@ -161,6 +161,12 @@
     color: var(--cchat-zone-header-text);
 }
 
+.community-chat-root .community-chat-leave-btn {
+    color: #f87171;
+    border-color: color-mix(in srgb, #ef4444 45%, var(--cchat-zone-header-border));
+    background: color-mix(in srgb, #ef4444 14%, var(--cchat-zone-header-bg));
+}
+
 /* Pinned bar */
 .community-chat-root .community-pinned-host-bar {
     background: var(--cchat-pinned-bg);
@@ -310,9 +316,9 @@
 }
 
 .community-chat-root .community-composer-bar .community-main-chat__input-row {
-    background: var(--cchat-zone-composer-input-bg);
-    border-color: var(--cchat-zone-composer-input-border);
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--cchat-text) 4%, transparent);
+    background: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 .community-chat-root .community-main-chat__attach-btn {

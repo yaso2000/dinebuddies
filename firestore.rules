@@ -88,6 +88,20 @@ service cloud.firestore {
              (request.auth.uid == partnerId || !isCommunityChatMuted(partnerId));
     }
 
+    function isCommunityChatDisplay(partnerId) {
+      return isSignedIn() &&
+             request.auth.token.get('communityDisplay', false) == true &&
+             request.auth.token.get('communityDisplayPartnerId', '') == partnerId;
+    }
+
+    function canReadCommunityChat(partnerId) {
+      return isAdmin() ||
+             isCommunityChatDisplay(partnerId) ||
+             (isSignedIn() &&
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              isCommunityMember(partnerId));
+    }
+
     function isChatParticipant(chatId) {
       let chat = get(/databases/$(database)/documents/chats/$(chatId)).data;
       return request.auth.uid in chat.participants;
@@ -158,6 +172,28 @@ service cloud.firestore {
       let inv = get(/databases/$(database)/documents/social_invitations/$(invitationId)).data;
       return isPrivateInvitationHost(inv) ||
              isUidInPrivateInviteList(inv.get('invitedFriends', []));
+    }
+
+    function deliveredToAppendOnlyByViewer() {
+      let before = resource.data.get('deliveredTo', []);
+      let after = request.resource.data.get('deliveredTo', before);
+      return after is list &&
+             after.hasAll(before) &&
+             after.hasOnly(before.concat([request.auth.uid]));
+    }
+
+    function readByAppendOnlyByViewer() {
+      let before = resource.data.get('readBy', []);
+      let after = request.resource.data.get('readBy', before);
+      return after is list &&
+             after.hasAll(before) &&
+             after.hasOnly(before.concat([request.auth.uid]));
+    }
+
+    function isReceiptFieldsOnlyUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveredTo', 'readBy']) &&
+             deliveredToAppendOnlyByViewer() &&
+             readByAppendOnlyByViewer();
     }
 
     // True when Firestore doc has never stored `role` (e.g. email-only stub from auth sync).
@@ -277,6 +313,11 @@ service cloud.firestore {
       allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && isBusinessSignupCompletionFromIntent();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
       allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && isUpgradingStubToBusinessProfile();
+      // Follow / unfollow: owner may update only their following[] list
+      allow update: if isOwner(userId) &&
+                       ownerAffiliateWriteGuards() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['following']) &&
+                       request.resource.data.following is list;
       allow update: if isOwner(userId) && ownerAffiliateWriteGuards() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'accountType']);
@@ -321,6 +362,11 @@ service cloud.firestore {
           && request.resource.data.ok is bool
           && request.resource.data.at == request.time;
         allow read: if isOwner(userId) || isAdminOrPanelStaff();
+      }
+
+      // Invite card dismissals (view / decline — hide card permanently for this user)
+      match /invite_inbox_dismissals/{invitationId} {
+        allow read, write: if isOwner(userId);
       }
 
       // Read-only invitation history (Cloud Functions write on archive)
@@ -437,6 +483,9 @@ service cloud.firestore {
                          isPublicInvitationChatParticipant(invitationId);
         allow update: if isSignedIn() &&
                          resource.data.senderId == request.auth.uid;
+        allow update: if isSignedIn() &&
+                         isPublicInvitationChatParticipant(invitationId) &&
+                         isReceiptFieldsOnlyUpdate();
         allow delete: if isSignedIn() &&
                          (resource.data.senderId == request.auth.uid || isAdmin());
       }
@@ -493,6 +542,9 @@ service cloud.firestore {
                          canPostPrivateInvitationMessage(invitationId);
         allow update: if isSignedIn() &&
                          resource.data.senderId == request.auth.uid;
+        allow update: if isSignedIn() &&
+                         isPrivateInvitationChatParticipant(invitationId) &&
+                         isReceiptFieldsOnlyUpdate();
         allow delete: if isSignedIn() &&
                          (resource.data.senderId == request.auth.uid || isAdminOrPanelStaff());
       }
@@ -536,6 +588,9 @@ service cloud.firestore {
                          canPostSocialInvitationMessage(invitationId);
         allow update: if isSignedIn() &&
                          resource.data.senderId == request.auth.uid;
+        allow update: if isSignedIn() &&
+                         isSocialInvitationChatParticipant(invitationId) &&
+                         isReceiptFieldsOnlyUpdate();
         allow delete: if isSignedIn() &&
                          (resource.data.senderId == request.auth.uid || isAdminOrPanelStaff());
       }
@@ -612,10 +667,13 @@ service cloud.firestore {
         // Security: constrain message create schema and sender ownership
         allow create: if isSignedIn() && 
                          request.resource.data.senderId == request.auth.uid &&
-                         request.resource.data.keys().hasOnly(['senderId', 'text', 'type', 'createdAt', 'status', 'reactions', 'replyTo', 'audioUrl', 'imageUrl', 'fileUrl', 'duration', 'sharedContent']) &&
+                         request.resource.data.keys().hasOnly(['senderId', 'text', 'type', 'createdAt', 'status', 'deliveredTo', 'readBy', 'reactions', 'replyTo', 'audioUrl', 'imageUrl', 'fileUrl', 'duration', 'sharedContent']) &&
                          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
         allow update: if isSignedIn() && 
                          resource.data.senderId == request.auth.uid;
+        allow update: if isSignedIn() &&
+                         request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants &&
+                         isReceiptFieldsOnlyUpdate();
         allow delete: if isSignedIn() && 
                          (resource.data.senderId == request.auth.uid || isAdmin());
       }
@@ -812,8 +870,8 @@ service cloud.firestore {
     // ============================================
 
     match /communities/{partnerId} {
-      // Only members, partner owner, or admins can read community info
-      allow read: if isSignedIn() && (isCommunityMember(partnerId) || isAdmin());
+      // Members, display screens (cast), or admins can read community info
+      allow read: if canReadCommunityChat(partnerId);
 
       // Only the partner (owner) can create/update the community document
       allow create, update: if isOwner(partnerId) || isAdmin();
@@ -821,8 +879,8 @@ service cloud.firestore {
 
       // MESSAGES SUBCOLLECTION
       match /messages/{messageId} {
-        // Only community members/owner/admin can read
-        allow read: if isSignedIn() && (isCommunityMember(partnerId) || isAdmin());
+        // Members, venue display screens, or admins can read
+        allow read: if canReadCommunityChat(partnerId);
 
         // Only community members/owner/admin can send (muted members cannot post)
         allow create: if isSignedIn() &&
@@ -838,6 +896,11 @@ service cloud.firestore {
         allow update: if isSignedIn() &&
                          canWriteCommunityChat(partnerId) &&
                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
+
+        // Readers may append only their own delivery/read receipts
+        allow update: if isSignedIn() &&
+                         (isCommunityMember(partnerId) || isAdmin()) &&
+                         isReceiptFieldsOnlyUpdate();
 
         // Admin can update anything
         allow update: if isAdmin();

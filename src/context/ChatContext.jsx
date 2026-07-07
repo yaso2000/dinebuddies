@@ -254,6 +254,8 @@ export const ChatProvider = ({ children }) => {
                     ...messageData,
                     createdAt: serverTimestamp(),
                     status: 'sent', // sent, delivered, read
+                    deliveredTo: [],
+                    readBy: [],
                     reactions: {}
                 }
             );

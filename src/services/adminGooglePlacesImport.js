@@ -9,9 +9,10 @@ import { resolveApiUrl } from '../utils/resolveApiUrl';
 /**
  * @param {string} placeId
  * @param {string} idToken
+ * @param {{ languageCode?: string }} [opts]
  * @returns {Promise<{ ok: boolean; status: number; data: ImportFromGooglePreviewSuccess | ImportFromGoogleApiError }>}
  */
-export async function previewBusinessFromGoogle(placeId, idToken) {
+export async function previewBusinessFromGoogle(placeId, idToken, opts = {}) {
     const res = await fetch(resolveApiUrl('/api/business/import-from-google'), {
         method: 'POST',
         headers: {
@@ -21,6 +22,7 @@ export async function previewBusinessFromGoogle(placeId, idToken) {
         body: JSON.stringify({
             placeId: String(placeId || '').trim(),
             action: 'preview',
+            ...(opts.languageCode ? { languageCode: String(opts.languageCode) } : {}),
         }),
     });
     const data = await res.json().catch(() => (/** @type {ImportFromGoogleApiError} */ ({
@@ -35,7 +37,7 @@ export async function previewBusinessFromGoogle(placeId, idToken) {
  * @param {string} placeId
  * @param {string | null | undefined} previewCoverImage data URL from preview phase
  * @param {string} idToken
- * @param {{ forceCreate?: boolean }} [opts]
+ * @param {{ forceCreate?: boolean; languageCode?: string }} [opts]
  * @returns {Promise<{ ok: boolean; status: number; data: ImportFromGooglePublishSuccess | ImportFromGoogleApiError }>}
  */
 export async function publishBusinessFromGoogle(placeId, previewCoverImage, idToken, opts = {}) {
@@ -50,6 +52,7 @@ export async function publishBusinessFromGoogle(placeId, previewCoverImage, idTo
             action: 'publish',
             ...(previewCoverImage ? { previewCoverImage: String(previewCoverImage) } : {}),
             ...(opts.forceCreate === true ? { forceCreate: true } : {}),
+            ...(opts.languageCode ? { languageCode: String(opts.languageCode) } : {}),
         }),
     });
     const data = await res.json().catch(() => (/** @type {ImportFromGoogleApiError} */ ({

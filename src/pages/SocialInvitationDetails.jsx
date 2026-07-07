@@ -7,7 +7,7 @@ import { auth, db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { getTemplateStyle } from '../utils/invitationTemplates';
-import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import { getSafeAvatar, pickSafeDisplayImageUrl, enrichUserWithAvatarFields, hydrateUsersAvatarFields, getAvatarUrlOrNull } from '../utils/avatarUtils';
 import SocialInvitationInfoGrid from '../components/Invitation/SocialInvitationInfoGrid';
 import PrivateInvitationPairShowcase from '../components/Invitations/privateCard/PrivateInvitationPairShowcase';
 import SocialInvitationExternalShare from '../components/Invitations/socialCard/SocialInvitationExternalShare';
@@ -174,17 +174,20 @@ const SocialInvitationDetails = () => {
                 try {
                   const uSnap = await getDoc(doc(db, 'users', friendUid));
                   if (uSnap.exists()) {
-                    users.push({
-                      id: friendUid,
-                      ...uSnap.data(),
-                      rsvpStatus: data.rsvps?.[friendUid] || 'pending'
-                    });
+                    users.push(
+                      enrichUserWithAvatarFields({
+                        id: friendUid,
+                        ...uSnap.data(),
+                        rsvpStatus: data.rsvps?.[friendUid] || 'pending',
+                      })
+                    );
                   }
                 } catch (e) {
                   console.error(e);
                 }
               }
-              setInvitedUsers(users);
+              const hydrated = await hydrateUsersAvatarFields(users);
+              if (!cancelled) setInvitedUsers(hydrated);
             }
           } else {
             setInvitation(null);
@@ -275,24 +278,59 @@ const SocialInvitationDetails = () => {
     ? `theme-personal-${personalInviteCategory}`
     : `theme-${(invitation?.occasionType || 'social').toLowerCase()}`;
 
+  const [hydratedHostProfile, setHydratedHostProfile] = useState(null);
+
   const datingHostProfile = useMemo(() => {
     if (!invitation) return null;
     const hostId = normUid(invitation.authorId || invitation.author?.id);
-    return {
+    if (viewerUid && hostId && viewerUid === hostId && userProfile) {
+      return enrichUserWithAvatarFields({
+        id: hostId,
+        ...userProfile,
+      });
+    }
+    const author = invitation.author || {};
+    const snapshotUrl =
+      invitation.authorAvatarUrl ||
+      author.photo_url ||
+      author.photoURL ||
+      author.photo ||
+      author.avatarUrl ||
+      author.avatar;
+    return enrichUserWithAvatarFields({
       id: hostId,
       display_name:
-      invitation.author?.name ||
-      invitation.author?.displayName ||
-      invitation.authorName ||
-      '',
-      photoURL:
-      invitation.author?.photo ||
-      invitation.author?.photoURL ||
-      invitation.authorAvatarUrl,
-      gender: invitation.author?.gender,
-      role: invitation.author?.role
+        author.name ||
+        author.displayName ||
+        invitation.authorName ||
+        '',
+      photo_url: snapshotUrl,
+      photoURL: snapshotUrl,
+      avatarUrl: snapshotUrl,
+      avatar: snapshotUrl,
+      profileGallery: author.profileGallery,
+      gender: author.gender,
+      role: author.role,
+    });
+  }, [invitation, viewerUid, userProfile]);
+
+  useEffect(() => {
+    if (!datingHostProfile?.id) {
+      setHydratedHostProfile(null);
+      return undefined;
+    }
+    if (getAvatarUrlOrNull(datingHostProfile)) {
+      setHydratedHostProfile(datingHostProfile);
+      return undefined;
+    }
+    let cancelled = false;
+    hydrateUsersAvatarFields([datingHostProfile]).then((rows) => {
+      if (!cancelled) setHydratedHostProfile(rows[0] || datingHostProfile);
+    });
+    return () => {
+      cancelled = true;
     };
-  }, [invitation]);
+  }, [datingHostProfile]);
 
   const datingGuestProfile = useMemo(() => {
     if (!invitation) return null;
@@ -302,11 +340,11 @@ const SocialInvitationDetails = () => {
     const selfFromList = invitedUsers.find((u) => normUid(u.id) === viewerUid);
     if (selfFromList) return selfFromList;
     if (userProfile) {
-      return {
+      return enrichUserWithAvatarFields({
         id: viewerUid,
         ...userProfile,
         rsvpStatus: myRSVP
-      };
+      });
     }
     return null;
   }, [invitation, isHost, invitedUsers, viewerUid, userProfile, myRSVP]);
@@ -567,7 +605,7 @@ const SocialInvitationDetails = () => {
                 {/* Dating: intimate host + guest pairing | Private: guest list */}
                 {isPrivateInvitation ?
         <PrivateInvitationPairShowcase
-          host={datingHostProfile}
+          host={hydratedHostProfile || datingHostProfile}
           guest={datingGuestProfile}
           guestRsvpStatus={datingGuestRsvp}
           personalInviteCategory={personalInviteCategory}

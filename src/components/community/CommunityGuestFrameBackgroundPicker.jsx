@@ -7,11 +7,10 @@ import {
   buildCommunityGuestFrameColorBackgroundCss,
   getCommunityGuestFramePresetUrl,
 } from '../../constants/communityChatGuestFrameLook';
+import BannerGradientPresetCarousel from './BannerGradientPresetCarousel';
 import {
-  BANNER_BG_PRESETS,
   DEFAULT_BANNER_BG,
   DEFAULT_BANNER_BG2,
-  buildBannerGradientCss,
   sanitizeBannerBgDensity,
   sanitizeBannerHexColor,
 } from '../../utils/communityChatBanner';
@@ -282,66 +281,16 @@ export default function CommunityGuestFrameBackgroundPicker({
             'Gradient cover on top of the selected background image (same as the banner).'
           )}
         </AppText>
-        <div className="community-banner-modal__swatches">
-          <button
-            type="button"
-            className={`community-banner-modal__swatch community-banner-modal__swatch--transparent${!colorOverlayEnabled ? ' community-banner-modal__swatch--active' : ''}`}
-            aria-label={t('community_banner_bg_transparent', 'Transparent')}
-            aria-pressed={!colorOverlayEnabled}
-            title={t(
-              'community_guest_frame_bg_transparent_hint',
-              'No color overlay — show the image or theme background only.'
-            )}
-            disabled={busy}
-            onClick={() => onSelectTransparent?.()}
-          >
-            <AppText as="span">{t('community_banner_bg_transparent', 'Transparent')}</AppText>
-          </button>
-          {BANNER_BG_PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              className={`community-banner-modal__swatch${
-                colorOverlayEnabled && colorStart === preset.color && colorEnd === preset.color2
-                  ? ' community-banner-modal__swatch--active'
-                  : ''
-              }`}
-              style={{
-                background: buildBannerGradientCss(preset.color, preset.color2),
-              }}
-              aria-label={preset.id}
-              aria-pressed={
-                colorOverlayEnabled && colorStart === preset.color && colorEnd === preset.color2
-              }
-              disabled={busy}
-              onClick={() => onSelectGradientPreset?.(preset.color, preset.color2)}
-            />
-          ))}
-        </div>
-        {colorOverlayEnabled ? (
-          <div className="community-banner-modal__gradient-pickers">
-            <label className="community-banner-modal__color-picker">
-              <input
-                type="color"
-                value={colorStart}
-                disabled={busy}
-                onChange={(event) => onChangeColors?.(event.target.value, colorEnd)}
-                aria-label={t('community_banner_bg_color_start', 'Gradient start color')}
-              />
-              <AppText as="span">{t('community_banner_bg_color_start', 'Start')}</AppText>
-            </label>
-            <label className="community-banner-modal__color-picker">
-              <input
-                type="color"
-                value={colorEnd}
-                disabled={busy}
-                onChange={(event) => onChangeColors?.(colorStart, event.target.value)}
-                aria-label={t('community_banner_bg_color_end', 'Gradient end color')}
-              />
-              <AppText as="span">{t('community_banner_bg_color_end', 'End')}</AppText>
-            </label>
-          </div>
-        ) : null}
+        <BannerGradientPresetCarousel
+          colorStart={colorStart}
+          colorEnd={colorEnd}
+          disabled={busy}
+          showTransparent
+          transparentSelected={!colorOverlayEnabled}
+          onSelectTransparent={() => onSelectTransparent?.()}
+          onSelectGradient={(start, end) => onSelectGradientPreset?.(start, end)}
+          ariaLabel={t('community_guest_frame_bg_overlay_section', 'Color overlay')}
+        />
         {colorOverlayEnabled ? (
           <div className="community-banner-modal__density">
             <div className="community-banner-modal__density-head">

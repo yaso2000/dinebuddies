@@ -15,7 +15,6 @@ import {
   DEFAULT_BANNER_BG_DENSITY,
   DEFAULT_BANNER_FONT_SIZE,
   DEFAULT_BANNER_TITLE_FONT_SIZE,
-  buildBannerGradientCss,
   clampBannerBodySlotText,
   createDefaultBannerBodySlot,
   createDefaultBannerTitleStyle,
@@ -44,6 +43,7 @@ import {
   sanitizeYoutubeVideoId,
 } from '../../utils/videoEmbedUtils';
 import CommunityBannerYoutubeBackground from './CommunityBannerYoutubeBackground';
+import BannerGradientPresetCarousel from './BannerGradientPresetCarousel';
 import CommunityChatZoneThemePicker from './CommunityChatZoneThemePicker';
 import InvitationEditorLeaveDialog from '../Invitations/socialCard/InvitationEditorLeaveDialog';
 import {
@@ -780,58 +780,18 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
           <AppText as="span" className="community-banner-modal__label">
             {t('community_banner_bg_gradient', 'Gradient background')}
           </AppText>
-          <div className="community-banner-modal__swatches">
-            <button
-              type="button"
-              className={`community-banner-modal__swatch community-banner-modal__swatch--transparent${isTransparentBg ? ' community-banner-modal__swatch--active' : ''}`}
-              aria-label={t('community_banner_bg_transparent', 'Transparent')}
-              aria-pressed={isTransparentBg}
-              title={t('community_banner_bg_transparent_hint', 'Show text over the banner image')}
-              onClick={() => setBgColorDraft(BANNER_BG_TRANSPARENT)}
-            >
-              <AppText as="span">{t('community_banner_bg_transparent', 'Transparent')}</AppText>
-            </button>
-            {BANNER_BG_PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                className={`community-banner-modal__swatch${bgColorDraft === preset.color && bgColor2Draft === preset.color2 ? ' community-banner-modal__swatch--active' : ''}`}
-                style={{
-                  background: buildBannerGradientCss(preset.color, preset.color2),
-                }}
-                aria-label={preset.id}
-                aria-pressed={
-                  bgColorDraft === preset.color && bgColor2Draft === preset.color2
-                }
-                onClick={() => {
-                  setBgColorDraft(preset.color);
-                  setBgColor2Draft(preset.color2);
-                }}
-              />
-            ))}
-          </div>
-          {!isTransparentBg ? (
-            <div className="community-banner-modal__gradient-pickers">
-              <label className="community-banner-modal__color-picker">
-                <input
-                  type="color"
-                  value={bgColorDraft}
-                  onChange={(e) => setBgColorDraft(e.target.value)}
-                  aria-label={t('community_banner_bg_color_start', 'Gradient start color')}
-                />
-                <AppText as="span">{t('community_banner_bg_color_start', 'Start')}</AppText>
-              </label>
-              <label className="community-banner-modal__color-picker">
-                <input
-                  type="color"
-                  value={bgColor2Draft}
-                  onChange={(e) => setBgColor2Draft(e.target.value)}
-                  aria-label={t('community_banner_bg_color_end', 'Gradient end color')}
-                />
-                <AppText as="span">{t('community_banner_bg_color_end', 'End')}</AppText>
-              </label>
-            </div>
-          ) : null}
+          <BannerGradientPresetCarousel
+            colorStart={bgColorDraft}
+            colorEnd={bgColor2Draft}
+            showTransparent
+            transparentSelected={isTransparentBg}
+            onSelectTransparent={() => setBgColorDraft(BANNER_BG_TRANSPARENT)}
+            onSelectGradient={(start, end) => {
+              setBgColorDraft(sanitizeBannerHexColor(start, DEFAULT_BANNER_BG));
+              setBgColor2Draft(sanitizeBannerHexColor(end, DEFAULT_BANNER_BG2));
+            }}
+            ariaLabel={t('community_banner_bg_gradient', 'Gradient background')}
+          />
           {!isTransparentBg ? (
             <div className="community-banner-modal__density">
               <div className="community-banner-modal__density-head">
@@ -925,7 +885,7 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
     activeModal === 'zoneTheme' && zoneThemeDraft ? (
       <>
         <BannerToolModal
-          title={t('community_chat_zone_theme_tool', 'Chat color themes')}
+          title={t('community_guest_frame_bg_tool', 'Chat background')}
           titleId="community-chat-zone-theme-modal"
           onClose={requestCloseZoneThemeModal}
           headerActions={
@@ -948,12 +908,10 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
           }
         >
           <CommunityChatZoneThemePicker
-            value={zoneThemeDraft.themeId}
             guestFrameBackground={buildGuestFrameBackgroundFromDraft(zoneThemeDraft.guestFrame)}
             saving={zoneThemeSaving}
             guestFrameBackgroundUploading={guestFrameBackgroundUploading}
             guestFrameBackgroundGenerating={guestFrameBackgroundGenerating}
-            onSelect={(themeId) => updateZoneThemeDraft({ themeId })}
             onSelectTransparent={() => {
               updateZoneThemeGuestFrameDraft({ colorOverlayEnabled: false });
             }}
@@ -1123,8 +1081,8 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
         <button
           type="button"
           className={`community-banner-host-tools__btn${zoneThemeId && zoneThemeId !== 'default' ? ' community-banner-host-tools__btn--active' : ''}`}
-          aria-label={t('community_chat_zone_theme_tool', 'Chat color themes')}
-          title={t('community_chat_zone_theme_tool', 'Chat color themes')}
+          aria-label={t('community_guest_frame_bg_tool', 'Chat background')}
+          title={t('community_guest_frame_bg_tool', 'Chat background')}
           onClick={openZoneThemeModal}
           disabled={uploadingBanner || zoneThemeSaving}
         >
@@ -1211,8 +1169,8 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
         <button
           type="button"
           className={`community-banner-host-tools__btn${zoneThemeId && zoneThemeId !== 'default' ? ' community-banner-host-tools__btn--active' : ''}`}
-          aria-label={t('community_chat_zone_theme_tool', 'Chat color themes')}
-          title={t('community_chat_zone_theme_tool', 'Chat color themes')}
+          aria-label={t('community_guest_frame_bg_tool', 'Chat background')}
+          title={t('community_guest_frame_bg_tool', 'Chat background')}
           onClick={openZoneThemeModal}
           disabled={uploadingBanner || zoneThemeSaving}
         >

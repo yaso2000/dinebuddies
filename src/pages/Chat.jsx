@@ -13,7 +13,7 @@ import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import {
   FaArrowLeft, FaCamera, FaMicrophone,
-  FaPaperPlane, FaEllipsisV, FaPlay, FaPause, FaFile,
+  FaPaperPlane, FaPlay, FaPause, FaFile,
   FaDownload, FaStop, FaPlus, FaArrowDown } from
 'react-icons/fa';
 import { FaLock, FaBan } from 'react-icons/fa6';
@@ -24,11 +24,17 @@ import { ImageUploadZone } from '../services/imageUploadZones';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import NewReportModal from '../components/NewReportModal';
 import SharedContentBubble from '../components/SharedContentBubble';
-import EmojiPickerPortal, { isTouchOrCoarsePointer } from '../components/EmojiPickerPortal';
+import EmojiPickerPortal from '../components/EmojiPickerPortal';
+import { handleEmojiButtonClick, shouldUseAppEmojiPicker, showComposerEmojiButton } from '../utils/emojiInputMode';
 import './Chat.css';
+import '../styles/chatReferenceTheme.css';
 import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
 import { AppText, AppTextInput } from "../components/base";
 import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
+import { getMessageGroupPosition } from '../utils/chatMessageGrouping';
+import { getMessageReceiptDisplay, syncMessageReceiptDocs } from '../utils/chatMessageReceipts';
+import { useChatTheme } from '../hooks/useChatTheme';
+import ChatThemePicker from '../components/chat/ChatThemePicker';
 
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
@@ -42,6 +48,7 @@ const Chat = () => {
   const { isDark } = useTheme();
   const { getOrCreateConversation, sendMessage, markAsRead, setTypingStatus, addReaction } = useChat();
   const { showToast } = useToast();
+  const { themeId: chatThemeId, setThemeId: setChatThemeId, themeStyle: chatThemeStyle } = useChatTheme();
 
   const [conversationId, setConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -105,8 +112,9 @@ const Chat = () => {
   const imageInputRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
+  const latestMessageDocsRef = useRef([]);
+  const readReceiptTimeoutRef = useRef(null);
 
-  const isTouchUi = isTouchOrCoarsePointer();
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const emojiBtnRef = useRef(null);
   const containerRef = useRef(null);
@@ -256,13 +264,51 @@ const Chat = () => {
       orderBy('createdAt', 'asc')
     );
     const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
+      latestMessageDocsRef.current = snapshot.docs;
       const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setMessages(msgs);
       setLoading(false);
-      if (!connectionLocked) markAsRead(conversationId);
+      if (!connectionLocked && currentUser?.uid) {
+        void syncMessageReceiptDocs({
+          db,
+          messageDocs: snapshot.docs,
+          viewerId: currentUser.uid,
+          markRead: false
+        });
+      }
     });
     return () => unsubscribe();
-  }, [connectionLocked, conversationId, markAsRead]);
+  }, [connectionLocked, conversationId, currentUser?.uid]);
+
+  useEffect(() => {
+    if (readReceiptTimeoutRef.current) {
+      clearTimeout(readReceiptTimeoutRef.current);
+      readReceiptTimeoutRef.current = null;
+    }
+    if (!conversationId || connectionLocked || !currentUser?.uid || messages.length === 0) {
+      return undefined;
+    }
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      return undefined;
+    }
+
+    readReceiptTimeoutRef.current = setTimeout(() => {
+      void syncMessageReceiptDocs({
+        db,
+        messageDocs: latestMessageDocsRef.current,
+        viewerId: currentUser.uid,
+        markRead: true
+      });
+      void markAsRead(conversationId);
+    }, 900);
+
+    return () => {
+      if (readReceiptTimeoutRef.current) {
+        clearTimeout(readReceiptTimeoutRef.current);
+        readReceiptTimeoutRef.current = null;
+      }
+    };
+  }, [connectionLocked, conversationId, currentUser?.uid, markAsRead, messages]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -470,7 +516,7 @@ const Chat = () => {
 
   if ((loading || connectionCheckLoading) && !conversationError) {
     return (
-      <div dir="ltr" className="chat-container">
+      <div dir={i18n.dir()} className="chat-container" data-chat-theme={chatThemeId} style={chatThemeStyle}>
                 <div className="chat-header">
                     <button className="back-btn" onClick={goBackFromChat}>
                         <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
@@ -483,7 +529,7 @@ const Chat = () => {
 
   if (conversationError) {
     return (
-      <div dir="ltr" className="chat-container">
+      <div dir={i18n.dir()} className="chat-container" data-chat-theme={chatThemeId} style={chatThemeStyle}>
                 <div className="chat-header">
                     <button className="back-btn" onClick={goBackFromChat}>
                         <FaArrowLeft style={{ transform: 'rotate(180deg)' }} />
@@ -491,7 +537,7 @@ const Chat = () => {
                     <div className="header-info" style={{ minWidth: 0, flex: 1 }}><AppText as="h3">{t("chat_title")}</AppText></div>
                 </div>
                 <div style={{ padding: '2rem', textAlign: 'center' }}>
-                    <AppText as="p" style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>Couldn&apos;t start conversation.</AppText>
+                    <AppText as="p" style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>{t('chat_conversation_start_failed', "Couldn't start conversation.")}</AppText>
                     <button
             onClick={handleRetryConversation}
             style={{
@@ -504,7 +550,7 @@ const Chat = () => {
               fontSize: '0.95rem'
             }}>
             
-                        Retry
+                        {t('retry', 'Retry')}
                     </button>
                 </div>
             </div>);
@@ -512,7 +558,13 @@ const Chat = () => {
   }
 
   return (
-    <div ref={containerRef} className="chat-container chat-root">
+    <div
+      ref={containerRef}
+      dir={i18n.dir()}
+      className="chat-container chat-root"
+      data-chat-theme={chatThemeId}
+      style={chatThemeStyle}
+    >
             <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelect} />
 
             {/* Header */}
@@ -532,14 +584,14 @@ const Chat = () => {
           justifyContent: 'center',
           boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
           color: 'var(--text-main)',
-          marginRight: '12px',
+          marginInlineEnd: '12px',
           border: '1px solid var(--border-color)'
         }}>
                     <FaArrowLeft size={18} />
                 </button>
                 {otherUser &&
         <>
-                        <div className="header-avatar" style={{ position: 'relative', display: 'flex', width: '42px', height: '42px', minWidth: '42px', minHeight: '42px', flexShrink: 0, marginRight: '12px' }}>
+                        <div className="header-avatar" style={{ position: 'relative', display: 'flex', width: '42px', height: '42px', minWidth: '42px', minHeight: '42px', flexShrink: 0, marginInlineEnd: '12px' }}>
                             <UserAvatar
               user={otherUser}
               alt={otherUser.displayName}
@@ -547,13 +599,13 @@ const Chat = () => {
             
                             {otherUser.isOnline && <div className="online-dot" style={{ position: 'absolute', bottom: -2, right: -2, width: '12px', height: '12px', background: '#10b981', borderRadius: '50%', border: '2px solid var(--bg-card)' }} />}
                         </div>
-                        <div className="header-info" style={{ textAlign: 'left', minWidth: 0, flex: 1 }}>
+                        <div className="header-info" style={{ textAlign: 'start', minWidth: 0, flex: 1 }}>
                             <AppText as="h3" style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0 }}>{otherUser.displayName}</AppText>
                             <AppText as="p" className="status" style={{ fontSize: '0.8rem', opacity: 0.7 }}>{otherUserTyping ? t('typing') : otherUser.isOnline ? t('online') : formatLastSeen(otherUser.lastSeen)}</AppText>
                         </div>
                     </>
         }
-                <button className="options-btn" style={{ color: 'var(--text-main)' }}><FaEllipsisV /></button>
+                <ChatThemePicker value={chatThemeId} onChange={setChatThemeId} />
             </div>
 
             <div className="chat-body-column">
@@ -576,25 +628,38 @@ const Chat = () => {
             }
 
             const isOwn = msg.senderId === currentUser?.uid;
-            const isFirstInGroup = index === 0 || messages[index - 1].senderId !== msg.senderId;
+            const groupPosition = getMessageGroupPosition(messages, index);
+            const showIncomingAvatar = !isOwn && (groupPosition === 'single' || groupPosition === 'first');
 
             return (
               <div
                 key={msg.id}
-                className={`message-wrapper ${isOwn ? 'own' : 'other'} ${!isFirstInGroup ? 'consecutive' : ''}`}
+                className={`message-wrapper ${isOwn ? 'own' : 'other'} message-group-${groupPosition}`}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   if (!isOwn) {
                     setActiveReactionMenu(msg.id);
                   }
                 }}>
-                
+                {!isOwn ? (
+                  showIncomingAvatar ? (
+                    <div className="message-avatar">
+                      <UserAvatar
+                        user={otherUser}
+                        alt={otherUser?.displayName || 'User'}
+                        style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="message-avatar-spacer" aria-hidden />
+                  )
+                ) : null}
 
                             <div className="message-content-wrapper">
                                 {msg.replyTo &&
                   <div className="reply-preview">
                                         <div className="reply-line" />
-                                        <div className="reply-content"><AppText as="p" className="reply-text">{msg.replyTo.text}</AppText></div>
+                                        <div className="reply-content"><AppText as="p" className="reply-text" dir="auto">{msg.replyTo.text}</AppText></div>
                                     </div>
                   }
 
@@ -626,13 +691,18 @@ const Chat = () => {
                                     {/* Inline Text and Time */}
                                     <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: '4px 12px' }}>
                                         {(msg.type === 'text' || msg.type === 'shared_content' && msg.text) &&
-                      <AppText as="span" className="message-text" style={{ flex: '1 1 auto', margin: 0, minWidth: 0, wordBreak: 'break-word', paddingTop: '2px' }}>
+                      <AppText as="span" dir="auto" className="message-text" style={{ flex: '1 1 auto', margin: 0, minWidth: 0, wordBreak: 'break-word', paddingTop: '2px' }}>
                                                 {msg.text}
                                             </AppText>
                       }
-                                        <div className="message-meta" style={{ display: 'flex', alignItems: 'center', gap: '4px', margin: '0 0 0 auto', paddingBottom: 0, flexShrink: 0 }}>
+                                        <div className="message-meta" style={{ display: 'flex', alignItems: 'center', gap: '4px', marginInlineStart: 'auto', paddingBottom: 0, flexShrink: 0 }}>
                                             <AppText as="span" className="message-time" style={{ fontSize: '0.65rem', opacity: 0.8, whiteSpace: 'nowrap' }}>{formatTime(msg.createdAt)}</AppText>
-                                            {isOwn && <AppText as="span" className="message-status" style={{ fontSize: '0.7rem', display: 'flex' }}>{msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}</AppText>}
+                                            {(() => {
+                                              const receipt = getMessageReceiptDisplay(msg, currentUser?.uid);
+                                              return receipt ?
+                                              <AppText as="span" className={`message-status message-status--${receipt.state}`} style={{ fontSize: '0.7rem', display: 'flex' }}>{receipt.ticks}</AppText> :
+                                              null;
+                                            })()}
                                         </div>
                                     </div>
 
@@ -662,7 +732,7 @@ const Chat = () => {
                                                 {emoji}
                                             </AppText>
                     )}
-                                        {!isTouchUi &&
+                                        {shouldUseAppEmojiPicker() &&
                     <div
                       className="reaction-popup-item"
                       style={{ background: '#374151', borderRadius: '50%', padding: '2px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px' }}
@@ -677,8 +747,8 @@ const Chat = () => {
                                     </div>
                   }
 
-                                {/* Extended Emoji Picker for Reactions (desktop — touch uses system keyboard) */}
-                                {extendedReactionPicker === msg.id && !isTouchUi &&
+                                {/* Extended Emoji Picker for Reactions (desktop - touch uses system keyboard) */}
+                                {extendedReactionPicker === msg.id && shouldUseAppEmojiPicker() &&
                   <div className="extended-reaction-picker" style={{ position: 'absolute', bottom: '40px', left: '0', zIndex: 1001 }} onClick={(e) => e.stopPropagation()}>
                                         <Suspense fallback={<div style={{ width: 300, height: 350, background: '#111827' }} />}>
                                             <LazyEmojiPicker
@@ -752,7 +822,7 @@ const Chat = () => {
                         )
                       : t(
                           'chat_connection_locked',
-                          'You need a mutual connection to chat — like, follow, or acquaintance match.'
+                          'You need a mutual connection to chat - like, follow, or acquaintance match.'
                         )}
                   </AppText>
                   {blockedVariant === 'connection' && userId ? (
@@ -794,24 +864,8 @@ const Chat = () => {
         }
 
             <div className="chat-footer-stack">
-            <div ref={composerRef} style={{
-            flexShrink: 0,
-            width: '100%',
-            boxSizing: 'border-box',
-            background: 'var(--bg-darker)',
-            borderTop: '1px solid var(--border-color)',
-            padding: '8px',
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: '8px',
-            paddingBottom: 'max(8px, var(--chat-composer-safe-bottom, env(safe-area-inset-bottom)))'
-          }}>
-                <div className="input-wrapper" style={{
-              flex: 1, display: 'flex', alignItems: 'center',
-              background: 'var(--bg-input)', borderRadius: '24px', padding: '4px 12px',
-              border: '1px solid var(--border-color)'
-            }}>
+            <div ref={composerRef} className="chat-composer-row">
+                <div className="input-wrapper chat-composer-input">
                     {isRecording ?
               <div className="recording-ui" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
                             <div className="recording-info" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -819,7 +873,7 @@ const Chat = () => {
                                 <AppText as="span" className="recording-timer">{formatDuration(recordingDuration)}</AppText>
                             </div>
                             <button className="delete-recording-btn" onClick={stopRecording}>
-                                <FaStop /> Stop
+                                <FaStop /> {t('chat_voice_stop', 'Stop')}
                             </button>
                         </div> :
 
@@ -837,18 +891,22 @@ const Chat = () => {
                   onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
                   className="chat-input-field" />
                 
-                            {!isTouchUi &&
+                {showComposerEmojiButton() ?
                 <button
                   ref={emojiBtnRef}
                   type="button"
-                  onClick={() => setEmojiPickerOpen((o) => !o)}
-                  style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 8px', fontSize: '1.3rem', flexShrink: 0, display: 'flex', alignItems: 'center' }}
+                  className="composer-icon-btn chat-composer-icon-btn composer-icon-btn--emoji"
+                  onClick={() => handleEmojiButtonClick({ inputRef, setPickerOpen: setEmojiPickerOpen })}
                   title="Emoji">
                   
                                     😊
                                 </button>
-                }
-                            <button onClick={() => imageInputRef.current?.click()} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 4px', fontSize: '1.2rem', display: 'flex' }}>
+                : null}
+                            <button
+                  type="button"
+                  className="composer-icon-btn chat-composer-icon-btn"
+                  onClick={() => imageInputRef.current?.click()}
+                  aria-label={t('attach_photo', { defaultValue: 'Attach photo' })}>
                                 <FaCamera />
                             </button>
                         </>
@@ -856,21 +914,15 @@ const Chat = () => {
                 </div>
 
                 <button
+              className={`chat-send-btn${isRecording ? ' chat-send-btn--recording' : ''}`}
               type="button"
               onPointerDown={(e) => e.preventDefault()}
-              onClick={newMessage.trim() ? handleSendMessage : startRecording}
-              style={{
-                background: isRecording ? '#ef4444' : 'var(--primary)',
-                color: 'white', border: 'none', borderRadius: '50%',
-                width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
-              }}>
+              onClick={newMessage.trim() ? handleSendMessage : startRecording}>
               
-                    {isRecording ? <FaPaperPlane /> : newMessage.trim() ? <FaPaperPlane style={{ marginLeft: '-2px' }} /> : <FaMicrophone />}
+                    {isRecording ? <FaPaperPlane /> : newMessage.trim() ? <FaPaperPlane /> : <FaMicrophone />}
                 </button>
             </div>
 
-            {!isTouchUi &&
           <EmojiPickerPortal
             open={emojiPickerOpen}
             onClose={() => setEmojiPickerOpen(false)}
@@ -878,8 +930,6 @@ const Chat = () => {
             onEmojiClick={(data) => {
               handleEmojiClick(data);
             }} />
-
-          }
             </div>
             </>
             ) : null}
@@ -889,3 +939,5 @@ const Chat = () => {
 };
 
 export default Chat;
+
+

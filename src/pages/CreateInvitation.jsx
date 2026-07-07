@@ -39,6 +39,7 @@ import { extractAIContentFields } from '../utils/aiContentFieldMapper';
 import { buildPublicInvitationAiUserPrompt } from '../utils/aiPromptLocale';
 import { parseAiStudioImageFromState } from '../utils/aiStudioImagePayload';
 import { useDragScrollRail } from '../hooks/useDragScrollRail';
+import { scheduleScrollPageToTop, scrollElementIntoHorizontalContainer } from '../utils/scrollPageToTop';
 
 import { goToLogin } from '../utils/goToLogin';
 import { resolveVenueCountryIso } from '../utils/countryIso';
@@ -137,6 +138,8 @@ const CreateInvitation = () => {
     const userId = currentUser?.id || authUser?.uid;
     return userId ? `db_invitation_media_library_${userId}` : null;
   }, [currentUser?.id, authUser?.uid]);
+
+  useEffect(() => scheduleScrollPageToTop(), []);
 
   useEffect(() => {
     if (!editingInvitation?.id) editVideoHydratedRef.current = null;
@@ -1190,7 +1193,7 @@ const CreateInvitation = () => {
     const slide = root.querySelector(`[data-template-key="${esc}"]`);
     if (!slide) return;
     requestAnimationFrame(() => {
-      slide.scrollIntoView({ behavior: 'auto', inline: 'center', block: 'nearest' });
+      scrollElementIntoHorizontalContainer(root, slide);
     });
   }, [formData.templateType]);
 

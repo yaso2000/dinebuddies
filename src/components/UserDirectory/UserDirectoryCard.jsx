@@ -90,6 +90,7 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
       user?.coverPhotoUrl
     ) || USER_DIRECTORY_DEFAULT_COVER;
   const headline = user?.ageRange ? `${displayName}, ${user.ageRange}` : displayName;
+  const bioText = String(user?.bio || user?.shortBio || '').trim();
   const isSelf =
     profileUid &&
     (currentUser?.uid === profileUid || currentUser?.id === profileUid);
@@ -395,8 +396,12 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
 
         <div className="user-directory-card__overlay">
           <OnlineStatusBadge isOnline={isOnline} className="user-directory-card__online-badge" size="sm" />
-          {!isSelf ? (
-            <div className="user-directory-card__actions">
+          <div className="user-directory-card__footer">
+            {bioText ? (
+              <AppText as="p" className="user-directory-card__bio">{bioText}</AppText>
+            ) : null}
+            {!isSelf ? (
+              <div className="user-directory-card__actions">
               <button
                 type="button"
                 className="user-directory-card__action user-directory-card__action--gift"
@@ -457,7 +462,8 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
                 </button>
               ) : null}
             </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </div>
     </article>

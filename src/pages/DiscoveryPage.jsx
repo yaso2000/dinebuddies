@@ -200,7 +200,7 @@ export default function DiscoveryPage() {
           className="discovery-icon-btn"
           fallback={APP_HOME_PATH}
           iconStyle={{ transform: 'scaleX(-1)' }}
-          ariaLabel="Back to feed"
+          ariaLabel={t('discovery_back_to_feed_aria', 'Back to feed')}
         />
 
       </div>
@@ -246,7 +246,7 @@ export default function DiscoveryPage() {
         <Link
           to="/search/list"
           className="discovery-icon-btn discovery-icon-btn--cards"
-          aria-label="List view"
+          aria-label={t('user_directory_list_view_aria', 'List view')}
           title={t('user_directory_list_view', 'Card view')}>
           <LuLayoutGrid aria-hidden />
         </Link>

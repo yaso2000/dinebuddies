@@ -26,7 +26,12 @@ import {
   isValidE164,
   defaultDialCodeForCountryIso,
   cleanedPhoneLength,
-  toCountryCodeSelectValue } from
+  toCountryCodeSelectValue,
+  formatPhoneForDisplay,
+  parseE164ToParts,
+  phoneNumberLtrStyle,
+  compactE164FromGoogleInternational,
+} from
 '../utils/phoneUtils';
 import { PHONE_COUNTRY_OPTIONS } from '../constants/phoneCountryCodes';
 import {
@@ -46,9 +51,9 @@ const SEND_COOLDOWN_SEC = 60;
 
 /**
  * Business phone verification via Firebase Phone Auth (SMS OTP).
- * @param {{ defaultDialCode?: string, disabled?: boolean, lockFieldsAfterSend?: boolean, onVerified: Function }} props
+ * @param {{ defaultDialCode?: string, disabled?: boolean, lockFieldsAfterSend?: boolean, lockedPhoneE164?: string, onVerified: Function }} props
  */
-export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfterSend = true, onVerified }) {
+export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfterSend = true, lockedPhoneE164 = '', onVerified }) {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const isRtl = typeof i18n.dir === 'function' && i18n.dir(i18n.language) === 'rtl';
@@ -65,14 +70,28 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
   const [standardizedPhone, setStandardizedPhone] = useState('');
   const [claimMeta, setClaimMeta] = useState(null);
 
-  const standardizedPreview = useMemo(
-    () => formatToE164(countryCode, rawPhone),
-    [countryCode, rawPhone]
-  );
+  const phoneLocked = Boolean(String(lockedPhoneE164 || '').trim());
 
   useEffect(() => {
+    if (!phoneLocked) return;
+    const parts = parseE164ToParts(lockedPhoneE164);
+    if (!parts) return;
+    setCountryCode(parts.countryCode);
+    setRawPhone(parts.localNumber);
+    setStandardizedPhone(compactE164FromGoogleInternational(lockedPhoneE164));
+  }, [lockedPhoneE164, phoneLocked]);
+
+  const standardizedPreview = useMemo(() => {
+    if (phoneLocked) {
+      return compactE164FromGoogleInternational(lockedPhoneE164);
+    }
+    return formatToE164(countryCode, rawPhone);
+  }, [phoneLocked, lockedPhoneE164, countryCode, rawPhone]);
+
+  useEffect(() => {
+    if (phoneLocked) return;
     setCountryCode(toCountryCodeSelectValue(defaultDialCode || '61'));
-  }, [defaultDialCode]);
+  }, [defaultDialCode, phoneLocked]);
 
   useEffect(() => () => clearBusinessPhoneRecaptcha(), []);
 
@@ -87,14 +106,20 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
     return () => clearTimeout(timer);
   }, [countdown]);
 
-  const fieldsLocked = disabled || phoneVerified || lockFieldsAfterSend && isOtpSent;
+  const fieldsLocked = disabled || phoneVerified || phoneLocked || lockFieldsAfterSend && isOtpSent;
 
   const handleSendOTP = async (e) => {
     e?.preventDefault?.();
     setErrorMessage('');
 
-    const standardized = formatToE164(countryCode, rawPhone);
-    if (!standardized || cleanedPhoneLength(rawPhone) < 7 || !isValidE164(standardized)) {
+    const standardized = phoneLocked
+      ? compactE164FromGoogleInternational(lockedPhoneE164)
+      : formatToE164(countryCode, rawPhone);
+    if (!standardized || !isValidE164(standardized)) {
+      setErrorMessage(t('business_phone_invalid'));
+      return;
+    }
+    if (!phoneLocked && cleanedPhoneLength(rawPhone) < 7) {
       setErrorMessage(t('business_phone_invalid'));
       return;
     }
@@ -179,7 +204,16 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
                 <label className="biz-phone-verify__label">
                     {t('business_phone_label')}
                 </label>
-                <div className="biz-phone-verify__inputs">
+                {phoneLocked ?
+      <div
+        className="biz-phone-verify__locked-phone"
+        style={phoneNumberLtrStyle()}
+        dir="ltr"
+        aria-live="polite">
+                    {formatPhoneForDisplay(standardizedPreview)}
+                </div> :
+
+      <div className="biz-phone-verify__inputs">
                     <select
             className="biz-phone-verify__country"
             value={countryCode}
@@ -189,7 +223,7 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
 
                         {PHONE_COUNTRY_OPTIONS.map((c) =>
             <option key={c.iso} value={`+${c.dial}`}>
-                                {c.labelFallback} (+{c.dial})
+                                {t(c.labelKey, c.labelFallback)} (+{c.dial})
                             </option>
             )}
                     </select>
@@ -207,6 +241,7 @@ export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfter
 
                     </div>
                 </div>
+      }
             </div>
 
             {errorMessage &&

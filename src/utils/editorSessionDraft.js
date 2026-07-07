@@ -1,3 +1,5 @@
+import { resolveInviteCategory } from './inviteCategory';
+
 /** Max image payload stored in browser draft storage (~2.5 MB). */
 const MAX_DATA_URL_BYTES = 2.5 * 1024 * 1024;
 const STORAGE_PREFIX = 'dineb_editor_draft:';
@@ -85,10 +87,30 @@ export function inlinePostDraftKey(uid) {
     return `${STORAGE_PREFIX}inline-post:${uid}`;
 }
 
-/** @param {string} uid @param {'social' | 'private'} kind @param {string | null | undefined} editId */
+/** @param {string} uid @param {'social' | 'private' | 'dating'} kind @param {string | null | undefined} editId */
 export function privateInvitationEditorDraftKey(uid, kind, editId = null) {
     const base = `${STORAGE_PREFIX}private-invite:${kind}:${uid}`;
     return editId ? `${base}:edit:${editId}` : base;
+}
+
+/** Clear editor sessionStorage after the draft is opened in preview (Firestore is source of truth). */
+export function clearPrivateInvitationEditorSession(uid, invitationOrDraft, draftId = null) {
+    if (!uid) return;
+    let sessionKind = 'private';
+    if (invitationOrDraft === 'dating') {
+        sessionKind = 'dating';
+    } else if (invitationOrDraft === 'private') {
+        sessionKind = 'private';
+    } else if (resolveInviteCategory(invitationOrDraft) === 'private') {
+        sessionKind = 'dating';
+    }
+    clearEditorSessionDraft(privateInvitationEditorDraftKey(uid, sessionKind));
+    const resolvedDraftId = draftId || invitationOrDraft?.id;
+    if (resolvedDraftId) {
+        clearEditorSessionDraft(
+            privateInvitationEditorDraftKey(uid, sessionKind, resolvedDraftId)
+        );
+    }
 }
 
 /** @param {object | null | undefined} draft */

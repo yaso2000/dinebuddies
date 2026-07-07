@@ -2,13 +2,60 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { CREDIT_PACKAGES, getBusinessMonthlyPriceId } = require('./creditsCore');
-const { isStripeTestMode } = require('./stripeEnv');
+const {
+    isStripeTestMode,
+    stripeCustomerModeLabel,
+    isStripeCustomerModeMismatchError,
+} = require('./stripeEnv');
 
 if (!admin.apps.length) {
     admin.initializeApp();
 }
 
 const db = admin.firestore();
+
+/**
+ * Reuse Stripe customer for current mode (test/live), or create a fresh one when
+ * Firestore still has a customer id from the other mode.
+ */
+async function resolveStripeCustomerForUser({ userId, email, userRef, userData }) {
+    const currentMode = stripeCustomerModeLabel();
+    const expectLive = currentMode === 'live';
+    const storedId = String(userData?.stripeCustomerId || '').trim();
+    const storedMode = String(userData?.stripeCustomerMode || '').trim().toLowerCase();
+
+    const validateStored = async () => {
+        if (!storedId) return null;
+        const customer = await stripe.customers.retrieve(storedId);
+        if (customer.deleted || customer.livemode !== expectLive) return null;
+        if (storedMode !== currentMode) {
+            await userRef.set({ stripeCustomerMode: currentMode }, { merge: true });
+        }
+        return storedId;
+    };
+
+    if (storedId) {
+        try {
+            const ok = await validateStored();
+            if (ok) return ok;
+        } catch (err) {
+            if (!isStripeCustomerModeMismatchError(err)) throw err;
+        }
+    }
+
+    const customer = await stripe.customers.create({
+        email: email || `user_${userId}@dinebuddies.com`,
+        metadata: { firebaseUID: userId, stripeMode: currentMode },
+    });
+
+    await userRef.set({
+        stripeCustomerId: customer.id,
+        stripeCustomerMode: currentMode,
+    }, { merge: true });
+
+    console.log(`Stripe customer ${customer.id} (${currentMode}) for user ${userId}`);
+    return customer.id;
+}
 
 /**
  * إنشاء جلسة دفع Stripe Checkout
@@ -34,27 +81,15 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
     }
 
     try {
-        // إنشاء أو جلب Stripe Customer
-        let customerId;
-        const userDoc = await db.collection('users').doc(userId).get();
-
-        if (userDoc.exists && userDoc.data().stripeCustomerId) {
-            customerId = userDoc.data().stripeCustomerId;
-        } else {
-            // إنشاء عميل جديد في Stripe
-            const customer = await stripe.customers.create({
-                email: context.auth.token.email || `user_${userId}@dinebuddies.com`,
-                metadata: {
-                    firebaseUID: userId
-                }
-            });
-            customerId = customer.id;
-
-            // حفظ Customer ID في Firestore
-            await db.collection('users').doc(userId).set({
-                stripeCustomerId: customerId
-            }, { merge: true });
-        }
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
+        const userData = userDoc.exists ? userDoc.data() : {};
+        const customerId = await resolveStripeCustomerForUser({
+            userId,
+            email: context.auth.token.email,
+            userRef,
+            userData,
+        });
 
         // إنشاء Checkout Session
         const session = await stripe.checkout.sessions.create({
@@ -155,19 +190,15 @@ exports.createCreditsCheckoutSession = functions.https.onCall(async (data, conte
     const userId = context.auth.uid;
 
     try {
-        let customerId;
-        const userDoc = await db.collection('users').doc(userId).get();
-
-        if (userDoc.exists && userDoc.data().stripeCustomerId) {
-            customerId = userDoc.data().stripeCustomerId;
-        } else {
-            const customer = await stripe.customers.create({
-                email: context.auth.token.email || `user_${userId}@dinebuddies.com`,
-                metadata: { firebaseUID: userId },
-            });
-            customerId = customer.id;
-            await db.collection('users').doc(userId).set({ stripeCustomerId: customerId }, { merge: true });
-        }
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
+        const userData = userDoc.exists ? userDoc.data() : {};
+        const customerId = await resolveStripeCustomerForUser({
+            userId,
+            email: context.auth.token.email,
+            userRef,
+            userData,
+        });
 
         const session = await stripe.checkout.sessions.create({
             customer: customerId,
@@ -217,19 +248,15 @@ exports.createBusinessSubscriptionCheckout = functions.https.onCall(async (data,
     const planName = String(data?.planName || 'Paid Business').trim();
 
     try {
-        let customerId;
-        const userDoc = await db.collection('users').doc(userId).get();
-
-        if (userDoc.exists && userDoc.data().stripeCustomerId) {
-            customerId = userDoc.data().stripeCustomerId;
-        } else {
-            const customer = await stripe.customers.create({
-                email: context.auth.token.email || `user_${userId}@dinebuddies.com`,
-                metadata: { firebaseUID: userId },
-            });
-            customerId = customer.id;
-            await db.collection('users').doc(userId).set({ stripeCustomerId: customerId }, { merge: true });
-        }
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
+        const userData = userDoc.exists ? userDoc.data() : {};
+        const customerId = await resolveStripeCustomerForUser({
+            userId,
+            email: context.auth.token.email,
+            userRef,
+            userData,
+        });
 
         const session = await stripe.checkout.sessions.create({
             customer: customerId,

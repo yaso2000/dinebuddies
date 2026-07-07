@@ -42,7 +42,6 @@
     margin-top: 0;
     flex: 0 0 auto;
     align-self: stretch;
-    direction: rtl;
 }
 
 /* Rail: pinned to preview-wrap edges — never taller than card + typography (color bar bottom). */

@@ -1,5 +1,6 @@
 import { normalizeUserProfile } from './userProfileNormalize';
 import { openingHoursToBusinessHours } from './googlePlacesBusiness';
+import { resolveBusinessClaimPhoneE164 } from './phoneUtils';
 
 /**
  * @param {unknown} coords
@@ -129,5 +130,6 @@ export function isBusinessProfileOwner(sessionUid, profileId, business) {
 export function businessShowsClaimCta(business) {
     if (!business || typeof business !== 'object') return false;
     if (business._sourceCollection !== 'restaurants') return false;
-    return business.isClaimed !== true;
+    if (business.isClaimed === true) return false;
+    return Boolean(resolveBusinessClaimPhoneE164(business));
 }

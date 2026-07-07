@@ -60,9 +60,9 @@ function resolveCardTextBackdropFromInvitationFields(invitation, { toneField, co
     };
 }
 
-/** @param {object} [invitation] */
+/** Social invitation card — text panel tone (stored on socialCardTextBackdropTone). */
 export function getPrivateCardTextBackdropFromInvitation(invitation) {
-    if (!invitation || invitation.type !== 'Private') {
+    if (!invitation || invitation.type !== 'Social') {
         return { tone: DEFAULT_PRIVATE_TEXT_BACKDROP_TONE, showWithContent: false };
     }
     return resolveCardTextBackdropFromInvitationFields(invitation, {
@@ -72,9 +72,9 @@ export function getPrivateCardTextBackdropFromInvitation(invitation) {
     });
 }
 
-/** @param {object} [invitation] */
+/** Private invitation card — text panel tone (stored on privateCardTextBackdropTone). */
 export function getDatingCardTextBackdropFromInvitation(invitation) {
-    if (!invitation || invitation.type !== 'Dating') {
+    if (!invitation || invitation.type !== 'Private') {
         return { tone: DEFAULT_PRIVATE_TEXT_BACKDROP_TONE, showWithContent: false };
     }
     return resolveCardTextBackdropFromInvitationFields(invitation, {

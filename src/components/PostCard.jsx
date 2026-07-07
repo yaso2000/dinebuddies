@@ -308,8 +308,8 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     if (!window.confirm("Are you sure you want to hide this post? It will be moved to your drafts.")) return;
     try {
       await updateDoc(doc(db, collectionName, postDocId), { status: 'draft' });
-      showToast("Post hidden from feed.", 'success');
-    } catch (err) {showToast("Failed to hide post.", 'error');}
+      showToast(t('post_hidden_success', 'Post hidden from feed.'), 'success');
+    } catch (err) {showToast(t('post_hide_failed', 'Failed to hide post.'), 'error');}
     setShowMenu(false);
   };
 
@@ -361,9 +361,9 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         content: editedContent.trim(),
         updatedAt: serverTimestamp()
       });
-      showToast("Post updated.", 'success');
+      showToast(t('post_updated_success', 'Post updated.'), 'success');
       setIsEditing(false);
-    } catch (err) {showToast("Failed to update post.", 'error');}
+    } catch (err) {showToast(t('post_update_failed', 'Failed to update post.'), 'error');}
     setSavingEdit(false);
   };
 
@@ -747,7 +747,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
               role="menuitem"
               onClick={(e) => {
                 e.stopPropagation();
-                showToast('Reported.', 'success');
+                showToast(t('reported_success', 'Reported.'), 'success');
                 setShowMenu(false);
               }}>
 
@@ -1102,7 +1102,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                                         <AppText as="span" style={{
                   background: '#f59e0b', color: 'black', fontWeight: 'bold',
                   fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px'
-                }}>INVITATION</AppText>
+                }}>{t('invitation').toUpperCase()}</AppText>
                                         <AppText as="h4" style={{ color: 'white', margin: 0, fontSize: '0.95rem', textShadow: '0 1px 2px black' }}>
                                             {displayPost.attachedInvitation.title}
                                         </AppText>
@@ -1113,7 +1113,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                                         <AppText as="span">📅 {displayPost.attachedInvitation.date} • {displayPost.attachedInvitation.time}</AppText>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', color: 'var(--text-main)' }}>
-                                        <AppText as="span">📍 {displayPost.attachedInvitation.location || 'Selected Venue'}</AppText>
+                                        <AppText as="span">📍 {displayPost.attachedInvitation.location || t('invitation_selected_venue')}</AppText>
                                     </div>
                                 </div>
                             </div>

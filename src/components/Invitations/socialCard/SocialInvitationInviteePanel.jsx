@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaCheckCircle, FaSearch, FaUserFriends } from 'react-icons/fa';
+import { FaCheckCircle, FaUserFriends } from 'react-icons/fa';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useAuth } from '../../../context/AuthContext';
 import { useInvitations } from '../../../context/InvitationContext';
 import { getFollowing } from '../../../utils/followHelpers';
+import { hydrateUsersAvatarFields, enrichUserWithAvatarFields } from '../../../utils/avatarUtils';
 import { isExcludedFromUserDocSearch } from '../../../utils/consumerSearchExclusions';
 import { searchAccounts } from '../../../services/accountSearch';
 import UserAvatar from '../../UserAvatar';
@@ -17,10 +18,12 @@ import {
   senderFollowsInvitee } from
 '../../../utils/privateInviteAvailability';
 import { useToast } from '../../../context/ToastContext';
-import { AppText, AppTextInput } from "../../base";
+import { AppText } from "../../base";
+import SocialInvitationInviteeAllSheet from './SocialInvitationInviteeAllSheet';
 
 const SOCIAL_MAX_GUESTS = 30;
 const PRIVATE_MAX_GUESTS = 1;
+const INLINE_INVITEE_PREVIEW_LIMIT = 6;
 
 /**
  * Pick in-app invitees on the preview step (not on the create form).
@@ -46,9 +49,10 @@ export default function SocialInvitationInviteePanel({
   const [mutualFriends, setMutualFriends] = useState([]);
   const [followingIds, setFollowingIds] = useState([]);
   const [friendsLoading, setFriendsLoading] = useState(true);
-  const [friendSearchQuery, setFriendSearchQuery] = useState('');
-  const [friendSearchLoading, setFriendSearchLoading] = useState(false);
-  const [friendSearchResults, setFriendSearchResults] = useState([]);
+  const [allSheetOpen, setAllSheetOpen] = useState(false);
+  const [sheetSearchQuery, setSheetSearchQuery] = useState('');
+  const [sheetSearchLoading, setSheetSearchLoading] = useState(false);
+  const [sheetSearchResults, setSheetSearchResults] = useState([]);
   const [selectedProfiles, setSelectedProfiles] = useState([]);
 
   const uid = authUser?.uid || currentUser?.uid || currentUser?.id;
@@ -69,10 +73,10 @@ export default function SocialInvitationInviteePanel({
         }
         setFollowingIds(followingIds);
         const friends = await getFollowing(uid, followingIds);
-        let list = friends;
+        let list = await hydrateUsersAvatarFields(friends);
         if (mode === 'dating') {
-          const fieldsMap = await fetchPrivateInviteEligibilityByUserIds(friends.map((f) => f.id));
-          list = friends.
+          const fieldsMap = await fetchPrivateInviteEligibilityByUserIds(list.map((f) => f.id));
+          list = list.
           map((f) => mergePrivateInviteEligibility(f, fieldsMap)).
           filter((f) => isUserAvailableForPrivateInvite(f));
         }
@@ -108,15 +112,17 @@ export default function SocialInvitationInviteePanel({
         try {
           const snap = await getDoc(doc(db, 'users', friendId));
           if (snap.exists()) {
-            profiles.push({
-              id: friendId,
-              display_name:
-              snap.data().display_name ||
-              snap.data().displayName ||
-              snap.data().name ||
-              'User',
-              ...snap.data()
-            });
+            profiles.push(
+              enrichUserWithAvatarFields({
+                id: friendId,
+                display_name:
+                  snap.data().display_name ||
+                  snap.data().displayName ||
+                  snap.data().name ||
+                  'User',
+                ...snap.data(),
+              })
+            );
           } else {
             profiles.push({ id: friendId, display_name: t('user', 'User') });
           }
@@ -124,7 +130,8 @@ export default function SocialInvitationInviteePanel({
           profiles.push({ id: friendId, display_name: t('user', 'User') });
         }
       }
-      if (!cancelled) setSelectedProfiles(profiles);
+      const hydrated = await hydrateUsersAvatarFields(profiles);
+      if (!cancelled) setSelectedProfiles(hydrated);
     })();
 
     return () => {
@@ -133,17 +140,25 @@ export default function SocialInvitationInviteePanel({
   }, [selectedIds, mutualFriends, t]);
 
   useEffect(() => {
-    const rawQ = friendSearchQuery.trim();
+    if (!allSheetOpen) {
+      setSheetSearchQuery('');
+      setSheetSearchResults([]);
+      setSheetSearchLoading(false);
+    }
+  }, [allSheetOpen]);
+
+  useEffect(() => {
+    const rawQ = sheetSearchQuery.trim();
     const searchQ = rawQ.toLowerCase();
-    if (!rawQ || rawQ.length < 2 || !uid) {
-      setFriendSearchResults([]);
-      setFriendSearchLoading(false);
+    if (!allSheetOpen || !rawQ || rawQ.length < 2 || !uid) {
+      setSheetSearchResults([]);
+      setSheetSearchLoading(false);
       return undefined;
     }
 
     let cancelled = false;
     const timer = setTimeout(async () => {
-      setFriendSearchLoading(true);
+      setSheetSearchLoading(true);
       try {
         const localMatches = mutualFriends.filter((friend) => {
           const name = `${friend.display_name || ''} ${friend.name || ''}`.trim().toLowerCase();
@@ -163,18 +178,20 @@ export default function SocialInvitationInviteePanel({
           }
           const display = data?.display_name || data?.displayName || data?.name || '';
           if (!display) return;
-          merged.set(id, {
+          merged.set(id, enrichUserWithAvatarFields({
             id,
             display_name: display,
             name: display,
-            photo_url: data?.photo_url || data?.photoURL || data?.avatar || '',
-            photoURL: data?.photoURL || data?.photo_url || data?.avatar || '',
-            avatar: data?.avatar || data?.photo_url || data?.photoURL || '',
+            photo_url: data?.photo_url || data?.photoURL || data?.avatar || data?.avatarUrl || '',
+            photoURL: data?.photoURL || data?.photo_url || data?.avatar || data?.avatarUrl || '',
+            avatar: data?.avatar || data?.avatarUrl || data?.photo_url || data?.photoURL || '',
+            avatarUrl: data?.avatarUrl || data?.avatar || data?.photo_url || data?.photoURL || '',
+            profileGallery: data?.profileGallery,
             gender: data?.gender || null,
             availableForPrivateInvite: data?.availableForPrivateInvite,
             role: data?.role,
             isBusiness: data?.isBusiness
-          });
+          }));
         };
 
         localMatches.forEach((f) => addCandidate(f.id, f));
@@ -203,12 +220,12 @@ export default function SocialInvitationInviteePanel({
           filter((r) => isUserAvailableForPrivateInvite(r));
         }
 
-        if (!cancelled) setFriendSearchResults(results);
+        if (!cancelled) setSheetSearchResults(await hydrateUsersAvatarFields(results));
       } catch (e) {
         console.error('Invitee search failed:', e);
-        if (!cancelled) setFriendSearchResults([]);
+        if (!cancelled) setSheetSearchResults([]);
       } finally {
-        if (!cancelled) setFriendSearchLoading(false);
+        if (!cancelled) setSheetSearchLoading(false);
       }
     }, 300);
 
@@ -216,10 +233,27 @@ export default function SocialInvitationInviteePanel({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [friendSearchQuery, uid, mutualFriends, mode, followingIds]);
+  }, [sheetSearchQuery, allSheetOpen, uid, mutualFriends, mode, followingIds]);
 
-  const searchQ = friendSearchQuery.trim().toLowerCase();
-  const filteredFriends = searchQ ? friendSearchResults : mutualFriends;
+  const sheetSearchQ = sheetSearchQuery.trim().toLowerCase();
+  const sheetFilteredFriends = useMemo(() => {
+    if (sheetSearchQ.length >= 2) return sheetSearchResults;
+    if (!sheetSearchQ) return mutualFriends;
+    return mutualFriends.filter((friend) => {
+      const name = `${friend.display_name || ''} ${friend.name || ''}`.trim().toLowerCase();
+      return name.includes(sheetSearchQ);
+    });
+  }, [sheetSearchQ, sheetSearchResults, mutualFriends]);
+
+  const previewFriends = useMemo(() => {
+    const selectedSet = new Set(selectedIds);
+    const selected = mutualFriends.filter((friend) => selectedSet.has(friend.id));
+    const rest = mutualFriends.filter((friend) => !selectedSet.has(friend.id));
+    return [...selected, ...rest].slice(0, INLINE_INVITEE_PREVIEW_LIMIT);
+  }, [mutualFriends, selectedIds]);
+
+  const showAllInviteesButton =
+    !readOnly && mutualFriends.length > INLINE_INVITEE_PREVIEW_LIMIT;
   const isAtLimit = selectedIds.length >= maxGuests;
 
   const datingListEmptyMessage = useMemo(() => {
@@ -228,12 +262,16 @@ export default function SocialInvitationInviteePanel({
       t('follow_people_first', 'Follow people first to invite them') :
       t('no_friends_found');
     }
-    if (searchQ) return t('no_friends_found');
     return t('private_no_available_invitees', {
       defaultValue:
       'No one you follow is open to private invites. Follow members who accept Private Invite.'
     });
-  }, [mode, mutualFriends.length, searchQ, t]);
+  }, [mode, mutualFriends.length, t]);
+
+  const sheetEmptyMessage = useMemo(() => {
+    if (sheetSearchQ.length >= 2) return t('no_friends_found');
+    return datingListEmptyMessage;
+  }, [sheetSearchQ, datingListEmptyMessage, t]);
 
   const persistInvitees = useCallback(
     async (nextIds) => {
@@ -251,12 +289,16 @@ export default function SocialInvitationInviteePanel({
         });
       } catch (e) {
         console.error('Failed to save invitees:', e);
+        showToast(
+          t('failed_save_invitees', { defaultValue: 'Could not save invite list. Try again.' }),
+          'error'
+        );
       }
     },
     [invitationId, onInvitedFriendsChange, readOnly]
   );
 
-  const toggleFriend = (friendId) => {
+  const toggleFriend = (friendId, { closeSheetOnSelect = false } = {}) => {
     if (readOnly) return;
     if (mode === 'dating' && !senderFollowsInvitee(followingIds, friendId)) {
       showToast(
@@ -275,10 +317,40 @@ export default function SocialInvitationInviteePanel({
     }
     if (mode === 'dating') {
       persistInvitees([friendId]);
+      if (closeSheetOnSelect) setAllSheetOpen(false);
       return;
     }
     if (current.length >= maxGuests) return;
     persistInvitees([...current, friendId]);
+  };
+
+  const renderFriendChip = (friend, { fromSheet = false } = {}) => {
+    const isSelected = selectedIds.includes(friend.id);
+    const isDisabled = !isSelected && isAtLimit;
+    return (
+      <button
+        key={friend.id}
+        type="button"
+        className={`private-friend-chip${isSelected ? ' private-friend-chip--selected' : ''}${isDisabled ? ' private-friend-chip--disabled' : ''}`}
+        onClick={() =>
+          !isDisabled &&
+          toggleFriend(friend.id, { closeSheetOnSelect: fromSheet && mode === 'dating' })
+        }
+        disabled={isDisabled}>
+        {isSelected ?
+        <FaCheckCircle
+          className="private-friend-chip__check-icon"
+          aria-hidden /> :
+        null}
+        <UserAvatar
+          user={friend}
+          alt={friend.display_name}
+          style={{ width: 48, height: 48 }} />
+        <AppText as="span" className="private-friend-chip__name">
+          {friend.display_name?.split(' ')[0]}
+        </AppText>
+      </button>
+    );
   };
 
   const title =
@@ -345,54 +417,47 @@ export default function SocialInvitationInviteePanel({
 
             {!readOnly ?
       <>
-                    <div className="social-invitee-panel__search-wrap">
-                        <AppTextInput
-            type="search"
-            className="social-invitee-panel__search"
-            placeholder={t('search_friends')}
-            value={friendSearchQuery}
-            onChange={(e) => setFriendSearchQuery(e.target.value)}
-            autoComplete="off" />
-          
-                        <FaSearch className="social-invitee-panel__search-icon" aria-hidden />
-                    </div>
-
-                    {friendsLoading || friendSearchLoading ?
+                    {friendsLoading ?
         <AppText as="p" className="social-invitee-panel__loading">{t('loading')}</AppText> :
-        filteredFriends.length > 0 ?
-        <div className="social-invitee-panel__grid">
-                            {filteredFriends.map((friend) => {
-            const isSelected = selectedIds.includes(friend.id);
-            const isDisabled = !isSelected && isAtLimit;
-            return (
-              <button
-                key={friend.id}
-                type="button"
-                className={`private-friend-chip${isSelected ? ' private-friend-chip--selected' : ''}${isDisabled ? ' private-friend-chip--disabled' : ''}`}
-                onClick={() => !isDisabled && toggleFriend(friend.id)}
-                disabled={isDisabled}>
-                
-                                        {isSelected ?
-                <FaCheckCircle
-                  className="private-friend-chip__check-icon"
-                  aria-hidden /> :
-
-                null}
-                                        <UserAvatar
-                  user={friend}
-                  alt={friend.display_name}
-                  style={{ width: 48, height: 48 }} />
-                
-                                        <AppText as="span" className="private-friend-chip__name">
-                                            {friend.display_name?.split(' ')[0]}
-                                        </AppText>
-                                    </button>);
-
-          })}
-                        </div> :
+        previewFriends.length > 0 ?
+        <>
+                        <div className="social-invitee-panel__grid social-invitee-panel__grid--preview">
+                            {previewFriends.map((friend) => renderFriendChip(friend))}
+                        </div>
+                        {showAllInviteesButton ?
+          <button
+            type="button"
+            className="social-invitee-panel__show-all"
+            onClick={() => setAllSheetOpen(true)}>
+                            {t('invitee_show_all', {
+              defaultValue: 'Show all ({{count}})',
+              count: mutualFriends.length
+            })}
+                        </button> :
+          null}
+                    </> :
 
         <AppText as="p" className="social-invitee-panel__empty">{datingListEmptyMessage}</AppText>
         }
+
+                    <SocialInvitationInviteeAllSheet
+          open={allSheetOpen}
+          onClose={() => setAllSheetOpen(false)}
+          title={
+            mode === 'dating' ?
+            t('private_pick_date_create', { defaultValue: 'Who are you inviting?' }) :
+            t('invite_friends_on_app', { defaultValue: 'Friends on the app (optional)' })
+          }
+          searchQuery={sheetSearchQuery}
+          onSearchQueryChange={setSheetSearchQuery}
+          loading={sheetSearchLoading}
+          emptyMessage={
+            !sheetSearchLoading && sheetFilteredFriends.length === 0 ?
+            sheetEmptyMessage :
+            ''
+          }>
+                        {sheetFilteredFriends.map((friend) => renderFriendChip(friend, { fromSheet: true }))}
+                    </SocialInvitationInviteeAllSheet>
                 </> :
       null}
         </section>);

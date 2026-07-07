@@ -39,10 +39,10 @@ export const DISCOVERY_MOCK_PROFILES = [
 ];
 
 export const ICEBREAKER_ITEMS = [
-    { id: 'coffee', emoji: '☕', label: 'قهوة؟' },
-    { id: 'bubble-tea', emoji: '🧋', label: 'شاي مثلج' },
-    { id: 'cookie', emoji: '🍪', label: 'حلوى' },
-    { id: 'wave', emoji: '👋', label: 'تحية' },
+    { id: 'coffee', emoji: '☕', labelKey: 'discovery_icebreaker_coffee' },
+    { id: 'bubble-tea', emoji: '🧋', labelKey: 'discovery_icebreaker_bubble_tea' },
+    { id: 'cookie', emoji: '🍪', labelKey: 'discovery_icebreaker_cookie' },
+    { id: 'wave', emoji: '👋', labelKey: 'discovery_icebreaker_wave' },
 ];
 
 export const INBOX_MOCK_CHATS = [

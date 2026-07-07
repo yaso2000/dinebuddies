@@ -4,6 +4,7 @@ import { db } from '../../firebase/config';
 import { browseUsersPage, searchUsers } from '../../utils/adminUserQueries';
 import { adminApi } from '../api';
 import { AppText, AppTextInput } from "../../components/base";
+import { normalizeBusinessTier } from '../../utils/businessSubscription';
 
 const USER_TABS = [
 {
@@ -232,7 +233,32 @@ export default function UsersPage() {
                             </button>
           }
                         {tab === 'business' &&
-          <button
+          <>
+                            <button
+            type="button"
+            className="db-btn"
+            disabled={acting === u.id}
+            onClick={() =>
+            act(u.id, () =>
+            adminApi.setUserSubscriptionTier(u.id, 'free', true)
+            )
+            }>
+
+                                {t('admin_business_plan_free', 'Free plan')}
+                            </button>
+                            <button
+            type="button"
+            className="db-btn db-btn--lime"
+            disabled={acting === u.id}
+            onClick={() =>
+            act(u.id, () =>
+            adminApi.setUserSubscriptionTier(u.id, 'paid', true)
+            )
+            }>
+
+                                {t('admin_business_plan_paid', 'Paid plan')}
+                            </button>
+                            <button
             type="button"
             className="db-btn db-btn--danger"
             disabled={acting === u.id}
@@ -252,6 +278,7 @@ export default function UsersPage() {
 
                                 {t('admin_delete_partner')}
                             </button>
+          </>
           }
                     </>
         }
@@ -375,6 +402,7 @@ export default function UsersPage() {
                         <thead>
                             <tr>
                                 <th>{tab === 'business' ? t('admin_users_business_col') : t('admin_users_user_col')}</th>
+                                {tab === 'business' ? <th>{t('admin_business_plan_col', 'Plan')}</th> : null}
                                 <th>{t('admin_users_status')}</th>
                                 <th>{t('admin_users_actions')}</th>
                             </tr>
@@ -386,6 +414,15 @@ export default function UsersPage() {
                                         <div>{nameForTab(tab, u)}</div>
                                         <div className="db-id">{u.id}</div>
                                     </td>
+                                    {tab === 'business' ?
+              <td>
+                                            <AppText as="span" className={`db-badge${normalizeBusinessTier(u.subscriptionTier) === 'paid' ? ' db-badge--ok' : ''}`}>
+                                                {normalizeBusinessTier(u.subscriptionTier) === 'paid'
+                    ? t('admin_business_plan_paid', 'Paid plan')
+                    : t('admin_business_plan_free', 'Free plan')}
+                                            </AppText>
+                                        </td> :
+              null}
                                     <td>
                                         <StatusBadge u={u} t={t} />
                                     </td>

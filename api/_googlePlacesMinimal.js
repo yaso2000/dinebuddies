@@ -36,7 +36,7 @@ function googlePlacesApiKey() {
  * @param {string} placeId
  * @param {string} fieldMask
  */
-async function fetchGooglePlaceResource(placeId, fieldMask) {
+async function fetchGooglePlaceResource(placeId, fieldMask, languageCode = 'en') {
     const key = googlePlacesApiKey();
     const id = String(placeId || '').trim();
     if (!id) {
@@ -48,7 +48,8 @@ async function fetchGooglePlaceResource(placeId, fieldMask) {
         });
     }
 
-    const url = `${PLACES_V1}/${encodeURIComponent(id)}`;
+    const lang = String(languageCode || 'en').trim().slice(0, 5) || 'en';
+    const url = `${PLACES_V1}/${encodeURIComponent(id)}?languageCode=${encodeURIComponent(lang)}`;
     const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -96,7 +97,8 @@ function extractPhotoName(data) {
  * }} [options]
  */
 export async function fetchGooglePlaceMinimal(placeId, options = {}) {
-    const { id, data } = await fetchGooglePlaceResource(placeId, GOOGLE_PLACE_IMPORT_FIELD_MASK);
+    const languageCode = String(options.languageCode || 'en').trim() || 'en';
+    const { id, data } = await fetchGooglePlaceResource(placeId, GOOGLE_PLACE_IMPORT_FIELD_MASK, languageCode);
 
     const types = normalizeGooglePlaceCategories(data.types);
     const hours = regularOpeningHoursToBusinessHours(data.regularOpeningHours);
@@ -190,9 +192,11 @@ export async function fetchGooglePlaceMinimal(placeId, options = {}) {
 /**
  * Fetch Google Place fields + in-memory cover preview (no Storage / Firestore).
  * @param {string} placeId
+ * @param {{ languageCode?: string }} [options]
  */
-export async function fetchGooglePlacePreview(placeId) {
-    const details = await fetchGooglePlaceMinimal(placeId, { skipPhotoUpload: true });
+export async function fetchGooglePlacePreview(placeId, options = {}) {
+    const languageCode = String(options.languageCode || 'en').trim() || 'en';
+    const details = await fetchGooglePlaceMinimal(placeId, { skipPhotoUpload: true, languageCode });
 
     let previewCoverImage = null;
     /** @type {{ code: string; message: string } | null} */

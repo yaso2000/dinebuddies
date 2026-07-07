@@ -56,9 +56,9 @@ const Settings = () => {
       const { outcome } = await window.__deferredInstallPrompt.userChoice;
       if (outcome === 'accepted') window.__deferredInstallPrompt = null;
     } else if (isIOS) {
-      showToast('Tap the Share button ↗️ then "Add to Home Screen"', 'info');
+      showToast(t('pwa_install_ios_toast', 'Tap the Share button ↗️ then "Add to Home Screen"'), 'info');
     } else {
-      showToast('Open this page in Chrome and tap ⋮ then "Add to Home Screen"', 'info');
+      showToast(t('pwa_install_android_toast', 'Open this page in Chrome and tap ⋮ then "Add to Home Screen"'), 'info');
     }
   };
 
@@ -70,7 +70,7 @@ const Settings = () => {
       await signOut('/login');
     } catch (error) {
       console.error('Error logging out:', error);
-      showToast('Failed to logout. Please try again.', 'error');
+      showToast(t('logout_failed', 'Failed to log out. Please try again.'), 'error');
     }
   };
 

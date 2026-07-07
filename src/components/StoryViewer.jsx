@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { FaHeart, FaRegHeart, FaTimes, FaPaperPlane, FaRegCommentDots, FaRegSmile } from 'react-icons/fa';
 import StoryCommentStream from './StoryCommentStream';
 import './StoryViewer.css';
+import { handleEmojiButtonClick, shouldUseAppEmojiPicker, showComposerEmojiButton } from '../utils/emojiInputMode';
 
 /** Shown inline in the footer bar (Instagram-style). */import { AppText, AppTextInput } from "./base";
 const INLINE_EMOJIS = ['😂', '🥰', '🥺'];
@@ -636,7 +637,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
         style={{ bottom: keyboardLift > 0 ? `${keyboardLift}px` : 0 }}
         onClick={(e) => e.stopPropagation()}>
         
-                {showEmojiPicker ?
+                {showEmojiPicker && shouldUseAppEmojiPicker() ?
         <div className="story-emoji-float">
                         <div className="story-emoji-float__grid" role="listbox" aria-label={t('quick_emojis', 'Quick reactions')}>
                             {PICKER_EMOJIS.map((emoji) =>
@@ -689,6 +690,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                 }
               }} />
             
+                        {showComposerEmojiButton() ? (
                         <button
               type="button"
               className="story-footer__tool"
@@ -697,11 +699,12 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
               onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => {
                 e.stopPropagation();
-                setShowEmojiPicker((prev) => !prev);
+                handleEmojiButtonClick({ inputRef: replyInputRef, setPickerOpen: setShowEmojiPicker });
               }}>
               
                             <FaRegSmile size={22} />
                         </button>
+                        ) : null}
                     </div>
                 </div>
             </div>);

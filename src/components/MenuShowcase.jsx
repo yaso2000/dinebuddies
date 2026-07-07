@@ -462,7 +462,7 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], menuListingType = '
         setTimeout(() => setShowDraftBanner(false), 30000);
       }
     } catch (err) {
-      showToast('Save failed', 'error');
+      showToast(t('save_failed', 'Save failed'), 'error');
     } finally {
       setSavingAll(false);
     }

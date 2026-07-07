@@ -1,4 +1,4 @@
-﻿import { getApp } from 'firebase/app';
+import { getApp } from 'firebase/app';
 import { getAI, getGenerativeModel, getImagenModel, GoogleAIBackend, VertexAIBackend } from 'firebase/ai';
 import {
     coalesceInvitationAiText,
@@ -20,6 +20,10 @@ import {
 } from '../utils/geminiProviderErrors.js';
 import { normalizeAiOutputLanguage, getAiOutputLanguageLabel } from '../utils/aiOutputLanguage.js';
 import { AI_USER_PROMPT_MAX_CHARS, getAiUserPromptDefaultEn } from '../constants/aiPromptLimits.js';
+import {
+    formatAdviceExcerptsForPrompt,
+    retrieveRelationshipAdvice,
+} from '../utils/relationshipAdviceRetrieval.js';
 
 export type AiOutputLanguage =
     | 'ar'
@@ -422,7 +426,7 @@ function buildSystemInstruction(
             return `${JSON_OUTPUT_RULE} ${languageRule} Return exactly: {"title":"...","description":"...","animation_type":"..."} where animation_type is one of: slide-up, fade-in, zoom-in.`;
 
         case 'text_assistant':
-            return `${JSON_OUTPUT_RULE} ${languageRule} Return exactly: {"answer":"..."}. "answer" is a clear, helpful reply in plain language (2–6 sentences when needed). For DineBuddies questions (invitations, credits, profiles, communities, Connect), explain app features accurately without inventing capabilities. Do not include markdown headings or bullet lists unless the user asked for a list.`;
+            return `${JSON_OUTPUT_RULE} ${languageRule} Return exactly: {"answer":"..."}. You are a respectful relationship and dating coach for adults using DineBuddies. Ground answers primarily in the curated excerpts provided in the user message when they match the question; briefly mention a source name when you use one (e.g. Gottman Institute, CDC). If no excerpt fits, give cautious general guidance aligned with healthy communication, consent, boundaries, and safety — never manipulation, stalking, guilt-tripping, or pressure tactics. Refuse requests for coercion, harassment, or abuse. This is educational only — not therapy or medical advice; suggest professional help for crisis, violence, or severe distress. "answer" is plain language (2–6 sentences unless the user asked for a list). No markdown headings unless the user asked for a list.`;
 
         default:
             return `${JSON_OUTPUT_RULE} ${languageRule}`;
@@ -436,8 +440,22 @@ function appendContextLine(lines: string[], label: string, value: unknown) {
 }
 
 function buildUserPrompt(input: GenerateContentInput): string {
-    const { postType, userPrompt, accountType = 'user' } = input;
+    const { postType, userPrompt, accountType = 'user', outputLanguage: outputLanguageRaw } = input;
+    const outputLanguage = normalizeAiOutputLanguage(outputLanguageRaw);
     const lines: string[] = [];
+
+    if (postType === 'text_assistant') {
+        const trimmedQuestion = userPrompt.trim();
+        if (trimmedQuestion) {
+            const matchedAdvice = retrieveRelationshipAdvice(trimmedQuestion, outputLanguage);
+            const excerptBlock = formatAdviceExcerptsForPrompt(matchedAdvice);
+            if (excerptBlock) {
+                lines.push(excerptBlock);
+            }
+            lines.push(`User question: ${trimmedQuestion}`);
+            return lines.join('\n').trim();
+        }
+    }
 
     if (postType === 'invitation') {
         if (accountType === 'business') {

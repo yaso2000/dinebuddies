@@ -108,15 +108,9 @@ const PostsFeed = () => {
     );
   }, []);
 
-  const userCityLabel = useMemo(() => {
-    const city = String(userProfile?.city || '').trim();
-    return city || t('feed_scope_local', t('in_my_city', 'My city'));
-  }, [userProfile?.city, t]);
+  const userCityLabel = useMemo(() => t('my_city', 'My city'), [t]);
 
-  const userCountryLabel = useMemo(() => {
-    const country = String(userProfile?.country || '').trim();
-    return country || t('in_my_country', 'My country');
-  }, [userProfile?.country, t]);
+  const userCountryLabel = useMemo(() => t('my_country', 'My country'), [t]);
 
   const geoScopeFilters = useMemo(
     () => [
@@ -637,11 +631,11 @@ const PostsFeed = () => {
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 24 }}>
                     <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: 28, maxWidth: 360, width: '100%', border: '1px solid var(--border-color)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
                         <div style={{ fontSize: '1.5rem', textAlign: 'center', marginBottom: 10 }}>🗑️</div>
-                        <AppText as="h3" style={{ margin: '0 0 8px', textAlign: 'center', fontSize: '1rem' }}>Delete this post?</AppText>
-                        <AppText as="p" style={{ margin: '0 0 20px', textAlign: 'center', fontSize: '0.82rem', color: 'var(--text-muted)' }}>This action is permanent and cannot be undone.</AppText>
+                        <AppText as="h3" style={{ margin: '0 0 8px', textAlign: 'center', fontSize: '1rem' }}>{t('posts_delete_confirm_title', 'Delete this post?')}</AppText>
+                        <AppText as="p" style={{ margin: '0 0 20px', textAlign: 'center', fontSize: '0.82rem', color: 'var(--text-muted)' }}>{t('posts_delete_confirm_body', 'This action is permanent and cannot be undone.')}</AppText>
                         <div style={{ display: 'flex', gap: 10 }}>
-                            <button onClick={() => setConfirmDeleteId(null)} style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', fontWeight: 600, color: 'var(--text-muted)' }}>Cancel</button>
-                            <button onClick={() => deletePost(confirmDeleteId)} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer', fontWeight: 700 }}>Delete</button>
+                            <button onClick={() => setConfirmDeleteId(null)} style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', fontWeight: 600, color: 'var(--text-muted)' }}>{t('cancel', 'Cancel')}</button>
+                            <button onClick={() => deletePost(confirmDeleteId)} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer', fontWeight: 700 }}>{t('delete', 'Delete')}</button>
                         </div>
                     </div>
                 </div>

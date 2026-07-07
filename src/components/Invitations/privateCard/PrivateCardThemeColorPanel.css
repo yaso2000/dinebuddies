@@ -25,6 +25,7 @@
     padding: 0;
     border: none;
     background: transparent;
+    direction: ltr;
 }
 
 .private-card-theme-color-panel__presets--row .private-card-theme-color-panel__preset {
@@ -35,14 +36,29 @@
     margin: 0;
 }
 
+/* Compact strip under card preview: 6×2 grid so all 12 swatches fit beside the cover rail. */
+.private-card-theme-color-panel.private-card-theme-color-panel__presets--compact {
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
 .private-card-theme-color-panel__presets--compact.private-card-theme-color-panel__presets--row {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 5px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .private-card-theme-color-panel__presets--compact.private-card-theme-color-panel__presets--row
     .private-card-theme-color-panel__preset {
-    width: 22px;
+    width: 100%;
+    max-width: 22px;
     height: 22px;
+    margin: 0;
+    justify-self: center;
     border-radius: 6px;
     border-width: 1.5px;
 }

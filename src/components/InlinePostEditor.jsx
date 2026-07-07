@@ -24,6 +24,7 @@ import {
   serializeEditorMedia } from
 '../utils/editorSessionDraft';
 import { AppText, AppTextInput } from "./base";
+import { handleEmojiButtonClick, shouldUseAppEmojiPicker, showComposerEmojiButton } from '../utils/emojiInputMode';
 
 const POST_TITLE_MAX = 100;
 const POST_BODY_MAX = 300;
@@ -496,16 +497,17 @@ const InlinePostEditor = ({
                         <FaImage size={18} color="#45bd62" /> {t('photo', 'Photo')}
                     </button>
 
+                    {showComposerEmojiButton() ? (
                     <div style={{ position: 'relative' }}>
                         <button
               type="button"
-              onClick={() => setShowEmojiPicker((v) => !v)}
+              onClick={() => handleEmojiButtonClick({ inputRef: textareaRef, setPickerOpen: setShowEmojiPicker })}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 8px', borderRadius: '8px' }}>
               
                             <FaSmile size={18} color="#f59e0b" /> {t('emoji', 'Emoji')}
                         </button>
 
-                        {showEmojiPicker &&
+                        {showEmojiPicker && shouldUseAppEmojiPicker() &&
             <>
                                 <div
                 role="presentation"
@@ -547,6 +549,7 @@ const InlinePostEditor = ({
                             </>
             }
                     </div>
+                    ) : null}
                 </div>
             </div>
 

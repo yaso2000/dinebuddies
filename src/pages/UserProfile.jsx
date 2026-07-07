@@ -56,12 +56,12 @@ import ProfileGalleryEditor from '../components/profile/ProfileGalleryEditor';
 import { useInvitationArchives } from '../hooks/useInvitationArchives';
 import { sortInvitationsByDateDesc, formatArchiveDateRange } from '../utils/invitationExpiry';
 import './UserProfile.tailwind.css';
+import { DEFAULT_PROFILE_COVER_FALLBACK } from '../constants/defaultProfileMedia';
 import { AppText } from "../components/base";
 
 const PROFILE_SECTION_PREVIEW_MAX = 3;
 
-const DEFAULT_COVER =
-'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&h=600&fit=crop';
+const DEFAULT_COVER = DEFAULT_PROFILE_COVER_FALLBACK;
 
 /**
  * Expected Firestore `users` document shape (schema reference + demo defaults).
@@ -1073,7 +1073,8 @@ const UserProfile = () => {
 
       <div className="user-profile-actions mt-6 flex px-4" onClick={(e) => e.stopPropagation()}>
         {userProfile?.role !== 'business' && canBeFollowed ?
-        useDatingLike ?
+        <>
+        {useDatingLike ?
         <button
           type="button"
           onClick={handleToggleLike}
@@ -1082,6 +1083,7 @@ const UserProfile = () => {
           className={`user-profile-action user-profile-action--like ${liked ? 'is-liked' : ''}`}>
           {liked ? `❤️ ${t('liked', 'Liked')}` : `🤍 ${t('user_directory_like', 'Like')}`}
         </button> :
+        null}
         <button
           type="button"
           onClick={handleConnectFollow}
@@ -1089,7 +1091,8 @@ const UserProfile = () => {
           aria-pressed={isFollowing}
           className={`user-profile-action user-profile-action--follow ${isFollowing ? 'is-following' : ''}`}>
           {isFollowing ? `✔️ ${t('following')}` : t('follow')}
-        </button> :
+        </button>
+        </> :
         null}
         {currentUser?.isGuest ?
         <button

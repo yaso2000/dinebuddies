@@ -117,7 +117,7 @@ const Home = () => {
         }
       );
     } else {
-      setLocationError('Geolocation not supported');
+      setLocationError(t('geolocation_not_supported'));
       setUserLocation(null);
     }
   }, []);
@@ -416,7 +416,7 @@ const Home = () => {
                                 <h4 class="compact-popup-title">${popupText(inv.title)}</h4>
                                 <div class="compact-popup-meta">
                                     <img src="${profilePic}" style="width: 14px; height: 14px; border-radius: 50%;" />
-                                    ${popupText(inv.author?.name || 'Unknown')}
+                                    ${popupText(inv.author?.name || t('unknown_user'))}
                                 </div>
                                 ${distance ? `
                                     <div class="compact-popup-stats">
@@ -426,7 +426,7 @@ const Home = () => {
                                 ` : ''}
                                 <div>
                                     <button onclick="window.location.href='/invitation/${inv.id}'" class="compact-popup-btn">
-                                        ${!eligibility.eligible ? popupText('⚠️ ' + (eligibility.reason ? eligibility.reason.substring(0, 15) : 'Unavailable') + '...') : popupText(t('view_details'))}
+                                        ${!eligibility.eligible ? popupText('⚠️ ' + (eligibility.reason ? eligibility.reason.substring(0, 15) : t('unavailable')) + '...') : popupText(t('view_details'))}
                                     </button>
                                 </div>
                             </div>
@@ -784,8 +784,8 @@ const Home = () => {
               
                             <option value="All">🌍 {t('all') || 'All'}</option>
                             <option value="nearby">📍 {t('near_me') || 'Near me'}</option>
-                            <option value="city">🏙️ {t('in_my_city') || 'In my city'}</option>
-                            <option value="country">🗺️ {t('in_my_country') || 'In my country'}</option>
+                            <option value="city">🏙️ {t('my_city', 'My city')}</option>
+                            <option value="country">🗺️ {t('my_country', 'My country')}</option>
                         </select>
                     </div>
                 </div>
@@ -949,13 +949,13 @@ const Home = () => {
 
                 {premiumAds.length > 0 &&
         <div className="promo-banner" onClick={() => navigate(`/restaurant/${premiumAds[0].id}`)}>
-                        <AppText as="span" className="promo-badge">HOT DEAL</AppText>
+                        <AppText as="span" className="promo-badge">{t('home_hot_deal')}</AppText>
                         <div className="promo-overlay"></div>
                         <img src={premiumAds[0].image} className="promo-bg" alt="" />
                         <div className="promo-text-layer">
                             <AppText as="h3" className="promo-title">{premiumAds[0].name}</AppText>
                             <AppText as="p" className="promo-desc">{premiumAds[0].promoText}</AppText>
-                            <button className="btn btn-sm btn-white">Explore Now</button>
+                            <button className="btn btn-sm btn-white">{t('home_explore_now', 'Explore now')}</button>
                         </div>
                     </div>
         }

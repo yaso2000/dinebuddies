@@ -57,6 +57,7 @@ const Notifications = lazy(() => import('./pages/Notifications'));
 const ChatList = lazy(() => import('./pages/ChatList'));
 const Chat = lazy(() => import('./pages/Chat'));
 const CommunityChatRoom = lazy(() => import('./pages/CommunityChatRoom'));
+const CommunityChatCastPage = lazy(() => import('./pages/CommunityChatCastPage'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const HomeInvitations = lazy(() => import('./pages/Home'));
 
@@ -326,6 +327,7 @@ function App() {
                                                         path="/communities"
                                                         element={<Navigate to="/messages?tab=communities" replace />}
                                                     />
+                                                    <Route path="/community/:partnerId/cast" element={<CommunityChatCastPage />} />
                                                     <Route path="/community/:partnerId" element={<GuestBlockedRoute><CommunityChatRoom /></GuestBlockedRoute>} />
                                                     <Route path="/posts-feed" element={<PostsFeed />} />
                                                     <Route path="/invitations" element={<HomeInvitations />} />

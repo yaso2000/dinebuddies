@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaTimes } from 'react-icons/fa';
 import { useVerticalDragScrollRail } from '../../../hooks/useVerticalDragScrollRail';
@@ -222,8 +222,6 @@ export default function SocialInvitationCoverRightRail({
   const mediaItems =
   mode === 'upload' ? uploadItems : mode === 'ai' ? aiItems : mode === 'camera' ? cameraItems : [];
 
-  const selectingFromScrollRef = useRef(false);
-
   const handleScrollSettle = useCallback(
     (scrollEl) => {
       if (!isScrollColumnMode) return;
@@ -235,7 +233,6 @@ export default function SocialInvitationCoverRightRail({
         cardBackgroundId === nearestId ||
         nearestId === 'birthday-candlecake' && cardBackgroundId === 'birthday-candlake';
         if (!same) {
-          selectingFromScrollRef.current = true;
           onCardBackgroundIdChange?.(nearestId);
         }
       }
@@ -257,28 +254,12 @@ export default function SocialInvitationCoverRightRail({
     onScrollSettle: handleScrollSettle
   });
 
+  // Keep the template rail at the top when the personal invite category changes.
   useEffect(() => {
     if (!isScrollColumnMode) return;
-    if (selectingFromScrollRef.current) {
-      selectingFromScrollRef.current = false;
-      return;
-    }
-
     const el = railRef.current;
-    if (!el) return;
-
-    const selectedId =
-    mode === 'template' ?
-    cardBackgroundId === 'birthday-candlake' ?
-    'birthday-candlecake' :
-    cardBackgroundId :
-    null;
-
-    if (!selectedId) return;
-
-    const btn = el.querySelector(`[data-rail-option-id="${selectedId}"]`);
-    btn?.scrollIntoView({ block: 'center', behavior: 'auto' });
-  }, [cardBackgroundId, mode, isScrollColumnMode, railRef, occasionOptions.length]);
+    if (el) el.scrollTop = 0;
+  }, [personalInviteCategory, categoryId, isScrollColumnMode, railRef]);
 
   return (
     <div

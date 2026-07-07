@@ -75,6 +75,7 @@ const RestaurantDetails = () => {
   const communityId = resolveBusinessCommunityId(joinedCommunities, {
     ownerId: restaurant?.ownerId,
     businessId: id,
+    isVirtual: restaurant?.isVirtual === true,
   });
   const isJoined = isJoinedToBusinessCommunity(joinedCommunities, communityId);
 
@@ -161,19 +162,17 @@ const RestaurantDetails = () => {
               onClick={handleCommunityJoinClick}
               style={{
                 background: isJoined ?
-                'transparent' :
+                'linear-gradient(135deg, #1a2744 0%, #0f1729 100%)' :
                 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
-                color: 'white',
-                border: isJoined ?
-                '1px solid var(--primary)' :
-                'none',
+                color: '#ffffff',
+                border: 'none',
                 padding: '10px 20px',
                 borderRadius: '12px',
                 fontSize: '0.85rem',
                 fontWeight: '800',
                 cursor: 'pointer',
                 boxShadow: isJoined ?
-                'none' :
+                '0 4px 14px rgba(15, 23, 41, 0.45)' :
                 '0 4px 12px rgba(139, 92, 246, 0.3)',
                 display: 'flex',
                 alignItems: 'center',
@@ -200,12 +199,12 @@ const RestaurantDetails = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
                     <div style={{ background: 'var(--bg-card)', padding: '1rem', borderRadius: '15px', border: '1px solid var(--border-color)' }}>
                         <FaMapMarkerAlt style={{ color: 'var(--primary)', marginBottom: '5px' }} />
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Location</div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{t('location', 'Location')}</div>
                         <div style={{ fontSize: '0.8rem', fontWeight: '700' }}>{restaurant.businessInfo?.address || location}</div>
                     </div>
                     <div style={{ background: 'var(--bg-card)', padding: '1rem', borderRadius: '15px', border: '1px solid var(--border-color)' }}>
                         <FaClock style={{ color: 'var(--accent)', marginBottom: '5px' }} />
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Today's Hours</div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{t('restaurant_todays_hours', "Today's hours")}</div>
                         <div style={{ fontSize: '0.8rem', fontWeight: '700' }}>
                             {(() => {
                 const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];

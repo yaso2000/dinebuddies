@@ -12,6 +12,7 @@ import {
     sortInvitesOldestFirst,
     uidStr,
 } from '../utils/inviteLanding';
+import { useInviteInboxDismissals } from './useInviteInboxDismissals';
 
 const HOSTED_INVITE_COLLECTIONS = ['social_invitations', 'private_invitations'];
 
@@ -65,6 +66,8 @@ export function usePendingInvitesForMe() {
     const [invites, setInvites] = useState([]);
     const [synced, setSynced] = useState(false);
     const lastKeyRef = useRef('');
+
+    const { dismissedIds } = useInviteInboxDismissals(canLoad ? viewerUid : '');
 
     useEffect(() => {
         if (!canLoad) {
@@ -140,9 +143,12 @@ export function usePendingInvitesForMe() {
         };
     }, [canLoad, viewerUid]);
 
-    const pending = useMemo(() => invites, [invites]);
+    const pending = useMemo(
+        () => invites.filter((inv) => !dismissedIds.has(inv.id)),
+        [invites, dismissedIds]
+    );
 
-    return { pending, synced, canLoad, viewerUid };
+    return { pending, synced, canLoad, viewerUid, dismissedIds };
 }
 
 function currentViewerUid() {

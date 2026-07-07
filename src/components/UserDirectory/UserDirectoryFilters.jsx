@@ -7,6 +7,8 @@ import { AppText } from '../base';
  * Gender + geo filter chips for the Connect member card list (same geo pattern as posts feed).
  */
 export default function UserDirectoryFilters({
+  id,
+  expanded = true,
   genderFilter,
   onGenderFilterChange,
   geoScope,
@@ -15,36 +17,32 @@ export default function UserDirectoryFilters({
 }) {
   const { t } = useTranslation();
 
-  const userCityLabel = useMemo(() => {
-    const city = String(userProfile?.city || '').trim();
-    return city || t('feed_scope_local', t('in_my_city', 'My city'));
-  }, [userProfile?.city, t]);
+  const userCityLabel = useMemo(() => t('my_city', 'My city'), [t]);
 
-  const userCountryLabel = useMemo(() => {
-    const country = String(userProfile?.country || '').trim();
-    return country || t('in_my_country', 'My country');
-  }, [userProfile?.country, t]);
+  const userCountryLabel = useMemo(() => t('my_country', 'My country'), [t]);
 
   const genderFilters = useMemo(
     () => [
-      { id: 'all', label: t('filter_all', 'All'), icon: '👥' },
-      { id: 'male', label: t('gender_male', 'Male'), icon: '👨' },
-      { id: 'female', label: t('gender_female', 'Female'), icon: '👩' },
+      { id: 'all', label: t('filter_all', 'All') },
+      { id: 'male', label: t('gender_male', 'Male') },
+      { id: 'female', label: t('gender_female', 'Female') },
     ],
     [t]
   );
 
   const geoScopeFilters = useMemo(
     () => [
-      { id: 'global', label: t('feed_scope_global', t('global', 'Global')), icon: '🌍' },
-      { id: 'country', label: userCountryLabel, icon: '🗺️' },
-      { id: 'city', label: userCityLabel, icon: '🏙️' },
+      { id: 'global', label: t('feed_scope_global', t('global', 'Global')) },
+      { id: 'country', label: userCountryLabel },
+      { id: 'city', label: userCityLabel },
     ],
     [t, userCountryLabel, userCityLabel]
   );
 
+  if (!expanded) return null;
+
   return (
-    <div className="users-directory-filters">
+    <div id={id} className="users-directory-filters">
       <div
         className="users-directory-filters__row posts-feed-scope-chips"
         role="group"
@@ -53,12 +51,9 @@ export default function UserDirectoryFilters({
           <button
             key={f.id}
             type="button"
-            className={`home-geo-chip home-geo-chip--compact${genderFilter === f.id ? ' home-geo-chip--active' : ''}`}
+            className={`home-geo-chip home-geo-chip--compact users-directory-filter-chip${genderFilter === f.id ? ' home-geo-chip--active' : ''}`}
             onClick={() => onGenderFilterChange(f.id)}
             aria-pressed={genderFilter === f.id}>
-            <AppText as="span" className="home-geo-chip__icon" aria-hidden>
-              {f.icon}
-            </AppText>
             <AppText as="span" className="home-geo-chip__label">{f.label}</AppText>
           </button>
         ))}
@@ -72,12 +67,9 @@ export default function UserDirectoryFilters({
           <button
             key={f.id}
             type="button"
-            className={`home-geo-chip home-geo-chip--compact${geoScope === f.id ? ' home-geo-chip--active' : ''}`}
+            className={`home-geo-chip home-geo-chip--compact users-directory-filter-chip${geoScope === f.id ? ' home-geo-chip--active' : ''}`}
             onClick={() => onGeoScopeChange(f.id)}
             aria-pressed={geoScope === f.id}>
-            <AppText as="span" className="home-geo-chip__icon" aria-hidden>
-              {f.icon}
-            </AppText>
             <AppText as="span" className="home-geo-chip__label">{f.label}</AppText>
           </button>
         ))}

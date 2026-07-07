@@ -14,6 +14,7 @@ import { collection, addDoc, serverTimestamp, doc } from 'firebase/firestore';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import './CreateStory.css';
 import { AppText, AppTextInput } from "../components/base";
+import { handleEmojiButtonClick, shouldUseAppEmojiPicker, showComposerEmojiButton } from '../utils/emojiInputMode';
 
 const GRADIENTS = [
 { id: 'black', bg: '#000000', label: 'Black' },
@@ -70,6 +71,7 @@ const CreateStory = () => {
   const [showCamera, setShowCamera] = useState(false);
 
   const fileInputRef = useRef(null);
+  const storyTextRef = useRef(null);
   const moodPickerRef = useRef(null);
 
   // Click outside to close emoji picker
@@ -214,6 +216,7 @@ const CreateStory = () => {
         
                 {isTextMode &&
         <AppTextInput as="textarea"
+        ref={storyTextRef}
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={backgroundType === 'GRADIENT' ? t('tap_to_type', "Tap to type...") : t('add_a_caption', "Add a caption...")}
@@ -259,12 +262,15 @@ const CreateStory = () => {
                     </>
         }
 
-                {isTextMode &&
+                {isTextMode && showComposerEmojiButton() &&
         <div style={{ position: 'relative' }} ref={moodPickerRef}>
-                        <button className={`tool-btn ${showMoodPicker ? 'active' : ''}`} onClick={() => setShowMoodPicker(!showMoodPicker)}>
+                        <button
+                          className={`tool-btn ${showMoodPicker ? 'active' : ''}`}
+                          onClick={() => handleEmojiButtonClick({ inputRef: storyTextRef, setPickerOpen: setShowMoodPicker })}
+                        >
                             <FaSmile />
                         </button>
-                        {showMoodPicker &&
+                        {showMoodPicker && shouldUseAppEmojiPicker() &&
           <div style={{
             position: 'absolute', right: '60px', top: '-20px', background: 'rgba(0,0,0,0.85)',
             backdropFilter: 'blur(10px)', borderRadius: '16px', padding: '12px', zIndex: 100,

@@ -70,10 +70,27 @@
     padding: 1px 0 3px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
+    /* Swatches/fonts scroll left→right; RTL page direction hides them otherwise. */
+    direction: ltr;
 }
 
 .private-card-typography-bars__scroll--colors {
     align-items: center;
+    flex-wrap: wrap;
+    overflow-x: visible;
+    overflow-y: visible;
+    min-width: 0;
+    gap: 6px 8px;
+}
+
+.private-card-typography-bars__scroll--colors .private-card-theme-color-panel {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.private-card-typography-bars__scroll--colors .private-card-typography-bars__reset {
+    flex: 0 0 auto;
 }
 
 .private-card-typography-bars__font-chip {

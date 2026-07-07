@@ -19,6 +19,37 @@ import { FaUsers, FaUserPlus, FaChartLine, FaEye, FaStar, FaEdit, FaStore, FaCal
 import { useNotifications } from '../context/NotificationContext';
 import { hasBusinessSessionHint } from '../utils/accountRole';
 import { AppText } from "../components/base";
+
+const DASHBOARD_LOADING_STYLE = {
+  padding: '2rem',
+  minHeight: '80vh',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+function BusinessDashboardLoading({ label }) {
+  return (
+    <div className="page-container" style={DASHBOARD_LOADING_STYLE}>
+      <div
+        style={{
+          width: '50px',
+          height: '50px',
+          border: '4px solid var(--border-color)',
+          borderTop: '4px solid var(--primary)',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite',
+          marginBottom: '1rem',
+        }}
+      />
+      <AppText as="p" style={{ color: 'var(--text-muted)', textAlign: 'center' }}>
+        {label}
+      </AppText>
+    </div>
+  );
+}
+
 const BusinessDashboard = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -182,56 +213,34 @@ const BusinessDashboard = () => {
 
   if (authLoading || !profileServerSynced || (loading && hasBusinessAccess)) {
     return (
-      <div className="page-container" style={{ padding: '2rem', textAlign: 'center', minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div style={{
-          width: '50px',
-          height: '50px',
-          border: '4px solid var(--border-color)',
-          borderTop: '4px solid var(--primary)',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite',
-          margin: '0 auto 1rem'
-        }} />
-                <AppText as="p" style={{ color: 'var(--text-muted)' }}>{t('loading_dashboard', 'Loading dashboard...')}</AppText>
-            </div>);
-
+      <BusinessDashboardLoading label={t('loading_dashboard', 'Loading dashboard...')} />
+    );
   }
 
   if (currentUser && !authLoading && !userProfile) {
     return (
-      <div className="page-container" style={{ padding: '2rem', textAlign: 'center', minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div style={{
-          width: '50px',
-          height: '50px',
-          border: '4px solid var(--border-color)',
-          borderTop: '4px solid var(--primary)',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite',
-          margin: '0 auto 1rem'
-        }} />
-                <AppText as="p" style={{ color: 'var(--text-muted)' }}>{t('loading_dashboard', 'Loading dashboard...')}</AppText>
-            </div>);
-
+      <BusinessDashboardLoading label={t('loading_dashboard', 'Loading dashboard...')} />
+    );
   }
 
   if (!currentUser || !hasBusinessAccess) {
     if (!currentUser) {
-      return <Navigate to="/business/login" replace />;
+      let pendingBusinessRestore = false;
+      try {
+        pendingBusinessRestore = Boolean(sessionStorage.getItem('dineb_biz_uid'));
+      } catch {
+        pendingBusinessRestore = false;
+      }
+      if (authLoading || !profileServerSynced || pendingBusinessRestore) {
+        return (
+          <BusinessDashboardLoading label={t('loading_dashboard', 'Loading dashboard...')} />
+        );
+      }
+      return <Navigate to="/login?tab=business" replace />;
     }
     if (!profileServerSynced || !userProfile) {
       return (
-        <div className="page-container" style={{ padding: '2rem', textAlign: 'center', minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div style={{
-            width: '50px',
-            height: '50px',
-            border: '4px solid var(--border-color)',
-            borderTop: '4px solid var(--primary)',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 1rem'
-          }} />
-          <AppText as="p" style={{ color: 'var(--text-muted)' }}>{t('loading_dashboard', 'Loading dashboard...')}</AppText>
-        </div>
+        <BusinessDashboardLoading label={t('loading_dashboard', 'Loading dashboard...')} />
       );
     }
     return <Navigate to="/posts-feed" replace />;

@@ -9,9 +9,10 @@ import PersonalAuthPanel from './PersonalAuthPanel';
 import BusinessLoginPanel from './BusinessLoginPanel';
 import AuthPageChrome from './AuthPageChrome';
 import LocalDevOAuthNotice from '../../components/LocalDevOAuthNotice';
-import { isEmbeddedPreviewBrowser, peekPostLogoutRedirect, clearPostLogoutRedirect } from '../../utils/localDevAuth';
+import { isEmbeddedPreviewBrowser, peekPostLogoutRedirect, clearPostLogoutRedirect, hasFirebaseAuthReturnInUrl, peekOAuthRedirectPending, peekOAuthRedirectProvider } from '../../utils/localDevAuth';
 import { resolveSignedInHomePath } from '../../utils/accountKind';
-import { isAffiliateAgent, isBusinessUser } from '../../utils/accountRole';
+import { resolveBusinessPostLoginPath } from '../../utils/postAuthRedirect';
+import { isAffiliateAgent, isBusinessUser, hasBusinessSessionHint } from '../../utils/accountRole';
 import { shouldLandOnAdminDashboard } from '../../utils/adminAccess';
 import { AppText } from '../../components/base';
 
@@ -44,6 +45,14 @@ export default function LoginHub() {
         !isAffiliateAgent(userProfile) &&
         !isBusinessUser(userProfile);
 
+    const signedInBusinessReady =
+        Boolean(currentUser) &&
+        !isGuest &&
+        !postLogout &&
+        profileServerSynced &&
+        Boolean(userProfile) &&
+        (isBusinessUser(userProfile) || hasBusinessSessionHint(currentUser.uid));
+
     useEffect(() => {
         if (!currentUser) {
             clearPostLogoutRedirect();
@@ -70,6 +79,16 @@ export default function LoginHub() {
     useEffect(() => {
         setTab(readLoginTabFromLocation(location));
     }, [location.pathname, location.search]);
+
+    const finishingOAuth =
+        Boolean(currentUser) &&
+        !isGuest &&
+        !profileServerSynced &&
+        (hasFirebaseAuthReturnInUrl() || peekOAuthRedirectPending() || peekOAuthRedirectProvider());
+
+    if (signedInBusinessReady && tab === 'business') {
+        return <Navigate to={resolveBusinessPostLoginPath(location.search)} replace />;
+    }
 
     if (signedInConsumerReady) {
         return (
@@ -118,6 +137,19 @@ export default function LoginHub() {
                     showAffiliateLink={false}
                 />
                 <LocalDevOAuthNotice />
+                {finishingOAuth ? (
+                    <AppText
+                        as="p"
+                        style={{
+                            margin: '0 0 1rem',
+                            textAlign: 'center',
+                            color: 'var(--text-muted)',
+                            fontSize: '0.9rem',
+                        }}
+                    >
+                        {t('auth_finishing_sign_in', 'Finishing sign-in…')}
+                    </AppText>
+                ) : null}
                 {import.meta.env.DEV && isEmbeddedPreviewBrowser() ? (
                     <div
                         className="local-dev-oauth-notice local-dev-oauth-notice--blocked"

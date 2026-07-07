@@ -22,7 +22,7 @@ export function getAiUserPromptDefaultEn(postType, subType) {
         return 'Modern social media graphic';
     }
     if (postType === 'text_assistant') {
-        return 'How can I use DineBuddies invitations and Connect?';
+        return 'How do I stay safe and respectful on a first date?';
     }
     return 'Short friendly community post';
 }

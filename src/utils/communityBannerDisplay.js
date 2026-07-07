@@ -1,7 +1,4 @@
-import {
-    DEFAULT_BUSINESS_COVER,
-    resolveBusinessCoverImageUrl,
-} from './businessCoverImage';
+import { resolveBusinessCoverImageUrl } from './businessCoverImage';
 import { isCommunityBannerVideoUrl } from './communityBannerTemplates';
 import {
     buildYoutubeBannerBackgroundSrc,
@@ -29,10 +26,11 @@ export function resolveCommunityBannerDisplay(banner, businessUser) {
     }
 
     const storedUrl = String(banner?.url || '').trim();
-    const businessCover =
-        resolveBusinessCoverImageUrl(businessUser) || DEFAULT_BUSINESS_COVER;
-    const url = storedUrl || businessCover;
-    const usesBusinessCover = !storedUrl && Boolean(url);
+    const businessCover = businessUser
+        ? resolveBusinessCoverImageUrl(businessUser, { preferProxy: true })
+        : null;
+    const url = storedUrl || businessCover || '';
+    const usesBusinessCover = !storedUrl && Boolean(businessCover);
 
     return {
         url,

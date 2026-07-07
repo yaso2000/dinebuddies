@@ -13,6 +13,7 @@ import { updateProfile as updateAuthProfile } from 'firebase/auth';
 import ImageUpload from '../components/ImageUpload';
 import { uploadProfilePicture, validateImageFile } from '../utils/imageUpload';
 import { resolveSignedInHomePath } from '../utils/accountKind';
+import { buildDefaultProfileMediaPatch } from '../constants/defaultProfileMedia';
 import { AppText, AppTextInput } from "../components/base";
 
 const CompleteProfile = () => {
@@ -91,6 +92,17 @@ const CompleteProfile = () => {
         photo_url: formData.photoURL || currentUser.photoURL || ''
       };
 
+      Object.assign(
+        updateData,
+        buildDefaultProfileMediaPatch({
+          uid: currentUser.uid,
+          gender: formData.gender,
+          email: currentUser.email,
+          photo_url: updateData.photo_url,
+          cover_photo: '',
+        })
+      );
+
       console.log("Saving profile data (robust mode)...", updateData);
 
       // 1. ALWAYS use setDoc with merge: true for robustness (handles both create and update)
@@ -102,7 +114,7 @@ const CompleteProfile = () => {
         try {
           await updateAuthProfile(currentUser, {
             displayName: formData.displayName,
-            photoURL: formData.photoURL || currentUser.photoURL
+            photoURL: updateData.photoURL || currentUser.photoURL
           });
           console.log("✅ Auth Profile updated (displayName & photoURL synced)");
         } catch (authError) {

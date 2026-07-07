@@ -26,6 +26,7 @@ const {
 const { registerAffiliateAgentProfile } = require('./affiliateAuth');
 const { requestAffiliatePayout } = require('./affiliatePayouts');
 const stripeModule = require('./stripe');
+const paypalModule = require('./paypal');
 const webhookModule = require('./webhook');
 const {
     CREDIT_COSTS,
@@ -423,6 +424,8 @@ registerDirectorySearch(exports, { db, admin });
 registerConsumerAccountSearch(exports, { db });
 const { registerBusinessPostNotify } = require('./businessPostNotify');
 registerBusinessPostNotify(exports, { db, admin, enforceCallableRateLimit });
+const { registerCommunityChatDisplay } = require('./communityChatDisplay');
+registerCommunityChatDisplay(exports, { db, admin, enforceCallableRateLimit });
 const { registerConnectMatchNotifications } = require('./connectMatchNotifications');
 registerConnectMatchNotifications(exports, {
     db,
@@ -656,6 +659,12 @@ exports.createPortalSession = stripeModule.createPortalSession;
 exports.createCreditsCheckoutSession = stripeModule.createCreditsCheckoutSession;
 exports.createBusinessSubscriptionCheckout = stripeModule.createBusinessSubscriptionCheckout;
 exports.getStripeCommerceStatus = stripeModule.getStripeCommerceStatus;
+exports.createPayPalCreditsOrder = paypalModule.createPayPalCreditsOrder;
+exports.capturePayPalCreditsOrder = paypalModule.capturePayPalCreditsOrder;
+exports.reconcilePayPalCreditsOrder = paypalModule.reconcilePayPalCreditsOrder;
+exports.createPayPalBusinessPlanOrder = paypalModule.createPayPalBusinessPlanOrder;
+exports.capturePayPalBusinessPlanOrder = paypalModule.capturePayPalBusinessPlanOrder;
+exports.getPayPalCommerceStatus = paypalModule.getPayPalCommerceStatus;
 
 const googlePlayModule = require('./googlePlayBilling');
 exports.verifyGooglePlayCreditsPurchase = googlePlayModule.verifyGooglePlayCreditsPurchase;
@@ -1864,6 +1873,9 @@ exports.getFollowerCount = functions.https.onCall(async (data, context) => {
 
     return { success: true, userId, followersCount: followersSnap.size };
 });
+
+const { registerSetUserFollow } = require('./setUserFollow');
+registerSetUserFollow(exports, { db, isBusinessUserDoc, enforceCallableRateLimit });
 
 // ─── Trusted callable: resolve business uid by placeId ───────────────────────
 exports.lookupBusinessByPlaceId = functions.https.onCall(async (data, context) => {

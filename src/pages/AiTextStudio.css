@@ -41,6 +41,18 @@
     color: var(--text-muted);
 }
 
+.ai-text-studio__disclaimer {
+    margin-top: 8px !important;
+    font-size: 0.78rem !important;
+    line-height: 1.4 !important;
+    color: var(--text-muted);
+    opacity: 0.92;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(14, 165, 233, 0.08);
+    border: 1px solid rgba(14, 165, 233, 0.2);
+}
+
 .ai-text-studio__panel {
     border: 1px solid rgba(14, 165, 233, 0.35);
     border-radius: 16px;

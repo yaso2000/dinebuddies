@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { getSafeAvatar } from '../../../utils/avatarUtils';
+import UserAvatar from '../../UserAvatar';
 import { normalizePersonalInviteCategory } from '../../../constants/personalInviteCategories';
 import './PrivateInvitationPairShowcase.css';
 import { AppText } from "../../base";
@@ -98,20 +98,22 @@ export default function PrivateInvitationPairShowcase({
                 <div className="private-invite-pair__glow" aria-hidden />
                 <div className="private-invite-pair__avatars">
                     <div className="private-invite-pair__avatar-wrap private-invite-pair__avatar-wrap--host">
-                        <img
+                        <UserAvatar
               className="private-invite-pair__avatar"
-              src={getSafeAvatar(host || {})}
-              alt={hostName} />
+              user={host || {}}
+              alt={hostName}
+              style={{ width: '100%', height: '100%' }} />
             
                     </div>
                     <AppText as="span" className="private-invite-pair__connector" aria-hidden>
                         {variant.connector}
                     </AppText>
                     <div className="private-invite-pair__avatar-wrap private-invite-pair__avatar-wrap--guest">
-                        <img
+                        <UserAvatar
               className="private-invite-pair__avatar"
-              src={getSafeAvatar(guest || {})}
-              alt={guestName} />
+              user={guest || {}}
+              alt={guestName}
+              style={{ width: '100%', height: '100%' }} />
             
                     </div>
                 </div>

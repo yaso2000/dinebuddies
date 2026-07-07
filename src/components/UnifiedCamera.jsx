@@ -186,7 +186,7 @@ const UnifiedCamera = ({
       }, 1000);
     } catch (err) {
       console.error("Recording error:", err);
-      showToast("Failed to start recording.", 'error');
+      showToast(t('recording_start_failed', 'Failed to start recording.'), 'error');
     }
   };
 

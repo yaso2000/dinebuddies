@@ -1,19 +1,39 @@
-import React, { Suspense, lazy, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
+import {
+  getEmojiPickerAnchorStyle,
+  isTouchOrCoarsePointer,
+  shouldUseAppEmojiPicker,
+} from '../utils/emojiInputMode';
 
-// Emoji picker is for DESKTOP / fine pointer only — touch uses the system emoji keyboard.
-export function isTouchOrCoarsePointer() {
-    if (typeof window === 'undefined') return false;
-    return 'ontouchstart' in window || window.matchMedia('(pointer: coarse)').matches;
-}
+export { isTouchOrCoarsePointer, shouldUseAppEmojiPicker } from '../utils/emojiInputMode';
+
+const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
 const EmojiPickerPortal = ({ open, onClose, onEmojiClick, anchorRef }) => {
     const pickerRef = useRef(null);
+    const [anchorStyle, setAnchorStyle] = useState(() =>
+        getEmojiPickerAnchorStyle(anchorRef?.current)
+    );
 
-    const shouldRender = open && !isTouchOrCoarsePointer();
+    const shouldRender = open && shouldUseAppEmojiPicker();
 
-    // Close on outside click (desktop only)
+    useEffect(() => {
+        if (!shouldRender) return undefined;
+
+        const syncPosition = () => {
+            setAnchorStyle(getEmojiPickerAnchorStyle(anchorRef?.current));
+        };
+
+        syncPosition();
+        window.addEventListener('resize', syncPosition);
+        window.addEventListener('scroll', syncPosition, true);
+        return () => {
+            window.removeEventListener('resize', syncPosition);
+            window.removeEventListener('scroll', syncPosition, true);
+        };
+    }, [shouldRender, anchorRef]);
+
     useEffect(() => {
         if (!shouldRender) return;
         const handleOutside = (e) => {
@@ -38,16 +58,12 @@ const EmojiPickerPortal = ({ open, onClose, onEmojiClick, anchorRef }) => {
         <div
             ref={pickerRef}
             style={{
-                position: 'fixed',
-                bottom: '70px',
-                left: '8px',
-                zIndex: 999999,
+                ...anchorStyle,
                 borderRadius: '12px',
                 overflow: 'hidden',
                 boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
             }}
         >
-            {/* Close button */}
             <div style={{
                 display: 'flex',
                 justifyContent: 'flex-end',
@@ -55,6 +71,7 @@ const EmojiPickerPortal = ({ open, onClose, onEmojiClick, anchorRef }) => {
                 padding: '4px 8px',
             }}>
                 <button
+                    type="button"
                     onClick={onClose}
                     style={{
                         background: 'rgba(255,255,255,0.1)',
@@ -87,7 +104,6 @@ const EmojiPickerPortal = ({ open, onClose, onEmojiClick, anchorRef }) => {
                     <LazyEmojiPicker
                         onEmojiClick={(emojiData) => {
                             onEmojiClick(emojiData);
-                            // Stay open — user can pick multiple emojis
                         }}
                         theme="dark"
                         width={300}

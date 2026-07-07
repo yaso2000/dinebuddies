@@ -41,6 +41,7 @@ export function getFatalUiRecoveryTarget(pathname = '') {
     if (p.startsWith('/affiliate')) return '/affiliate/dashboard';
     if (p.startsWith('/admin')) return '/login';
     if (p.startsWith('/business')) return '/business-dashboard';
+    if (p.startsWith('/settings')) return p.split('?')[0] || '/settings';
     if (p === '/login' || p.startsWith('/login')) return '/login';
     if (p.startsWith('/invitation/social/preview/') || p.startsWith('/invitation/private/preview/')) {
         return getPrivateDraftRecoveryCreatePath();

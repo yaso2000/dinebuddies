@@ -68,7 +68,7 @@ import {
   resolveBusinessCommunityId,
 } from '../utils/businessCommunityJoin';
 import BusinessClaimPanel from '../components/BusinessClaimPanel';
-import { formatPhoneForDisplay, phoneNumberLtrStyle, phoneToTelHref } from '../utils/phoneUtils';
+import { formatPhoneForDisplay, phoneNumberLtrStyle, phoneToTelHref, resolveBusinessClaimPhoneE164 } from '../utils/phoneUtils';
 import {
   normalizeRestaurantToBusinessProfile,
   isBusinessProfileOwner,
@@ -299,8 +299,9 @@ const BusinessProfile = () => {
   const [joiningCommunity, setJoiningCommunity] = useState(false);
   const joinedCommunities = inviteCurrentUser?.joinedCommunities || [];
   const profileCommunityId = resolveBusinessCommunityId(joinedCommunities, {
-    ownerId: profileId,
+    ownerId: business?.ownerId || profileId,
     businessId: profileId,
+    isVirtual: isVirtualGoogleImportProfile(business),
   });
   const effectiveIsMember =
     isJoinedToBusinessCommunity(joinedCommunities, profileCommunityId) || isMember;
@@ -1842,7 +1843,8 @@ const BusinessProfile = () => {
                 <BusinessClaimPanel
                   variant="hero"
                   restaurantId={profileId}
-                  businessName={businessInfo.businessName || business.display_name} />
+                  businessName={businessInfo.businessName || business.display_name}
+                  businessPhoneE164={resolveBusinessClaimPhoneE164(business)} />
 
                 }
                             </div>
@@ -1979,7 +1981,7 @@ const BusinessProfile = () => {
                 {/* Actions Row */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--profile-actions-gap)', width: '100%', marginBottom: 'var(--profile-stack-gap)' }}>
                     {currentUser?.uid !== profileId && !userProfile?.isBusiness &&
-          <button onClick={() => {if (isGuest) {goToLogin();return;}handleJoinCommunity();}} style={{ width: '100%', padding: '14px 16px', borderRadius: '16px', background: effectiveIsMember ? 'var(--hover-overlay)' : 'var(--brand-primary)', border: effectiveIsMember ? `1px solid var(--border-color)` : 'none', color: effectiveIsMember ? 'var(--text-main)' : 'var(--text-on-brand)', fontWeight: '900', fontSize: '1.05rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s', boxShadow: effectiveIsMember ? 'none' : '0 8px 24px color-mix(in srgb, var(--brand-primary) 30%, transparent)' }}>
+          <button onClick={() => {if (isGuest) {goToLogin();return;}handleJoinCommunity();}} style={{ width: '100%', padding: '14px 16px', borderRadius: '16px', background: effectiveIsMember ? 'linear-gradient(135deg, #1a2744 0%, #0f1729 100%)' : 'var(--brand-primary)', border: 'none', color: effectiveIsMember ? '#ffffff' : 'var(--text-on-brand)', fontWeight: '900', fontSize: '1.05rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s', boxShadow: effectiveIsMember ? '0 4px 14px rgba(15, 23, 41, 0.45)' : '0 8px 24px color-mix(in srgb, var(--brand-primary) 30%, transparent)' }}>
                             <>
                                     {/* Overlapping member avatars — always visible */}
                                     {memberCount > 0 && memberAvatars.length > 0 &&
@@ -2409,11 +2411,11 @@ const BusinessProfile = () => {
           <div className="ui-banner--warning">
                                 <AppText as="span" style={{ fontSize: '1.4rem', flexShrink: 0 }}>⚠️</AppText>
                                 <div style={{ flex: 1 }}>
-                                    <AppText as="p" className="ui-banner--warning__title">Saved as Draft</AppText>
+                                    <AppText as="p" className="ui-banner--warning__title">{t('business_saved_as_draft', 'Saved as Draft')}</AppText>
                                     <AppText as="p" style={{ margin: '0 0 10px', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                                        Your services were saved, but they <strong>won't appear on your public profile</strong> until you upgrade your plan.
+                                        {t('business_services_draft_body', 'Your services were saved, but they will not appear on your public profile until you upgrade your plan.')}
                                     </AppText>
-                                    <a href="/settings/subscription" className="ui-banner--warning__link">🚀 Upgrade Plan</a>
+                                    <a href="/settings/subscription" className="ui-banner--warning__link">🚀 {t('upgrade_plan', 'Upgrade Plan')}</a>
                                 </div>
                                 <button type="button" className="ui-btn ui-btn--ghost" onClick={() => setShowServiceDraftBanner(false)} style={{ padding: '4px', color: 'var(--text-muted)', fontSize: '1.1rem', flexShrink: 0 }}>✕</button>
                             </div>
@@ -2513,20 +2515,20 @@ const BusinessProfile = () => {
 
                                 {/* Name */}
                                 <div>
-                                    <label className="ui-form-label">Service Name *</label>
+                                    <label className="ui-form-label">{t('service_item_name')} *</label>
                                     <AppTextInput
                 type="text"
                 className="ui-form-field"
                 value={serviceForm.name}
                 onChange={(e) => setServiceForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="e.g., Home Delivery, Live DJ..." />
+                placeholder={t('business_service_name_placeholder')} />
 
                                 </div>
 
                                 {/* Description */}
                                 <div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                                        <label className="ui-form-label" style={{ margin: 0 }}>Description (optional)</label>
+                                        <label className="ui-form-label" style={{ margin: 0 }}>{t('description')} ({t('optional')})</label>
                                         <AppText as="span" style={{ fontSize: '0.75rem', color: (serviceForm.description?.length || 0) >= 150 ? 'var(--secondary)' : 'var(--text-muted)' }}>
                                             {serviceForm.description?.length || 0}/150
                                         </AppText>
@@ -2606,8 +2608,8 @@ const BusinessProfile = () => {
                                         {service.description && <AppText as="p" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>{service.description}</AppText>}
                                         {isOwner &&
               <div style={{ display: 'flex', gap: '8px', marginTop: '8px', opacity: 0.8 }} className="service-actions">
-                                                <button onClick={() => {setEditingService(index);setShowServiceModal(true);}} style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: '700', background: 'var(--hover-overlay)', border: 'none', borderRadius: '8px', color: 'var(--text-main)', cursor: 'pointer' }}>Edit</button>
-                                                <button type="button" className="ui-btn ui-btn--danger-outline" onClick={() => handleDeleteService(index)} style={{ padding: '6px 12px', fontSize: '0.75rem' }}>Del</button>
+                                                <button onClick={() => {setEditingService(index);setShowServiceModal(true);}} style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: '700', background: 'var(--hover-overlay)', border: 'none', borderRadius: '8px', color: 'var(--text-main)', cursor: 'pointer' }}>{t('edit')}</button>
+                                                <button type="button" className="ui-btn ui-btn--danger-outline" onClick={() => handleDeleteService(index)} style={{ padding: '6px 12px', fontSize: '0.75rem' }}>{t('delete')}</button>
                                             </div>
               }
                                     </div>
@@ -2616,7 +2618,7 @@ const BusinessProfile = () => {
           !showServiceAddForm &&
           <div style={{ textAlign: 'center', padding: '3rem 1rem', background: 'var(--bg-card)', borderRadius: '24px', border: `1px dashed var(--border-color)` }}>
                                 <div style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.5 }}>🔧</div>
-                                <AppText as="p" style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '1rem' }}>No services listed yet.</AppText>
+                                <AppText as="p" style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '1rem' }}>{t('business_no_services_listed', 'No services listed yet.')}</AppText>
                                 {isOwner &&
             <button onClick={() => setShowServiceAddForm(true)} style={{ padding: '12px 24px', fontSize: '0.9rem', fontWeight: '800', background: 'var(--brand-primary)', border: 'none', borderRadius: '16px', color: 'white', cursor: 'pointer', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
                                         ➕ Add Your First Service
@@ -3171,7 +3173,7 @@ const BusinessProfile = () => {
               onChange={(e) => setBasicInfoForm((p) => ({ ...p, cuisineType: e.target.value }))}
               style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box', background: 'var(--bg-body)', border: '1px solid var(--border-color)', borderRadius: '10px', color: basicInfoForm.cuisineType ? 'var(--text-main)' : 'var(--text-muted)', fontSize: '0.9rem', appearance: 'none' }}>
 
-                                        <option value="">Select Cuisine Type...</option>
+                                        <option value="">{t('business_select_cuisine_type', 'Select cuisine type…')}</option>
                                         {['Italian', 'Asian', 'Chinese', 'Japanese', 'Indian', 'Lebanese', 'Mexican', 'Greek', 'Thai', 'Vietnamese', 'Korean', 'Turkish', 'French', 'Spanish', 'American', 'Australian', 'Middle Eastern', 'Mediterranean', 'Seafood', 'Steakhouse', 'Vegetarian', 'Vegan', 'Other'].map((type) =>
               <option key={type} value={type}>{type}</option>
               )}
@@ -3180,7 +3182,7 @@ const BusinessProfile = () => {
           }
                             <div style={{ marginBottom: '1.25rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                                    <label style={{ fontWeight: '600', fontSize: '0.9rem', color: 'var(--text-main)', margin: 0 }}>Description</label>
+                                    <label style={{ fontWeight: '600', fontSize: '0.9rem', color: 'var(--text-main)', margin: 0 }}>{t('description', 'Description')}</label>
                                     <AppText as="span" style={{ fontSize: '0.75rem', color: (basicInfoForm.description?.length || 0) >= 300 ? 'var(--secondary)' : 'var(--text-muted)' }}>
                                         {basicInfoForm.description?.length || 0}/300
                                     </AppText>
@@ -3211,7 +3213,7 @@ const BusinessProfile = () => {
                             </div>
                             {/* Free Fields Section Header */}
                             <div style={{ margin: '0 0 0.8rem', padding: '0.5rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <AppText as="span" style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Basic Info</AppText>
+                                <AppText as="span" style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('business_basic_info_section', 'Basic info')}</AppText>
                                 <AppText as="span" style={{ border: '1px solid #22c55e', borderRadius: '5px', padding: '1px 6px', fontSize: '0.65rem', fontWeight: '800', color: '#4ade80', background: 'rgba(34,197,94,0.12)' }}>🆓 Free</AppText>
                             </div>
                             {[
@@ -3261,9 +3263,9 @@ const BusinessProfile = () => {
                         <div style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '2rem', width: '90%', maxWidth: '420px', border: '1px solid rgba(245,158,11,0.3)', boxShadow: '0 0 40px rgba(245,158,11,0.15)', textAlign: 'center' }}>
                             {/* Icon */}
                             <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#000', border: '2px solid #f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', margin: '0 auto 1rem' }}>👑</div>
-                            <AppText as="h3" style={{ margin: '0 0 0.5rem', fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-primary)' }}>Information Saved!</AppText>
+                            <AppText as="h3" style={{ margin: '0 0 0.5rem', fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-primary)' }}>{t('business_info_saved_title', 'Information saved!')}</AppText>
                             <AppText as="p" style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: '0 0 1.2rem', lineHeight: 1.6 }}>
-                                The following fields require a <strong style={{ color: '#f59e0b' }}>Pro plan</strong> to be visible to visitors:
+                                {t('business_pro_fields_notice', 'The following fields require a Pro plan to be visible to visitors:')}
                             </AppText>
                             {/* Fields list */}
                             <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '14px', padding: '1rem', marginBottom: '1.2rem', textAlign: 'left' }}>
@@ -3274,14 +3276,14 @@ const BusinessProfile = () => {
             )}
                             </div>
                             <AppText as="p" style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0 0 1.5rem' }}>
-                                Your data is saved and will become visible once you upgrade.
+                                {t('business_pro_fields_saved_hint', 'Your data is saved and will become visible once you upgrade.')}
                             </AppText>
                             <div style={{ display: 'flex', gap: '10px' }}>
                                 <button onClick={() => setProFieldsNotice(null)} style={{ flex: 1, padding: '11px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}>
-                                    Got it
+                                    {t('got_it', 'Got it')}
                                 </button>
                                 <button onClick={() => {setProFieldsNotice(null);navigate('/settings/subscription');}} style={{ flex: 1, padding: '11px', border: 'none', borderRadius: '12px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', cursor: 'pointer', fontWeight: '800', fontSize: '0.9rem' }}>
-                                    ⚡ Upgrade to Pro
+                                    ⚡ {t('business_upgrade_to_pro', 'Upgrade to Pro')}
                                 </button>
                             </div>
                         </div>

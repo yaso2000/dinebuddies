@@ -33,6 +33,7 @@ import {
   syncSerializeEditorMedia } from
 '../utils/editorSessionDraft';
 import { persistPrivateInvitationEditorDraft } from '../utils/persistPrivateInvitationEditorDraft';
+import { ensureHostedInvitationDraftReady } from '../utils/fetchHostedInvitationDraft';
 import SocialInvitationEditorFooter from '../components/Invitations/socialCard/SocialInvitationEditorFooter';
 import InvitationEditorLeaveDialog from '../components/Invitations/socialCard/InvitationEditorLeaveDialog';
 import '../components/Invitations/socialCard/SocialInvitationEditorFooter.css';
@@ -86,6 +87,7 @@ import AIFloatingLauncher from '../components/AIFloatingLauncher';
 import { extractAIContentFields } from '../utils/aiContentFieldMapper';
 import { parseAiStudioImageFromState } from '../utils/aiStudioImagePayload';
 import { goToLogin, getCurrentReturnPath } from '../utils/goToLogin';
+import { scheduleScrollPageToTop } from '../utils/scrollPageToTop';
 import { resolveCardStructureFromBackgroundId } from '../utils/cardStructure';
 import { AppText, AppTextInput } from "../components/base";
 
@@ -111,6 +113,8 @@ const CreateSocialInvitation = () => {
   const [mediaData, setMediaData] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [existingDraftId, setExistingDraftId] = useState(null);
+  const existingDraftIdRef = useRef(existingDraftId);
+  existingDraftIdRef.current = existingDraftId;
   const [cardFontId, setCardFontId] = useState(DEFAULT_FONT_ID);
   const [cardFrameColorId, setCardFrameColorId] = useState(DEFAULT_FRAME_COLOR_ID);
   const [socialCardThemeColor, setPrivateCardThemeColor] = useState(null);
@@ -207,6 +211,8 @@ const CreateSocialInvitation = () => {
       revokeAllPrivateCoverStash(coverMediaStashRef.current);
     };
   }, []);
+
+  useEffect(() => scheduleScrollPageToTop(), []);
 
   const privateHeroCover = useMemo(() => getPrivateHeroCoverFromMediaData(mediaData), [mediaData]);
 
@@ -971,7 +977,7 @@ const CreateSocialInvitation = () => {
         cardCopyFontScale,
         cardBackgroundId,
         cardGradientId,
-        existingDraftId,
+        existingDraftId: existingDraftIdRef.current,
         addHostedInvitation,
         socialCardThemeColor,
         socialCardShowHostAndMessage,
@@ -1105,6 +1111,7 @@ const CreateSocialInvitation = () => {
         }
         return;
       }
+      existingDraftIdRef.current = result.draftId;
       setExistingDraftId(result.draftId);
       clearSessionDraft();
       showToast(
@@ -1139,12 +1146,42 @@ const CreateSocialInvitation = () => {
       if (!result.ok) {
         if (result.code === 'create_failed') {
           showToast(t('failed_create_invitation'), 'error');
+        } else if (result.code === 'not_signed_in') {
+          showToast(t('please_sign_in', { defaultValue: 'Please sign in to continue.' }), 'error');
+        } else {
+          showToast(t('failed_create_invitation'), 'error');
         }
         return;
       }
-      clearSessionDraft();
-      clearCoverMediaStashAfterPublish();
-      navigate(`/invitation/social/preview/${result.draftId}`, { replace: true });
+      if (!result.draftId) {
+        showToast(t('failed_create_invitation'), 'error');
+        return;
+      }
+
+      const verified = await ensureHostedInvitationDraftReady(result.draftId);
+      if (!verified.ok) {
+        console.warn('Preview draft not readable yet:', verified.code, result.draftId);
+        showToast(
+          verified.code === 'permission'
+            ? t('social_draft_permission_denied', {
+                defaultValue: 'Could not open the draft. Sign in again and retry.'
+              })
+            : t('social_preview_open_retry', {
+                defaultValue: 'Could not open preview yet. Please try again in a moment.'
+              }),
+          'error'
+        );
+        return;
+      }
+
+      existingDraftIdRef.current = result.draftId;
+      setExistingDraftId(result.draftId);
+      navigate(`/invitation/social/preview/${result.draftId}`, {
+        replace: true,
+        state: {
+          previewInvitation: { id: result.draftId, ...verified.data },
+        },
+      });
     } catch (error) {
       console.error('Error creating private draft:', error);
       showToast(t('failed_create_invitation'), 'error');
@@ -1156,7 +1193,6 @@ const CreateSocialInvitation = () => {
   canCreateSocialInvitation,
   editInvitation,
   persistEditorDraft,
-  clearSessionDraft,
   navigate,
   showToast,
   t]

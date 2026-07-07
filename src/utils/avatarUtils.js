@@ -1,9 +1,17 @@
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
+import { normalizeProfileGallery } from './profileGallery';
+import { mapPublicProfileDocToUserShape } from './publicProfileMap';
+import {
+    pickDefaultProfileAvatar,
+    resolveDefaultProfileCover,
+} from '../constants/defaultProfileMedia';
+
 /**
  * Google Places image URLs (JS PhotoService, REST /place/photo, etc.) are not persisted app media.
  * Do not use as gallery/cover img src — use Firebase Storage + Firestore instead.
  */
-export function isGooglePlaceImageUrl(url) {
-    if (!url || typeof url !== 'string') return false;
+export function isGooglePlaceImageUrl(url) {    if (!url || typeof url !== 'string') return false;
     if (/maps\.googleapis\.com\/maps\/api\/place\/photo\b/i.test(url)) return true;
     return /PhotoService\.GetPhoto|maps\.googleapis\.com.*PhotoService|place\/js.*PhotoService/i.test(url);
 }
@@ -106,18 +114,30 @@ export function normalizeUserGender(user) {
     return 'unspecified';
 }
 
+/** First usable portrait from profile gallery slots. */
+export function firstProfileGalleryAvatarUrl(userData) {
+    if (!userData) return null;
+    for (const slot of normalizeProfileGallery(userData.profileGallery)) {
+        if (slot && !shouldBlockDirectImageLoad(slot)) return slot;
+    }
+    return null;
+}
+
 /**
- * Unified logic to retrieve a safe avatar URL for a user
- * Checks multiple possible fields and provides a consistent fallback
+ * Returns a persisted avatar URL when one exists, otherwise null (no generated fallback).
+ * @param {Record<string, unknown> | null | undefined} userData
  */
-export const getSafeAvatar = (userData) => {
-    if (!userData) return getDefaultAvatar();
+export function getAvatarUrlOrNull(userData) {
+    if (!userData) return null;
 
     const candidates = [
         userData.avatarUrl,
         userData.avatar,
+        userData.avatar_url,
         userData.photoURL,
         userData.photo_url,
+        userData.swipePhotoUrl,
+        firstProfileGalleryAvatarUrl(userData),
         userData.userPhoto,
         userData.logo,
         userData.logoImage,
@@ -141,6 +161,93 @@ export const getSafeAvatar = (userData) => {
             }
         }
     }
+
+    return null;
+}
+
+/** Normalize all common avatar field aliases from the best available URL. */
+export function enrichUserWithAvatarFields(user = {}) {
+    if (!user || typeof user !== 'object') return user;
+    const url = getAvatarUrlOrNull(user);
+    if (!url) return user;
+    return {
+        ...user,
+        photo_url: user.photo_url || url,
+        photoURL: user.photoURL || url,
+        avatar: user.avatar || url,
+        avatarUrl: user.avatarUrl || url,
+        avatar_url: user.avatar_url || url,
+    };
+}
+
+/**
+ * Fetch users / public_profiles for rows missing a portrait URL.
+ * @param {Array<Record<string, unknown>>} users
+ */
+export async function hydrateUsersAvatarFields(users = []) {
+    if (!Array.isArray(users) || users.length === 0) return [];
+
+    const enriched = users.map((user) => enrichUserWithAvatarFields(user));
+    const needIds = [
+        ...new Set(
+            enriched
+                .filter((user) => user?.id && !getAvatarUrlOrNull(user))
+                .map((user) => String(user.id))
+        ),
+    ];
+    if (!needIds.length) return enriched;
+
+    const hydratedById = new Map();
+    await Promise.all(
+        needIds.map(async (uid) => {
+            try {
+                const [userSnap, pubSnap] = await Promise.all([
+                    getDoc(doc(db, 'users', uid)),
+                    getDoc(doc(db, 'public_profiles', uid)),
+                ]);
+                const merged = { id: uid };
+                if (pubSnap.exists()) {
+                    Object.assign(
+                        merged,
+                        mapPublicProfileDocToUserShape({ ...pubSnap.data(), uid })
+                    );
+                }
+                if (userSnap.exists()) {
+                    Object.assign(merged, userSnap.data());
+                }
+                if (Object.keys(merged).length > 1) {
+                    hydratedById.set(uid, enrichUserWithAvatarFields(merged));
+                }
+            } catch (err) {
+                console.warn('[hydrateUsersAvatarFields]', uid, err);
+            }
+        })
+    );
+
+    return enriched.map((user) => {
+        const extra = hydratedById.get(String(user.id));
+        if (!extra) return user;
+        return enrichUserWithAvatarFields({ ...extra, ...user });
+    });
+}
+
+/**
+ * Unified logic to retrieve a safe avatar URL for a user
+ * Checks multiple possible fields and provides a consistent fallback
+ */
+export const getSafeAvatar = (userData) => {
+    if (!userData) return getDefaultAvatar();
+
+    const picked = getAvatarUrlOrNull(userData);
+    if (picked) return picked;
+
+    if (!isBusinessAvatarUser(userData)) {
+        const pooled = pickDefaultProfileAvatar(userData);
+        if (pooled) return pooled;
+    }
+
+    const fallbackName =
+        userData.display_name || userData.displayName || userData.nickname || userData.name || '';
 
     return getDefaultAvatar(fallbackName);
 };

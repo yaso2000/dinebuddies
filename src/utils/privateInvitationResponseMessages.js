@@ -14,9 +14,10 @@ function isArabicLocale(locale) {
 
 export { isArabicLocale };
 
-function trimTitle(title) {
-    const t = String(title || '').trim();
-    return t || 'الدعوة';
+function trimTitle(title, locale = 'en') {
+    const trimmed = String(title || '').trim();
+    if (trimmed) return trimmed;
+    return isArabicLocale(locale) ? 'الدعوة' : 'Invitation';
 }
 
 function hostThanksPhrase(hostGender, locale) {
@@ -50,7 +51,7 @@ export function buildPrivateInvitationResponseChatMessage(opts) {
         isDating = false,
         locale = 'en',
     } = opts;
-    const title = trimTitle(invitationTitle);
+    const title = trimTitle(invitationTitle, locale);
     const thanks = hostThanksPhrase(hostGender, locale);
     const wish = hostWishPhrase(hostGender, locale);
     const meet = hostMeetPhrase(hostGender, locale);

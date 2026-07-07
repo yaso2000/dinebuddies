@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { FaEdit, FaCheckCircle, FaArrowLeft } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import {
   isPrivateInvitationDraft,
@@ -12,6 +12,7 @@ import {
   rememberPrivateDraftCreateKind,
   getInvitationDetailsPath } from
 '../utils/socialInvitationDraft';
+import { fetchHostedInvitationDraft } from '../utils/fetchHostedInvitationDraft';
 import { resolveInviteCategory } from '../utils/inviteCategory';
 import { readPrivateInvitationShareToken } from '../utils/privateInvitationShare';
 import { useInvitations } from '../context/InvitationContext';
@@ -28,26 +29,46 @@ import SocialInvitationInviteePanel from '../components/Invitations/socialCard/S
 import SocialInvitationShareCapture from '../components/Invitations/socialCard/SocialInvitationShareCapture';
 import '../components/Invitations/socialCard/SocialInvitationExternalShare.css';
 import { AppText } from "../components/base";
+import { clearPrivateInvitationEditorSession } from '../utils/editorSessionDraft';
+import { scheduleScrollPageToTop } from '../utils/scrollPageToTop';
 
 const SocialInvitationPreview = () => {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const { id: draftId } = useParams();
   const { publishPrivateInvitationDraft } = useInvitations();
 
   const cardCaptureRef = useRef(null);
   const postPublishShareTokenRef = useRef(null);
+  const invitationRef = useRef(null);
 
-  const [invitation, setInvitation] = useState(null);
+  const [invitation, setInvitation] = useState(() => {
+    const seeded = location.state?.previewInvitation;
+    if (seeded?.id && draftId && String(seeded.id) === String(draftId)) {
+      return seeded;
+    }
+    return null;
+  });
+  invitationRef.current = invitation;
+
   const [loadError, setLoadError] = useState(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [hasSentToMembers, setHasSentToMembers] = useState(false);
   const [postPublishShareToken, setPostPublishShareToken] = useState(null);
   postPublishShareTokenRef.current = postPublishShareToken;
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const seeded = location.state?.previewInvitation;
+    return !(seeded?.id && draftId && String(seeded.id) === String(draftId));
+  });
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+
+  useEffect(() => {
+    if (loading || !invitation?.id) return undefined;
+    return scheduleScrollPageToTop();
+  }, [loading, invitation?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,34 +80,60 @@ const SocialInvitationPreview = () => {
       }
 
       setLoadError(null);
-      setLoading(true);
+      const seeded = location.state?.previewInvitation;
+      const hasSeededDraft =
+        seeded?.id && draftId && String(seeded.id) === String(draftId);
+      if (!hasSeededDraft) {
+        setLoading(true);
+      }
 
       try {
-        await auth.authStateReady();
+        const loaded = await fetchHostedInvitationDraft(draftId, {
+          maxAttempts: hasSeededDraft ? 4 : 10,
+          baseDelayMs: 150,
+          preferServer: !hasSeededDraft,
+          allowPublished: true,
+        });
         if (cancelled) return;
 
-        const invitationRef = doc(db, 'social_invitations', draftId);
-        let invitationDoc = await getDoc(invitationRef);
-        if (!invitationDoc.exists()) {
-          await new Promise((r) => setTimeout(r, 400));
-          if (cancelled) return;
-          invitationDoc = await getDoc(invitationRef);
-        }
+        if (!loaded.ok) {
+          if (hasSeededDraft && loaded.code !== 'published') {
+            rememberPrivateDraftCreateKind(seeded);
+            const editorUid = auth.currentUser?.uid;
+            if (editorUid) {
+              clearPrivateInvitationEditorSession(editorUid, seeded, draftId);
+            }
+            return;
+          }
 
-        if (!invitationDoc.exists()) {
-          setLoadError('not_found');
-          showToast(t('invitation_not_found') || 'Draft not found', 'error');
+          if (loaded.code === 'published') {
+            setLoadError('published');
+          } else if (loaded.code === 'permission') {
+            setLoadError('permission');
+          } else if (loaded.code === 'invalid_status') {
+            setLoadError('invalid_status');
+          } else {
+            setLoadError('not_found');
+          }
+          showToast(
+            loaded.code === 'permission'
+              ? t('social_draft_permission_denied', {
+                  defaultValue: 'Could not open the draft. Sign in again and retry.'
+                })
+              : loaded.code === 'invalid_status'
+                ? t('error_loading_draft') || 'Could not open this invitation draft.'
+                : t('invitation_not_found') || 'Draft not found',
+            'error'
+          );
           return;
         }
 
-        const data = invitationDoc.data();
-
-        if (isPrivateInvitationPublished(data)) {
-          navigate(getInvitationDetailsPath({ id: draftId, ...data }), { replace: true });
+        if (loaded.published || isPrivateInvitationPublished(loaded.data)) {
+          navigate(getInvitationDetailsPath({ id: draftId, ...loaded.data }), { replace: true });
           return;
         }
 
-        if (!isPrivateInvitationDraft(data)) {
+        if (!isPrivateInvitationDraft(loaded.data)) {
           setLoadError('invalid_status');
           showToast(
             t('error_loading_draft') || 'Could not open this invitation draft.',
@@ -97,11 +144,19 @@ const SocialInvitationPreview = () => {
 
         setInvitation({
           id: draftId,
-          ...data
+          ...loaded.data
         });
-        rememberPrivateDraftCreateKind(data);
+        rememberPrivateDraftCreateKind(loaded.data);
+        const editorUid = auth.currentUser?.uid;
+        if (editorUid) {
+          clearPrivateInvitationEditorSession(editorUid, loaded.data, draftId);
+        }
       } catch (error) {
         console.error('Error fetching private draft:', error);
+        if (hasSeededDraft) {
+          rememberPrivateDraftCreateKind(seeded);
+          return;
+        }
         const code = error?.code || '';
         setLoadError(code === 'permission-denied' ? 'permission' : 'unknown');
         showToast(
@@ -121,7 +176,7 @@ const SocialInvitationPreview = () => {
     return () => {
       cancelled = true;
     };
-  }, [draftId, navigate, showToast, t]);
+  }, [draftId, location.state, navigate, showToast, t]);
 
   const cardHeroCover = useMemo(() => {
     if (!invitation) return null;
@@ -162,14 +217,21 @@ const SocialInvitationPreview = () => {
     );
   };
 
-  const persistPreviewDraft = async () => {
-    if (!draftId || !invitation) return;
+  const persistPreviewDraft = useCallback(async () => {
+    const current = invitationRef.current;
+    if (!draftId || !current) return false;
+    const invitedFriends = Array.isArray(current.invitedFriends) ? current.invitedFriends : [];
+    const rsvps =
+      current.rsvps && typeof current.rsvps === 'object'
+        ? current.rsvps
+        : Object.fromEntries(invitedFriends.map((id) => [id, 'pending']));
     await updateDoc(doc(db, 'social_invitations', draftId), {
-      invitedFriends: invitation.invitedFriends || [],
-      rsvps: invitation.rsvps || {},
+      invitedFriends,
+      rsvps,
       updatedAt: serverTimestamp()
     });
-  };
+    return true;
+  }, [draftId]);
 
   const loadExistingShareToken = useCallback(async () => {
     if (!draftId) return null;
@@ -205,10 +267,17 @@ const SocialInvitationPreview = () => {
         return { success: true, shareToken: existingToken, alreadyPublished: true };
       }
 
-      await persistPreviewDraft();
-      return publishPrivateInvitationDraft(draftId, { silent: true });
+      const persisted = await persistPreviewDraft();
+      if (!persisted) {
+        return {
+          success: false,
+          message: t('error_loading_draft', { defaultValue: 'Could not load the invitation draft.' })
+        };
+      }
+
+      return publishPrivateInvitationDraft(draftId);
     },
-    [draftId, loadExistingShareToken, publishPrivateInvitationDraft]
+    [draftId, loadExistingShareToken, persistPreviewDraft, publishPrivateInvitationDraft, t]
   );
 
   const handleBackClick = () => {
@@ -245,13 +314,20 @@ const SocialInvitationPreview = () => {
 
     setIsPublishing(true);
     try {
-      const publishResult = await publishDraftOnce();
-      if (!publishResult?.success) {
+      const persisted = await persistPreviewDraft();
+      if (!persisted) {
         showToast(
-          publishResult?.message ||
-          t('failed_publish_invitation', { defaultValue: 'Could not publish invitation.' }),
+          t('error_loading_draft', { defaultValue: 'Could not load the invitation draft.' }),
           'error'
         );
+        return;
+      }
+
+      const publishResult = await publishPrivateInvitationDraft(draftId);
+      if (!publishResult?.success) {
+        if (publishResult?.message) {
+          showToast(publishResult.message, 'error');
+        }
         return;
       }
 
@@ -266,9 +342,22 @@ const SocialInvitationPreview = () => {
         }),
         'success'
       );
+
+      const current = invitationRef.current;
+      navigate(
+        getInvitationDetailsPath({
+          id: draftId,
+          ...(current || {}),
+          status: 'published'
+        }),
+        { replace: true }
+      );
     } catch (error) {
       console.error('Error sending private invitation:', error);
-      showToast(t('failed_publish_invitation'), 'error');
+      showToast(
+        error?.message || t('failed_publish_invitation', { defaultValue: 'Could not publish invitation.' }),
+        'error'
+      );
     } finally {
       setIsPublishing(false);
     }

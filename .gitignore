@@ -44,8 +44,16 @@ ui-debug.log
 .runtimeconfig.json
 .vercel
 .env*.local
+.env.vercel.production
 service-account-key.json 
 # Never commit Firebase service account keys (even under public/)
 public/dinebuddies-*.json
 **/dinebuddies-*.json
 functions/.env
+
+# Local snapshots / debug (not part of the live app)
+/backups/
+/_backups/
+.agent/backups/
+functions/logs.txt
+debug-friends.html

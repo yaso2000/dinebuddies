@@ -13,13 +13,27 @@ export default function RankingSidebarWidget() {
   const navigate = useNavigate();
   const { loading, top } = useTopRankedPaid(TOP_N);
 
-  if (loading || !top.length) return null;
+  if (loading && !top.length) {
+    return (
+      <div className="ds-widget-card" aria-busy="true">
+        <div className="ds-widget-header">
+          <FaCrown size={14} style={{ color: 'var(--luxury-gold)' }} />
+          <AppText as="span">{t('rankings_title', 'Business Rankings')}</AppText>
+        </div>
+        <div className="ds-widget-skeleton-row" />
+        <div className="ds-widget-skeleton-row" />
+        <div className="ds-widget-skeleton-row" />
+      </div>
+    );
+  }
+
+  if (!top.length) return null;
 
   return (
     <div className="ds-widget-card">
             <div className="ds-widget-header">
                 <FaCrown size={14} style={{ color: 'var(--luxury-gold)' }} />
-                <AppText as="span">{t('rankings_top_paid', 'Top Paid Ranking')}</AppText>
+                <AppText as="span">{t('rankings_title', 'Business Rankings')}</AppText>
                 <Link to="/rankings" className="ds-widget-see-all">{t('see_all', 'See all')}</Link>
             </div>
             {top.map((b, i) =>

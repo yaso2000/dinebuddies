@@ -7,9 +7,13 @@ export const BUSINESS_LOGIN_INVALID_MSG_EN =
 
 export const BUSINESS_AI_UNCLAIMED_MSG_AR =
     'هذا الحساب منشأ تلقائياً بالذكاء الاصطناعي. يرجى الضغط على "استعادة الحساب وتوثيقه عبر SMS" أولاً لتتمكن من تعيين كلمة مرور والدخول.';
+export const BUSINESS_AI_UNCLAIMED_MSG_EN =
+    'This account was created automatically by AI. Use "Recover & verify via SMS" first to set a password and sign in.';
 
 export const RESET_GENERIC_SUCCESS_AR =
     'إذا كان الحساب موجوداً، فقد أرسلنا رابط الاستعادة.';
+export const RESET_GENERIC_SUCCESS_EN =
+    'If an account exists, we sent a reset link.';
 
 export const AI_UNCLAIMED_CODES = new Set(['unclaimed-ai-profile', 'ai-unclaimed']);
 
@@ -47,7 +51,7 @@ export async function resolveBusinessLoginForSignIn(identifier, password, countr
     if (isAiUnclaimedCode(data?.code)) {
         throw {
             code: 'unclaimed-ai-profile',
-            message: data.message || BUSINESS_AI_UNCLAIMED_MSG_AR,
+            message: data.message || BUSINESS_AI_UNCLAIMED_MSG_EN,
             businessId: data.businessId,
         };
     }
@@ -56,7 +60,7 @@ export async function resolveBusinessLoginForSignIn(identifier, password, countr
     if (!ok || !resolved) {
         throw {
             code: 'auth-failed',
-            message: data?.message || BUSINESS_LOGIN_INVALID_MSG_AR,
+            message: data?.message || BUSINESS_LOGIN_INVALID_MSG_EN,
         };
     }
 
@@ -69,7 +73,7 @@ export async function resolveBusinessLoginForSignIn(identifier, password, countr
 export async function requestBusinessPasswordReset(identifier, countryCode = '+20') {
     const id = String(identifier || '').trim();
     if (!id) {
-        throw { code: 'invalid-input', message: 'يرجى إدخال البريد أو رقم الجوال' };
+        throw { code: 'invalid-input', message: 'Please enter your email or mobile number' };
     }
 
     const { ok, data } = await callLoginResolver('reset', { identifier: id, countryCode });
@@ -77,11 +81,11 @@ export async function requestBusinessPasswordReset(identifier, countryCode = '+2
     if (!ok) {
         throw {
             code: 'reset-failed',
-            message: data?.message || 'خطأ في معالجة استعادة الحساب',
+            message: data?.message || 'Could not process password reset',
         };
     }
 
-    const message = data?.message || RESET_GENERIC_SUCCESS_AR;
+    const message = data?.message || RESET_GENERIC_SUCCESS_EN;
     const genericOnly = data?.genericOnly === true || !pickResolvedEmail(data);
 
     return {

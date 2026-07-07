@@ -4,7 +4,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaTrophy, FaUserPlus } from 'react-icons/fa';
+import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaTrophy, FaBuilding, FaPlus } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -13,6 +13,7 @@ import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import { DEFAULT_BUSINESS_COVER, handleBusinessCoverImageError, resolveBusinessCoverImageUrl } from '../utils/businessCoverImage';
 import UserAvatar from '../components/UserAvatar';
 import { useUserPresence } from '../hooks/usePresence';
+import { resolveBusinessOpenNow } from '../utils/googlePlacesBusiness';
 import { getContrastText } from '../utils/colorUtils';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -226,25 +227,72 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
 const BusinessDirectoryGridCard = React.memo(({ res }) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const { userProfile, currentUser: authCurrentUser } = useAuth();
   const context = useInvitations();
   const currentUser = context?.currentUser || authCurrentUser || {};
+  const likeUser = authCurrentUser || currentUser;
   const joinCommunity = context?.joinCommunity || (() => Promise.resolve(false));
 
   const joinedCommunities = currentUser.joinedCommunities || [];
   const communityId = resolveBusinessCommunityId(joinedCommunities, {
     ownerId: res.ownerId,
     businessId: res.id,
+    isVirtual: res.isVirtual === true,
   });
   const isJoined = isJoinedToBusinessCommunity(joinedCommunities, communityId);
   const isOwner = currentUser?.id === res.ownerId || (currentUser?.ownedRestaurants || []).includes(res.id);
   const isBusinessAccount = userProfile?.isBusiness || false;
   const isOnline = useUserPresence(res.ownerId || res.id, { fallback: Boolean(res.isOnline) });
+  const isOpenNow = useMemo(
+    () =>
+      resolveBusinessOpenNow({
+        hours: res.hours || res.businessInfo?.hours,
+        openingHours: res.openingHours || res.businessInfo?.openingHours,
+        workingHours: res.workingHours || res.businessInfo?.workingHours,
+        openNow: res.openNow ?? res.businessInfo?.openNow,
+      }),
+    [
+      res.hours,
+      res.businessInfo?.hours,
+      res.openingHours,
+      res.businessInfo?.openingHours,
+      res.workingHours,
+      res.businessInfo?.workingHours,
+      res.openNow,
+      res.businessInfo?.openNow,
+    ]
+  );
   const effectiveJoined = isJoined;
+
+  const [cardLiked, setCardLiked] = useState(false);
+  const [optimisticLiked, setOptimisticLiked] = useState(null);
+  const [likeInProgress, setLikeInProgress] = useState(false);
+
+  useEffect(() => {
+    if (!res.id || !likeUser?.uid) {
+      setCardLiked(false);
+      setOptimisticLiked(null);
+      return () => {};
+    }
+    return subscribeBusinessLiked(res.id, likeUser.uid, setCardLiked);
+  }, [res.id, likeUser?.uid]);
+
+  const effectiveLiked = optimisticLiked ?? cardLiked;
+
+  useEffect(() => {
+    if (optimisticLiked === null) return;
+    if (optimisticLiked === cardLiked) setOptimisticLiked(null);
+  }, [cardLiked, optimisticLiked]);
 
   const categoryLabel = res.type
     ? t(`type_${res.type.toLowerCase().replace(/\s+/g, '')}`, res.type)
     : t('venue', 'Venue');
+
+  const ratingValue =
+    res.averageRating != null && Number.isFinite(Number(res.averageRating))
+      ? Number(res.averageRating).toFixed(1)
+      : '0.0';
 
   const openProfile = () => navigate(`/business/${res.id}`);
 
@@ -259,6 +307,39 @@ const BusinessDirectoryGridCard = React.memo(({ res }) => {
       joinCommunity,
       returnPath: `/business/${res.id}`,
     });
+  };
+
+  const handleToggleLike = async (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (likeInProgress) return;
+    if (!likeUser?.uid || likeUser?.isGuest) {
+      goToLogin();
+      return;
+    }
+    const businessId = res.id;
+    const userId = likeUser.uid;
+    const nextLiked = !effectiveLiked;
+    setOptimisticLiked(nextLiked);
+    setLikeInProgress(true);
+    try {
+      const businessInfoForFavorite = !effectiveLiked
+        ? {
+            businessId: res.id,
+            name: res.name || '',
+            image: res.image,
+            address: res.location || '',
+            city: '',
+          }
+        : undefined;
+      void toggleBusinessLike(businessId, userId, effectiveLiked, businessInfoForFavorite).catch((err) => {
+        setOptimisticLiked(effectiveLiked);
+        console.warn('[like] grid card toggle failed', { businessId, userId, err });
+        showToast(t('like_failed', 'Could not update like. Try again.'), 'error');
+      });
+    } finally {
+      setLikeInProgress(false);
+    }
   };
 
   return (
@@ -288,49 +369,88 @@ const BusinessDirectoryGridCard = React.memo(({ res }) => {
         />
         <div className="restaurant-grid-card__scrim" aria-hidden />
         <div className="restaurant-grid-card__top">
-          <AppText as="span" className="restaurant-grid-card__category">
-            {categoryLabel}
-          </AppText>
+          <div className="restaurant-grid-card__category-wrap">
+            <AppText as="span" className="restaurant-grid-card__category">
+              {categoryLabel}
+            </AppText>
+            <span
+              className={`restaurant-grid-card__presence-dot${isOnline ? ' restaurant-grid-card__presence-dot--online' : ' restaurant-grid-card__presence-dot--offline'}`}
+              role="status"
+              title={isOnline ? t('online', 'Online') : t('offline', 'Offline')}
+              aria-label={isOnline ? t('online', 'Online') : t('offline', 'Offline')}
+            />
+          </div>
+          <div
+            className="restaurant-grid-card__rating"
+            aria-label={t('rating', 'Rating')}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <FaStar className="restaurant-grid-card__rating-star" aria-hidden />
+            <AppText as="span" className="restaurant-grid-card__rating-value">
+              {ratingValue}
+            </AppText>
+          </div>
+        </div>
+
+        {typeof isOpenNow === 'boolean' ? (
           <span
-            className={`restaurant-grid-card__presence${isOnline ? ' restaurant-grid-card__presence--online' : ' restaurant-grid-card__presence--offline'}`}
+            className={`restaurant-grid-card__hours-status${isOpenNow ? ' restaurant-grid-card__hours-status--open' : ' restaurant-grid-card__hours-status--closed'}`}
             role="status"
           >
-            <span className="restaurant-grid-card__presence-dot" aria-hidden />
-            <AppText as="span">{isOnline ? t('online', 'Online') : t('offline', 'Offline')}</AppText>
+            <AppText as="span">{isOpenNow ? t('open', 'Open') : t('closed', 'Closed')}</AppText>
           </span>
-        </div>
+        ) : null}
 
         {isOwner ? (
           <AppText as="span" className="restaurant-grid-card__owner-badge">
             {t('owner', 'Owner')}
           </AppText>
         ) : !isBusinessAccount ? (
-          <button
-            type="button"
-            className={`restaurant-grid-card__join${effectiveJoined ? ' restaurant-grid-card__join--chat' : ''}`}
-            onClick={handleJoinOrChat}
-            title={
-              effectiveJoined
-                ? t('business_grid_join_chat', 'Join chat')
-                : t('join_plus', '+ Join')
-            }
-            aria-label={
-              effectiveJoined
-                ? t('business_grid_join_chat', 'Join chat')
-                : t('join_plus', '+ Join')
-            }
-          >
+          <div className="restaurant-grid-card__actions">
             {effectiveJoined ? (
-              <>
-                <FaComments className="restaurant-grid-card__join-icon" aria-hidden />
-                <AppText as="span" className="restaurant-grid-card__join-label">
-                  {t('business_grid_join_chat', 'Join chat')}
-                </AppText>
-              </>
+              <button
+                type="button"
+                className="restaurant-grid-card__action restaurant-grid-card__action--chat"
+                onClick={handleJoinOrChat}
+                title={t('business_grid_join_chat', 'Join chat')}
+                aria-label={t('business_grid_join_chat', 'Join chat')}
+              >
+                <FaComments className="restaurant-grid-card__action-icon" aria-hidden />
+              </button>
             ) : (
-              <FaUserPlus className="restaurant-grid-card__join-icon" aria-hidden />
+              <button
+                type="button"
+                className="restaurant-grid-card__action restaurant-grid-card__action--join"
+                onClick={handleJoinOrChat}
+                title={t('join_plus', '+ Join')}
+                aria-label={t('join_plus', '+ Join')}
+              >
+                <span className="restaurant-grid-card__join-icon-wrap" aria-hidden>
+                  <FaBuilding className="restaurant-grid-card__join-icon" />
+                  <FaPlus className="restaurant-grid-card__join-plus" />
+                </span>
+              </button>
             )}
-          </button>
+            <button
+              type="button"
+              className={`restaurant-grid-card__action restaurant-grid-card__action--like${effectiveLiked ? ' restaurant-grid-card__action--liked' : ''}`}
+              onClick={handleToggleLike}
+              disabled={likeInProgress}
+              title={effectiveLiked ? t('unlike', 'Unlike') : t('like', 'Like')}
+              aria-label={effectiveLiked ? t('unlike', 'Unlike') : t('like', 'Like')}
+              aria-pressed={effectiveLiked}
+            >
+              {likeInProgress ? (
+                <AppText as="span" className="restaurant-grid-card__action-busy" aria-hidden>
+                  ⋯
+                </AppText>
+              ) : effectiveLiked ? (
+                <FaHeart className="restaurant-grid-card__action-icon" aria-hidden />
+              ) : (
+                <FaRegHeart className="restaurant-grid-card__action-icon" aria-hidden />
+              )}
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -394,10 +514,31 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
   const communityId = resolveBusinessCommunityId(joinedCommunities, {
     ownerId: res.ownerId,
     businessId: res.id,
+    isVirtual: res.isVirtual === true,
   });
   const isJoined = isJoinedToBusinessCommunity(joinedCommunities, communityId);
   const isOwner = currentUser?.id === res.ownerId || (currentUser?.ownedRestaurants || []).includes(res.id);
   const isBusinessAccount = userProfile?.isBusiness || false;
+  const isOnline = useUserPresence(res.ownerId || res.id, { fallback: Boolean(res.isOnline) });
+  const isOpenNow = useMemo(
+    () =>
+      resolveBusinessOpenNow({
+        hours: res.hours || res.businessInfo?.hours,
+        openingHours: res.openingHours || res.businessInfo?.openingHours,
+        workingHours: res.workingHours || res.businessInfo?.workingHours,
+        openNow: res.openNow ?? res.businessInfo?.openNow,
+      }),
+    [
+      res.hours,
+      res.businessInfo?.hours,
+      res.openingHours,
+      res.businessInfo?.openingHours,
+      res.workingHours,
+      res.businessInfo?.workingHours,
+      res.openNow,
+      res.businessInfo?.openNow,
+    ]
+  );
 
   const [cardLiked, setCardLiked] = useState(false);
   const [optimisticLiked, setOptimisticLiked] = useState(null);
@@ -493,7 +634,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
 
   return (
     <div
-      className="restaurant-card"
+      className="restaurant-card restaurant-list-card"
       onClick={() => navigate(`/business/${res.id}`)}
       style={{
         background: tc?.cardBg || '#0f172a',
@@ -543,30 +684,20 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
           zIndex: 1
         }} />
 
-                {/* Top Badges (Absolute) */}
-                <div style={{ position: 'absolute', top: '16px', left: '16px', right: '16px', display: 'flex', justifyContent: 'space-between', zIndex: 10 }}>
+                {/* Top row: category + online | rating + actions */}
+                <div className="restaurant-list-card__top">
+                    <div className="restaurant-list-card__top-start">
                     <button
             type="button"
+            className="restaurant-list-card__category"
             onClick={(e) => {
               e.stopPropagation();
               navigate(`/restaurants?category=${encodeURIComponent(res.type || 'Venue')}`);
             }}
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: '26px',
-              background: tc ? tc.badgeBg || `${tc.accent}33` : 'rgba(15, 23, 42, 0.85)',
-              backdropFilter: 'blur(8px)',
-              padding: '4px 12px',
-              borderRadius: '50px',
-              color: '#ffffff',
-              fontSize: '0.75rem',
-              fontWeight: '700',
-              border: tc ? `1px solid ${tc.border || tc.accent}` : '1px solid rgba(148, 163, 184, 0.4)',
-              boxShadow: tc?.btnShadow || '0 4px 12px rgba(0,0,0,0.2)',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
+              background: tc ? tc.badgeBg || `${tc.accent}33` : undefined,
+              border: tc ? `1px solid ${tc.border || tc.accent}` : undefined,
+              boxShadow: tc?.btnShadow,
             }}
             onMouseEnter={(e) => {
               if (tc) {
@@ -576,40 +707,36 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
               e.currentTarget.style.transform = 'scale(1.03)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = tc ? tc.badgeBg || `${tc.accent}33` : 'rgba(15, 23, 42, 0.85)';
+              if (tc) {
+                e.currentTarget.style.background = tc.badgeBg || `${tc.accent}33`;
+              }
               e.currentTarget.style.color = '#ffffff';
               e.currentTarget.style.transform = 'scale(1)';
             }}>
             
                         {res.type ? t(`type_${res.type.toLowerCase().replace(' ', '')}`, res.type) : t('venue', 'Venue')}
                     </button>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span
+            className={`restaurant-list-card__presence-dot${isOnline ? ' restaurant-list-card__presence-dot--online' : ' restaurant-list-card__presence-dot--offline'}`}
+            role="status"
+            title={isOnline ? t('online', 'Online') : t('offline', 'Offline')}
+            aria-label={isOnline ? t('online', 'Online') : t('offline', 'Offline')}
+          />
+                    </div>
+                    <div className="restaurant-list-card__top-end">
                         {/* Rating badge */}
                         <div
+              className="restaurant-list-card__rating"
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'column',
-                minHeight: '36px',
-                padding: '4px 10px',
-                background: tc ? tc.badgeBg || `${tc.accent}33` : 'rgba(15, 23, 42, 0.85)',
-                backdropFilter: 'blur(8px)',
-                borderRadius: '50px',
-                color: '#ffffff',
-                fontSize: '0.7rem',
-                fontWeight: '700',
-                border: tc ? `1px solid ${tc.border || tc.accent}` : '1px solid rgba(148, 163, 184, 0.4)',
-                boxShadow: tc?.btnShadow || '0 4px 12px rgba(0,0,0,0.2)'
+                background: tc ? tc.badgeBg || `${tc.accent}33` : undefined,
+                border: tc ? `1px solid ${tc.border || tc.accent}` : undefined,
+                boxShadow: tc?.btnShadow,
               }}
               onClick={(e) => e.stopPropagation()}>
               
-                            <AppText as="span" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#fbbf24' }}>
-                                <FaStar style={{ fontSize: '0.7rem' }} />
+                            <FaStar style={{ fontSize: '0.75rem', color: '#fbbf24' }} aria-hidden />
+                            <AppText as="span">
                                 {(res.averageRating != null ? Number(res.averageRating) : 0).toFixed(1)}
-                            </AppText>
-                            <AppText as="span" style={{ fontSize: '0.6rem', opacity: 0.9 }}>
-                                {res.reviewCount != null ? res.reviewCount : 0} {t('reviews', 'reviews')}
                             </AppText>
                         </div>
                         <button
@@ -666,6 +793,14 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
 
                     {/* Title & Location */}
                     <div style={{ marginBottom: '16px' }}>
+                        {typeof isOpenNow === 'boolean' ? (
+            <span
+              className={`restaurant-list-card__hours-status${isOpenNow ? ' restaurant-list-card__hours-status--open' : ' restaurant-list-card__hours-status--closed'}`}
+              role="status">
+              
+                            <AppText as="span">{isOpenNow ? t('open', 'Open') : t('closed', 'Closed')}</AppText>
+                        </span>
+            ) : null}
                         <AppText as="h2" style={{
               fontSize: '1.8rem',
               fontWeight: '900',
@@ -790,22 +925,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
               effectiveJoined
                 ? t('business_grid_join_chat', 'Join chat')
                 : t('join_plus', '+ Join')
-            }
-            style={{
-              background: effectiveJoined ? 'rgba(255,255,255,0.25)' : '#ffffff',
-              color: effectiveJoined ? '#ffffff' : '#f97316',
-              border: effectiveJoined ? '1px solid rgba(255,255,255,0.4)' : 'none',
-              padding: '8px 20px',
-              borderRadius: '14px',
-              fontWeight: '900',
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.2s',
-              boxShadow: effectiveJoined ? 'none' : '0 6px 15px rgba(0,0,0,0.15)'
-            }}>
+            }>
             {effectiveJoined ? (
               <>
                 <FaComments aria-hidden />
@@ -849,7 +969,7 @@ const BusinessesDirectory = () => {
   const [locationFilter, setLocationFilter] = useState('All');
   const [activeFilter, setActiveFilter] = useState(() => searchParams.get('category') || 'All'); // Category filter
   const [showFilters, setShowFilters] = useState(false); // Controls filter visibility
-  const [viewMode, setViewMode] = useState('grid');
+  const [viewMode, setViewMode] = useState('list');
   const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode for map
   const [userLocation, setUserLocation] = useState(null);
   const [detectedLocationContext, setDetectedLocationContext] = useState(null);
@@ -945,8 +1065,8 @@ const BusinessesDirectory = () => {
   const locationFilters = [
   { id: 'All', label: t('all'), icon: '🌍' },
   { id: 'nearby', label: t('near_me'), icon: '📍' },
-  { id: 'city', label: t('in_my_city'), icon: '🏙️' },
-  { id: 'country', label: t('in_my_country'), icon: '🗺️' }];
+  { id: 'city', label: t('my_city', 'My city'), icon: '🏙️' },
+  { id: 'country', label: t('my_country', 'My country'), icon: '🗺️' }];
 
 
   const categories = [

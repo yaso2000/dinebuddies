@@ -10,7 +10,6 @@ import { isAffiliateAgent, isBusinessUser } from '../../utils/accountRole';
 import { sanitizeNextPath } from '../../utils/safeInternalPath';
 import { dismissFacebookSdkOverlay } from '../../utils/facebookSdkCleanup';
 import { prepareOAuthSignInAttempt } from '../../utils/firebaseOAuthSignIn';
-import { resetFirebaseRedirectBootstrap } from '../../firebase/authBootstrap';
 import {
   consumeOAuthRedirectComplete,
   consumeOAuthRedirectError,
@@ -21,9 +20,11 @@ import {
   isFirebaseAuthorizedDevHost,
   isLocalDevHost,
   isIosTouchDevice,
+  isMobileTouchDevice,
   getLocalDevOAuthLoginUrl,
   openLoginInExternalBrowser,
   peekOAuthRedirectPending,
+  isRecentOAuthRedirectAttempt,
   peekOAuthRedirectProvider } from
 '../../utils/localDevAuth';
 
@@ -202,7 +203,6 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
 
   useEffect(() => {
     clearStaleOAuthRedirectFlags();
-    resetFirebaseRedirectBootstrap();
     const redirectErr = consumeOAuthRedirectError();
     if (redirectErr) {
       setError(getAuthErrorMessage(redirectErr) || redirectErr.message);
@@ -222,6 +222,10 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     if (!hasFirebaseAuthReturnInUrl() && !peekOAuthRedirectPending() && !peekOAuthRedirectProvider()) {
       return undefined;
     }
+    if (!hasFirebaseAuthReturnInUrl() && !isRecentOAuthRedirectAttempt()) {
+      clearStaleOAuthRedirectFlags();
+      return undefined;
+    }
     if (authLoading) return undefined;
 
     const delayMs =
@@ -229,14 +233,39 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
 
     const timer = setTimeout(() => {
       if (currentUser) return;
+      releaseLoginButtons();
+      if (!peekOAuthRedirectPending() && !peekOAuthRedirectProvider()) return;
       const redirectErr = consumeOAuthRedirectError();
       if (redirectErr) {
         setError(getAuthErrorMessage(redirectErr) || redirectErr.message);
+      } else if (peekOAuthRedirectProvider() === 'apple.com') {
+        setError(
+          getAuthErrorMessage({ code: 'auth/apple-config-mismatch' }) ||
+            t(
+              'auth_apple_popup_retry',
+              'Apple sign-in did not finish. Close the app completely, reopen Safari, and try again.'
+            )
+        );
+      } else {
+        setError(
+          getAuthErrorMessage({ code: 'auth/embedded-oauth-redirect-lost' }) ||
+            t(
+              'auth_oauth_retry_chrome',
+              'Sign-in did not complete. Open https://www.dinebuddies.com/login in Chrome or Safari (not WhatsApp).'
+            )
+        );
       }
+      clearStaleOAuthRedirectFlags();
     }, delayMs);
 
     return () => clearTimeout(timer);
   }, [authLoading, currentUser, t]);
+
+  useEffect(() => {
+    if (currentUser) {
+      setLoading(false);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     const oauthBusy =
@@ -254,10 +283,9 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     return () => clearTimeout(timer);
   }, [loading]);
 
-  const oauthButtonsLocked = loading && !isIosTouchDevice();
+  const oauthButtonsLocked = loading && !isMobileTouchDevice();
 
   const handleOAuth = async (provider) => {
-    prepareOAuthSignInAttempt();
     clearGuestModeForSignIn();
     setLoading(true);
     setError('');
