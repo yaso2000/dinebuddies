@@ -1848,8 +1848,7 @@ const BusinessProfile = () => {
                     business.businessInfo?.placeId ||
                     profileId
                   }
-                  businessName={businessInfo.businessName || business.display_name}
-                  businessPhoneE164={resolveBusinessClaimPhoneE164(business)} />
+                  businessName={businessInfo.businessName || business.display_name} />
 
                 }
                             </div>

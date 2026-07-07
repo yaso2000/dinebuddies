@@ -1,13 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FaStore, FaEnvelope, FaTimes, FaGoogle, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
+import { FaEnvelope, FaTimes, FaGoogle, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
-import { BusinessPhoneFields } from './BusinessSignup';
-import { finalizeBusinessSignup } from '../services/businessPhoneSignupApi';
 import {
   finalizeGoogleBusinessClaim,
   readGoogleBusinessClaimCallback,
@@ -17,13 +15,6 @@ import {
 import { useToast } from '../context/ToastContext';
 import { AppText, AppTextInput } from './base';
 
-const CLAIM_BTN_GREEN = {
-  background: 'linear-gradient(135deg, #4ade80 0%, #16a34a 55%, #15803d 100%)',
-  border: '2px solid #bbf7d0',
-  color: '#052e16',
-  boxShadow: '0 6px 22px rgba(34, 197, 94, 0.55), inset 0 1px 0 rgba(255,255,255,0.35)',
-};
-
 const GOOGLE_BTN_STYLE = {
   background: 'linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%)',
   border: '2px solid rgba(255,255,255,0.85)',
@@ -32,7 +23,6 @@ const GOOGLE_BTN_STYLE = {
 };
 
 const HERO_CLAIM_BTN = {
-  ...CLAIM_BTN_GREEN,
   height: '48px',
   minHeight: '48px',
   padding: '0 20px',
@@ -51,6 +41,13 @@ const HERO_CLAIM_BTN = {
 const HERO_GOOGLE_BTN = {
   ...GOOGLE_BTN_STYLE,
   ...HERO_CLAIM_BTN,
+};
+
+const SUBMIT_BTN_GREEN = {
+  background: 'linear-gradient(135deg, #4ade80 0%, #16a34a 55%, #15803d 100%)',
+  border: '2px solid #bbf7d0',
+  color: '#052e16',
+  boxShadow: '0 6px 22px rgba(34, 197, 94, 0.55), inset 0 1px 0 rgba(255,255,255,0.35)',
 };
 
 /** @typedef {'idle' | 'starting' | 'verifying' | 'verified' | 'finalizing' | 'done' | 'error'} GoogleFlowStatus */
@@ -114,7 +111,11 @@ function AlertBox({ variant, children }) {
         color: isError ? '#fecaca' : '#bbf7d0',
       }}
     >
-      {isError ? <FaExclamationTriangle aria-hidden style={{ marginTop: 2, flexShrink: 0 }} /> : <FaCheckCircle aria-hidden style={{ marginTop: 2, flexShrink: 0 }} />}
+      {isError ? (
+        <FaExclamationTriangle aria-hidden style={{ marginTop: 2, flexShrink: 0 }} />
+      ) : (
+        <FaCheckCircle aria-hidden style={{ marginTop: 2, flexShrink: 0 }} />
+      )}
       <AppText as="p" style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.45 }}>
         {children}
       </AppText>
@@ -124,13 +125,12 @@ function AlertBox({ variant, children }) {
 
 /**
  * Claim CTA for unclaimed `restaurants/{id}` admin imports.
- * Google Business Profile OAuth (business.manage) + optional SMS fallback.
+ * Google Business Profile OAuth only (business.manage scope).
  */
 export default function BusinessClaimPanel({
   restaurantId,
   googlePlaceId = '',
   businessName,
-  businessPhoneE164 = '',
   variant = 'default',
 }) {
   const { t } = useTranslation();
@@ -142,25 +142,19 @@ export default function BusinessClaimPanel({
 
   const processedSessionRef = useRef('');
   const autoClaimStartedRef = useRef(false);
-  const [open, setOpen] = useState(false);
-  const [claimMethod, setClaimMethod] = useState('google');
-  const [showManualFallback, setShowManualFallback] = useState(!businessPhoneE164);
+  const callbackHandledRef = useRef('');
 
+  const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [phoneVerification, setPhoneVerification] = useState(null);
-
   const [googleSessionId, setGoogleSessionId] = useState('');
   /** @type {[GoogleFlowStatus, Function]} */
   const [googleFlowStatus, setGoogleFlowStatus] = useState('idle');
   const [googleError, setGoogleError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const isBusy =
-    submitting ||
-    googleFlowStatus === 'starting' ||
-    googleFlowStatus === 'verifying' ||
-    googleFlowStatus === 'finalizing';
+  const isFinalizing = googleFlowStatus === 'finalizing';
+  const isModalLocked = isFinalizing || submitting;
 
   const buildReturnPath = useCallback(() => {
     const cleanSearch = stripGbpParams(location.search);
@@ -169,12 +163,23 @@ export default function BusinessClaimPanel({
 
   const clearGbpQueryParams = useCallback(() => {
     const cleanSearch = stripGbpParams(location.search);
-    if (cleanSearch === (location.search || '')) return;
+    const normalizedCurrent = location.search || '';
+    const normalizedNext = cleanSearch || '';
+    if (normalizedNext === normalizedCurrent) return;
     navigate(
-      { pathname: location.pathname, search: cleanSearch.replace(/^\?/, '') ? cleanSearch : '' },
+      { pathname: location.pathname, search: cleanSearch.replace(/^\?/, '') },
       { replace: true, state: location.state }
     );
   }, [location.pathname, location.search, location.state, navigate]);
+
+  const closeModal = useCallback(() => {
+    if (isModalLocked) return;
+    setOpen(false);
+    if (googleFlowStatus === 'error' || googleFlowStatus === 'done') {
+      setGoogleFlowStatus('idle');
+      setGoogleError('');
+    }
+  }, [googleFlowStatus, isModalLocked]);
 
   const finalizeGoogleClaim = useCallback(
     async (sessionId, accountEmail, idToken) => {
@@ -209,9 +214,7 @@ export default function BusinessClaimPanel({
       processedSessionRef.current = sessionId;
 
       setOpen(true);
-      setClaimMethod('google');
       setGoogleError('');
-      setShowManualFallback(false);
       setGoogleFlowStatus('verifying');
 
       try {
@@ -228,8 +231,6 @@ export default function BusinessClaimPanel({
               'This Google account does not manage this location. Please try the correct email.'
             )
           );
-          setShowManualFallback(true);
-          if (businessPhoneE164) setClaimMethod('phone');
           return;
         }
 
@@ -248,11 +249,9 @@ export default function BusinessClaimPanel({
               'This Google account does not manage this location. Please try the correct email.'
             )
         );
-        setShowManualFallback(true);
-        if (businessPhoneE164) setClaimMethod('phone');
       }
     },
-    [placeId, currentUser, businessPhoneE164, t]
+    [placeId, currentUser, t]
   );
 
   useEffect(() => {
@@ -285,40 +284,36 @@ export default function BusinessClaimPanel({
   ]);
 
   useEffect(() => {
-    const callback = readGoogleBusinessClaimCallback(new URLSearchParams(location.search));
-    if (!callback.gbpSession) return;
+    const params = new URLSearchParams(location.search);
+    const callback = readGoogleBusinessClaimCallback(params);
+    if (!callback.gbpClaim) return;
+
+    const callbackKey = `${callback.gbpClaim}:${callback.gbpSession}:${callback.gbpError}`;
+    if (callbackHandledRef.current === callbackKey) return;
+    callbackHandledRef.current = callbackKey;
 
     setOpen(true);
+    clearGbpQueryParams();
 
     if (callback.isError) {
       setGoogleFlowStatus('error');
       setGoogleError(
-        t('claim_business_google_oauth_failed', 'Google sign-in was cancelled or failed. Please try again.')
+        callback.gbpError === 'access_denied'
+          ? t('claim_business_google_oauth_failed', 'Google sign-in was cancelled or failed. Please try again.')
+          : t('claim_business_google_oauth_failed', 'Google sign-in was cancelled or failed. Please try again.')
       );
-      setShowManualFallback(true);
-      if (businessPhoneE164) setClaimMethod('phone');
-      clearGbpQueryParams();
       return;
     }
 
-    if (callback.isConnected) {
-      void runGoogleVerificationAndClaim(callback.gbpSession).finally(clearGbpQueryParams);
+    if (callback.isConnected && callback.gbpSession) {
+      void runGoogleVerificationAndClaim(callback.gbpSession);
     }
-  }, [
-    location.search,
-    clearGbpQueryParams,
-    runGoogleVerificationAndClaim,
-    businessPhoneE164,
-    t,
-  ]);
+  }, [location.search, clearGbpQueryParams, runGoogleVerificationAndClaim, t]);
 
   const handleStartGoogleAuth = async () => {
-    if (!placeId || isBusy) return;
+    if (!placeId || googleFlowStatus === 'starting' || isFinalizing) return;
     setGoogleFlowStatus('starting');
     setGoogleError('');
-    setShowManualFallback(false);
-    setOpen(true);
-    setClaimMethod('google');
 
     try {
       const { ok, data } = await startGoogleBusinessClaimAuth({
@@ -328,54 +323,28 @@ export default function BusinessClaimPanel({
       });
       if (!ok || !data?.authUrl) {
         setGoogleFlowStatus('error');
-        setGoogleError(
+        const message =
           data?.message ||
-            t('claim_business_google_start_failed', 'Could not start Google Business verification')
-        );
-        setShowManualFallback(true);
+          t('claim_business_google_start_failed', 'Could not start Google Business verification');
+        setGoogleError(message);
+        setOpen(true);
+        showToast(message, 'error');
         return;
       }
       window.location.assign(data.authUrl);
     } catch (err) {
       setGoogleFlowStatus('error');
-      setGoogleError(
-        err?.message || t('claim_business_google_start_failed', 'Could not start Google Business verification')
-      );
-      setShowManualFallback(true);
-    }
-  };
-
-  const handlePhoneClaimSubmit = async (e) => {
-    e.preventDefault();
-    if (!phoneVerification?.idToken || !email.trim() || isBusy) return;
-    setSubmitting(true);
-    try {
-      const { ok, data } = await finalizeBusinessSignup(
-        {
-          standardizedPhone: phoneVerification.standardizedPhone,
-          email: email.trim().toLowerCase(),
-          claimBusinessId: restaurantId,
-          businessId: restaurantId,
-        },
-        phoneVerification.idToken
-      );
-      if (!ok) {
-        showToast(data?.message || t('claim_business_failed', 'Could not claim this business'), 'error');
-        return;
-      }
-      showToast(t('claim_business_success', 'Business claimed successfully'), 'success');
-      setOpen(false);
-      navigate(`/business/${data.uid || phoneVerification.firebaseUid}`, { replace: true });
-    } catch (err) {
-      showToast(err?.message || t('claim_business_failed', 'Could not claim this business'), 'error');
-    } finally {
-      setSubmitting(false);
+      const message =
+        err?.message || t('claim_business_google_start_failed', 'Could not start Google Business verification');
+      setGoogleError(message);
+      setOpen(true);
+      showToast(message, 'error');
     }
   };
 
   const handleGoogleClaimSubmit = async (e) => {
     e.preventDefault();
-    if (!googleSessionId || !email.trim() || password.length < 6 || isBusy) return;
+    if (!googleSessionId || !email.trim() || password.length < 6 || isModalLocked) return;
     setSubmitting(true);
     try {
       const credential = await createUserWithEmailAndPassword(
@@ -402,13 +371,12 @@ export default function BusinessClaimPanel({
   };
 
   const isHero = variant === 'hero';
-  const phoneReady = Boolean(phoneVerification?.idToken && email.trim());
+  const isStarting = googleFlowStatus === 'starting';
   const googleAccountReady = Boolean(
     googleSessionId && googleFlowStatus === 'verified' && email.trim() && password.length >= 6
   );
 
   const showGoogleLoading =
-    googleFlowStatus === 'starting' ||
     googleFlowStatus === 'verifying' ||
     googleFlowStatus === 'finalizing' ||
     (googleFlowStatus === 'verified' && authLoading);
@@ -432,7 +400,7 @@ export default function BusinessClaimPanel({
           justifyContent: 'center',
           padding: '1rem',
         }}
-        onClick={() => !isBusy && setOpen(false)}
+        onClick={closeModal}
       >
         <div
           style={{
@@ -455,14 +423,14 @@ export default function BusinessClaimPanel({
             <button
               type="button"
               aria-label={t('close', 'Close')}
-              disabled={isBusy}
-              onClick={() => setOpen(false)}
+              disabled={isModalLocked}
+              onClick={closeModal}
               style={{
                 background: 'none',
                 border: 'none',
                 color: 'var(--text-muted)',
-                cursor: isBusy ? 'not-allowed' : 'pointer',
-                opacity: isBusy ? 0.5 : 1,
+                cursor: isModalLocked ? 'not-allowed' : 'pointer',
+                opacity: isModalLocked ? 0.5 : 1,
               }}
             >
               <FaTimes />
@@ -482,9 +450,7 @@ export default function BusinessClaimPanel({
                   ? t('claim_business_finalizing', 'Finalizing your claim…')
                   : googleFlowStatus === 'verifying'
                     ? t('claim_business_google_verifying_locations', 'Verifying your Google Business locations…')
-                    : googleFlowStatus === 'verified' && authLoading
-                      ? t('claim_business_checking_account', 'Checking your account…')
-                    : t('claim_business_google_redirecting', 'Redirecting to Google…')
+                    : t('claim_business_checking_account', 'Checking your account…')
               }
             />
           )}
@@ -503,20 +469,11 @@ export default function BusinessClaimPanel({
           )}
 
           {googleFlowStatus === 'error' && googleError && !showGoogleLoading && (
-            <AlertBox variant="error">{googleError}</AlertBox>
-          )}
-
-          {!showGoogleLoading && googleFlowStatus !== 'verified' && (
             <>
-              <AppText as="p" style={{ marginTop: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                {t(
-                  'claim_business_google_hint',
-                  'Sign in with the Google account that manages this business on Google Business Profile.'
-                )}
-              </AppText>
+              <AlertBox variant="error">{googleError}</AlertBox>
               <button
                 type="button"
-                disabled={isBusy}
+                disabled={isStarting || isFinalizing}
                 onClick={handleStartGoogleAuth}
                 style={{
                   marginTop: '0.75rem',
@@ -528,13 +485,48 @@ export default function BusinessClaimPanel({
                   gap: '0.5rem',
                   borderRadius: 12,
                   fontWeight: 800,
-                  cursor: isBusy ? 'not-allowed' : 'pointer',
-                  opacity: isBusy ? 0.55 : 1,
+                  cursor: isStarting || isFinalizing ? 'not-allowed' : 'pointer',
+                  opacity: isStarting || isFinalizing ? 0.55 : 1,
                   ...GOOGLE_BTN_STYLE,
                 }}
               >
                 <FaGoogle aria-hidden />
-                {t('claim_business_google_cta', 'Claim with Google')}
+                {t('claim_business_google_retry', 'Try again with Google')}
+              </button>
+            </>
+          )}
+
+          {!showGoogleLoading && googleFlowStatus !== 'verified' && googleFlowStatus !== 'error' && googleFlowStatus !== 'done' && (
+            <>
+              <AppText as="p" style={{ marginTop: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                {t(
+                  'claim_business_google_hint',
+                  'Sign in with the Google account that manages this business on Google Business Profile.'
+                )}
+              </AppText>
+              <button
+                type="button"
+                disabled={isStarting || isFinalizing}
+                onClick={handleStartGoogleAuth}
+                style={{
+                  marginTop: '0.75rem',
+                  width: '100%',
+                  minHeight: '48px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  borderRadius: 12,
+                  fontWeight: 800,
+                  cursor: isStarting || isFinalizing ? 'not-allowed' : 'pointer',
+                  opacity: isStarting || isFinalizing ? 0.55 : 1,
+                  ...GOOGLE_BTN_STYLE,
+                }}
+              >
+                <FaGoogle aria-hidden />
+                {isStarting
+                  ? t('claim_business_google_redirecting', 'Redirecting to Google…')
+                  : t('claim_business_google_cta', 'Claim with Google')}
               </button>
             </>
           )}
@@ -553,7 +545,7 @@ export default function BusinessClaimPanel({
                 required
                 value={email}
                 onChange={(ev) => setEmail(ev.target.value)}
-                disabled={isBusy}
+                disabled={isModalLocked}
                 style={{
                   width: '100%',
                   padding: '0.65rem',
@@ -573,7 +565,7 @@ export default function BusinessClaimPanel({
                 minLength={6}
                 value={password}
                 onChange={(ev) => setPassword(ev.target.value)}
-                disabled={isBusy}
+                disabled={isModalLocked}
                 style={{
                   width: '100%',
                   padding: '0.65rem',
@@ -585,7 +577,7 @@ export default function BusinessClaimPanel({
               />
               <button
                 type="submit"
-                disabled={!googleAccountReady || isBusy}
+                disabled={!googleAccountReady || isModalLocked}
                 style={{
                   marginTop: '1rem',
                   width: '100%',
@@ -594,9 +586,9 @@ export default function BusinessClaimPanel({
                   borderRadius: '12px',
                   fontWeight: 800,
                   fontSize: '1rem',
-                  cursor: !googleAccountReady || isBusy ? 'not-allowed' : 'pointer',
-                  opacity: !googleAccountReady || isBusy ? 0.55 : 1,
-                  ...CLAIM_BTN_GREEN,
+                  cursor: !googleAccountReady || isModalLocked ? 'not-allowed' : 'pointer',
+                  opacity: !googleAccountReady || isModalLocked ? 0.55 : 1,
+                  ...SUBMIT_BTN_GREEN,
                 }}
               >
                 {submitting
@@ -605,189 +597,43 @@ export default function BusinessClaimPanel({
               </button>
             </form>
           )}
-
-          {(showManualFallback || (businessPhoneE164 && googleFlowStatus === 'error')) && !showGoogleLoading && (
-            <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
-              <AppText as="p" style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                {t(
-                  'claim_business_manual_fallback_hint',
-                  'Or verify manually using the business phone number on Google Maps:'
-                )}
-              </AppText>
-
-              {businessPhoneE164 ? (
-                <>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => setClaimMethod('phone')}
-                      style={{
-                        flex: 1,
-                        padding: '0.55rem',
-                        borderRadius: 10,
-                        border: '1px solid var(--border-color)',
-                        background: claimMethod === 'phone' ? 'rgba(74, 222, 128, 0.15)' : 'transparent',
-                        color: 'var(--text-primary)',
-                        fontWeight: 700,
-                        cursor: isBusy ? 'not-allowed' : 'pointer',
-                        opacity: isBusy ? 0.55 : 1,
-                      }}
-                    >
-                      {t('claim_business_method_phone', 'SMS phone')}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => setClaimMethod('google')}
-                      style={{
-                        flex: 1,
-                        padding: '0.55rem',
-                        borderRadius: 10,
-                        border: '1px solid var(--border-color)',
-                        background: claimMethod === 'google' ? 'rgba(74, 222, 128, 0.15)' : 'transparent',
-                        color: 'var(--text-primary)',
-                        fontWeight: 700,
-                        cursor: isBusy ? 'not-allowed' : 'pointer',
-                        opacity: isBusy ? 0.55 : 1,
-                      }}
-                    >
-                      {t('claim_business_method_google', 'Google Business')}
-                    </button>
-                  </div>
-
-                  {claimMethod === 'phone' && (
-                    <>
-                      <AppText as="p" style={{ marginBottom: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                        {t(
-                          'claim_business_phone_locked_hint',
-                          'Verify the Google Maps phone number for this business via SMS. The number cannot be changed.'
-                        )}
-                      </AppText>
-                      <BusinessPhoneFields
-                        lockedPhoneE164={businessPhoneE164}
-                        lockFieldsAfterSend={false}
-                        disabled={isBusy}
-                        onVerified={(payload) => setPhoneVerification(payload)}
-                      />
-                      <form onSubmit={handlePhoneClaimSubmit} style={{ marginTop: '1rem' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.35rem' }}>
-                          <FaEnvelope style={{ marginInlineEnd: 6 }} />
-                          {t('email', 'Email')}
-                        </label>
-                        <AppTextInput
-                          type="email"
-                          required
-                          value={email}
-                          onChange={(ev) => setEmail(ev.target.value)}
-                          disabled={!phoneVerification || isBusy}
-                          style={{
-                            width: '100%',
-                            padding: '0.65rem',
-                            borderRadius: 8,
-                            border: '1px solid var(--border-color)',
-                            background: 'var(--bg-body)',
-                            color: 'var(--text-primary)',
-                          }}
-                        />
-                        <button
-                          type="submit"
-                          disabled={!phoneReady || isBusy}
-                          style={{
-                            marginTop: '1rem',
-                            width: '100%',
-                            minHeight: '48px',
-                            padding: '12px 16px',
-                            borderRadius: '12px',
-                            fontWeight: 800,
-                            fontSize: '1rem',
-                            cursor: !phoneReady || isBusy ? 'not-allowed' : 'pointer',
-                            opacity: !phoneReady || isBusy ? 0.55 : 1,
-                            ...CLAIM_BTN_GREEN,
-                          }}
-                        >
-                          {submitting
-                            ? t('claim_business_submitting', 'Claiming…')
-                            : t('claim_business_confirm', 'Confirm claim')}
-                        </button>
-                      </form>
-                    </>
-                  )}
-                </>
-              ) : (
-                <AppText as="p" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                  {t(
-                    'claim_business_no_phone_fallback',
-                    'No phone number is available for SMS verification. Please use a Google account that manages this location.'
-                  )}
-                </AppText>
-              )}
-            </div>
-          )}
         </div>
       </div>,
       document.body
     );
 
-  const heroBtnBase = isHero ? HERO_CLAIM_BTN : {
-    marginTop: '1rem',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    minHeight: '48px',
-    padding: '12px 20px',
-    borderRadius: '14px',
-    fontWeight: 800,
-    fontSize: '0.95rem',
-    cursor: 'pointer',
-  };
+  const heroBtnBase = isHero
+    ? HERO_GOOGLE_BTN
+    : {
+        marginTop: '1rem',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        minHeight: '48px',
+        padding: '12px 20px',
+        borderRadius: '14px',
+        fontWeight: 800,
+        fontSize: '0.95rem',
+        ...GOOGLE_BTN_STYLE,
+      };
 
   return (
     <>
-      <div
+      <button
+        type="button"
+        disabled={isStarting || isFinalizing}
         style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '0.65rem',
-          alignItems: 'center',
+          ...heroBtnBase,
+          cursor: isStarting || isFinalizing ? 'not-allowed' : 'pointer',
+          opacity: isStarting || isFinalizing ? 0.55 : 1,
         }}
+        onClick={handleStartGoogleAuth}
       >
-        <button
-          type="button"
-          disabled={isBusy}
-          style={{
-            ...heroBtnBase,
-            ...(isHero ? HERO_GOOGLE_BTN : { ...GOOGLE_BTN_STYLE }),
-            cursor: isBusy ? 'not-allowed' : 'pointer',
-            opacity: isBusy ? 0.55 : 1,
-          }}
-          onClick={handleStartGoogleAuth}
-        >
-          <FaGoogle aria-hidden />
-          {t('claim_business_google_cta', 'Claim with Google')}
-        </button>
-
-        <button
-          type="button"
-          disabled={isBusy}
-          style={{
-            ...heroBtnBase,
-            ...CLAIM_BTN_GREEN,
-            cursor: isBusy ? 'not-allowed' : 'pointer',
-            opacity: isBusy ? 0.55 : 1,
-          }}
-          onClick={() => {
-            setOpen(true);
-            setShowManualFallback(Boolean(businessPhoneE164));
-            if (businessPhoneE164) setClaimMethod('phone');
-          }}
-        >
-          <FaStore aria-hidden />
-          {businessPhoneE164
-            ? t('claim_business_other_methods', 'Other options')
-            : t('claim_business_request', 'Claim Business')}
-        </button>
-      </div>
+        <FaGoogle aria-hidden />
+        {isStarting
+          ? t('claim_business_google_redirecting', 'Redirecting to Google…')
+          : t('claim_business_google_cta', 'Claim with Google')}
+      </button>
       {modal}
     </>
   );
