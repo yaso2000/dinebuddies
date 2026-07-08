@@ -28,6 +28,10 @@ import {
 // Removed redundant FeaturedPostCard. PostCard now natively handles featured_posts when post._isFeatured is true.
 import { AppText, AppTextInput } from "../components/base";
 import PullToRefresh from '../components/PullToRefresh';
+
+/** Initial community posts loaded on mount; grows by this step on "load more". */
+const FEED_PAGE_SIZE = 30;
+
 const PostsFeed = () => {
   const { t } = useTranslation();
   const location = useLocation();
@@ -63,6 +67,8 @@ const PostsFeed = () => {
   const [posts, setPosts] = useState([]);
   const [motionPosts, setMotionPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [feedLimit, setFeedLimit] = useState(FEED_PAGE_SIZE);
+  const [hasMorePosts, setHasMorePosts] = useState(false);
   const [viewingStory, setViewingStory] = useState(null);
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -219,12 +225,23 @@ const PostsFeed = () => {
   }, []);
 
   useEffect(() => {
-    const q = query(collection(db, 'communityPosts'), orderBy('createdAt', 'asc'));
+    // Bounded, newest-first window instead of loading the whole collection.
+    // Grows via "load more" (feedLimit) so the initial paint stays fast.
+    const q = query(
+      collection(db, 'communityPosts'),
+      orderBy('createdAt', 'desc'),
+      limit(feedLimit)
+    );
     const unsub = onSnapshot(q, (snap) => {
-      setPosts(snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse());
+      setPosts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setHasMorePosts(snap.docs.length >= feedLimit);
       setLoading(false);
     }, () => setLoading(false));
     return () => unsub();
+  }, [feedLimit]);
+
+  const loadMorePosts = useCallback(() => {
+    setFeedLimit((prev) => prev + FEED_PAGE_SIZE);
   }, []);
 
   /** Published studio posts not yet mirrored to communityPosts (legacy publishes). */
@@ -621,6 +638,26 @@ const PostsFeed = () => {
                     </div> :
 
         feedPosts.map((post) => renderFeedPost(post)).filter(Boolean)
+        }
+
+                {hasFeedItems && hasMorePosts && !searchQuery.trim() &&
+        <div style={{ textAlign: 'center', padding: '1rem 1rem 2rem' }}>
+                        <button
+            type="button"
+            onClick={loadMorePosts}
+            style={{
+              padding: '10px 24px',
+              borderRadius: '12px',
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-card)',
+              color: 'var(--text-primary)',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}>
+
+                            {t('load_more', 'Load more')}
+                        </button>
+                    </div>
         }
             </div>
 

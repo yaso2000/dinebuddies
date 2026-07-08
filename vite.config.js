@@ -538,6 +538,12 @@ export default defineConfig({
                     if (id.includes('/leaflet/') || id.includes('/react-leaflet/')) return 'vendor-maps'
                     if (id.includes('/stripe/')) return 'vendor-stripe'
                     if (id.includes('/lottie-react/') || id.includes('/lottie-web/')) return 'vendor-media'
+                    if (id.includes('/framer-motion/')) return 'vendor-motion'
+                    if (id.includes('/html2canvas/')) return 'vendor-html2canvas'
+                    if (id.includes('/country-state-city/')) return 'vendor-country-state-city'
+                    if (id.includes('/browser-image-compression/')) return 'vendor-image-compress'
+                    if (id.includes('/jspdf/')) return 'vendor-jspdf'
+                    if (id.includes('/emoji-picker-react/')) return 'vendor-emoji'
                 }
             }
         }

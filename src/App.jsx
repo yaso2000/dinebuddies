@@ -31,9 +31,9 @@ import InviteReceivedPage from './pages/InviteReceivedPage';
 import DiscoveryPage from './pages/DiscoveryPage';
 import DiscoveryInboxPage from './pages/DiscoveryInboxPage';
 import UsersDirectory from './pages/UsersDirectory';
-import PostsFeed from './pages/PostsFeed';
 
 // Lazy Pages (Loaded on demand to improve startup speed)
+const PostsFeed = lazy(() => import('./pages/PostsFeed'));
 const Profile = lazy(() => import('./pages/Profile'));
 const PostDetails = lazy(() => import('./pages/PostDetails'));
 const UserProfile = lazy(() => import('./pages/UserProfile'));

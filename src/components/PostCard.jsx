@@ -33,7 +33,7 @@ import PostCommentComposer from './comments/PostCommentComposer';
 import PostCommentsList from './comments/PostCommentsList';
 import { createNotification } from '../utils/notificationHelpers';
 import { notifyCommentLikeActivity, notifyPostCommentActivity } from '../utils/postCommentNotifications';
-import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
+import { fetchAuthorProfile } from '../utils/authorProfileCache';
 import { deleteFeedPostCascade } from '../utils/postDeleteCascade';
 import {
   buildPostCommentThreads,
@@ -244,56 +244,15 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     // SKIP FETCH if it is ME (we use live profile in render)
     if (currentUser?.uid === authorId && userProfile) return;
 
-    const fetchUser = async () => {
-      try {
-        // public_profiles: allow get for everyone (guests + signed-in). users/{id} is signed-in only.
-        const pubSnap = await getDoc(doc(db, 'public_profiles', authorId));
-        if (pubSnap.exists()) {
-          const mapped = mapPublicProfileDocToUserShape(pubSnap.data());
-          if (mapped) {
-            let merged = mapped;
-            const mappedAvatar = getSafeAvatar(mapped);
-            const needsUsersLookup =
-            !mapped.avatarUrl ||
-            mappedAvatar.startsWith('data:image/svg+xml');
-
-            if (needsUsersLookup && currentUser?.uid) {
-              try {
-                const userSnap = await getDoc(doc(db, 'users', authorId));
-                if (userSnap.exists()) {
-                  const ud = userSnap.data();
-                  const userAvatar = getSafeAvatar(ud);
-                  if (!userAvatar.startsWith('data:image/svg+xml')) {
-                    merged = {
-                      ...mapped,
-                      photo_url: ud.photo_url || ud.photoURL,
-                      photoURL: ud.photoURL || ud.photo_url,
-                      avatarUrl: ud.photo_url || ud.photoURL || ud.avatar,
-                      avatar: ud.avatar || ud.photo_url || ud.photoURL,
-                      gender: ud.gender ?? mapped.gender
-                    };
-                  }
-                }
-              } catch {
-
-                /* keep public profile row */}
-            }
-            setUserData(merged);
-            return;
-          }
-        }
-        // Sync lag / missing projection: signed-in clients may still read users/{id}
-        if (currentUser?.uid) {
-          const userSnap = await getDoc(doc(db, 'users', authorId));
-          if (userSnap.exists()) setUserData(userSnap.data());
-        }
-      } catch (err) {
-        if (err?.code !== 'permission-denied') {
-          console.warn('PostCard author fetch:', err?.message || err);
-        }
-      }
+    // Shared cache + in-flight de-dup: repeated authors across the feed and
+    // re-mounts on scroll reuse one Firestore read instead of one per card.
+    let cancelled = false;
+    fetchAuthorProfile(authorId, { canReadUsers: Boolean(currentUser?.uid) }).then((merged) => {
+      if (!cancelled && merged) setUserData(merged);
+    });
+    return () => {
+      cancelled = true;
     };
-    fetchUser();
   }, [authorId, currentUser?.uid, userProfile]);
 
   // Derived State — based on LOCAL optimistic likes, not raw post.likes
