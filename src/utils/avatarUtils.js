@@ -26,10 +26,22 @@ export function isPlacePhotoProxyUrl(url) {
     return u.includes('/api/place-photo') || u.includes('/__dev/place-photo');
 }
 
-/** Ephemeral Google CDN URLs (Places photoUri, lh3.googleusercontent.com) — do not persist or render. */
+/**
+ * Google *account* profile photos live on the same CDN as Places photos
+ * (lh3.googleusercontent.com) but use stable `/a/` or `/a-/` avatar paths.
+ * These are the photos returned by Google/Firebase sign-in and are safe to render.
+ */
+export function isGoogleAccountPhotoUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    return /^https?:\/\/lh\d+\.googleusercontent\.com\/a[-/]/i.test(url.trim());
+}
+
+/** Ephemeral Google CDN URLs (Places photoUri) — do not persist or render. Account avatars are allowed. */
 export function isEphemeralGoogleCdnUrl(url) {
     if (!url || typeof url !== 'string') return false;
     const u = url.trim();
+    // Google/Firebase account avatars are stable — never treat them as ephemeral place media.
+    if (isGoogleAccountPhotoUrl(u)) return false;
     if (/^https?:\/\/lh\d+\.googleusercontent\.com\//i.test(u)) return true;
     if (/^https?:\/\/places\.googleapis\.com\//i.test(u)) return true;
     return false;

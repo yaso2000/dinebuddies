@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getSafeAvatar, getAvatarUrlOrNull, getGenderAvatarRingStyle } from '../utils/avatarUtils';
+import { getSafeAvatar, getAvatarUrlOrNull, getGenderAvatarRingStyle, getDefaultAvatar } from '../utils/avatarUtils';
 import { AppText } from "./base";
 
 const DEFAULT_AVATAR_PX = 40;
@@ -151,8 +151,11 @@ const UserAvatar = ({
             setImgFailed(true);
             return;
           }
+          // Stable, name-based data-URI default — never re-fetches, so it can't loop or flicker.
           e.target.onerror = null;
-          e.target.src = getSafeAvatar(null);
+          e.target.src = getDefaultAvatar(
+            user?.display_name || user?.displayName || user?.name || ''
+          );
         }}
         {...props} />
       

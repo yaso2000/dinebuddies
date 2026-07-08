@@ -110,6 +110,16 @@ export function mergeProfileSnapshot(prev, incoming) {
         next.directoryCoverIndex = prev.directoryCoverIndex;
     }
 
+    // Preserve a previously-resolved avatar so an incoming snapshot with an empty
+    // photo (Firestore doc without a stored photo) can't wipe the social avatar.
+    for (const key of ['photoURL', 'photo_url', 'avatar', 'avatarUrl', 'avatar_url']) {
+        const incomingVal = typeof incoming[key] === 'string' ? incoming[key].trim() : incoming[key];
+        const prevVal = typeof prev[key] === 'string' ? prev[key].trim() : prev[key];
+        if (!incomingVal && prevVal) {
+            next[key] = prev[key];
+        }
+    }
+
     return next;
 }
 

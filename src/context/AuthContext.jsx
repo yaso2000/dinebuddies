@@ -7,6 +7,7 @@ import {
     isConsumerProfileComplete,
 } from '../utils/consumerProfileComplete';
 import { normalizeUserProfile as normalizeProfile } from '../utils/userProfileNormalize';
+import { getAvatarUrlOrNull } from '../utils/avatarUtils';
 import { mergeProfilePreserveFavoritePlaces } from '../utils/favoritePlacesUtils';
 import { mergeProfileSnapshot } from '../utils/profileGallery';
 import { DEFAULT_ACCESS_PLATFORM } from '../constants/userProfileSchema';
@@ -171,6 +172,21 @@ function toSessionAuthUser(user) {
         name: user.displayName ?? null,
         avatar: user.photoURL ?? null,
     };
+}
+
+/**
+ * Backfill a normalized profile's avatar from the Firebase-auth photo
+ * (Google/Facebook/Apple) when the Firestore doc has no usable photo.
+ * Keeps the signed-in user's social avatar from flickering to a default.
+ */
+function backfillProfileWithAuthPhoto(normalized) {
+    const authPhotoUrl = String(auth.currentUser?.photoURL || '').trim();
+    if (authPhotoUrl && !getAvatarUrlOrNull(normalized)) {
+        normalized.photoURL = authPhotoUrl;
+        normalized.photo_url = authPhotoUrl;
+        normalized.avatar = authPhotoUrl;
+    }
+    return normalized;
 }
 
 export const useAuth = () => {
@@ -358,6 +374,20 @@ export const AuthProvider = ({ children }) => {
         const userRef = doc(db, 'users', uid);
         let cancelled = false;
 
+        // Firebase-auth photo (Google/Facebook/Apple). Used as a fallback so the
+        // signed-in user's social avatar always shows even when the Firestore doc
+        // has no stored photo — prevents flicker between the social photo and a default.
+        const authPhotoUrl = String(currentUser?.photoURL || currentUser?.avatar || '').trim();
+        const normalizeWithAuthPhoto = (raw) => {
+            const normalized = normalizeProfile(raw);
+            if (authPhotoUrl && !getAvatarUrlOrNull(normalized)) {
+                normalized.photoURL = authPhotoUrl;
+                normalized.photo_url = authPhotoUrl;
+                normalized.avatar = authPhotoUrl;
+            }
+            return normalized;
+        };
+
         const applyProfileDoc = (snap) => {
             if (!snap.exists()) {
                 if (!isDeletingAccountRef.current) {
@@ -365,7 +395,7 @@ export const AuthProvider = ({ children }) => {
                 }
                 return;
             }
-            const normalized = normalizeProfile({
+            const normalized = normalizeWithAuthPhoto({
                 id: snap.id,
                 uid: snap.id,
                 ...snap.data(),
@@ -430,7 +460,7 @@ export const AuthProvider = ({ children }) => {
             (docSnap) => {
                 const fromCache = docSnap.metadata.fromCache;
                 if (docSnap.exists()) {
-                    const normalized = normalizeProfile({
+                    const normalized = normalizeWithAuthPhoto({
                         id: docSnap.id,
                         uid: docSnap.id,
                         ...docSnap.data(),
@@ -594,11 +624,11 @@ export const AuthProvider = ({ children }) => {
             }
             if (userDoc.exists()) {
                 const data = userDoc.data();
-                const normalized = normalizeProfile({
+                const normalized = backfillProfileWithAuthPhoto(normalizeProfile({
                     id: userId,
                     uid: userId,
                     ...data
-                });
+                }));
                 syncBusinessNavHint(normalized, userId);
                 setUserProfile((prev) => {
                     const next = mergeConsumerProfiles(prev, normalized);
@@ -663,11 +693,11 @@ export const AuthProvider = ({ children }) => {
                         throw portalErr;
                     }
                 }
-                const normalized = normalizeProfile({
+                const normalized = backfillProfileWithAuthPhoto(normalizeProfile({
                     id: uid,
                     uid,
                     ...raw,
-                });
+                }));
                 syncBusinessNavHint(normalized, uid);
                 setUserProfile((prev) => {
                     const next = mergeConsumerProfiles(prev, normalized);
