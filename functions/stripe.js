@@ -2,6 +2,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { CREDIT_PACKAGES } = require('./creditsCore');
+const { getPaymentPlan } = require('./paymentPlans');
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -21,13 +22,14 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
         );
     }
 
-    const { priceId, planId, planName } = data;
+    const planId = String(data?.planId || '').trim();
+    const plan = getPaymentPlan(planId);
     const userId = context.auth.uid;
 
-    if (!priceId) {
+    if (!plan) {
         throw new functions.https.HttpsError(
             'invalid-argument',
-            'Price ID is required'
+            'Invalid plan'
         );
     }
 
@@ -60,17 +62,17 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
             payment_method_types: ['card'],
             line_items: [
                 {
-                    price: priceId,
+                    price: plan.priceId,
                     quantity: 1,
                 },
             ],
-            mode: 'subscription',
-            success_url: `${data.successUrl}?session_id={CHECKOUT_SESSION_ID}`,
+            mode: plan.mode,
+            success_url: `${data.successUrl}${String(data.successUrl || '').includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: data.cancelUrl,
             metadata: {
                 userId: userId,
-                planId: planId,
-                planName: planName
+                planId: plan.planId,
+                planName: plan.planName
             }
         });
 
