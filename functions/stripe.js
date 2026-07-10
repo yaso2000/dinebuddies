@@ -2,6 +2,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { CREDIT_PACKAGES } = require('./creditsCore');
+const { getCheckoutItem } = require('./paymentPlans');
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -21,13 +22,14 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
         );
     }
 
-    const { priceId, planId, planName } = data;
+    const { planId } = data;
     const userId = context.auth.uid;
+    const item = getCheckoutItem(planId);
 
-    if (!priceId) {
+    if (!item || !item.priceId) {
         throw new functions.https.HttpsError(
             'invalid-argument',
-            'Price ID is required'
+            'Invalid checkout item'
         );
     }
 
@@ -54,25 +56,45 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
             }, { merge: true });
         }
 
-        // إنشاء Checkout Session
-        const session = await stripe.checkout.sessions.create({
+        const sessionParams = {
             customer: customerId,
             payment_method_types: ['card'],
             line_items: [
                 {
-                    price: priceId,
+                    price: item.priceId,
                     quantity: 1,
                 },
             ],
-            mode: 'subscription',
-            success_url: `${data.successUrl}?session_id={CHECKOUT_SESSION_ID}`,
+            mode: item.mode,
+            success_url: `${data.successUrl}${String(data.successUrl || '').includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: data.cancelUrl,
             metadata: {
                 userId: userId,
-                planId: planId,
-                planName: planName
+                planId: item.id,
+                planName: item.name,
+                purchaseType: item.type,
+                priceId: item.priceId,
             }
-        });
+        };
+
+        if (item.mode === 'subscription') {
+            sessionParams.subscription_data = {
+                metadata: {
+                    userId,
+                    planId: item.id,
+                    purchaseType: item.type,
+                    priceId: item.priceId,
+                },
+            };
+        }
+
+        if (item.type === 'private_invitation_pack') {
+            sessionParams.metadata.credits = String(item.credits);
+        } else if (item.type === 'offer_slot_pack') {
+            sessionParams.metadata.offerCredits = String(item.offerCredits);
+        }
+
+        const session = await stripe.checkout.sessions.create(sessionParams);
 
         console.log(`✅ Checkout session created for user ${userId}: ${session.id}`);
 
