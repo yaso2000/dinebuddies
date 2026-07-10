@@ -240,7 +240,6 @@ const BusinessSignup = () => {
             await setDoc(doc(db, 'users', user.uid), {
                 uid: user.uid,
                 email: email.trim(),
-                accountType: 'business',
                 role: 'partner',
                 display_name: businessData.businessName.trim(),
                 photo_url: null,
