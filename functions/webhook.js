@@ -88,27 +88,26 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 
 // ===== Event Handlers =====
 
-async function handleDineCreditsPurchase(session) {
+async function handleDineCreditsPurchase(session, firestore = db) {
     const userId = session.metadata?.userId;
     const credits = Math.floor(Number(session.metadata?.credits));
     const packageId = String(session.metadata?.packageId || '');
 
-    if (!userId || !Number.isFinite(credits) || credits <= 0) {
+    if (!session.id || !userId || !Number.isFinite(credits) || credits <= 0) {
         console.error('Invalid dine credits checkout metadata', session.metadata);
-        return;
+        throw new Error('Invalid dine credits checkout metadata');
     }
 
-    const fulfillRef = db.collection('stripe_dine_credit_fulfillments').doc(session.id);
-    const userRef = db.collection('users').doc(userId);
+    const fulfillRef = firestore.collection('stripe_dine_credit_fulfillments').doc(session.id);
+    const userRef = firestore.collection('users').doc(userId);
 
-    await db.runTransaction(async (tx) => {
+    const result = await firestore.runTransaction(async (tx) => {
         const done = await tx.get(fulfillRef);
-        if (done.exists) return;
+        if (done.exists) return { alreadyFulfilled: true };
 
         const snap = await tx.get(userRef);
         if (!snap.exists) {
-            console.error('User not found for dine credits:', userId);
-            return;
+            throw new Error(`User not found for dine credits: ${userId}`);
         }
         const d = snap.data();
         const accountRole = isBusinessUserDoc(d) ? 'business' : 'user';
@@ -126,9 +125,15 @@ async function handleDineCreditsPurchase(session) {
             packageId,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        return { alreadyFulfilled: false };
     });
 
-    console.log(`✅ Granted ${credits} dine credits to ${userId}`);
+    if (result.alreadyFulfilled) {
+        console.log(`Dine credits already fulfilled for session ${session.id}`);
+    } else {
+        console.log(`✅ Granted ${credits} dine credits to ${userId}`);
+    }
+    return result;
 }
 
 async function handleCheckoutComplete(session) {
@@ -252,3 +257,7 @@ async function handlePaymentSucceeded(invoice) {
 async function handlePaymentFailed(invoice) {
     console.log('⚠️ Payment failed:', invoice.id);
 }
+
+exports._test = {
+    handleDineCreditsPurchase,
+};
