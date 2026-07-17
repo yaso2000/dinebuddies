@@ -173,12 +173,11 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
 
             const user = userCredential.user;
 
-            // Create Firestore document — business plan tier on users.subscriptionTier only
+            // Create Firestore document. Paid tiers are assigned only by trusted admin/payment code.
             await setDoc(doc(db, 'users', user.uid), {
                 email: formData.email,
                 display_name: formData.businessName,
                 role: 'business',
-                subscriptionTier: formData.subscriptionTier,
                 created_at: serverTimestamp(),
                 last_active_time: serverTimestamp(),
                 location: formData.lat && formData.lng ? {
