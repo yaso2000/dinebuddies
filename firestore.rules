@@ -16,15 +16,103 @@ service cloud.firestore {
     
     function isAdmin() {
       return isSignedIn() &&
-             (request.auth.token.admin == true ||
-              request.auth.token.role == 'admin' ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+             (request.auth.token.get('admin', false) == true ||
+              request.auth.token.get('role', '') == 'admin');
     }
 
     // Super owner check via Custom Claims only (no hardcoded emails or UIDs).
     // Grant via: admin.auth().setCustomUserClaims(uid, { superOwner: true })
     function isSuperOwner() {
-      return isSignedIn() && request.auth.token.superOwner == true;
+      return isSignedIn() && request.auth.token.get('superOwner', false) == true;
+    }
+
+    // These fields are maintained by Admin SDK code (payments, moderation,
+    // admin tools, and membership callables), never by an end-user client.
+    function serverManagedUserFieldsWithoutSubscriptionTier() {
+      return [
+        'admin', 'adminGrantedAt', 'adminGrantedBy', 'adminNotes',
+        'aiCredits', 'aiCreditsUsed', 'aiFreeTextCount', 'aiFreeTextDay',
+        'banReason', 'banned', 'bannedAt', 'billingStatus', 'claims',
+        'communityMembers', 'currentPlan', 'customClaims', 'disabled',
+        'freeCredits', 'isAdmin', 'isVerified', 'joinedCommunities',
+        'lastCreditGrantedAt', 'lastCreditPurchaseAt', 'lastPrivateResetMonth',
+        'lastPrivateResetWeek', 'moderation', 'moderationStatus',
+        'monthlyPrivateQuota', 'offerCredits', 'offerSlotCredits',
+        'paidCredits', 'permissions', 'purchasedPrivateCredits', 'reputation',
+        'stripeCustomerId', 'stripePriceId', 'stripeSubscriptionId',
+        'subscriptionEndDate', 'subscriptionId', 'subscriptionPlan',
+        'subscriptionStartDate', 'subscriptionStatus', 'superOwner',
+        'suspended', 'totalCreditsPurchased', 'totalCreditsSpent',
+        'usedPrivateCreditsThisMonth', 'usedPrivateCreditsThisWeek',
+        'weeklyPrivateQuota'
+      ];
+    }
+
+    function hasSafeInitialUserIdentity(userId) {
+      return (!request.resource.data.keys().hasAny(['uid']) ||
+              request.resource.data.uid == userId) &&
+             request.resource.data.get('role', 'user') in ['user', 'business', 'partner', 'guest'] &&
+             request.resource.data.get('accountType', 'user') in ['user', 'personal', 'business', 'partner', 'guest'];
+    }
+
+    function authEmailFieldsMatchToken() {
+      return (!request.resource.data.keys().hasAny(['emailVerified']) ||
+              request.resource.data.emailVerified == request.auth.token.get('email_verified', false)) &&
+             (!request.resource.data.keys().hasAny(['authEmail']) ||
+              request.resource.data.authEmail == request.auth.token.get('email', null));
+    }
+
+    function hasProtectedBusinessInfoFields(data) {
+      return data.get('businessInfo', {}) is map &&
+             data.get('businessInfo', {}).keys().hasAny([
+               'adminNotes', 'customLimits', 'customLimitsExpiry', 'lastAdminUpdate'
+             ]);
+    }
+
+    function hasNoProtectedBusinessInfoChanges() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['businessInfo']) ||
+             (request.resource.data.get('businessInfo', {}) is map &&
+              resource.data.get('businessInfo', {}) is map &&
+              !request.resource.data.get('businessInfo', {})
+                .diff(resource.data.get('businessInfo', {})).affectedKeys()
+                .hasAny(['adminNotes', 'customLimits', 'customLimitsExpiry', 'lastAdminUpdate']));
+    }
+
+    function isValidOwnerUserCreate(userId) {
+      return isOwner(userId) &&
+             hasSafeInitialUserIdentity(userId) &&
+             authEmailFieldsMatchToken() &&
+             !request.resource.data.keys().hasAny(serverManagedUserFieldsWithoutSubscriptionTier()) &&
+             (!request.resource.data.keys().hasAny(['subscriptionTier']) ||
+              request.resource.data.subscriptionTier == 'free') &&
+             (!request.resource.data.keys().hasAny(['businessInfo']) ||
+              request.resource.data.businessInfo is map) &&
+             !hasProtectedBusinessInfoFields(request.resource.data);
+    }
+
+    function isValidOwnerUserUpdate() {
+      return (!request.resource.data.keys().hasAny(['uid']) ||
+              request.resource.data.uid == request.auth.uid) &&
+             authEmailFieldsMatchToken() &&
+             !request.resource.data.diff(resource.data).affectedKeys()
+               .hasAny(serverManagedUserFieldsWithoutSubscriptionTier()) &&
+             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscriptionTier']) &&
+             hasNoProtectedBusinessInfoChanges();
+    }
+
+    // Onboarding may add only the non-entitling free tier while completing a
+    // role-less Auth sync stub. Every other server field remains immutable.
+    function isValidOwnerOnboardingUpdate() {
+      return (!request.resource.data.keys().hasAny(['uid']) ||
+              request.resource.data.uid == request.auth.uid) &&
+             request.resource.data.get('role', 'user') in ['user', 'business', 'partner', 'guest'] &&
+             request.resource.data.get('accountType', 'user') in ['user', 'personal', 'business', 'partner', 'guest'] &&
+             authEmailFieldsMatchToken() &&
+             !request.resource.data.diff(resource.data).affectedKeys()
+               .hasAny(serverManagedUserFieldsWithoutSubscriptionTier()) &&
+             (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscriptionTier']) ||
+              request.resource.data.subscriptionTier == 'free') &&
+             hasNoProtectedBusinessInfoChanges();
     }
 
     // Business accounts (role 'business'); legacy 'partner' kept for backward compatibility
@@ -101,6 +189,15 @@ service cloud.firestore {
              (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
+
+    function isAllowedOwnerOnboardingTransition() {
+      return (userDocHasNoRoleField() && request.resource.data.role == 'user') ||
+             (userDocHasNoRoleField() &&
+              (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
+              request.resource.data.keys().hasAny(['businessInfo'])) ||
+             isBusinessSignupCompletionFromIntent() ||
+             isUpgradingStubToBusinessProfile();
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -112,31 +209,21 @@ service cloud.firestore {
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      // Allow user to update their own FCM push tokens (from notificationService)
-      allow update: if isOwner(userId) &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
-      // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
-      allow update: if isOwner(userId) &&
-                       userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user';
-      // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
-      allow update: if isOwner(userId) &&
-                       userDocHasNoRoleField() &&
-                       (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
-                       request.resource.data.keys().hasAny(['businessInfo']);
-      // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
-      // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
-      allow update: if isOwner(userId) && 
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
-      allow update: if isAdmin();
+      allow create: if isValidOwnerUserCreate(userId);
+      // Owners may edit safe profile fields or complete one constrained onboarding transition.
+      // Admin SDK writes bypass rules; console/admin clients require an admin custom claim.
+      allow update: if
+        (isOwner(userId) &&
+         ((isValidOwnerUserUpdate() &&
+           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'accountType'])) ||
+          (isValidOwnerOnboardingUpdate() && isAllowedOwnerOnboardingTransition()))) ||
+        isAdmin();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['businessInfo']) &&
+                       request.resource.data.get('businessInfo', {}) is map &&
+                       resource.data.get('businessInfo', {}) is map &&
                        request.resource.data.get('businessInfo', {}).diff(resource.data.get('businessInfo', {})).affectedKeys()
                          .hasOnly(['profileViews', 'profileLikes', 'profileShares', 'totalInvitations']);
       
