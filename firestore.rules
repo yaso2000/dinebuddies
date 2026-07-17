@@ -189,6 +189,15 @@ service cloud.firestore {
              (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
              request.resource.data.keys().hasAny(['businessInfo']);
     }
+
+    function isAllowedOwnerOnboardingTransition() {
+      return (userDocHasNoRoleField() && request.resource.data.role == 'user') ||
+             (userDocHasNoRoleField() &&
+              (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
+              request.resource.data.keys().hasAny(['businessInfo'])) ||
+             isBusinessSignupCompletionFromIntent() ||
+             isUpgradingStubToBusinessProfile();
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -201,38 +210,20 @@ service cloud.firestore {
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
       allow create: if isValidOwnerUserCreate(userId);
-      // Allow user to update their own FCM push tokens (from notificationService)
-      allow update: if isOwner(userId) &&
-                       isValidOwnerUserUpdate() &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
-      // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
-      allow update: if isOwner(userId) &&
-                       userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user' &&
-                       isValidOwnerOnboardingUpdate();
-      // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
-      allow update: if isOwner(userId) &&
-                       userDocHasNoRoleField() &&
-                       (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
-                       request.resource.data.keys().hasAny(['businessInfo']) &&
-                       isValidOwnerOnboardingUpdate();
-      // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) &&
-                       isBusinessSignupCompletionFromIntent() &&
-                       isValidOwnerOnboardingUpdate();
-      // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) &&
-                       isUpgradingStubToBusinessProfile() &&
-                       isValidOwnerOnboardingUpdate();
-      allow update: if isOwner(userId) && 
-                       isValidOwnerUserUpdate() &&
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
-      allow update: if isAdmin();
+      // Owners may edit safe profile fields or complete one constrained onboarding transition.
+      // Admin SDK writes bypass rules; console/admin clients require an admin custom claim.
+      allow update: if
+        (isOwner(userId) &&
+         ((isValidOwnerUserUpdate() &&
+           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'accountType'])) ||
+          (isValidOwnerOnboardingUpdate() && isAllowedOwnerOnboardingTransition()))) ||
+        isAdmin();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['businessInfo']) &&
+                       request.resource.data.get('businessInfo', {}) is map &&
+                       resource.data.get('businessInfo', {}) is map &&
                        request.resource.data.get('businessInfo', {}).diff(resource.data.get('businessInfo', {})).affectedKeys()
                          .hasOnly(['profileViews', 'profileLikes', 'profileShares', 'totalInvitations']);
       
