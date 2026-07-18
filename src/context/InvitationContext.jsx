@@ -35,6 +35,11 @@ import { fetchIpLocation } from '../utils/locationUtils';
 import { deleteInvitationAndStorage } from '../utils/storageCleanup';
 import { incrementBusinessInvitationCount } from '../services/businessLikeService';
 import { filterInviteesWhoAcceptAuthor, asUidArray } from '../utils/userSocialLists';
+import {
+    DATING_INVITATION_PUBLISH_CREDITS,
+    PRIVATE_INVITATION_PUBLISH_CREDITS,
+    getTotalDineCredits
+} from '../utils/privateInvitationCredits';
 
 const InvitationContext = createContext(null);
 
@@ -830,7 +835,7 @@ export const InvitationProvider = ({ children }) => {
     // Priority: plan monthly quota → purchased credits → deny
     // ─────────────────────────────────────────────────────────────────────────
 
-    const canCreatePrivateInvitation = () => {
+    const canCreatePrivateInvitation = (options = {}) => {
         if (!currentUser || isGuest) return { canCreate: false, reason: 'guest' };
         if (currentUser.role === 'admin') return { canCreate: true, quota: 'unlimited' };
 
@@ -848,6 +853,14 @@ export const InvitationProvider = ({ children }) => {
         const purchasedCredits = firebaseProfile?.purchasedPrivateCredits || 0;
         if (purchasedCredits > 0) {
             return { canCreate: true, quota: purchasedCredits, source: 'purchased' };
+        }
+
+        const dineCreditCost = options?.type === 'dating'
+            ? DATING_INVITATION_PUBLISH_CREDITS
+            : PRIVATE_INVITATION_PUBLISH_CREDITS;
+        const totalDineCredits = getTotalDineCredits(firebaseProfile);
+        if (totalDineCredits >= dineCreditCost) {
+            return { canCreate: true, quota: totalDineCredits, source: 'dine_credits', cost: dineCreditCost };
         }
 
         return { canCreate: false, reason: 'no_credits' };

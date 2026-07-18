@@ -12,6 +12,7 @@ const { runSuggestInvitationMessages } = require('./suggestInvitationMessages');
 const functions = require('firebase-functions');
 const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
 const db = admin.firestore();
+const { CREDIT_COSTS, spendCreditsInTransaction, isBusinessUserDoc } = require('./creditsCore');
 const MONTHLY_PRIVATE_QUOTAS = {
     free: 3,
     pro: 4,
@@ -88,6 +89,15 @@ function assertAllowedKeys(data, allowedKeys, label) {
             `${label} contains unsupported fields: ${unknownKeys.join(', ')}`
         );
     }
+}
+
+function isDatingPrivateInvitation(inv) {
+    const occasionLc = String(inv?.occasionType || inv?.type || '').trim().toLowerCase();
+    return (
+        inv?.type === 'Dating' ||
+        occasionLc === 'dating' ||
+        (inv?.datingInvitationPreference != null && inv.datingInvitationPreference !== false)
+    );
 }
 
 function normalizeNotificationPayload(data) {
@@ -258,10 +268,6 @@ async function assertAdminContext(context) {
     const requesterEmail = (context.auth.token.email || '').toLowerCase();
     const isSuperOwner = SUPER_OWNER_UIDS.includes(requesterUid) || SUPER_OWNER_EMAILS.includes(requesterEmail);
     if (isSuperOwner || context.auth.token.admin === true) return { requesterUid, isSuperOwner };
-
-    const requesterDoc = await db.collection('users').doc(requesterUid).get();
-    const requesterRole = requesterDoc.exists ? requesterDoc.data()?.role : null;
-    if (requesterRole === 'admin') return { requesterUid, isSuperOwner: false };
 
     throw new functions.https.HttpsError('permission-denied', 'Admin privileges required.');
 }
@@ -659,7 +665,7 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
                 nextRsvps[fid] = normalized === 'accepted' || normalized === 'declined' ? normalized : 'pending';
             });
 
-            const isBypassUser = user.role === 'admin';
+            const isBypassUser = context.auth.token.admin === true || context.auth.token.role === 'admin';
             let chargedSource = null;
             /** @type {Record<string, unknown> | null} */
             let userCreditPatch = null;
@@ -687,7 +693,25 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
                         purchasedPrivateCredits: purchasedCredits - 1
                     };
                 } else {
-                    throw new functions.https.HttpsError('failed-precondition', 'No private invitation credits remaining.');
+                    const dineCreditCost = isDatingPrivateInvitation(inv)
+                        ? CREDIT_COSTS.DATING_INVITATION
+                        : CREDIT_COSTS.PRIVATE_INVITATION;
+                    try {
+                        spendCreditsInTransaction(tx, userRef, user, {
+                            uid,
+                            accountRole: isBusinessUserDoc(user) ? 'business' : 'user',
+                            amount: dineCreditCost,
+                            type: 'spend',
+                            reason: isDatingPrivateInvitation(inv) ? 'dating_invitation_publish' : 'private_invitation_publish',
+                            relatedId: invitationId,
+                        });
+                        chargedSource = 'dine_credits';
+                    } catch (creditErr) {
+                        if (creditErr?.code === 'INSUFFICIENT_CREDITS') {
+                            throw new functions.https.HttpsError('failed-precondition', 'Not enough Dine Credits to publish this invitation.');
+                        }
+                        throw creditErr;
+                    }
                 }
             }
 
@@ -1189,9 +1213,18 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
         adminGrantedBy: requesterUid
     }, { merge: true });
 
-    // Set both 'admin' and 'superOwner' Custom Claims for token-based rule evaluation.
-    // superOwner allows the user to pass isSuperOwner() checks in firestore.rules.
-    await admin.auth().setCustomUserClaims(targetUid, { admin: true, superOwner: isSuperOwner });
+    const targetUser = await admin.auth().getUser(targetUid);
+    const targetClaims = targetUser.customClaims || {};
+    const targetEmail = (targetUser.email || '').toLowerCase();
+    const targetIsConfiguredSuperOwner =
+        targetClaims.superOwner === true ||
+        SUPER_OWNER_UIDS.includes(targetUid) ||
+        SUPER_OWNER_EMAILS.includes(targetEmail);
+    await admin.auth().setCustomUserClaims(targetUid, {
+        ...targetClaims,
+        admin: true,
+        superOwner: targetIsConfiguredSuperOwner,
+    });
 
     return { success: true, targetUid };
 });
