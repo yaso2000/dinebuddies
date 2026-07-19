@@ -123,21 +123,38 @@ export function preferOAuthRedirectOnThisDevice() {
     return isIosTouchDevice() || isMacSafariBrowser() || isStandalonePwa();
 }
 
+/** Live web hosts where Google/Apple must use redirect (COOP breaks popup polling). */
+export function isProductionWebHost() {
+    if (typeof window === 'undefined') return false;
+    const host = String(window.location.hostname || '').toLowerCase();
+    return (
+        host === 'www.dinebuddies.com' ||
+        host === 'dinebuddies.com' ||
+        host.endsWith('.vercel.app') ||
+        host.endsWith('.web.app') ||
+        host.endsWith('.firebaseapp.com')
+    );
+}
+
 /**
  * Prefer redirect when popup OAuth is unreliable or floods COOP console noise.
- * - iOS / Mac Safari / PWA → redirect (existing device policy)
- * - Desktop Google/Apple → redirect (Chrome COOP blocks window.closed polling)
+ * - Localhost Vite → popup (redirect ports are flaky)
  * - Android → popup (redirect + cross-origin authDomain breaks Google there)
- * - Facebook → popup first (redirect fallback only if blocked)
+ * - Production / preview Google+Apple → always redirect (stops COOP window.closed spam)
+ * - iOS / Mac Safari / PWA → redirect
+ * - Facebook → popup first (redirect only if blocked)
  */
 export function preferOAuthRedirectForProvider(providerId) {
-    // Localhost: keep popup — Firebase redirect + authDomain is unreliable on Vite ports.
-    if (isLocalDevHost() || isEmbeddedPreviewBrowser() || isAndroidTouchDevice()) {
+    if (isLocalDevHost() || isAndroidTouchDevice()) {
         return false;
     }
-    if (preferOAuthRedirectOnThisDevice()) return true;
     const id = String(providerId || '');
-    return id === 'google.com' || id === 'apple.com';
+    if (id === 'google.com' || id === 'apple.com') {
+        // Production, Vercel previews, and embedded browsers: never use popup.
+        return true;
+    }
+    if (preferOAuthRedirectOnThisDevice()) return true;
+    return false;
 }
 
 /** @deprecated Use preferOAuthRedirectOnThisDevice */

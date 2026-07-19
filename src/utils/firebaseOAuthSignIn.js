@@ -7,6 +7,7 @@ import {
     clearOAuthRedirectPending,
     clearGuestModeForSignIn,
     isIosTouchDevice,
+    isProductionWebHost,
     isStandalonePwa,
     markOAuthRedirectPending,
     preferOAuthRedirectForProvider,
@@ -105,7 +106,9 @@ export async function firebaseOAuthPopupOrRedirect(provider) {
     await auth.authStateReady();
 
     const providerId = resolveOAuthProviderId(provider);
-    if (preferOAuthRedirectForProvider(providerId)) {
+    const forceProductionRedirect =
+        isProductionWebHost() && (providerId === 'google.com' || providerId === 'apple.com');
+    if (forceProductionRedirect || preferOAuthRedirectForProvider(providerId)) {
         return startOAuthRedirect(provider);
     }
 
