@@ -21,6 +21,25 @@ export function isPendingInviteForUser(inv, uid) {
     return true;
 }
 
+/**
+ * Host or invitee may open hosted invite details (including after accept/decline).
+ * Used by notification panel links — do not require pending RSVP.
+ */
+export function canViewerOpenHostedInvitation(inv, uid) {
+    const me = uidStr(uid);
+    if (!me || !inv?.id) return false;
+
+    const hostId = uidStr(inv.authorId || inv.author?.id);
+    if (hostId && hostId === me) return true;
+
+    const invited = Array.isArray(inv.invitedFriends) ? inv.invitedFriends : [];
+    if (!invited.some((f) => uidStr(f) === me)) return false;
+
+    // Invitees only see published invites (drafts stay host-only).
+    if (inv.status === 'draft' && !inv.publishedAt) return false;
+    return true;
+}
+
 export function sortInvitesOldestFirst(a, b) {
     const ts = (inv) =>
         inv?.publishedAt?.seconds ??

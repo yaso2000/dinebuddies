@@ -5,6 +5,7 @@ import { browseUsersPage, searchUsers } from '../../utils/adminUserQueries';
 import { adminApi } from '../api';
 import { AppText, AppTextInput } from "../../components/base";
 import { normalizeBusinessTier } from '../../utils/businessSubscription';
+import { getPurchaseCredits, getSavedCredits } from '../../utils/walletCredits';
 
 const USER_TABS = [
 {
@@ -67,6 +68,19 @@ function nameForTab(tab, u) {
     return u.businessInfo?.businessName || u.businessInfo?.name || u.display_name || u.email || u.id;
   }
   return u.display_name || u.displayName || u.nickname || u.name || u.email || u.id;
+}
+
+function CreditsCell({ u, t }) {
+  const paid = getPurchaseCredits(u);
+  const saved = getSavedCredits(u);
+  return (
+    <td className="db-fin db-user-credits">
+      <AppText as="span">{t('admin_credits_paid_label', 'purchase')}</AppText>
+      <AppText as="span" className="total">{paid}</AppText>
+      <AppText as="span">{t('admin_savings_wallet_label', 'savings')}</AppText>
+      <AppText as="span" className="pending">{saved}</AppText>
+    </td>
+  );
 }
 
 export default function UsersPage() {
@@ -365,6 +379,7 @@ export default function UsersPage() {
                             <tr>
                                 <th>{t('admin_users_agent')}</th>
                                 <th>{t('admin_users_joined')}</th>
+                                <th>{t('admin_users_credits_col', 'Credits')}</th>
                                 <th>{t('admin_users_financial')}</th>
                                 <th>{t('admin_users_status')}</th>
                                 <th>{t('admin_users_actions')}</th>
@@ -382,6 +397,7 @@ export default function UsersPage() {
                                         <td>
                                             <strong style={{ color: 'var(--db-lime)' }}>{s.referred}</strong>
                                         </td>
+                                        <CreditsCell u={u} t={t} />
                                         <td className="db-fin">
                                             <AppText as="span">Pending</AppText>
                                             <AppText as="span" className="pending">{fmtMoney(s.pending)}</AppText>
@@ -403,6 +419,7 @@ export default function UsersPage() {
                             <tr>
                                 <th>{tab === 'business' ? t('admin_users_business_col') : t('admin_users_user_col')}</th>
                                 {tab === 'business' ? <th>{t('admin_business_plan_col', 'Plan')}</th> : null}
+                                <th>{t('admin_users_credits_col', 'Credits')}</th>
                                 <th>{t('admin_users_status')}</th>
                                 <th>{t('admin_users_actions')}</th>
                             </tr>
@@ -423,6 +440,7 @@ export default function UsersPage() {
                                             </AppText>
                                         </td> :
               null}
+                                    <CreditsCell u={u} t={t} />
                                     <td>
                                         <StatusBadge u={u} t={t} />
                                     </td>

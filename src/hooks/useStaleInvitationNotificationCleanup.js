@@ -4,7 +4,8 @@ import { useNotifications } from '../context/NotificationContext';
 import { findStaleSocialInvitationNotificationIds } from '../utils/staleInvitationNotifications';
 
 /**
- * Removes `social_invitation` notifications that point at missing, draft, or already-handled invites.
+ * Removes social invite notifications only when the invite doc is gone or the viewer
+ * has no access. Accepted/declined invites are kept so details links still work.
  */
 export default function useStaleInvitationNotificationCleanup() {
     const { currentUser, isGuest } = useAuth();

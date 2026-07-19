@@ -31,6 +31,13 @@ const CommunityManagement = ({ businessId, businessName, canUseMemberNotificatio
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [moderatingId, setModeratingId] = useState(null);
+  const broadcastCallableRef = React.useRef(null);
+  if (!broadcastCallableRef.current) {
+    broadcastCallableRef.current = httpsCallable(
+      getFunctions(app, FUNCTIONS_REGION),
+      'broadcastCommunityMemberMessage'
+    );
+  }
 
   useEffect(() => {
     loadMembers();
@@ -187,28 +194,131 @@ const CommunityManagement = ({ businessId, businessName, canUseMemberNotificatio
       return;
     }
 
-    setSending(true);
-    try {
+    const text = message.trim().slice(0, 500);
+    const title = (businessName || t('community_update', 'Community update')).slice(0, 120);
+
+    const finishToast = (delivered, failedCount) => {
+      if (delivered > 0 && failedCount === 0) {
+        showToast(
+          `${t('message_sent', 'Message sent to')} ${delivered} ${t('members_count', 'members')}`,
+          'success'
+        );
+        setMessage('');
+        setShowMessageModal(false);
+        deselectAll();
+      } else if (delivered > 0) {
+        showToast(
+          t('message_sent_partial', {
+            defaultValue: `Sent to ${delivered} member(s); ${failedCount} failed.`,
+            sent: delivered,
+            failed: failedCount,
+          }),
+          'warning'
+        );
+        setMessage('');
+      } else {
+        showToast(
+          t('message_sent_error', 'Failed to send messages. Please try again.'),
+          'error'
+        );
+      }
+    };
+
+    /** Client fallback when broadcast CF is not deployed yet. */
+    const sendViaClientFallback = async () => {
+      let chatCount = 0;
+      let notifyCount = 0;
+      let failedCount = 0;
       for (const memberId of selectedMembers) {
+        let ok = false;
         try {
           const conversationId = await getOrCreateConversation(memberId);
           if (conversationId) {
-            await sendDirectMessage(conversationId, {
-              text: message.trim(),
-              type: 'text'
-            });
+            const sent = await sendDirectMessage(conversationId, { text, type: 'text' });
+            if (sent) {
+              chatCount += 1;
+              ok = true;
+            }
           }
         } catch (err) {
-          console.error('Failed to send message to', memberId, err);
+          console.error('Failed to DM member', memberId, err);
+        }
+        try {
+          // type:message → ChatList "Messages" tab + unread badge (same as server broadcast).
+          // community_message alone only appears under the Notifications panel.
+          const res = await createNotification({
+            userId: memberId,
+            type: 'message',
+            title,
+            message: text,
+            actionUrl: `/chat/${profileId}`,
+            metadata: {
+              partnerId: profileId,
+              source: 'community_member_broadcast_client',
+            },
+          });
+          if (res?.ok) {
+            notifyCount += 1;
+            ok = true;
+          }
+        } catch (err) {
+          console.error('Failed to notify member', memberId, err);
+        }
+        if (!ok) failedCount += 1;
+      }
+      finishToast(Math.max(chatCount, notifyCount), failedCount);
+    };
+
+    setSending(true);
+    try {
+      // Server path: chat DM + inbox notification (FCM) for each member.
+      const result = await broadcastCallableRef.current({
+        partnerId: profileId,
+        memberIds: selectedMembers,
+        message: text,
+      });
+      const data = result?.data || {};
+      const chatCount = Number(data.chatCount) || 0;
+      const notifyCount = Number(data.notifyCount) || 0;
+      const failedCount = Number(data.failedCount) || 0;
+      finishToast(Math.max(chatCount, notifyCount), failedCount);
+    } catch (error) {
+      const code = String(error?.code || '');
+      const msg = String(error?.message || '');
+      const notDeployed =
+        code === 'functions/not-found' ||
+        code === 'functions/unimplemented' ||
+        /not found|NOT_FOUND/i.test(msg);
+      // Prefer client delivery when CF is missing or crashing; do not bypass paid-plan gate.
+      const serverUnavailable =
+        notDeployed ||
+        code === 'functions/internal' ||
+        code === 'functions/unavailable' ||
+        code === 'functions/deadline-exceeded';
+      const paidPlanRejected =
+        code === 'functions/failed-precondition' &&
+        /paid business plan|subscription/i.test(msg);
+
+      if (serverUnavailable) {
+        console.warn('[CommunityManagement] broadcast CF unavailable — client fallback', error);
+        try {
+          await sendViaClientFallback();
+        } catch (fallbackErr) {
+          console.error('Client broadcast fallback failed:', fallbackErr);
+          showToast(t('message_sent_error', 'Failed to send messages'), 'error');
+        }
+      } else {
+        console.error('Error sending messages:', error);
+        showToast(
+          paidPlanRejected
+            ? t('member_notifications_locked', 'Member messaging is included in the paid business plan.')
+            : getCallableErrorReason(error) || t('message_sent_error', 'Failed to send messages'),
+          paidPlanRejected ? 'info' : 'error'
+        );
+        if (paidPlanRejected) {
+          navigate('/settings/subscription');
         }
       }
-      showToast(`${t('message_sent', 'Message sent to')} ${selectedMembers.length} ${t('members_count', 'members')}`, 'success');
-      setMessage('');
-      setShowMessageModal(false);
-      deselectAll();
-    } catch (error) {
-      console.error('Error sending messages:', error);
-      showToast(t('message_sent_error', 'Failed to send messages'), 'error');
     } finally {
       setSending(false);
     }

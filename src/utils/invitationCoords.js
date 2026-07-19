@@ -16,7 +16,9 @@ function isValidLatLng(lat, lng) {
         lat >= -90 &&
         lat <= 90 &&
         lng >= -180 &&
-        lng <= 180
+        lng <= 180 &&
+        // Reject Null Island — often from Number(null) === 0 bugs.
+        !(lat === 0 && lng === 0)
     );
 }
 

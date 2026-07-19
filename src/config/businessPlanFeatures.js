@@ -57,9 +57,18 @@ export const BUSINESS_PAID_PLAN_FEATURE_KEYS = [
  * @returns {'free'|'paid'}
  */
 export function normalizeBusinessPlanTier(rawTier) {
-    return String(rawTier || BUSINESS_PLAN_TIERS.FREE).trim().toLowerCase() === BUSINESS_PLAN_TIERS.PAID
-        ? BUSINESS_PLAN_TIERS.PAID
-        : BUSINESS_PLAN_TIERS.FREE;
+    const t = String(rawTier || BUSINESS_PLAN_TIERS.FREE).trim().toLowerCase();
+    // Legacy Stripe / admin values that mean an active paid business plan.
+    if (
+        t === BUSINESS_PLAN_TIERS.PAID ||
+        t === 'elite' ||
+        t === 'professional' ||
+        t === 'pro' ||
+        t === 'business'
+    ) {
+        return BUSINESS_PLAN_TIERS.PAID;
+    }
+    return BUSINESS_PLAN_TIERS.FREE;
 }
 
 /**

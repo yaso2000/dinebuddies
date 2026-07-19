@@ -59,6 +59,7 @@ import {
     assertCreatorCanCreateInvitations,
     assertPublicInvitationGeofenceRule,
     INVITATION_ERROR_CODES,
+    LOCATION_NOT_DETERMINED_ERROR_MESSAGE,
     invitationErrorI18nKey,
 } from '../utils/invitationRules';
 import { cannotCreateInvitations, isBusinessUser } from '../utils/accountRole';
@@ -150,42 +151,64 @@ export const InvitationProvider = ({ children }) => {
         };
     }, [firebaseProfile, currentUser, isGuest]);
 
-    const fetchPublicInvitations = useCallback(async () => {
-        const q = query(
-            collection(db, 'invitations'),
-            orderBy('createdAt', 'desc'),
-            limit(INITIAL_INVITATIONS_LIMIT)
+    const patchPublicInvitation = useCallback((invId, patchFn) => {
+        if (!invId) return;
+        setInvitations((prev) =>
+            prev.map((inv) => {
+                if (inv.id !== invId) return inv;
+                const next = typeof patchFn === 'function' ? patchFn(inv) : { ...inv, ...patchFn };
+                return next;
+            })
         );
-        const snapshot = await getDocs(q);
-        return snapshot.docs
-            .map((d) => ({ id: d.id, ...d.data() }))
-            .filter((inv) => inv.adminBlocked !== true);
     }, []);
 
-    // --- 1. Load public invitations once on app entry (no live sync / load-more) ---
+    const upsertPublicInvitation = useCallback((invitation) => {
+        if (!invitation?.id) return;
+        setInvitations((prev) => {
+            const idx = prev.findIndex((inv) => inv.id === invitation.id);
+            if (idx === -1) return [invitation, ...prev];
+            const next = [...prev];
+            next[idx] = { ...next[idx], ...invitation };
+            return next;
+        });
+    }, []);
+
+    // --- 1. Live public invitations (latest N by createdAt) ---
     useEffect(() => {
         let cancelled = false;
         const timeout = setTimeout(() => {
             if (!cancelled) setLoadingInvitations(false);
         }, 15000);
 
-        fetchPublicInvitations()
-            .then((staticInvites) => {
+        const q = query(
+            collection(db, 'invitations'),
+            orderBy('createdAt', 'desc'),
+            limit(INITIAL_INVITATIONS_LIMIT)
+        );
+
+        const unsub = onSnapshot(
+            q,
+            (snapshot) => {
                 if (cancelled) return;
-                setInvitations(staticInvites);
+                const list = snapshot.docs
+                    .map((d) => ({ id: d.id, ...d.data() }))
+                    .filter((inv) => inv.adminBlocked !== true);
+                setInvitations(list);
                 setLoadingInvitations(false);
-            })
-            .catch((error) => {
+            },
+            (error) => {
                 if (cancelled) return;
                 console.error('Error loading invitations:', error);
                 setLoadingInvitations(false);
-            });
+            }
+        );
 
         return () => {
             cancelled = true;
             clearTimeout(timeout);
+            unsub();
         };
-    }, [fetchPublicInvitations]);
+    }, []);
 
     // --- 1b. Sync Private Invitations (separate collection) ---
     useEffect(() => {
@@ -302,9 +325,15 @@ export const InvitationProvider = ({ children }) => {
                 const data = doc.data();
                 const info = data.businessPublic || {};
                 const brandKit = info.brandKit || data.businessInfo?.brandKit || {};
-                const latNum = Number(info.lat);
-                const lngNum = Number(info.lng);
+                // Never Number(null) → 0 (Null Island). Prefer nested coordinates/location shapes.
+                const coords = getInvitationLatLng({
+                    lat: info.lat,
+                    lng: info.lng,
+                    coordinates: info.coordinates,
+                    location: info.location,
+                });
 
+                const city = String(info.city || '').trim();
                 businessList.push({
                     id: doc.id,
                     uid: doc.id,
@@ -319,6 +348,16 @@ export const InvitationProvider = ({ children }) => {
                     businessInfo: {
                         coverImage: info.coverImage || null,
                         coverImageStoragePath: info.coverImageStoragePath || null,
+                        city,
+                        // Keep address for profile deep-links only — cards must not display it.
+                        address: info.address || '',
+                        country: info.country || '',
+                        countryCode: info.countryCode || '',
+                        lat: coords?.lat ?? info.lat ?? null,
+                        lng: coords?.lng ?? info.lng ?? null,
+                        hours: info.hours || null,
+                        openingHours: info.openingHours || null,
+                        workingHours: info.workingHours || null,
                     },
                     image:
                         pickSafeDisplayImageUrl(
@@ -326,14 +365,22 @@ export const InvitationProvider = ({ children }) => {
                             data.avatarUrl,
                         ) || DEFAULT_BUSINESS_COVER,
                     avatar: data.avatarUrl || '',
-                    location: info.city || info.address || '',
                     description: info.description || '',
                     phone: info.phone || '',
                     rating: 5.0,
                     reviews: [],
                     ...info,
-                    lat: Number.isFinite(latNum) ? latNum : null,
-                    lng: Number.isFinite(lngNum) ? lngNum : null,
+                    city,
+                    // Card location label = city only (never street address).
+                    location: city,
+                    hours: info.hours || null,
+                    openingHours: info.openingHours || null,
+                    workingHours: info.workingHours || null,
+                    // Ignore stale Google openNow when a weekly schedule exists.
+                    openNow: info.hours ? null : (typeof info.openNow === 'boolean' ? info.openNow : null),
+                    lat: coords?.lat ?? null,
+                    lng: coords?.lng ?? null,
+                    countryCode: info.countryCode || info.country || null,
                     brandKit,
                     theme: info.theme || brandKit.theme || undefined,
                 });
@@ -497,27 +544,31 @@ export const InvitationProvider = ({ children }) => {
     };
 
     const resolveVenueCoordsForPublicInvite = async (newInvite) => {
-        let lat = newInvite?.lat ?? null;
-        let lng = newInvite?.lng ?? null;
-        let countryCode = newInvite?.countryCode ?? null;
+        let coords = getInvitationLatLng(newInvite);
+        let countryCode = newInvite?.countryCode ?? newInvite?.country ?? null;
 
         if (newInvite?.restaurantId) {
             const cached = restaurants.find((r) => r.id === newInvite.restaurantId);
             if (cached) {
-                if (cached.lat != null && lat == null) lat = cached.lat;
-                if (cached.lng != null && lng == null) lng = cached.lng;
-                if (cached.countryCode && !countryCode) countryCode = cached.countryCode;
+                if (!coords) coords = getInvitationLatLng(cached);
+                if ((cached.countryCode || cached.country) && !countryCode) {
+                    countryCode = cached.countryCode || cached.country;
+                }
             }
-            if (lat == null || lng == null) {
+            if (!coords) {
                 try {
                     const snap = await getDoc(doc(db, 'public_profiles', newInvite.restaurantId));
                     if (snap.exists()) {
                         const data = snap.data();
                         const info = data?.businessPublic || {};
-                        if (info.lat != null && lat == null) lat = Number(info.lat);
-                        if (info.lng != null && lng == null) lng = Number(info.lng);
-                        if ((info.countryCode || data?.countryCode) && !countryCode) {
-                            countryCode = info.countryCode || data.countryCode;
+                        coords = getInvitationLatLng({
+                            lat: info.lat,
+                            lng: info.lng,
+                            coordinates: info.coordinates,
+                            location: info.location,
+                        });
+                        if ((info.countryCode || info.country || data?.countryCode) && !countryCode) {
+                            countryCode = info.countryCode || info.country || data.countryCode;
                         }
                     }
                 } catch {
@@ -526,7 +577,11 @@ export const InvitationProvider = ({ children }) => {
             }
         }
 
-        return { lat, lng, countryCode };
+        return {
+            lat: coords?.lat ?? null,
+            lng: coords?.lng ?? null,
+            countryCode,
+        };
     };
 
     const resolveCreatorGeoForInviteDraft = async () => {
@@ -602,13 +657,17 @@ export const InvitationProvider = ({ children }) => {
             }
 
             const isBusinessAccount = cannotCreateInvitations(firebaseProfile);
-            const coords = getInvitationLatLng(newInvite);
+            const inviteCoords =
+                getInvitationLatLng({ lat: venueGeo.lat, lng: venueGeo.lng }) ||
+                getInvitationLatLng(newInvite);
             const inviteData = {
                 ...newInvite,
                 inviteCategory: 'public',
                 userCity: creatorGeo.userCity || null,
                 userLat: creatorGeo.userLat ?? null,
                 userLng: creatorGeo.userLng ?? null,
+                userCountryCode: creatorGeo.userCountryCode || newInvite.userCountryCode || null,
+                countryCode: venueGeo.countryCode || newInvite.countryCode || null,
                 restaurantCity: newInvite.restaurantCity || newInvite.city || null,
                 hostId: currentUser.id,
                 author: {
@@ -628,9 +687,9 @@ export const InvitationProvider = ({ children }) => {
                 privacy: newInvite.privacy || 'public',
                 createdAt: serverTimestamp()
             };
-            if (coords) {
-                inviteData.lat = coords.lat;
-                inviteData.lng = coords.lng;
+            if (inviteCoords) {
+                inviteData.lat = inviteCoords.lat;
+                inviteData.lng = inviteCoords.lng;
             } else {
                 delete inviteData.lat;
                 delete inviteData.lng;
@@ -800,6 +859,8 @@ export const InvitationProvider = ({ children }) => {
             showToast('Business accounts cannot join invitations.', 'error');
             return false;
         }
+        const uid = currentUser?.uid || currentUser?.id;
+        if (!uid || uid === 'guest') return false;
         try {
             const invRef = doc(db, 'invitations', invId);
             const invDoc = await getDoc(invRef);
@@ -809,21 +870,34 @@ export const InvitationProvider = ({ children }) => {
             const hostId = invData.author?.id;
 
             await updateDoc(invRef, {
-                requests: arrayUnion(currentUser.id)
+                requests: arrayUnion(uid)
             });
 
-            if (hostId && hostId !== currentUser.id) {
+            patchPublicInvitation(invId, (inv) => {
+                const prevRequests = Array.isArray(inv.requests) ? inv.requests : [];
+                return {
+                    ...inv,
+                    requests: prevRequests.includes(uid) ? prevRequests : [...prevRequests, uid],
+                };
+            });
+
+            if (hostId && hostId !== uid) {
+                const requesterName =
+                    currentUser.name ||
+                    currentUser.displayName ||
+                    currentUser.display_name ||
+                    'Someone';
                 await addUserNotification({
                     userId: hostId,
                     type: 'join_request',
                     title: '🙋 New Join Request',
-                    message: `${currentUser.name} wants to join your invitation "${invData.title}"`,
+                    message: `${requesterName} wants to join your invitation "${invData.title}"`,
                     invitationId: invId,
                     actionUrl: `/invitation/${invId}?section=join-requests`,
                 });
 
                 notificationSound.showJoinRequestNotification(
-                    currentUser.name,
+                    requesterName,
                     invData.title,
                     () => { window.location.href = `/invitation/${invId}`; }
                 );
@@ -837,11 +911,17 @@ export const InvitationProvider = ({ children }) => {
     };
 
     const cancelRequest = async (invId) => {
+        const uid = currentUser?.uid || currentUser?.id;
+        if (!uid || uid === 'guest') return false;
         try {
             const invRef = doc(db, 'invitations', invId);
             await updateDoc(invRef, {
-                requests: arrayRemove(currentUser.id)
+                requests: arrayRemove(uid)
             });
+            patchPublicInvitation(invId, (inv) => ({
+                ...inv,
+                requests: (Array.isArray(inv.requests) ? inv.requests : []).filter((id) => id !== uid),
+            }));
             return true;
         } catch (err) {
             console.error("Error canceling request:", err);
@@ -860,6 +940,16 @@ export const InvitationProvider = ({ children }) => {
             await updateDoc(invRef, {
                 requests: arrayRemove(userId),
                 joined: arrayUnion(userId)
+            });
+
+            patchPublicInvitation(invId, (inv) => {
+                const prevRequests = Array.isArray(inv.requests) ? inv.requests : [];
+                const prevJoined = Array.isArray(inv.joined) ? inv.joined : [];
+                return {
+                    ...inv,
+                    requests: prevRequests.filter((id) => id !== userId),
+                    joined: prevJoined.includes(userId) ? prevJoined : [...prevJoined, userId],
+                };
             });
 
             // System chat broadcast for user joining
@@ -918,6 +1008,10 @@ export const InvitationProvider = ({ children }) => {
         try {
             const invRef = doc(db, 'invitations', invId);
             await updateDoc(invRef, { requests: arrayRemove(userId) });
+            patchPublicInvitation(invId, (inv) => ({
+                ...inv,
+                requests: (Array.isArray(inv.requests) ? inv.requests : []).filter((id) => id !== userId),
+            }));
             return true;
         } catch (err) {
             console.error("Error rejecting user:", err);
@@ -926,7 +1020,7 @@ export const InvitationProvider = ({ children }) => {
         }
     };
 
-    // ── Private / dating drafts: Dine Credits (free+paid), same pool as AI; admins bypass. ──
+    // ── Private / social drafts: Dine Credits from purchase wallet (`paidCredits`); admins bypass. ──
 
     const canCreateSocialInvitation = (kind = 'social') => {
         if (!currentUser || isGuest) return { canCreate: false, reason: 'guest' };
@@ -1009,14 +1103,17 @@ export const InvitationProvider = ({ children }) => {
     const publishPrivateInvitationDraft = async (invitationId) => {
         const uid = currentUser?.uid || currentUser?.id;
         if (!invitationId || !currentUser || uid === 'guest') {
-            return { success: false, alreadyPublished: false, shareToken: null };
+            return { success: false, alreadyPublished: false, shareToken: null, notificationsSent: 0 };
         }
         try {
             const result = await publishPrivateInvitationDraftCallable({ invitationId });
+            const notificationsSent = Math.max(0, Number(result?.data?.notificationsSent) || 0);
             return {
                 success: true,
                 alreadyPublished: result?.data?.alreadyPublished === true,
                 shareToken: result?.data?.shareToken || null,
+                notificationsSent,
+                notifyError: result?.data?.notifyError || null,
             };
         } catch (error) {
             const reason = getCallableErrorReason(error);
@@ -1026,7 +1123,13 @@ export const InvitationProvider = ({ children }) => {
                 showToast(error?.message || 'Failed to publish private invitation.', 'error');
             }
             console.error('Error publishing private invitation draft:', error);
-            return { success: false, alreadyPublished: false, shareToken: null, code: reason || null };
+            return {
+                success: false,
+                alreadyPublished: false,
+                shareToken: null,
+                notificationsSent: 0,
+                code: reason || null,
+            };
         }
     };
 
@@ -1035,12 +1138,128 @@ export const InvitationProvider = ({ children }) => {
         if (!invitationId || !currentUser || uid === 'guest') {
             return { success: false, alreadyPublished: false };
         }
-        try {
-            const result = await publishPublicInvitationCallable({ invitationId });
-            return {
-                success: true,
-                alreadyPublished: result?.data?.alreadyPublished === true
+
+        const refreshLocal = async () => {
+            try {
+                const snap = await getDoc(doc(db, 'invitations', invitationId));
+                if (snap.exists()) {
+                    upsertPublicInvitation({ id: snap.id, ...snap.data() });
+                }
+            } catch (refreshErr) {
+                console.warn('Published but failed to refresh local invitation list:', refreshErr);
+            }
+        };
+
+        /** Keep draft geo aligned with live GPS so publish CF / client fallback use the same facts. */
+        const syncDraftGeoBeforePublish = async () => {
+            const snap = await getDoc(doc(db, 'invitations', invitationId));
+            if (!snap.exists()) {
+                return { ok: false, code: 'not-found' };
+            }
+            const inv = { id: snap.id, ...snap.data() };
+            const live = await detectLiveUserGps();
+            if (!live.success) {
+                return {
+                    ok: false,
+                    code: INVITATION_ERROR_CODES.LOCATION_NOT_DETERMINED,
+                    message: LOCATION_NOT_DETERMINED_ERROR_MESSAGE,
+                };
+            }
+
+            let venueLat = inv.lat ?? null;
+            let venueLng = inv.lng ?? null;
+            let venueCountryCode = inv.countryCode ?? null;
+            if (inv.restaurantId) {
+                const venueGeo = await resolveVenueCoordsForPublicInvite(inv);
+                if (venueGeo.lat != null && venueLat == null) venueLat = venueGeo.lat;
+                if (venueGeo.lng != null && venueLng == null) venueLng = venueGeo.lng;
+                if (venueGeo.countryCode && !venueCountryCode) venueCountryCode = venueGeo.countryCode;
+            }
+
+            const geofenceBlock = assertPublicInvitationGeofenceRule({
+                creatorCoords: { lat: live.latitude, lng: live.longitude },
+                venueCoords: { lat: venueLat, lng: venueLng },
+                creatorCountryCode: live.countryCode,
+                venueCountryCode,
+            });
+            if (geofenceBlock) {
+                return { ok: false, ...geofenceBlock };
+            }
+
+            const patch = {
+                userCity: live.city || inv.userCity || null,
+                userLat: live.latitude,
+                userLng: live.longitude,
+                userCountryCode: live.countryCode || inv.userCountryCode || null,
+                countryCode: venueCountryCode || inv.countryCode || null,
+                templateType: 'classic',
             };
+            if (venueLat != null && venueLng != null) {
+                patch.lat = venueLat;
+                patch.lng = venueLng;
+            }
+
+            await updateDoc(doc(db, 'invitations', invitationId), patch);
+            return {
+                ok: true,
+                inv: { ...inv, ...patch },
+                live,
+                venueLat,
+                venueLng,
+                venueCountryCode,
+            };
+        };
+
+        const publishViaClient = async (synced) => {
+            const inv = synced.inv;
+            await updateDoc(doc(db, 'invitations', invitationId), {
+                status: 'active',
+                publishedAt: serverTimestamp(),
+                archiveAfterAt: computeArchiveAfterFirestoreTimestamp(inv.date, inv.time || '20:30', Timestamp),
+                userCity: synced.live.city || inv.userCity || null,
+                userLat: synced.live.latitude,
+                userLng: synced.live.longitude,
+                userCountryCode: synced.live.countryCode || inv.userCountryCode || null,
+                restaurantCity: inv.restaurantCity || inv.city || null,
+                lat: synced.venueLat ?? inv.lat ?? null,
+                lng: synced.venueLng ?? inv.lng ?? null,
+                countryCode: synced.venueCountryCode || inv.countryCode || null,
+                inviteCategory: 'public',
+                templateType: 'classic',
+            });
+            await refreshLocal();
+            return { success: true, alreadyPublished: false };
+        };
+
+        try {
+            const synced = await syncDraftGeoBeforePublish();
+            if (!synced.ok) {
+                showInvitationRuleToast(synced.code, synced.message);
+                return { success: false, alreadyPublished: false, code: synced.code || null };
+            }
+
+            try {
+                const result = await publishPublicInvitationCallable({ invitationId });
+                await refreshLocal();
+                return {
+                    success: true,
+                    alreadyPublished: result?.data?.alreadyPublished === true,
+                };
+            } catch (cfError) {
+                const reason = getCallableErrorReason(cfError);
+                // Older deployed CF may still use stale profile country — client already validated.
+                if (
+                    reason === INVITATION_ERROR_CODES.PUBLIC_MUST_BE_LOCAL ||
+                    reason === INVITATION_ERROR_CODES.LOCATION_NOT_DETERMINED
+                ) {
+                    console.warn(
+                        '[publishPublicInvitationDraft] CF geofence rejected; publishing via host update after client validation',
+                        reason
+                    );
+                    return publishViaClient(synced);
+                }
+                throw cfError;
+            }
         } catch (error) {
             const reason = getCallableErrorReason(error);
             if (
@@ -1600,21 +1819,21 @@ export const InvitationProvider = ({ children }) => {
         if (!userId) return false;
         if (effectiveJoinedCommunities.includes(partnerId)) return true;
 
-        patchJoinedCommunitiesOptimistic(partnerId, true);
+        // Do NOT optimistic-patch before the callable: community chat listeners would
+        // start while Firestore rules still deny reads (permission-denied, no messages).
         try {
             await setCommunityMembershipCallable({ partnerId, action: 'join' });
+            patchJoinedCommunitiesOptimistic(partnerId, true);
             void addUserNotification({
                 userId: partnerId,
                 type: 'new_community_member',
                 title: '🎉 New Community Member!',
                 message: `${currentUser.name || currentUser.displayName || 'Someone'} has joined your community.`,
-                senderName: currentUser.name || currentUser.displayName || 'Someone',
-                senderAvatar: getSafeAvatar(currentUser),
+                actionUrl: '/business-dashboard',
             });
             addNotification('🎉 Success!', 'You have joined the community successfully.', 'success');
             return true;
         } catch (error) {
-            patchJoinedCommunitiesOptimistic(partnerId, false);
             console.error('Error joining community:', error);
             const msg = String(error?.message || '');
             if (msg.includes('blocked') || error?.code === 'functions/permission-denied') {

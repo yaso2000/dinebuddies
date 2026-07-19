@@ -189,6 +189,9 @@ export interface GeneratedImagePayload {
     mediaLibraryItem: MediaLibraryItem;
     moderation: ImageModerationResult;
     imagePrompt: string;
+    /** Firebase Storage object path when uploaded server-side */
+    path?: string;
+    bucket?: string;
 }
 
 export interface MultimodalPipelineInput {

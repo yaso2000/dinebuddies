@@ -15,7 +15,6 @@ const AGE_OPTIONS = ['18-24', '25-34', '35-44', '45-54', '55+'];
 const VENUE_TYPES = ['Restaurant', 'Cafe', 'Bar', 'Night Club', 'Cinema', 'Concert', 'Sports Match'];
 const INVITE_MOODS = ['social', 'family', 'celebratory', 'friends', 'new_friends', 'formal'];
 const PAYMENT_TYPES = ['Split', 'Host pays', 'Guest pays'];
-const TEMPLATE_TYPES = ['hero_4_5', 'classic'];
 const COLOR_SCHEMES = ['oceanBlue', 'sunsetGlow', 'forestGreen', 'royalPurple', 'midnightBlack'];
 
 function defaultDateString() {
@@ -45,7 +44,7 @@ export default function AdminCreateDemoInvitationForm({ onCreated }) {
   const [paymentType, setPaymentType] = useState('Split');
   const [type, setType] = useState('Restaurant');
   const [inviteMood, setInviteMood] = useState('social');
-  const [templateType, setTemplateType] = useState('hero_4_5');
+  const templateType = 'classic';
   const [colorScheme, setColorScheme] = useState('oceanBlue');
   const [restaurantId, setRestaurantId] = useState('');
   const [businesses, setBusinesses] = useState([]);
@@ -441,45 +440,24 @@ export default function AdminCreateDemoInvitationForm({ onCreated }) {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', maxWidth: 560 }}>
-          <div>
-            <label className="db-label" htmlFor="admin-invite-template">
-              {t('template', 'Template')}
-            </label>
-            <select
-              id="admin-invite-template"
-              className="db-select"
-              style={{ width: '100%' }}
-              value={templateType}
-              disabled={creating}
-              onChange={(e) => setTemplateType(e.target.value)}
-            >
-              {TEMPLATE_TYPES.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="db-label" htmlFor="admin-invite-color">
-              {t('color_scheme', 'Color scheme')}
-            </label>
-            <select
-              id="admin-invite-color"
-              className="db-select"
-              style={{ width: '100%' }}
-              value={colorScheme}
-              disabled={creating}
-              onChange={(e) => setColorScheme(e.target.value)}
-            >
-              {COLOR_SCHEMES.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div style={{ maxWidth: 280 }}>
+          <label className="db-label" htmlFor="admin-invite-color">
+            {t('color_scheme', 'Color scheme')}
+          </label>
+          <select
+            id="admin-invite-color"
+            className="db-select"
+            style={{ width: '100%' }}
+            value={colorScheme}
+            disabled={creating}
+            onChange={(e) => setColorScheme(e.target.value)}
+          >
+            {COLOR_SCHEMES.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="db-toolbar" style={{ margin: 0 }}>

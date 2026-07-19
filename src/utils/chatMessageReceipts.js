@@ -13,32 +13,45 @@ export function getMessageReceiptState(message, viewerId) {
     return null;
   }
 
+  if (message.status === 'pending' || message.pending === true) {
+    return 'pending';
+  }
+
+  if (message.status === 'failed' || message.failed === true) {
+    return 'failed';
+  }
+
   const readByOthers = withoutViewer(message.readBy, viewerId);
-  if (readByOthers.length > 0) {
+  if (readByOthers.length > 0 || message.status === 'read') {
     return 'read';
   }
 
   const deliveredToOthers = withoutViewer(message.deliveredTo, viewerId);
-  if (deliveredToOthers.length > 0) {
+  if (deliveredToOthers.length > 0 || message.status === 'delivered') {
     return 'delivered';
   }
 
-  if (message.status === 'read' || message.status === 'delivered') {
-    return message.status;
-  }
-
+  // On server but not yet delivered — keep quiet to avoid checkmark clutter.
   return 'sent';
 }
 
 export function getMessageReceiptDisplay(message, viewerId) {
   const state = getMessageReceiptState(message, viewerId);
-  if (!state) {
+  if (!state || state === 'sent') {
     return null;
+  }
+
+  if (state === 'pending') {
+    return { state, ticks: '◷' };
+  }
+
+  if (state === 'failed') {
+    return { state, ticks: '!' };
   }
 
   return {
     state,
-    ticks: state === 'sent' ? '✓' : '✓✓',
+    ticks: '✓✓',
   };
 }
 

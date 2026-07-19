@@ -25,6 +25,7 @@ import { asUidArray } from '../utils/userSocialLists';
 import { isVisibleInPublicFeed } from '../utils/invitationRules';
 import { isPublicInvitationExpiredForArchive } from '../utils/invitationExpiry';
 import { formatBiDiText, escapeHtmlText } from '../utils/formatBiDiText';
+import { fetchIpLocation } from '../utils/locationUtils';
 import { AppText, AppTextInput } from "../components/base";
 
 /** BiDi-safe escaped text for Leaflet HTML popups. */
@@ -98,29 +99,56 @@ const Home = () => {
     return R * c; // Distance in km
   };
 
-  // Get user location on component mount
+  // Get user location on component mount (GPS, then IP fallback so the feed is not empty)
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-          setLocationError(null);
-        },
-        (error) => {
-          console.log('Location access denied or unavailable:', error);
-          setLocationError(error.message);
-          // Default to null (world view) if location denied
-          setUserLocation(null);
+    let cancelled = false;
+
+    const applyCoords = (lat, lng) => {
+      if (cancelled || lat == null || lng == null) return;
+      setUserLocation({ lat: Number(lat), lng: Number(lng) });
+      setLocationError(null);
+    };
+
+    const applyIpFallback = async () => {
+      try {
+        const ip = await fetchIpLocation();
+        if (cancelled) return;
+        if (ip?.latitude != null && ip?.longitude != null) {
+          applyCoords(ip.latitude, ip.longitude);
+          return;
         }
-      );
-    } else {
+      } catch (err) {
+        console.warn('IP location fallback failed:', err);
+      }
+      if (!cancelled) {
+        setUserLocation(null);
+      }
+    };
+
+    if (!navigator.geolocation) {
       setLocationError(t('geolocation_not_supported'));
-      setUserLocation(null);
+      void applyIpFallback();
+      return () => {
+        cancelled = true;
+      };
     }
-  }, []);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        applyCoords(position.coords.latitude, position.coords.longitude);
+      },
+      (error) => {
+        console.log('Location access denied or unavailable:', error);
+        if (!cancelled) setLocationError(error.message);
+        void applyIpFallback();
+      },
+      { enableHighAccuracy: false, timeout: 12000, maximumAge: 120000 }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
 
 
 

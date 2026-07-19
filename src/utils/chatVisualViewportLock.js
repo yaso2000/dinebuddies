@@ -3,8 +3,9 @@
  *
  * - **Android (Chrome):** use `offsetLeft` / `offsetTop` + `vv.width` / `vv.height` (matches how
  *   Chrome maps the visual viewport — same pattern as your working Android screenshot).
- * - **Apple WebKit:** reset scroll; `top = offsetTop` (when > 0 the visual band already clears the
- *   status bar), `height = vv.height`, full width. Header safe-area padding only when `offsetTop === 0`.
+ * - **Apple WebKit:** reset scroll; `top = max(offsetTop, safe-area-top)` so the header
+ *   never slides under the iPhone status bar when keyboard opens (chat-vv-shell zeroes
+ *   CSS padding). `height = vv.height - (top - offsetTop)`, full width.
  *
  * Inner layout stays flex: header flex-shrink-0, body flex:1 min-height:0, footer flex-shrink-0.
  * On iOS, also handle `visualViewport` **scroll** (rubber-band / pan): reset document scroll and
@@ -116,10 +117,15 @@ function applyVisualViewportShellGeometry(el, vv, innerH, innerW, override, andr
     if (isAppleWebKitTouch()) {
         resetDocumentScroll();
         const offsetTop = Math.max(0, Math.round(vv.offsetTop));
-        let h = Math.max(1, Math.round(vv.height));
-        if (override != null) h = Math.max(1, Math.min(override, innerH));
+        const safeTop = Math.round(readSafeAreaInsetsPx().top);
+        // When keyboard opens, iOS often keeps offsetTop at 0 while chat-vv-shell
+        // zeroes CSS safe-area padding — pin top to at least the status-bar inset
+        // so the chat header never slides under the system status bar.
+        const top = Math.max(offsetTop, safeTop);
+        let h = Math.max(1, Math.round(vv.height) - (top - offsetTop));
+        if (override != null) h = Math.max(1, Math.min(override, innerH - top));
         el.style.left = '0px';
-        el.style.top = `${offsetTop}px`;
+        el.style.top = `${top}px`;
         el.style.width = '100%';
         el.style.height = `${h}px`;
         el.style.maxHeight = `${h}px`;

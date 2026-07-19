@@ -148,12 +148,25 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         const userRef = db.collection('users').doc(targetUid);
         let paidAfter = 0;
 
+        if (String(targetUid).startsWith('demo_')) {
+            throw new functions.https.HttpsError(
+                'failed-precondition',
+                'Demo users cannot receive admin credit grants.'
+            );
+        }
+
         await db.runTransaction(async (tx) => {
             const snap = await tx.get(userRef);
             if (!snap.exists) {
                 throw new functions.https.HttpsError('not-found', 'User not found.');
             }
             const d = snap.data() || {};
+            if (d.isDemo === true) {
+                throw new functions.https.HttpsError(
+                    'failed-precondition',
+                    'Demo users cannot receive admin credit grants.'
+                );
+            }
             const result = grantAdminPaidCreditsInTransaction(tx, userRef, d, targetUid, amount, {
                 reason: note ? `admin_grant:${note}` : 'admin_grant',
                 adminUid: requesterUid,

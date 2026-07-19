@@ -13,7 +13,11 @@ const SEARCH_DEBOUNCE_MS = 350;
 /**
  * Browse + search hook for the users directory.
  */
-export function useUserDirectory({ excludeUid, enabled = true } = {}) {
+export function useUserDirectory({
+    excludeUid,
+    enabled = true,
+    pageSize = USER_DIRECTORY_PAGE_SIZE,
+} = {}) {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -45,14 +49,18 @@ export function useUserDirectory({ excludeUid, enabled = true } = {}) {
             try {
                 const result = await fetchUserDirectoryPage({
                     excludeUid,
-                    pageSize: USER_DIRECTORY_PAGE_SIZE,
+                    pageSize,
                     lastDoc: reset ? null : lastDocRef.current,
                 });
                 if (requestId !== requestIdRef.current) return;
 
                 lastDocRef.current = result.lastDoc;
                 setHasMore(result.hasMore);
-                setUsers((prev) => (reset ? result.users : [...prev, ...result.users]).filter((u) => !isExcludedDirectoryUser(u)));
+                setUsers((prev) =>
+                    (reset ? result.users : [...prev, ...result.users]).filter(
+                        (u) => !isExcludedDirectoryUser(u)
+                    )
+                );
             } catch (err) {
                 console.error('[useUserDirectory] browse', err);
                 if (requestId === requestIdRef.current) {
@@ -66,7 +74,7 @@ export function useUserDirectory({ excludeUid, enabled = true } = {}) {
                 }
             }
         },
-        [enabled, excludeUid]
+        [enabled, excludeUid, pageSize]
     );
 
     useEffect(() => {

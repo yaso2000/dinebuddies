@@ -5,7 +5,7 @@ import { AppText } from '../base';
 import CommunityHostBannerComposerTools from './CommunityHostBannerComposerTools';
 import CommunityBannerDraggableTitle from './CommunityBannerDraggableTitle';
 import CommunityBannerDraggableBody from './CommunityBannerDraggableBody';
-import { isBannerBgTransparent, resolveBannerBackgroundStyle, hasAnyBannerBodyText } from '../../utils/communityChatBanner';
+import { isBannerBgTransparent, resolveBannerBackgroundStyle, hasAnyBannerBodyText, bannerBodySlotIsVisible } from '../../utils/communityChatBanner';
 import CommunityBannerYoutubeBackground from './CommunityBannerYoutubeBackground';
 import CommunityBannerYoutubeMemberSound from './CommunityBannerYoutubeMemberSound';
 import CommunityBannerYoutubeHostControls from './CommunityBannerYoutubeHostControls';
@@ -233,7 +233,7 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
 
         {showBodyOnBanner
           ? (banner.texts || []).map((slot, index) =>
-              slot.text ? (
+              bannerBodySlotIsVisible(slot) ? (
                 <CommunityBannerDraggableBody
                   key={`banner-body-${index}`}
                   text={slot.text}

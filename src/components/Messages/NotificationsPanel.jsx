@@ -29,7 +29,7 @@ import '../../pages/Notifications.css';
 import { navigateToHostedInvitationDetails } from '../../utils/hostedInvitationRoutes';
 import {
   getNotificationInvitationId,
-  isActionableSocialInvitationNotification,
+  isOpenableSocialInvitationNotification,
   loadHostedInvitationById,
 } from '../../utils/staleInvitationNotifications';
 import { AppText, AppTextInput } from '../base';
@@ -62,6 +62,7 @@ const getNotifTitle = (notif, t) => {
     case 'new_booking':return t('notif_title_new_booking', 'New booking');
     case 'business_feedback':return t('notif_title_business_feedback', 'Customer feedback');
     case 'business_post':return t('notif_title_business_post', 'New post');
+    case 'stage_invite':return t('notif_title_stage_invite', 'Stage invitation');
     default:return notif.title || t('notification', 'Notification');
   }
 };
@@ -127,6 +128,11 @@ const getNotifMessage = (notif, t) => {
     case 'business_feedback':
     case 'business_post':
       return notif.message || '';
+    case 'stage_invite':
+      return (
+        notif.message ||
+        t('notif_msg_stage_invite', '{{name}} invited you to a Stage', { name })
+      );
     default:
       return notif.message || '';
   }
@@ -265,13 +271,13 @@ const NotificationsPanel = () => {
   };
 
   const handleNotificationClick = async (notification) => {
+    // Closing an open swipe on this row only — other rows still navigate.
     if (openSwipeId === notification.id) {
       setOpenSwipeId(null);
       return;
     }
     if (openSwipeId) {
       setOpenSwipeId(null);
-      return;
     }
 
     // Mark as read
@@ -279,29 +285,36 @@ const NotificationsPanel = () => {
       markAsRead(notification.id, notification._collection || 'notifications');
     }
 
-    // Special routing: business_message should always open the chat,
-    // regardless of what actionUrl is stored (Cloud Function may store /profile/... by mistake)
-    if (notification.type === 'business_message' || notification.type === 'message') {
-      const senderId = notification.fromUserId || notification.metadata?.senderId;
+    // Special routing: business/community messages → chat
+    if (
+      notification.type === 'business_message' ||
+      notification.type === 'message' ||
+      notification.type === 'community_message'
+    ) {
+      const senderId =
+        notification.fromUserId ||
+        notification.metadata?.senderId ||
+        notification.metadata?.partnerId;
       if (senderId) {
         navigate(`/chat/${senderId}`);
         return;
       }
+      if (notification.actionUrl) {
+        navigate(notification.actionUrl);
+        return;
+      }
     }
 
-    // Private/dating invites — validate before navigate; drop stale notifications
+    // Social/private invites — open details for host/invitee even after accept/decline
     if (
-    notification.type === 'social_invitation' ||
-    notification.type === 'social_invitation_response')
-    {
+      notification.type === 'social_invitation' ||
+      notification.type === 'social_invitation_response'
+    ) {
       const invId = getNotificationInvitationId(notification);
       if (invId) {
         const inv = await loadHostedInvitationById(invId);
         const myUid = currentUser?.uid || currentUser?.id;
-        if (
-        notification.type === 'social_invitation' && (
-        !inv || !isActionableSocialInvitationNotification(inv, myUid)))
-        {
+        if (!inv || !isOpenableSocialInvitationNotification(inv, myUid)) {
           showToast(
             t(
               'notification_invite_unavailable',
@@ -312,9 +325,19 @@ const NotificationsPanel = () => {
           deleteNotification(notification.id, notification._collection || 'notifications');
           return;
         }
-        void navigateToHostedInvitationDetails(invId, navigate);
+        await navigateToHostedInvitationDetails(invId, navigate);
         return;
       }
+      // Last resort: stored actionUrl (may be hosted path without invitationId field)
+      if (notification.actionUrl) {
+        navigate(notification.actionUrl);
+        return;
+      }
+      showToast(
+        t('notification_invite_unavailable', 'This invitation is no longer available.'),
+        'info'
+      );
+      return;
     }
 
     // Navigate to action URL if exists
@@ -338,9 +361,9 @@ const NotificationsPanel = () => {
         invitations: [
         'invitation_accepted', 'invitation_rejected',
         'social_invitation', 'social_invitation_response',
-        'join_request', 'request_approved', 'invitation_full'],
+        'join_request', 'request_approved', 'invitation_full', 'stage_invite'],
 
-        messages: ['message'],
+        messages: ['message', 'community_message', 'business_message'],
         likes: ['like'],
         comments: ['comment'],
         reminders: ['reminder'],

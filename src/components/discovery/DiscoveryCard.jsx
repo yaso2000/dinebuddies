@@ -52,7 +52,11 @@ export default function DiscoveryCard({
     () => invitationUser?.following || [],
     [invitationUser?.following]
   );
-  const canMessageFromServer = useCanMessageMember(viewerUid, profile?.id, viewerFollowing);
+  const canMessageFromServer = useCanMessageMember(viewerUid, profile?.id, viewerFollowing, {
+    enabled: Boolean(isTop),
+    viewerProfile: viewerProfile,
+    targetProfile: targetUser,
+  });
   const { liked, greetedToday } = useDiscoveryActionStatus(viewerUid, profile?.id);
 
   const x = useMotionValue(0);
@@ -74,12 +78,21 @@ export default function DiscoveryCard({
     try {
       const snap = await getDoc(doc(db, 'users', profile.id));
       const targetFollowing = snap.exists() ? snap.data()?.following || [] : [];
-      const allowed = await checkCanMessage(viewerUid, profile.id, viewerFollowing, targetFollowing);
+      const allowed = await checkCanMessage(
+        viewerUid,
+        profile.id,
+        viewerFollowing,
+        targetFollowing,
+        {
+          currentUserProfile: viewerProfile,
+          targetUserProfile: targetUser,
+        }
+      );
       setCanChat(allowed);
     } catch {
       setCanChat(false);
     }
-  }, [profile?.id, viewerFollowing, viewerUid]);
+  }, [profile?.id, viewerFollowing, viewerUid, viewerProfile, targetUser]);
 
   useEffect(() => {
     setCanChat(canMessageFromServer);
@@ -294,15 +307,28 @@ export default function DiscoveryCard({
 
       <div className="discovery-card__gradient" aria-hidden />
 
-      <OnlineStatusBadge isOnline={isOnline} className="discovery-card__online-badge" size="sm" />
-
       <div className="discovery-card__info discovery-card__info--profile">
+        <div className="discovery-card__meta-row">
+          {profile.city ? (
+            <AppText as="span" className="discovery-card__city">
+              {profile.city}
+            </AppText>
+          ) : null}
+          <OnlineStatusBadge
+            isOnline={isOnline}
+            className="discovery-card__online-badge"
+            size="sm"
+            showLabel={false}
+          />
+        </div>
         <div className="discovery-card__headline">
           <AppText as="h2" className="discovery-card__name">{profile.name}</AppText>
-          {profile.ageCategory ?
-          <AppText as="span" className="discovery-card__age-badge">{profile.ageCategory}</AppText> :
-          null}
         </div>
+        {profile.bio ? (
+          <AppText as="p" className="discovery-card__bio">
+            {profile.bio}
+          </AppText>
+        ) : null}
       </div>
 
       <div className="discovery-card__actions discovery-card__actions--ghost">

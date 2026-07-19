@@ -335,6 +335,22 @@ const SocialInvitationPreview = () => {
         setPostPublishShareToken(publishResult.shareToken);
       }
 
+      const inviteeCount = Array.isArray(invitationRef.current?.invitedFriends)
+        ? invitationRef.current.invitedFriends.length
+        : 0;
+      const notificationsSent = Math.max(0, Number(publishResult.notificationsSent) || 0);
+      if (inviteeCount > 0 && (notificationsSent === 0 || publishResult.notifyError)) {
+        showToast(
+          t('social_invite_publish_notify_warning', {
+            defaultValue:
+              'Invitation published, but notifications could not be delivered to all members. Try sending again from preview.',
+          }),
+          'warning'
+        );
+        // Stay on preview — retry hits alreadyPublished and resends missing notifs (no re-charge).
+        return;
+      }
+
       setHasSentToMembers(true);
       showToast(
         t('social_invite_sent_to_members', {

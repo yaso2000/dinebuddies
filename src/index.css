@@ -764,8 +764,8 @@ body {
   }
 
   .chat-root .messages-area,
-  .community-chat-root .message-list,
-  .invitation-chat-root .message-list {
+  .community-chat-root .community-main-chat__messages,
+  .invitation-chat-root .community-main-chat__messages {
     overscroll-behavior: contain;
   }
 
@@ -878,8 +878,8 @@ body {
   }
 
   .chat-root .messages-area,
-  .community-chat-root .message-list,
-  .invitation-chat-root .message-list {
+  .community-chat-root .community-main-chat__messages,
+  .invitation-chat-root .community-main-chat__messages {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
@@ -2670,6 +2670,31 @@ select.input-field {
 .directory-page .restaurant-grid-card__footer {
   padding: 10px 8px 12px;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.directory-page .restaurant-grid-card__host-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(216, 180, 254, 0.28);
+  background: rgba(40, 40, 45, 0.9);
+  color: #d8b4fe;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.directory-page .restaurant-grid-card__host-btn:hover {
+  background: rgba(40, 40, 45, 1);
 }
 
 .directory-page .restaurant-grid-card__name-btn {
@@ -2690,6 +2715,20 @@ select.input-field {
   line-height: 1.25;
   text-align: center;
   color: #f1f5f9;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.directory-page .restaurant-grid-card__city {
+  margin: 4px 0 0;
+  padding: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  color: rgba(226, 232, 240, 0.78);
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -3631,6 +3670,19 @@ button.notification-bell {
 
 [data-theme='light'] .notification-bell.active {
   color: #0f172a;
+}
+
+.header-actions .header-stages-btn {
+  color: color-mix(in srgb, var(--brand-primary) 85%, var(--text-muted));
+}
+
+.header-actions .header-stages-btn:hover,
+.header-actions .header-stages-btn.active {
+  color: var(--brand-primary);
+}
+
+[data-theme='light'] .header-actions .header-stages-btn.active {
+  color: var(--brand-primary);
 }
 
 /* ── Header: mobile compact (more menu) vs desktop full row ── */

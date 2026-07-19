@@ -200,11 +200,29 @@
     );
 }
 
+.discovery-card__meta-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+
+.discovery-card__city {
+    padding: 0.28rem 0.65rem;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
 .discovery-card__online-badge {
-    position: absolute;
-    top: 12px;
-    inset-inline-start: 12px;
-    z-index: 12;
+    position: static;
+    flex-shrink: 0;
 }
 
 .discovery-card__info--profile {
@@ -225,6 +243,20 @@
     flex-wrap: wrap;
     align-items: baseline;
     gap: 0.45rem 0.65rem;
+}
+
+.discovery-card__bio {
+    margin: 0;
+    max-width: 100%;
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.92);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
 }
 
 .discovery-card__name {
@@ -341,31 +373,41 @@
 }
 
 .discovery-card__action--ghost.discovery-card__action--liked {
-    color: #ef4444;
+    color: #fb7185;
     opacity: 1;
 }
 
 .discovery-card__action--ghost.discovery-card__action--liked svg {
     fill: currentColor;
-    filter: drop-shadow(0 2px 8px rgba(239, 68, 68, 0.65));
+    filter: drop-shadow(0 2px 8px rgba(244, 63, 94, 0.65));
 }
 
 .discovery-card__action--ghost.discovery-card__action--follow {
-    color: #fff;
+    color: #93c5fd;
 }
 
 .discovery-card__action--ghost.discovery-card__action--following {
-    color: #86efac;
+    color: #60a5fa;
+    filter: drop-shadow(0 2px 8px rgba(37, 99, 235, 0.55));
 }
 
 .discovery-card__action--ghost.discovery-card__action--like:not(:disabled) svg {
     filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
 }
 
-.discovery-card__action--ghost.discovery-card__action--greeting,
-.discovery-card__action--ghost.discovery-card__action--gift,
+.discovery-card__action--ghost.discovery-card__action--gift {
+    color: #fbbf24;
+    filter: drop-shadow(0 2px 8px rgba(232, 110, 46, 0.45));
+}
+
+.discovery-card__action--ghost.discovery-card__action--greeting {
+    color: #c4b5fd;
+    filter: drop-shadow(0 2px 8px rgba(124, 58, 237, 0.4));
+}
+
 .discovery-card__action--ghost.discovery-card__action--chat {
-    color: #fff;
+    color: #5eead4;
+    filter: drop-shadow(0 2px 8px rgba(15, 118, 110, 0.45));
 }
 
 .discovery-card__action--ghost.discovery-card__action--greeted {

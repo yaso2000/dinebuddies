@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LuSparkles } from 'react-icons/lu';
 import DiscoveryCard from './DiscoveryCard';
 import './discovery.css';
-import { AppText } from "../base";
+import { AppText } from '../base';
 
 /** Immersive discovery feed — profile photo background + like / wave / gift. */
 export default function DiscoveryFeed({
@@ -13,19 +13,51 @@ export default function DiscoveryFeed({
   onSendGift,
   onGreeting,
   onDeckEmpty,
-  onNearEnd
+  onNearEnd,
 }) {
   const { t } = useTranslation();
   const [index, setIndex] = useState(0);
+  const activeIdRef = useRef(null);
+  const hasStartedRef = useRef(false);
 
+  // Keep the current card when the deck re-sorts (e.g. geo arrives); only clamp / start fresh.
   useEffect(() => {
-    setIndex(0);
+    if (profiles.length === 0) {
+      setIndex(0);
+      activeIdRef.current = null;
+      hasStartedRef.current = false;
+      return;
+    }
+
+    const currentId = activeIdRef.current;
+    if (currentId) {
+      const nextIndex = profiles.findIndex((p) => p.id === currentId);
+      if (nextIndex >= 0) {
+        setIndex(nextIndex);
+        return;
+      }
+    }
+
+    if (!hasStartedRef.current) {
+      setIndex(0);
+      activeIdRef.current = profiles[0]?.id ?? null;
+      return;
+    }
+
+    setIndex((prev) => Math.min(prev, profiles.length - 1));
   }, [profiles]);
 
   const activeProfile = profiles[index] ?? null;
   const nextProfile = profiles[index + 1] ?? null;
   const deckFinished = profiles.length > 0 && index >= profiles.length;
   const isEmpty = !activeProfile;
+
+  useEffect(() => {
+    if (activeProfile?.id) {
+      activeIdRef.current = activeProfile.id;
+      hasStartedRef.current = true;
+    }
+  }, [activeProfile?.id]);
 
   const advance = useCallback(() => {
     setIndex((prev) => {
@@ -36,8 +68,10 @@ export default function DiscoveryFeed({
   }, [profiles.length, onDeckEmpty]);
 
   const handleReplay = useCallback(() => {
+    hasStartedRef.current = false;
+    activeIdRef.current = profiles[0]?.id ?? null;
     setIndex(0);
-  }, []);
+  }, [profiles]);
 
   useEffect(() => {
     if (!onNearEnd || profiles.length === 0) return;
@@ -57,7 +91,7 @@ export default function DiscoveryFeed({
       onSkip: handleSkip,
       onLike,
       onSendGift: (p) => onSendGift?.(p),
-      onGreeting
+      onGreeting,
     }),
     [handleSkip, onGreeting, onLike, onSendGift]
   );
@@ -77,25 +111,23 @@ export default function DiscoveryFeed({
             : t('discovery_deck_no_members_sub', 'Try adjusting your filters or come back later.')}
         </AppText>
         {deckFinished ? (
-          <button
-            type="button"
-            className="discovery-feed__replay-btn"
-            onClick={handleReplay}
-          >
+          <button type="button" className="discovery-feed__replay-btn" onClick={handleReplay}>
             {t('discovery_deck_replay', 'Browse again')}
           </button>
         ) : null}
-      </div>);
+      </div>
+    );
   }
 
   return (
     <div className="discovery-feed">
-      {nextProfile ?
-      <div className="discovery-feed__next-bg" aria-hidden>
-        <img src={nextProfile.profilePhoto} alt="" />
-      </div> :
-      null}
+      {nextProfile ? (
+        <div className="discovery-feed__next-bg" aria-hidden>
+          <img src={nextProfile.profilePhoto} alt="" decoding="async" />
+        </div>
+      ) : null}
 
       <DiscoveryCard key={activeProfile.id} profile={activeProfile} isTop {...handlers} />
-    </div>);
+    </div>
+  );
 }

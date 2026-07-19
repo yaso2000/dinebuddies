@@ -1,13 +1,10 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
 
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { useTranslation } from 'react-i18next';
 
-import { LuLayoutGrid } from 'react-icons/lu';
-
-import AppBackButton from '../components/AppBackButton';
-import { APP_HOME_PATH } from '../utils/appRouteShell';
+import { LuX } from 'react-icons/lu';
 
 import DiscoveryFeed from '../components/discovery/DiscoveryFeed';
 import InboxHubLink from '../components/discovery/InboxHubLink';
@@ -33,7 +30,6 @@ import { AppText } from "../components/base";
 export default function DiscoveryPage() {
 
   const { t, i18n } = useTranslation();
-
   const navigate = useNavigate();
 
   const { showToast, showPersistentWarning } = useToast();
@@ -46,6 +42,10 @@ export default function DiscoveryPage() {
 
   const { profiles, loading, loadingMore, hasMore, loadMore, canLoad } = useDiscoveryProfiles();
   const { openGiftPicker, giftModal } = useProfileGiftPicker();
+
+  const handleClose = useCallback(() => {
+    navigate('/search/list', { replace: true });
+  }, [navigate]);
 
 
 
@@ -196,12 +196,14 @@ export default function DiscoveryPage() {
 
       <div className="discovery-shell__chrome discovery-shell__chrome--start">
 
-        <AppBackButton
+        <button
+          type="button"
           className="discovery-icon-btn"
-          fallback={APP_HOME_PATH}
-          iconStyle={{ transform: 'scaleX(-1)' }}
-          ariaLabel={t('discovery_back_to_feed_aria', 'Back to feed')}
-        />
+          onClick={handleClose}
+          aria-label={t('close', 'Close')}
+        >
+          <LuX size={22} aria-hidden />
+        </button>
 
       </div>
 
@@ -242,14 +244,6 @@ export default function DiscoveryPage() {
 
 
       <div className="discovery-shell__chrome discovery-shell__chrome--end">
-
-        <Link
-          to="/search/list"
-          className="discovery-icon-btn discovery-icon-btn--cards"
-          aria-label={t('user_directory_list_view_aria', 'List view')}
-          title={t('user_directory_list_view', 'Card view')}>
-          <LuLayoutGrid aria-hidden />
-        </Link>
 
         <InboxHubLink className="discovery-icon-btn" tab="activity" />
 

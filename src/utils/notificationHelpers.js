@@ -14,7 +14,7 @@ export const createNotification = async ({
 }) => {
     if (!userId) {
         console.error('userId is required for creating notification');
-        return;
+        return { ok: false, error: 'missing_user' };
     }
 
     try {
@@ -26,8 +26,10 @@ export const createNotification = async ({
             actionUrl,
             metadata
         });
+        return { ok: true };
     } catch (error) {
         console.error('Error creating notification:', error);
+        return { ok: false, error };
     }
 };
 

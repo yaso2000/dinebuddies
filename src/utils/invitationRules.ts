@@ -6,6 +6,7 @@ import type {
     PublicInvitationFeedDoc,
 } from '../types/invitation';
 import { isAffiliateAgentProfileData } from './accountRole';
+import { resolveCountryIso2 } from './countryIso';
 import { getInvitationLatLng } from './invitationCoords';
 import { detectLiveUserGps } from './locationUtils';
 
@@ -50,10 +51,15 @@ export type PublicInviteGeofenceInput = {
 };
 
 export function parseLatLng(pair: GeoCoords): { lat: number; lng: number } | null {
-    const lat = Number(pair?.lat);
-    const lng = Number(pair?.lng);
+    // Avoid Number(null) === 0 (Null Island) which falsely fails the 30 km gate.
+    if (pair?.lat == null || pair?.lng == null || pair?.lat === '' || pair?.lng === '') {
+        return null;
+    }
+    const lat = Number(pair.lat);
+    const lng = Number(pair.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    if (lat === 0 && lng === 0) return null;
     return { lat, lng };
 }
 
@@ -80,9 +86,13 @@ export function distanceBetweenCoords(a: GeoCoords, b: GeoCoords): number | null
 }
 
 export function normalizeCountryCode(raw: unknown): string {
-    return String(raw ?? '')
+    // Prefer ISO-2 ("AU") over names ("Australia") so border checks are not false positives.
+    const iso = resolveCountryIso2(raw);
+    if (iso) return iso;
+    const s = String(raw ?? '')
         .trim()
         .toUpperCase();
+    return /^[A-Z]{2}$/.test(s) ? s : '';
 }
 
 /** Reject when both ISO country codes are known and differ (cross-border). */
@@ -278,7 +288,9 @@ export function isVisibleInPublicFeed(
 
     if (options?.isStaff || options?.isOwn) return true;
 
-    if (!parseLatLng(viewerCoords)) return false;
+    // While viewer GPS is still resolving (or unavailable), do not hide the whole feed.
+    // Home applies distance sorting/filters once coords exist; IP fallback covers denial.
+    if (!parseLatLng(viewerCoords)) return true;
 
     const venueCoords = getInvitationLatLng(doc);
     if (!venueCoords) return false;
@@ -295,14 +307,16 @@ export function normalizeVenueCoordsFromRestaurantData(
     rd: Record<string, unknown> | null | undefined,
 ): { lat?: unknown; lng?: unknown; countryCode?: unknown } | null {
     if (!rd || typeof rd !== 'object') return null;
-    const nested = rd.coordinates as GeoCoords;
-    const lat = rd.lat ?? nested?.lat;
-    const lng = rd.lng ?? nested?.lng;
+    const nested = (rd.coordinates || rd.location || rd.geo || rd.venueLocation) as GeoCoords | undefined;
+    const lat = rd.lat ?? nested?.lat ?? (nested as { latitude?: unknown } | undefined)?.latitude;
+    const lng = rd.lng ?? nested?.lng ?? (nested as { longitude?: unknown } | undefined)?.longitude;
     if (lat == null && lng == null) return null;
+    // Skip Null Island / coerced Number(null) junk before the live-GPS gate runs.
+    if (!parseLatLng({ lat, lng })) return null;
     return {
         lat,
         lng,
-        countryCode: rd.countryCode ?? rd.country_code,
+        countryCode: rd.countryCode ?? rd.country_code ?? rd.country,
     };
 }
 

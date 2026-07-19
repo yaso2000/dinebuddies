@@ -13,19 +13,25 @@ export const INVITATION_BOOST_CREDITS = 50;
 export const MIN_HOST_INVITATION_DRAFT_CREDITS = SOCIAL_INVITATION_PUBLISH_CREDITS;
 
 /**
- * Client-side cost hints. Server `publishPrivateInvitationDraft` charges **one purchased
- * private invitation credit** per publish (no subscription monthly allowance).
+ * Client-side cost hints. Server `publishPrivateInvitationDraft` charges from
+ * the purchase wallet (`paidCredits`): social 90, private/personal 185.
  * @param {Record<string, unknown>} inv
  */
 export function isPrivateInvitationDoc(inv) {
     if (!inv || typeof inv !== 'object') return false;
+    const cat = String(inv.inviteCategory || '').toLowerCase();
+    if (cat === 'social') return false;
+    if (cat === 'private' || cat === 'dating') return true;
     const occasionLc = String(inv.occasionType || inv.type || '')
         .trim()
         .toLowerCase();
     return (
         inv.type === 'Private' ||
+        inv.type === 'Dating' ||
         occasionLc === 'private' ||
-        (inv.privateInvitationPreference != null && inv.privateInvitationPreference !== false)
+        occasionLc === 'dating' ||
+        (inv.privateInvitationPreference != null && inv.privateInvitationPreference !== false) ||
+        (inv.datingInvitationPreference != null && inv.datingInvitationPreference !== false)
     );
 }
 

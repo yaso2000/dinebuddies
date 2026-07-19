@@ -62,10 +62,25 @@ import { AppText, AppTextInput } from "../components/base";
 const InvitationListItem = ({ inv, navigate, t, showToast }) => {
   const isArchived = Boolean(inv.isArchived);
   const isGuestArchive = isArchived && inv.role === 'guest';
-  const targetPath =
-  inv.privacy === 'private' ? getHostedInvitationDetailsPath(inv) : `/invitation/${inv.id}`;
+  const isHosted =
+    inv.privacy === 'private' ||
+    inv.privacy === 'social' ||
+    inv.kind === 'private' ||
+    inv.kind === 'social' ||
+    inv._collection === 'social_invitations' ||
+    inv._collection === 'private_invitations' ||
+    Boolean(inv.publishedAt) && Array.isArray(inv.invitedFriends);
+  const category = resolveInviteCategory(inv);
+  const targetPath = isHosted
+    ? getHostedInvitationDetailsPath(inv)
+    : `/invitation/${inv.id}`;
 
-  const handleArchivedClick = () => {
+  const handleClick = () => {
+    // Active history (and archives that still have a live doc id) open details.
+    if (!isArchived || inv.id) {
+      navigate(targetPath);
+      return;
+    }
     if (!showToast) return;
     const dates = formatArchiveDateRange(inv, t);
     const roleLabel = isGuestArchive
@@ -80,12 +95,15 @@ const InvitationListItem = ({ inv, navigate, t, showToast }) => {
   return (
     <div
       className={`profile-invitation-item${isArchived ? ' profile-invitation-item--archived' : ''}`}
-      onClick={() => {
-        if (isArchived) handleArchivedClick();
-        else navigate(targetPath);
-      }}
-      role={isArchived ? 'button' : 'button'}
-      tabIndex={0}>
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleClick();
+        }
+      }}>
       
         <img
         className="profile-invitation-item__thumb"
@@ -115,9 +133,9 @@ const InvitationListItem = ({ inv, navigate, t, showToast }) => {
           <AppText as="span" className="profile-invitation-item__badge profile-invitation-item__badge--draft">
                         {t('invitation_draft_badge', { defaultValue: 'Draft' })}
                     </AppText> :
-          inv.privacy === 'private' ?
+          isHosted ?
           <AppText as="span" className="profile-invitation-item__badge profile-invitation-item__badge--private">
-                        {t(resolveInviteCategory(inv) === 'private' ? 'type_private' : 'type_social')}
+                        {t(category === 'private' ? 'type_private' : 'type_social')}
                     </AppText> :
 
           <AppText as="span" className="profile-invitation-item__badge profile-invitation-item__badge--public">{t('type_public', 'Public')}</AppText>
@@ -127,7 +145,7 @@ const InvitationListItem = ({ inv, navigate, t, showToast }) => {
               {isArchived ? formatArchiveDateRange(inv, t) : inv.date ? inv.date.split('T')[0] : 'Today'}
             </AppText>
         </div>
-        {!isArchived && <FaChevronRight style={{ opacity: 0.3, flexShrink: 0 }} />}
+        <FaChevronRight style={{ opacity: 0.3, flexShrink: 0 }} />
     </div>);
 
 };

@@ -379,8 +379,6 @@ export async function generateShareCard({
     /** e.g. "0:09" — shown on video-split hero */
     videoDurationLabel = '',
 } = {}) {
-    const normalizedHostName = String(hostName || '').trim();
-    const shouldShowHostName = normalizedHostName && normalizedHostName.toLowerCase() !== 'user';
     const canvas = document.createElement('canvas');
     canvas.width = CARD_W;
     canvas.height = CARD_H;
@@ -397,10 +395,7 @@ export async function generateShareCard({
     };
 
     const maxW = CARD_W - PADDING * 2;
-    const layout =
-        shareLayout === 'photoGlass' || shareLayout === 'photoChips' ? shareLayout
-            : shareLayout === 'videoSplit' ? 'videoSplit'
-                : 'photoBottom';
+    const layout = shareLayout === 'videoSplit' ? 'videoSplit' : 'photoBottom';
 
     if (layout === 'videoSplit') {
         const LINK_BAR_H = 48;
@@ -484,7 +479,6 @@ export async function generateShareCard({
     }
 
     drawInvitationFullBleed(ctx, heroImg);
-    const titleLeftX = layout === 'photoBottom' ? PADDING : (CARD_W - maxW) / 2;
 
     if (layout === 'photoBottom') {
         ctx.textAlign = 'left';
@@ -492,10 +486,10 @@ export async function generateShareCard({
         let ty = 88;
         const titleSize = title.length > 30 ? 46 : 54;
         const titleLH = title.length > 30 ? 56 : 64;
-        ty = drawWrappedTitle(ctx, title, titleLeftX, ty, maxW, titleSize, titleLH, 2);
+        ty = drawWrappedTitle(ctx, title, PADDING, ty, maxW, titleSize, titleLH, 2);
         ty += 10;
         if (description) {
-            ty = drawWrappedBody(ctx, description, titleLeftX, ty, maxW, 26, 36, 2, 'rgba(255,255,255,0.88)');
+            ty = drawWrappedBody(ctx, description, PADDING, ty, maxW, 26, 36, 2, 'rgba(255,255,255,0.88)');
         }
 
         const g2 = ctx.createLinearGradient(0, CARD_H - 340, 0, CARD_H);
@@ -519,110 +513,6 @@ export async function generateShareCard({
             ctx.fillStyle = 'rgba(255,255,255,0.55)';
             ctx.font = '22px "Arial", sans-serif';
             ctx.fillText(hostName, PADDING, my);
-        }
-    } else if (layout === 'photoGlass') {
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        let ty = 72;
-        const titleSize = title.length > 28 ? 44 : 52;
-        const titleLH = title.length > 28 ? 54 : 62;
-        ty = drawWrappedTitle(ctx, title, titleLeftX, ty, maxW, titleSize, titleLH, 2);
-        ty += 8;
-        if (description) {
-            drawWrappedBody(ctx, description, titleLeftX, ty, maxW, 24, 34, 2, 'rgba(255,255,255,0.88)');
-        }
-
-        // Keep info panel at the bottom so it never covers center of hero image.
-        const bx = 56;
-        const bw = CARD_W - 112;
-        const by = 620;
-        const bh = 340;
-        roundRectPath(ctx, bx, by, bw, bh, 22);
-        ctx.fillStyle = 'rgba(255,255,255,0.16)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.28)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '26px "Arial", sans-serif';
-        const rows = [
-            '📅  ' + meta.dateLine,
-            '🕐  ' + meta.timeLine,
-            '👥  ' + meta.guestsLine,
-            '💳  ' + (meta.paymentLine || '—'),
-            '📍  ' + (meta.distanceLine || location || city || '—'),
-        ];
-        let ry = by + 28;
-        rows.forEach((row, idx) => {
-            ctx.fillText(row, bx + 28, ry);
-            ry += 54;
-            if (idx < rows.length - 1) {
-                ctx.strokeStyle = 'rgba(255,255,255,0.14)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(bx + 20, ry - 12);
-                ctx.lineTo(bx + bw - 20, ry - 12);
-                ctx.stroke();
-            }
-        });
-
-        if (shouldShowHostName) {
-            ctx.textAlign = 'center';
-            ctx.fillStyle = 'rgba(255,255,255,0.5)';
-            ctx.font = '22px "Arial", sans-serif';
-            ctx.fillText(normalizedHostName, CARD_W / 2, by + bh + 20);
-        }
-    } else {
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        let ty = 72;
-        const titleSize = title.length > 28 ? 44 : 52;
-        const titleLH = title.length > 28 ? 54 : 62;
-        ty = drawWrappedTitle(ctx, title, titleLeftX, ty, maxW, titleSize, titleLH, 2);
-        ty += 8;
-        if (description) {
-            drawWrappedBody(ctx, description, titleLeftX, ty, maxW, 24, 34, 2, 'rgba(255,255,255,0.88)');
-        }
-
-        const drawChip = (text, cx, cy, chipW) => {
-            const padX = 28;
-            const padY = 16;
-            ctx.font = '24px "Arial", sans-serif';
-            const tw = ctx.measureText(text).width;
-            const w = Math.min(chipW || tw + padX * 2, CARD_W - 100);
-            const h = padY * 2 + 28;
-            roundRectPath(ctx, cx - w / 2, cy, w, h, h / 2);
-            ctx.fillStyle = 'rgba(0,0,0,0.45)';
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-            ctx.fillStyle = '#ffffff';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(text, cx, cy + h / 2);
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-        };
-
-        // Move chips to lower area to avoid covering main subject.
-        let cy = 700;
-        drawChip('📅 ' + meta.dateLine, CARD_W / 2 - 150, cy, 400);
-        drawChip('🕐 ' + meta.timeLine, CARD_W / 2 + 150, cy, 340);
-        cy += 76;
-        drawChip('👥 ' + meta.guestsLine, CARD_W / 2 - 150, cy, 400);
-        drawChip('💳 ' + (meta.paymentLine || '—'), CARD_W / 2 + 150, cy, 360);
-        cy += 76;
-        if (meta.distanceLine || location || city) {
-            drawChip('📍 ' + (meta.distanceLine || location || city), CARD_W / 2, cy, 620);
-            cy += 76;
-        }
-        if (shouldShowHostName) {
-            ctx.textAlign = 'center';
-            ctx.fillStyle = 'rgba(255,255,255,0.5)';
-            ctx.font = '22px "Arial", sans-serif';
-            ctx.fillText(normalizedHostName, CARD_W / 2, cy + 10);
         }
     }
 

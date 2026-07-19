@@ -18,10 +18,12 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
   const isMessagesIndex = isMessagesHub;
 
   const isCommunityRoute = path.startsWith('/community/');
-  const isCommunityFullscreen = isCommunityRoute && !isDesktopShell;
+  const isStageRoute = path.startsWith('/stage/');
+  /** Consumer Stage rooms reuse community chat fullscreen chrome. */
+  const isCommunityFullscreen = (isCommunityRoute || isStageRoute) && !isDesktopShell;
 
   /** Active conversation thread — fullscreen on mobile, hide shell chrome. */
-  const isConversationScreen = isDirectChatRoute || isCommunityRoute;
+  const isConversationScreen = isDirectChatRoute || isCommunityRoute || isStageRoute;
 
   /** Left sidebar: conversation list while in a DM thread. */
   const showConversationSidebar = isDirectChatRoute;
@@ -37,6 +39,7 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
     isMessagesHub,
     isMessagesIndex,
     isCommunityRoute,
+    isStageRoute,
     isCommunityFullscreen,
     isConversationScreen,
     showConversationSidebar,

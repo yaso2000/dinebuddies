@@ -23,6 +23,34 @@
     background: var(--bg-card);
 }
 
+.users-directory-field--place {
+    position: relative;
+    z-index: 5;
+    height: auto;
+    min-height: 40px;
+    align-items: stretch;
+    padding-block: 0;
+}
+
+.users-directory-field--place .users-directory-field-icon {
+    align-self: center;
+}
+
+.users-directory-place-autocomplete {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+}
+
+.users-directory-place-autocomplete > div,
+.users-directory-field--place .users-directory-place-autocomplete {
+    width: 100%;
+}
+
+.users-directory-field--place input {
+    outline: none !important;
+}
+
 .users-directory-field:focus-within {
     border-color: var(--primary);
 }
@@ -54,7 +82,7 @@
 .users-directory-toolbar__actions {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 6px;
     flex-wrap: wrap;
 }
@@ -64,6 +92,15 @@
     flex-direction: column;
     gap: 6px;
     padding: 0 12px 8px;
+}
+
+.users-directory-filters--toolbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    padding: 0;
+    margin-inline-end: auto;
 }
 
 .users-directory-filters__row {
@@ -83,8 +120,7 @@
 }
 
 .users-directory-feed-link,
-.users-directory-inbox-link,
-.users-directory-filters-toggle {
+.users-directory-inbox-link {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -108,8 +144,7 @@
 }
 
 .users-directory-feed-link svg,
-.users-directory-inbox-link svg,
-.users-directory-filters-toggle svg {
+.users-directory-inbox-link svg {
     width: 1rem;
     height: 1rem;
     flex-shrink: 0;
@@ -135,28 +170,7 @@
     pointer-events: none;
 }
 
-.users-directory-filters-toggle {
-    max-width: 100%;
-}
-
-.users-directory-filters-toggle--open {
-    border-color: rgba(232, 110, 46, 0.45);
-    background: rgba(232, 110, 46, 0.1);
-    color: var(--primary);
-}
-
-.users-directory-filters-toggle__summary {
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 0.68rem;
-    font-weight: 600;
-    color: var(--text-muted);
-}
-
-.users-directory-feed-link__label,
-.users-directory-filters-toggle__label {
+.users-directory-feed-link__label {
     display: none;
 }
 
@@ -204,13 +218,8 @@
 }
 
 @media (min-width: 640px) {
-    .users-directory-feed-link__label,
-    .users-directory-filters-toggle__label {
+    .users-directory-feed-link__label {
         display: inline;
-    }
-
-    .users-directory-filters-toggle__summary {
-        max-width: 180px;
     }
 }
 
@@ -220,8 +229,7 @@
     }
 
     .users-directory-feed-link,
-    .users-directory-inbox-link,
-    .users-directory-filters-toggle {
+    .users-directory-inbox-link {
         min-height: 36px;
         padding: 7px 12px;
         font-size: 0.8rem;

@@ -242,14 +242,23 @@
 }
 
 .community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) {
-    background: var(--cchat-zone-incoming-bg);
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: inherit;
+}
+
+.community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) .community-main-chat__bubble-segment,
+.community-chat-root .community-main-chat__bubble-segment--incoming {
     color: var(--cchat-zone-incoming-text);
+    background: var(--cchat-zone-incoming-bg);
     border: 1px solid var(--cchat-zone-incoming-border);
     box-shadow: var(--cchat-zone-incoming-shadow);
 }
 
 .community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) .community-main-chat__bubble-segment:not(:first-child)::before {
-    background: var(--cchat-border-strong);
+    content: none;
+    display: none;
 }
 
 .community-chat-root .community-main-chat__sender {
@@ -269,8 +278,24 @@
 }
 
 /* ⑤ Outgoing + host thread bubbles */
+.community-chat-root .community-main-chat__bubble-stack--outgoing,
+.community-chat-root .community-main-chat__bubble-stack--host {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: inherit;
+}
+
 .community-chat-root .community-main-chat__bubble--outgoing,
 .community-chat-root .community-main-chat__message--outgoing .community-main-chat__bubble:not(.community-main-chat__bubble--emoji):not(.community-main-chat__bubble--image) {
+    color: var(--cchat-zone-outgoing-text);
+    background: var(--cchat-zone-outgoing-bg);
+    border: 1px solid var(--cchat-zone-outgoing-border);
+    box-shadow: var(--cchat-zone-outgoing-shadow);
+}
+
+.community-chat-root .community-main-chat__bubble-stack--outgoing .community-main-chat__bubble-segment,
+.community-chat-root .community-main-chat__bubble-segment--outgoing {
     color: var(--cchat-zone-outgoing-text);
     background: var(--cchat-zone-outgoing-bg);
     border: 1px solid var(--cchat-zone-outgoing-border);
@@ -284,11 +309,26 @@
     border: 1px solid var(--cchat-zone-host-border);
 }
 
+.community-chat-root .community-main-chat__bubble-stack--host .community-main-chat__bubble-segment,
+.community-chat-root .community-main-chat__bubble-segment--host {
+    color: var(--cchat-zone-host-text);
+    background: var(--cchat-zone-host-bg);
+    border: 1px solid var(--cchat-zone-host-border);
+}
+
+.community-chat-root .community-main-chat__bubble-segment--outgoing .community-main-chat__bubble-time,
+.community-chat-root .community-main-chat__bubble-segment--host .community-main-chat__bubble-time,
 .community-chat-root .community-main-chat__bubble--outgoing .community-main-chat__bubble-time,
-.community-chat-root .community-main-chat__message--outgoing .community-main-chat__bubble-time,
 .community-chat-root .community-main-chat__bubble--host .community-main-chat__bubble-time,
-.community-chat-root .community-main-chat__message--host .community-main-chat__bubble-time {
+.community-chat-root .community-main-chat__bubble-meta--overlay .community-main-chat__bubble-time {
     color: var(--cchat-zone-outgoing-time);
+    opacity: 1;
+}
+
+.community-chat-root .community-main-chat__bubble-segment--incoming .community-main-chat__bubble-time,
+.community-chat-root .community-main-chat__bubble--incoming .community-main-chat__bubble-time,
+.community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) .community-main-chat__bubble-time {
+    color: var(--cchat-zone-incoming-time);
     opacity: 1;
 }
 
@@ -313,6 +353,12 @@
     z-index: 5;
     border-top: 1px solid var(--cchat-zone-composer-border);
     background: var(--cchat-zone-composer-bg);
+}
+
+.community-chat-root .community-guest-chat__frame > .community-main-chat__composer,
+.community-chat-root .community-chat-layout__bubbles > .community-main-chat__composer {
+    border-top: none;
+    background: transparent;
 }
 
 .community-chat-root .community-composer-bar .community-main-chat__input-row {

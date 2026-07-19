@@ -20,7 +20,7 @@ import { AppText } from "./base";
 const InvitationCard = ({ invitation }) => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { currentUser, toggleFollow, submitReport, deleteInvitation } = useInvitations();
+  const { currentUser, toggleFollow, submitReport, deleteInvitation, requestToJoin } = useInvitations();
   const { userProfile } = useAuth();
   const { showToast } = useToast();
   const [showReportModal, setShowReportModal] = useState(false);
@@ -31,6 +31,7 @@ const InvitationCard = ({ invitation }) => {
   const [isMuted, setIsMuted] = useState(true);
   const videoRef = useRef(null);
   const [videoDurationLabel, setVideoDurationLabel] = useState('');
+  const [joining, setJoining] = useState(false);
 
   const isRTL = i18n.language === 'ar' || i18n.language?.startsWith('ar');
 
@@ -80,10 +81,56 @@ const InvitationCard = ({ invitation }) => {
     flexShrink: 0
   };
 
-  const handleAction = (e) => {
+  const handleAction = async (e) => {
     e.stopPropagation();
-    if (isHost || isAccepted || isPending || spotsLeft > 0) {
+    e.preventDefault();
+
+    if (invitation.meetingStatus === 'completed') {
       navigate(`/invitation/${id}`);
+      return;
+    }
+
+    if (isHost) {
+      navigate(`/invitation/${id}`);
+      return;
+    }
+
+    // Accepted → open group chat directly (not details)
+    if (isAccepted) {
+      navigate(`/invitation/${id}/chat`);
+      return;
+    }
+
+    // Pending request → stay on feed; open details only if they want to manage/cancel
+    if (isPending) {
+      showToast(t('request_sent_waiting'), 'info');
+      return;
+    }
+
+    if (userProfile?.isGuest || !currentUser || currentUser.id === 'guest') {
+      goToLogin();
+      return;
+    }
+
+    if (!eligibility.eligible) {
+      showToast(eligibility.reason || t('invite_unavailable'), 'error');
+      return;
+    }
+
+    if (spotsLeft <= 0) {
+      showToast(t('invitation_full', { defaultValue: 'This invitation is full.' }), 'error');
+      return;
+    }
+
+    if (joining) return;
+    setJoining(true);
+    try {
+      const ok = await requestToJoin(id);
+      if (ok) {
+        showToast(t('join_request_sent'), 'success');
+      }
+    } finally {
+      setJoining(false);
     }
   };
 
@@ -259,28 +306,10 @@ const InvitationCard = ({ invitation }) => {
     return `${m}:${String(s).padStart(2, '0')}`;
   };
 
-  const isPhotoBottom = cardVariant === 'photoBottom';
-  const isPhotoGlass = cardVariant === 'photoGlass';
-  const isPhotoChips = cardVariant === 'photoChips';
   const isHeaderBodyLayout = templateKey === 'classic';
 
-  const CARD_HERO_ASPECT_CSS = { hero_4_5: '4 / 5', hero_1_1: '4 / 5', hero_9_16: '4 / 5' };
-  const cardHeroAspect = CARD_HERO_ASPECT_CSS[templateKey] || null;
   const accentColor = templateStyles.layout?.accentColor || '#f59e0b';
   const accentGlow = `${accentColor}55`;
-
-  const chipStyle = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '8px 14px',
-    borderRadius: 9999,
-    background: 'rgba(0,0,0,0.42)',
-    border: '1px solid rgba(255,255,255,0.22)',
-    color: '#fff',
-    fontSize: '0.8rem',
-    fontWeight: 700
-  };
 
   const bottomMetaPillStyle = {
     display: 'inline-flex',
@@ -301,7 +330,7 @@ const InvitationCard = ({ invitation }) => {
     ...templateStyles.card,
     position: 'relative',
     cursor: 'pointer',
-    minHeight: cardHeroAspect ? 'auto' : '500px',
+    minHeight: '500px',
     display: 'flex',
     flexDirection: 'column',
     transformOrigin: 'center bottom',
@@ -311,34 +340,52 @@ const InvitationCard = ({ invitation }) => {
     boxShadow: `${templateStyles.card?.boxShadow || '0 10px 30px rgba(0,0,0,0.15)'}, 0 0 0 1px ${accentColor}44, 0 0 22px ${accentGlow}`
   };
 
+  const joinLabel =
+  invitation.meetingStatus === 'completed' ? t('completed') :
+  isHost ? t('manage_invitation') :
+  isAccepted ? t('request_approved') :
+  isPending ? t('request_pending') :
+  joining ? t('sending', { defaultValue: 'Sending…' }) :
+  !eligibility.eligible ? t('invite_unavailable') :
+  userProfile?.isGuest ? t('login_to_join', { defaultValue: 'Login to Join' }) :
+  t('join_btn');
+
+  const joinDisabled =
+  joining ||
+  isPending && !isAccepted && !isHost ||
+  !eligibility.eligible && !isHost && !isAccepted && invitation.meetingStatus !== 'completed' && !userProfile?.isGuest;
+
   const joinButtonEl =
   <button
     type="button"
-    onClick={(e) => {e.stopPropagation();handleAction(e);}}
+    onClick={(e) => {e.stopPropagation();void handleAction(e);}}
     style={{
       width: '100%', padding: '12px', borderRadius: '12px', border: 'none',
       background: invitation.meetingStatus === 'completed' ?
       '#10b981' :
+      isAccepted ?
+      'linear-gradient(135deg, #10b981, #059669)' :
+      isPending ?
+      isHeaderBodyLayout ? '#e5e7eb' : 'rgba(255,255,255,0.2)' :
       !eligibility.eligible ?
       isHeaderBodyLayout ? '#e5e7eb' : 'rgba(255,255,255,0.15)' :
       templateStyles.button?.background || 'linear-gradient(135deg, var(--premium-orange), #eab308)',
-      color: invitation.meetingStatus === 'completed' ?
+      color: invitation.meetingStatus === 'completed' || isAccepted ?
       'white' :
-      !eligibility.eligible ?
-      isHeaderBodyLayout ? '#6b7280' : 'rgba(255,255,255,0.5)' :
+      isPending || !eligibility.eligible ?
+      isHeaderBodyLayout ? '#6b7280' : 'rgba(255,255,255,0.75)' :
       'white',
-      fontWeight: '900', fontSize: '1.05rem', cursor: !eligibility.eligible && !isHost && invitation.meetingStatus !== 'completed' ? 'not-allowed' : 'pointer',
+      fontWeight: '900', fontSize: '1.05rem',
+      cursor: joinDisabled && !isAccepted && !isHost ? 'not-allowed' : 'pointer',
       display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px',
-      boxShadow: !eligibility.eligible || invitation.meetingStatus === 'completed' ? 'none' : `0 8px 20px ${accentGlow}`,
+      boxShadow: !eligibility.eligible || invitation.meetingStatus === 'completed' || isPending ? 'none' : `0 8px 20px ${accentGlow}`,
       transition: 'all 0.3s ease',
-      textTransform: 'uppercase', letterSpacing: '1px'
+      textTransform: 'uppercase', letterSpacing: '1px',
+      opacity: joining ? 0.85 : 1
     }}
-    disabled={!eligibility.eligible && !isHost && invitation.meetingStatus !== 'completed'}>
+    disabled={joinDisabled && !isAccepted && !isHost}>
 
-            {invitation.meetingStatus === 'completed' ? t('completed') :
-    isHost ? t('manage_invitation') :
-    isAccepted ? t('request_approved') :
-    !eligibility.eligible ? t('invite_unavailable') : userProfile?.isGuest ? t('login_to_join', { defaultValue: 'Login to Join' }) : t('join_btn')}
+            {joinLabel}
         </button>;
 
 
@@ -596,7 +643,7 @@ const InvitationCard = ({ invitation }) => {
 
   return (
     <div
-      className={`smart-invitation-card${cardHeroAspect ? ' invitation-card--aspect-hero' : ''}`}
+      className="smart-invitation-card"
       onClick={() => navigate(`/invitation/${id}`)}
       style={cardFrameStyle}
       onMouseEnter={(e) => {
@@ -775,7 +822,7 @@ const InvitationCard = ({ invitation }) => {
             <div
           style={{
             width: '100%',
-            aspectRatio: cardHeroAspect || '1 / 1',
+            aspectRatio: '1 / 1',
             position: 'relative',
             overflow: 'hidden',
             borderRadius: 'inherit',
@@ -874,8 +921,8 @@ const InvitationCard = ({ invitation }) => {
                 </div>
 
                 <div style={{
-              padding: isPhotoBottom ? '56px 18px 0' : '52px 18px 0',
-              textAlign: isPhotoBottom ? 'left' : 'center',
+              padding: '56px 18px 0',
+              textAlign: 'left',
               fontFamily: templateStyles.layout?.fontFamily || 'inherit'
             }}>
                     <AppText as="h3"
@@ -911,8 +958,7 @@ const InvitationCard = ({ invitation }) => {
 
                 <div style={{ flex: 1 }} />
 
-                {isPhotoBottom &&
-            <div style={{
+                <div style={{
               padding: '18px 18px 16px',
               background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.5) 50%, transparent 100%)',
               borderRadius: '0 0 24px 24px'
@@ -946,65 +992,6 @@ const InvitationCard = ({ invitation }) => {
                         </div>
                         {joinButtonEl && <div style={{ marginTop: 12 }}>{joinButtonEl}</div>}
                     </div>
-            }
-
-                {isPhotoGlass &&
-            <div style={{ padding: '8px 16px 16px' }}>
-                        <div style={{
-                borderRadius: 16,
-                background: 'rgba(255,255,255,0.14)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255,255,255,0.28)',
-                padding: '10px'
-              }}>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                <AppText as="span" style={bottomMetaPillStyle}>
-                                    <FaCalendarAlt style={{ opacity: 0.92 }} />
-                                    {formatInviteDate()}
-                                </AppText>
-                                <AppText as="span" style={bottomMetaPillStyle}>
-                                    <FaClock style={{ opacity: 0.92 }} />
-                                    {formatInviteTime() || '—'}
-                                </AppText>
-                                <AppText as="span" style={bottomMetaPillStyle}>
-                                    <FaUserFriends style={{ opacity: 0.92 }} />
-                                    {guestsMeta}
-                                </AppText>
-                                <AppText as="span" style={bottomMetaPillStyle}>
-                                    <FaMoneyBillWave style={{ opacity: 0.92 }} />
-                                    {paymentLabel}
-                                </AppText>
-                                <AppText as="span" style={{ ...bottomMetaPillStyle, maxWidth: '100%' }}>
-                                    <FaMapMarkerAlt style={{ opacity: 0.92 }} />
-                                    <AppText as="span" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {distanceMeta || location || t('tbd', { defaultValue: 'TBD' })}
-                                    </AppText>
-                                </AppText>
-                            </div>
-                        </div>
-                        <div style={{ marginTop: 12 }}>{hostBlock}</div>
-                        {joinButtonEl && <div style={{ marginTop: 10 }}>{joinButtonEl}</div>}
-                    </div>
-            }
-
-                {isPhotoChips &&
-            <div style={{ padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
-                            <AppText as="span" style={chipStyle}><FaCalendarAlt style={{ marginRight: 6, opacity: 0.9 }} />{formatInviteDate()}</AppText>
-                            <AppText as="span" style={chipStyle}><FaClock style={{ marginRight: 6, opacity: 0.9 }} />{formatInviteTime() || '—'}</AppText>
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
-                            <AppText as="span" style={chipStyle}><FaUserFriends style={{ marginRight: 6, opacity: 0.9 }} />{guestsMeta}</AppText>
-                            <AppText as="span" style={chipStyle}><FaMoneyBillWave style={{ marginRight: 6, opacity: 0.9 }} />{paymentLabel}</AppText>
-                        </div>
-                        {(distanceMeta || location) &&
-              <AppText as="span" style={chipStyle}><FaMapMarkerAlt style={{ marginRight: 6, opacity: 0.9 }} />{distanceMeta || location}</AppText>
-              }
-                        <div style={{ alignSelf: 'stretch', marginTop: 4 }}>{hostBlock}</div>
-                        {joinButtonEl && <div style={{ alignSelf: 'stretch', marginTop: 6 }}>{joinButtonEl}</div>}
-                    </div>
-            }
             </div>
             </div>
             </>

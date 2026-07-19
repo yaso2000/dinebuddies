@@ -1,5 +1,5 @@
 // Invitation Template Configurations
-// Three full-bleed photo layouts (bottom bar / glass panel / chips) × color schemes.
+// Classic public cards use photoBottom accents; color schemes drive share/UI theming.
 
 export const COLOR_SCHEMES = {
     oceanBlue: {
@@ -146,173 +146,33 @@ export const TEMPLATE_STYLES = {
             },
         }),
     },
-
-    photoGlass: {
-        name: 'Glass panel',
-        emoji: '\u{2728}',
-        description: 'Frosted glass card for date, time, and details',
-
-        getStyles: (colors) => ({
-            card: {
-                background: 'transparent',
-                borderRadius: '24px',
-                border: 'none',
-                boxShadow: '0 20px 50px rgba(0,0,0,0.35)',
-                padding: 0,
-                overflow: 'hidden',
-                position: 'relative',
-            },
-            header: {
-                background: 'transparent',
-                color: '#ffffff',
-                padding: 0,
-                marginBottom: 0,
-            },
-            badge: {
-                background: 'rgba(255,255,255,0.2)',
-                color: '#ffffff',
-                border: '1px solid rgba(255,255,255,0.35)',
-                borderRadius: '12px',
-                padding: '6px 12px',
-                fontSize: '0.75rem',
-                fontWeight: '800',
-            },
-            button: {
-                background: colors.gradient,
-                color: 'white',
-                borderRadius: '14px',
-                padding: '12px 20px',
-                border: 'none',
-                fontWeight: '800',
-                boxShadow: `0 10px 28px ${colors.shadow}`,
-            },
-            layout: {
-                cardVariant: 'photoGlass',
-                textAlign: 'center',
-                displayDescription: true,
-                titleSize: '1.4rem',
-                fontFamily: "'Inter', system-ui, sans-serif",
-                messageStyle: { color: 'rgba(255,255,255,0.9)', fontWeight: '500' },
-                showSecondaryInfo: true,
-                accentColor: colors.primary,
-            },
-        }),
-    },
-
-    photoChips: {
-        name: 'Chips',
-        emoji: '\u{1F3F7}\u{FE0F}',
-        description: 'Compact pills for date, guests, payment, and distance',
-
-        getStyles: (colors) => ({
-            card: {
-                background: 'transparent',
-                borderRadius: '24px',
-                border: 'none',
-                boxShadow: '0 20px 50px rgba(0,0,0,0.35)',
-                padding: 0,
-                overflow: 'hidden',
-                position: 'relative',
-            },
-            header: {
-                background: 'transparent',
-                color: '#ffffff',
-                padding: 0,
-                marginBottom: 0,
-            },
-            badge: {
-                background: 'rgba(255,255,255,0.2)',
-                color: '#ffffff',
-                border: '1px solid rgba(255,255,255,0.35)',
-                borderRadius: '12px',
-                padding: '6px 12px',
-                fontSize: '0.75rem',
-                fontWeight: '800',
-            },
-            button: {
-                background: colors.gradient,
-                color: 'white',
-                borderRadius: '14px',
-                padding: '12px 20px',
-                border: 'none',
-                fontWeight: '800',
-                boxShadow: `0 10px 28px ${colors.shadow}`,
-            },
-            layout: {
-                cardVariant: 'photoChips',
-                textAlign: 'center',
-                displayDescription: true,
-                titleSize: '1.4rem',
-                fontFamily: "'Inter', system-ui, sans-serif",
-                messageStyle: { color: 'rgba(255,255,255,0.9)', fontWeight: '500' },
-                showSecondaryInfo: true,
-                accentColor: colors.primary,
-            },
-        }),
-    },
 };
 
 /** Legacy header+body template names → unified classic split card. */
 const HEADER_BODY_LEGACY = new Set(['modern', 'elegant', 'fun', 'minimal', 'premium', 'editorial']);
 
 /**
- * Canonical public card layout keys stored on invitations.
+ * Canonical public invitation layout. Header+body (`classic`) is the only model.
+ * Legacy card/hero keys normalize to classic so old drafts render as header.
  * @param {string | undefined | null} raw
- * @returns {'classic' | 'hero_4_5'}
+ * @returns {'classic'}
  */
 export function normalizePublicCardTemplateKey(raw) {
-    const s = String(raw || '').trim();
-    if (s === 'classic') return 'classic';
-    if (s === 'hero_4_5') return 'hero_4_5';
-    if (HEADER_BODY_LEGACY.has(s)) return 'classic';
-    // Legacy hero / full-bleed layouts → 4:5 portrait hero
-    if (
-        s === 'hero_16_9' ||
-        s === 'fullCanvas' ||
-        s === 'photoBottom' ||
-        s === 'hero_1_1' ||
-        s === 'hero_9_16' ||
-        s === 'photoGlass' ||
-        s === 'photoChips'
-    ) {
-        return 'hero_4_5';
-    }
-    return 'hero_4_5';
+    void raw;
+    void HEADER_BODY_LEGACY;
+    return 'classic';
 }
 
-export const LEGACY_PUBLIC_TEMPLATE_MAP = {
-    classic: 'photoBottom',
-    hero_4_5: 'photoBottom',
-    hero_1_1: 'photoBottom',
-    hero_9_16: 'photoBottom',
-    modern: 'photoGlass',
-    elegant: 'photoChips',
-    fun: 'photoBottom',
-    minimal: 'photoGlass',
-    premium: 'photoChips',
-    fullCanvas: 'photoBottom',
-    editorial: 'photoGlass',
-    photoBottom: 'photoBottom',
-    photoGlass: 'photoGlass',
-    photoChips: 'photoChips',
-};
-
-/**
- * Public create flow: 4:5 hero + header (classic split).
- */
-export const TEMPLATE_PICKER_KEYS = ['hero_4_5', 'classic'];
-
-/** Public magic-cover bitmap aspects (matches hero_4_5 layout). */
-export const MAGIC_COVER_ASPECT_RATIOS = ['4:5'];
+/** Public magic-cover bitmap aspects (header layout). */
+export const MAGIC_COVER_ASPECT_RATIOS = ['1:1'];
 
 /**
  * @param {string | undefined | null} templateType
  * @returns {'4:5'|'1:1'}
  */
 export function templateTypeToMagicCoverAspect(templateType) {
-    const k = normalizePublicCardTemplateKey(templateType);
-    if (k === 'classic') return '1:1';
-    return '4:5';
+    void templateType;
+    return '1:1';
 }
 
 /**
@@ -402,10 +262,9 @@ export const OCCASION_PRESETS = {
  * @param {{ cardFontFamily?: string }} [opts] — optional overrides from AI or user (public card typography)
  */
 export const getTemplateStyle = (templateType, colorScheme, occasionType, opts) => {
-    const canonical = normalizePublicCardTemplateKey(templateType);
-    const mapped = LEGACY_PUBLIC_TEMPLATE_MAP[canonical] || LEGACY_PUBLIC_TEMPLATE_MAP[templateType] || templateType;
-    const resolvedKey = TEMPLATE_STYLES[mapped] ? mapped : 'photoBottom';
-    const template = TEMPLATE_STYLES[resolvedKey] || TEMPLATE_STYLES.photoBottom;
+    void templateType;
+    void occasionType;
+    const template = TEMPLATE_STYLES.photoBottom;
     const colors = COLOR_SCHEMES[colorScheme] || COLOR_SCHEMES.oceanBlue;
     const base = template.getStyles(colors);
     const font =

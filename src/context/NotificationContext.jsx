@@ -55,7 +55,7 @@ function shouldSuppressInAppToastForPath(pathname, notif) {
     if (type !== 'message') return false;
 
     if (path === '/messages') return true;
-    if (url.startsWith('/community/')) {
+    if (url.startsWith('/community/') || url.startsWith('/stage/')) {
         const base = url.replace(/\/chat\/?$/, '');
         return path === base || path === url;
     }
@@ -131,7 +131,11 @@ export const NotificationProvider = ({ children }) => {
 
     const applyCounts = useCallback((notifs) => {
         const unread = notifs.filter((n) => !n.read).length;
-        const unreadMsgs = notifs.filter((n) => !n.read && n.type === 'message').length;
+        const unreadMsgs = notifs.filter(
+            (n) =>
+                !n.read &&
+                (n.type === 'message' || n.type === 'community_message' || n.type === 'business_message')
+        ).length;
         setUnreadCount(unread);
         setUnreadMessageCount(unreadMsgs);
         setUnreadBellCount(unread - unreadMsgs);
@@ -158,7 +162,16 @@ export const NotificationProvider = ({ children }) => {
             n.onclick = () => {
                 try {
                     window.focus();
-                    if (notif.actionUrl) navigate(notif.actionUrl);
+                    const invId = notif.invitationId || notif.metadata?.invitationId;
+                    const type = String(notif.type || '');
+                    if (
+                        (type === 'social_invitation' || type === 'social_invitation_response') &&
+                        invId
+                    ) {
+                        void navigateToHostedInvitationDetails(invId, navigate);
+                    } else if (notif.actionUrl) {
+                        navigate(notif.actionUrl);
+                    }
                 } catch {
                     /* ignore */
                 }

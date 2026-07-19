@@ -1,7 +1,7 @@
 {
   "counts": {
-    "en": 3694,
-    "ar": 3694
+    "en": 4273,
+    "ar": 4307
   },
   "missingInAr": [],
   "sameAsEn": [
@@ -12,7 +12,10 @@
     "app_title",
     "delivery_link_url_placeholder",
     "feedback_phone_ph",
-    "invitation_inbox_counter",
+    "gift_shield_badge_multi",
+    "gift_shield_badge_slot",
+    "gift_shield_slot_one",
+    "gift_shield_slot_two",
     "language_native_arabic",
     "language_native_english",
     "language_native_french",
@@ -23,11 +26,21 @@
     "language_native_turkish",
     "per_duration",
     "social_color_hex_label",
-    "social_share_line_event",
-    "social_share_line_when",
-    "social_share_line_where",
     "studio_layout_square",
-    "studio_layout_story"
+    "studio_layout_story",
+    "venue_search_section_dinebuddies",
+    "venue_search_section_google"
   ],
-  "englishLikeInAr": []
+  "englishLikeInAr": [
+    {
+      "key": "community_banner_body_link_url_placeholder",
+      "en": "https://… or /path",
+      "ar": "https://… أو /path"
+    },
+    {
+      "key": "invitation_inbox_counter",
+      "en": "{{current}} / {{total}}",
+      "ar": "{{current}} من {{total}}"
+    }
+  ]
 }

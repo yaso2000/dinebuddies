@@ -37,8 +37,8 @@ import { useUserPresence } from '../../hooks/usePresence';
 import './UserDirectoryCard.css';
 import { AppText } from '../base';
 
-/** Directory card — name + age, cover, avatar, quick actions. */
-export default function UserDirectoryCard({ user, currentUser, onGift }) {
+/** Directory card — name, cover, avatar, quick actions. */
+function UserDirectoryCard({ user, currentUser, onGift }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { showToast, showPersistentWarning } = useToast();
@@ -48,7 +48,11 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
 
   const viewerUid = invitationUser?.uid || invitationUser?.id || currentUser?.uid || currentUser?.id;
   const profileUid = user?.id || user?.uid;
-  const isOnline = useUserPresence(profileUid, { fallback: Boolean(user?.isOnline) });
+  // List view: avoid N RTDB listeners — use batch-hydrated isOnline only.
+  const isOnline = useUserPresence(profileUid, {
+    fallback: Boolean(user?.isOnline),
+    live: false,
+  });
   const profilePath = profileUid ? `/profile/${profileUid}` : null;
   const useDatingLike = profileShowsLikeButton(user);
   const { liked, greetedToday } = useDiscoveryActionStatus(viewerUid, profileUid);
@@ -62,7 +66,13 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
     [invitationUser?.following]
   );
   const isFollowingUser = checkIsFollowing(viewerFollowing, profileUid);
-  const canMessageFromServer = useCanMessageMember(viewerUid, profileUid, viewerFollowing);
+  // Defer chat permission reads until there is a reason to expect a connection.
+  const shouldProbeChat = isFollowingUser || liked;
+  const canMessageFromServer = useCanMessageMember(viewerUid, profileUid, viewerFollowing, {
+    enabled: shouldProbeChat,
+    viewerProfile: userProfile || invitationUser || currentUser,
+    targetProfile: user,
+  });
   const [canChat, setCanChat] = useState(false);
 
   useEffect(() => {
@@ -74,12 +84,21 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
     try {
       const snap = await getDoc(doc(db, 'users', profileUid));
       const targetFollowing = snap.exists() ? snap.data()?.following || [] : [];
-      const allowed = await checkCanMessage(viewerUid, profileUid, viewerFollowing, targetFollowing);
+      const allowed = await checkCanMessage(
+        viewerUid,
+        profileUid,
+        viewerFollowing,
+        targetFollowing,
+        {
+          currentUserProfile: userProfile || invitationUser || currentUser,
+          targetUserProfile: user,
+        }
+      );
       setCanChat(allowed);
     } catch {
       setCanChat(false);
     }
-  }, [profileUid, viewerFollowing, viewerUid]);
+  }, [profileUid, viewerFollowing, viewerUid, userProfile, invitationUser, currentUser, user]);
 
   const displayName = getPrivateInviteeDisplayName(user) || t('user', 'User');
   const avatarUrl = getSafeAvatar(user);
@@ -89,8 +108,9 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
       resolveProfileCoverUrl(user),
       user?.coverPhotoUrl
     ) || USER_DIRECTORY_DEFAULT_COVER;
-  const headline = user?.ageRange ? `${displayName}, ${user.ageRange}` : displayName;
+  const headline = displayName;
   const bioText = String(user?.bio || user?.shortBio || '').trim();
+  const cityLabel = String(user?.city || '').trim() || null;
   const isSelf =
     profileUid &&
     (currentUser?.uid === profileUid || currentUser?.id === profileUid);
@@ -395,7 +415,19 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
         </div>
 
         <div className="user-directory-card__overlay">
-          <OnlineStatusBadge isOnline={isOnline} className="user-directory-card__online-badge" size="sm" />
+          <div className="user-directory-card__top-meta">
+            {cityLabel ? (
+              <AppText as="span" className="user-directory-card__city">
+                {cityLabel}
+              </AppText>
+            ) : null}
+            <OnlineStatusBadge
+              isOnline={isOnline}
+              className="user-directory-card__online-badge"
+              size="sm"
+              showLabel={false}
+            />
+          </div>
           <div className="user-directory-card__footer">
             {bioText ? (
               <AppText as="p" className="user-directory-card__bio">{bioText}</AppText>
@@ -469,3 +501,5 @@ export default function UserDirectoryCard({ user, currentUser, onGift }) {
     </article>
   );
 }
+
+export default React.memo(UserDirectoryCard);

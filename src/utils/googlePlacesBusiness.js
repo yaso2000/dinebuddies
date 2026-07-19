@@ -1,4 +1,11 @@
 /** Convert Google Places `opening_hours.periods` to BusinessHours `hours` shape (sunday..saturday). */
+import {
+    hasBusinessHoursSchedule,
+    isOpenFromBusinessHours,
+    getBusinessLocalClock,
+    resolveBusinessTimeZone,
+} from './businessLocalTime';
+
 const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 const HIDDEN_CATEGORY_TYPES = new Set([
@@ -114,46 +121,59 @@ export function googlePlaceTypesToCategoryBadges(types) {
 
 /**
  * @param {Record<string, { closed?: boolean, open?: string, close?: string }>|null|undefined} hours
+ * @param {{
+ *   now?: Date,
+ *   timeZone?: string|null,
+ *   lat?: number|null,
+ *   lng?: number|null,
+ *   countryCode?: string|null,
+ *   country?: string|null,
+ * }} [location]
  */
-export function computeOpenNowFromBusinessHours(hours) {
-    if (!hours || typeof hours !== 'object') return null;
-    const now = new Date();
-    const dayName = DAY_KEYS[now.getDay()];
-    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const today = hours[dayName];
-    if (!today || today.closed) return false;
-    if (!today.open || !today.close) return null;
-    if (today.close <= today.open) {
-        return currentTime >= today.open || currentTime < today.close;
-    }
-    return currentTime >= today.open && currentTime < today.close;
+export function computeOpenNowFromBusinessHours(hours, location = {}) {
+    return isOpenFromBusinessHours(hours, location);
 }
 
 /**
  * Legacy `workingHours` shape uses `isOpen` per day instead of `closed`.
  * @param {Record<string, { isOpen?: boolean, open?: string, close?: string }>|null|undefined} workingHours
+ * @param {{
+ *   now?: Date,
+ *   timeZone?: string|null,
+ *   lat?: number|null,
+ *   lng?: number|null,
+ *   countryCode?: string|null,
+ *   country?: string|null,
+ * }} [location]
  */
-export function computeOpenNowFromLegacyWorkingHours(workingHours) {
+export function computeOpenNowFromLegacyWorkingHours(workingHours, location = {}) {
     if (!workingHours || typeof workingHours !== 'object') return null;
-    const now = new Date();
-    const dayName = DAY_KEYS[now.getDay()];
-    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const today = workingHours[dayName];
-    if (!today || today.isOpen === false) return false;
-    if (!today.open || !today.close) return null;
-    if (today.close <= today.open) {
-        return currentTime >= today.open || currentTime < today.close;
+    const normalized = {};
+    for (const day of DAY_KEYS) {
+        const src = workingHours[day];
+        if (!src || typeof src !== 'object') continue;
+        normalized[day] = {
+            open: src.open,
+            close: src.close,
+            closed: src.isOpen === false,
+        };
     }
-    return currentTime >= today.open && currentTime < today.close;
+    return isOpenFromBusinessHours(normalized, location);
 }
 
 /**
- * Resolve live open/closed state. Prefer stored hours over stale Google `openNow`.
+ * Resolve live open/closed state in the business local timezone.
+ * Prefer saved weekly hours over stale Google `openNow`.
  * @param {{
  *   hours?: Record<string, { closed?: boolean, open?: string, close?: string }>|null,
  *   openingHours?: { periods?: unknown[] }|null,
  *   workingHours?: Record<string, { isOpen?: boolean, open?: string, close?: string }>|null,
  *   openNow?: boolean|null,
+ *   timeZone?: string|null,
+ *   lat?: number|null,
+ *   lng?: number|null,
+ *   countryCode?: string|null,
+ *   country?: string|null,
  * }} sources
  * @returns {boolean|null}
  */
@@ -162,19 +182,32 @@ export function resolveBusinessOpenNow({
     openingHours,
     workingHours,
     openNow,
+    timeZone,
+    lat,
+    lng,
+    countryCode,
+    country,
 } = {}) {
-    const fromHours = computeOpenNowFromBusinessHours(hours);
-    if (typeof fromHours === 'boolean') return fromHours;
+    const location = { timeZone, lat, lng, countryCode, country };
 
-    const fromOpeningHours = computeOpenNowFromBusinessHours(
-        openingHoursToBusinessHours(
-            openingHours && typeof openingHours === 'object' ? openingHours : null
-        )
+    // Saved weekly schedule always wins — never mix with stale Google openNow.
+    if (hasBusinessHoursSchedule(hours)) {
+        return computeOpenNowFromBusinessHours(hours, location);
+    }
+
+    const fromOpeningHoursSchedule = openingHoursToBusinessHours(
+        openingHours && typeof openingHours === 'object' ? openingHours : null
     );
-    if (typeof fromOpeningHours === 'boolean') return fromOpeningHours;
+    if (hasBusinessHoursSchedule(fromOpeningHoursSchedule)) {
+        return computeOpenNowFromBusinessHours(fromOpeningHoursSchedule, location);
+    }
 
-    const fromLegacy = computeOpenNowFromLegacyWorkingHours(workingHours);
+    const fromLegacy = computeOpenNowFromLegacyWorkingHours(workingHours, location);
     if (typeof fromLegacy === 'boolean') return fromLegacy;
 
-    return typeof openNow === 'boolean' ? openNow : null;
+    // Ignore Google `openNow` snapshots — they often disagree with saved weekly hours.
+    void openNow;
+    return null;
 }
+
+export { getBusinessLocalClock, resolveBusinessTimeZone };

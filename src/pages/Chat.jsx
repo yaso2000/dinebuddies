@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, doc, getDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -31,8 +31,14 @@ import '../styles/chatReferenceTheme.css';
 import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
 import { AppText, AppTextInput } from "../components/base";
 import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
-import { getMessageGroupPosition } from '../utils/chatMessageGrouping';
+import {
+  getMessageGroupPosition,
+  messageCreatedAtMs,
+  shouldShowChatDaySeparator,
+  formatChatDaySeparator,
+} from '../utils/chatMessageGrouping';
 import { getMessageReceiptDisplay, syncMessageReceiptDocs } from '../utils/chatMessageReceipts';
+import { formatAppTime } from '../utils/localeFormat';
 import { useChatTheme } from '../hooks/useChatTheme';
 import ChatThemePicker from '../components/chat/ChatThemePicker';
 
@@ -88,15 +94,40 @@ const Chat = () => {
   const composerBlocked = messagingRestricted || connectionLocked;
   const blockedVariant = messagingRestricted ? 'restricted' : connectionLocked ? 'connection' : null;
 
+  const NEAR_BOTTOM_PX = 120;
+
   const handleScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
-    // Show button if user is more than 150px away from bottom
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
-    setShowScrollBottom(!isNearBottom);
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    pinnedToBottomRef.current = distanceFromBottom < NEAR_BOTTOM_PX;
+    setShowScrollBottom(distanceFromBottom >= 150);
   };
 
+  const pinMessagesToBottom = useCallback(() => {
+    const list = messagesAreaRef.current;
+    if (!list || !pinnedToBottomRef.current) return;
+    list.scrollTop = list.scrollHeight;
+    requestAnimationFrame(() => {
+      if (!pinnedToBottomRef.current) return;
+      list.scrollTop = list.scrollHeight;
+      requestAnimationFrame(() => {
+        if (pinnedToBottomRef.current) list.scrollTop = list.scrollHeight;
+      });
+    });
+  }, []);
+
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    pinnedToBottomRef.current = true;
+    const list = messagesAreaRef.current;
+    if (list) {
+      list.scrollTop = list.scrollHeight;
+      requestAnimationFrame(() => {
+        list.scrollTop = list.scrollHeight;
+      });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    setShowScrollBottom(false);
   };
 
   // Media states
@@ -107,6 +138,8 @@ const Chat = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const messagesEndRef = useRef(null);
+  const messagesAreaRef = useRef(null);
+  const pinnedToBottomRef = useRef(true);
   const inputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const imageInputRef = useRef(null);
@@ -121,9 +154,11 @@ const Chat = () => {
   const composerRef = useRef(null);
 
   useEffect(() => {
-    const { detach } = attachChatShellToVisualViewport(() => containerRef.current);
+    const { detach } = attachChatShellToVisualViewport(() => containerRef.current, {
+      onViewportChange: () => pinMessagesToBottom(),
+    });
     return detach;
-  }, []);
+  }, [pinMessagesToBottom]);
 
   const handleEmojiClick = (emojiData) => {
     const emoji = emojiData.emoji;
@@ -327,18 +362,57 @@ const Chat = () => {
   // Reset scroll when changing conversations
   useEffect(() => {
     setInitialScrollDone(false);
+    pinnedToBottomRef.current = true;
   }, [conversationId]);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      if (!initialScrollDone) {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-        setInitialScrollDone(true);
-      } else {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }
+    if (messages.length === 0) return;
+    if (!initialScrollDone) {
+      pinnedToBottomRef.current = true;
+      pinMessagesToBottom();
+      setInitialScrollDone(true);
+      return;
     }
-  }, [messages, initialScrollDone]);
+    pinMessagesToBottom();
+  }, [messages, initialScrollDone, pinMessagesToBottom]);
+
+  // Keep last message above keyboard when viewport / shell height changes
+  useEffect(() => {
+    if (loading || connectionCheckLoading || conversationError) return undefined;
+
+    const list = messagesAreaRef.current;
+    const onViewportChange = () => pinMessagesToBottom();
+
+    window.visualViewport?.addEventListener('resize', onViewportChange);
+    window.visualViewport?.addEventListener('scroll', onViewportChange);
+    window.addEventListener('resize', onViewportChange);
+
+    const attrObserver = new MutationObserver(onViewportChange);
+    attrObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-chat-keyboard-open', 'data-keyboard-open'],
+    });
+
+    const resizeObserver = list ? new ResizeObserver(onViewportChange) : null;
+    if (list) resizeObserver.observe(list);
+
+    // iOS keyboard animation settles after focus; pin again once height is final
+    pinMessagesToBottom();
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', onViewportChange);
+      window.visualViewport?.removeEventListener('scroll', onViewportChange);
+      window.removeEventListener('resize', onViewportChange);
+      attrObserver.disconnect();
+      resizeObserver?.disconnect();
+    };
+  }, [
+    pinMessagesToBottom,
+    conversationId,
+    loading,
+    connectionCheckLoading,
+    conversationError,
+  ]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -492,9 +566,9 @@ const Chat = () => {
   };
 
   const formatTime = (timestamp) => {
-    if (!timestamp) return '';
-    const date = timestamp.toDate();
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const ms = messageCreatedAtMs({ createdAt: timestamp });
+    if (ms == null) return '';
+    return formatAppTime(ms, i18n.language);
   };
 
   const formatLastSeen = (timestamp) => {
@@ -610,12 +684,25 @@ const Chat = () => {
 
             <div className="chat-body-column">
             {/* Messages */}
-            <div className="messages-area" onScroll={handleScroll} style={{ paddingBottom: '16px' }}>
+            {/* dir=ltr keeps own bubbles on the physical right in Arabic UI */}
+            <div ref={messagesAreaRef} className="messages-area" dir="ltr" onScroll={handleScroll} style={{ paddingBottom: '16px' }}>
                 {messages.map((msg, index) => {
+            const daySep = shouldShowChatDaySeparator(messages, index);
+            const dayLabel = daySep
+              ? formatChatDaySeparator(messageCreatedAtMs(msg), i18n.language, t)
+              : '';
+            const dayChip = daySep && dayLabel ? (
+              <div key={`day-${msg.id}`} className="chat-day-sep" aria-label={dayLabel}>
+                <span className="chat-day-sep-chip">{dayLabel}</span>
+              </div>
+            ) : null;
+
             const isSystem = msg.type === 'system' || msg.isSystemMessage === true;
             if (isSystem) {
               return (
-                <div key={msg.id} className="chat-system-message-row">
+                <React.Fragment key={msg.id}>
+                  {dayChip}
+                  <div className="chat-system-message-row">
                                 <div className="chat-system-message">
                                     <AppText as="span" className="chat-system-message__brand">
                                         {msg.senderName || 'DineBuddies'}
@@ -623,17 +710,18 @@ const Chat = () => {
                                     <AppText as="p" className="chat-system-message__text">{msg.text}</AppText>
                                     <AppText as="span" className="chat-system-message__time">{formatTime(msg.createdAt)}</AppText>
                                 </div>
-                            </div>);
+                            </div>
+                </React.Fragment>);
 
             }
 
             const isOwn = msg.senderId === currentUser?.uid;
             const groupPosition = getMessageGroupPosition(messages, index);
-            const showIncomingAvatar = !isOwn && (groupPosition === 'single' || groupPosition === 'first');
 
             return (
+              <React.Fragment key={msg.id}>
+              {dayChip}
               <div
-                key={msg.id}
                 className={`message-wrapper ${isOwn ? 'own' : 'other'} message-group-${groupPosition}`}
                 onContextMenu={(e) => {
                   e.preventDefault();
@@ -641,20 +729,6 @@ const Chat = () => {
                     setActiveReactionMenu(msg.id);
                   }
                 }}>
-                {!isOwn ? (
-                  showIncomingAvatar ? (
-                    <div className="message-avatar">
-                      <UserAvatar
-                        user={otherUser}
-                        alt={otherUser?.displayName || 'User'}
-                        style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
-                      />
-                    </div>
-                  ) : (
-                    <div className="message-avatar-spacer" aria-hidden />
-                  )
-                ) : null}
-
                             <div className="message-content-wrapper">
                                 {msg.replyTo &&
                   <div className="reply-preview">
@@ -766,7 +840,8 @@ const Chat = () => {
                                     </div>
                   }
                             </div>
-                        </div>);
+                        </div>
+              </React.Fragment>);
 
           })}
 
@@ -889,6 +964,12 @@ const Chat = () => {
                   value={newMessage}
                   onChange={(e) => handleTyping(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
+                  onFocus={() => {
+                    pinnedToBottomRef.current = true;
+                    pinMessagesToBottom();
+                    window.setTimeout(() => pinMessagesToBottom(), 120);
+                    window.setTimeout(() => pinMessagesToBottom(), 320);
+                  }}
                   className="chat-input-field" />
                 
                 {showComposerEmojiButton() ?

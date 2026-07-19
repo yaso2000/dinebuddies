@@ -31,6 +31,7 @@ import SimpleMap from '../components/SimpleMap';
 import { getTemplateStyle } from '../utils/invitationTemplates';
 import { goToLogin } from '../utils/goToLogin';
 import { getHostedInvitationDetailsPath } from '../utils/hostedInvitationRoutes';
+import { loadHostedInvitationById } from '../utils/staleInvitationNotifications';
 import { AppText } from "../components/base";
 
 const InvitationDetails = () => {
@@ -57,6 +58,7 @@ const InvitationDetails = () => {
   const shareCardFileRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
   const chatEndRef = useRef(null);
+  const invitationDocSeenRef = useRef(false);
 
   const [showAgeModal, setShowAgeModal] = useState(false);
   const [pendingJoin, setPendingJoin] = useState(false);
@@ -143,11 +145,11 @@ const InvitationDetails = () => {
 
   // Check eligibility based on gender and age
 
-  // Try to find invitation in context first, fallback to fetched
-  let invitation = invitations.find((inv) => inv.id === id);
-  if (!invitation && fetchedInvitation) {
-    invitation = fetchedInvitation;
-  }
+  // Prefer live Firestore snapshot for requests/joined; fall back to context list.
+  const contextInvitation = invitations.find((inv) => inv.id === id);
+  let invitation = fetchedInvitation
+    ? { ...(contextInvitation || {}), ...fetchedInvitation }
+    : contextInvitation;
 
   const templateStyles = invitation ? getTemplateStyle(
     invitation.templateType || 'classic',
@@ -156,36 +158,18 @@ const InvitationDetails = () => {
     { cardFontFamily: invitation.cardFontFamily }
   ) : null;
 
-  // Fetch invitation from Firestore if not in context (e.g., deep linking)
-  useEffect(() => {
-    const fetchInvitation = async () => {
-      if (!invitation && id && !loadingInvitations) {
-        try {
-          const invDoc = await getDoc(doc(db, 'invitations', id));
-          if (invDoc.exists()) {
-            setFetchedInvitation({ id: invDoc.id, ...invDoc.data() });
-          }
-        } catch (error) {
-          console.error('Error fetching invitation:', error);
-        }
-      }
-    };
-    fetchInvitation();
-  }, [id, invitation, loadingInvitations, navigate]);
-
-  // Resilience: if invitation is deleted after load, redirect to home.
-  // Do NOT redirect on the first snapshot when exists() is false — that can happen briefly before
-  // the new doc is visible to the listener (race after create), which would send users to "/" incorrectly.
-  const invitationDocSeenRef = useRef(false);
+  // Live sync: keep requests/joined (and host UI) fresh; redirect only after a known doc disappears.
   useEffect(() => {
     invitationDocSeenRef.current = false;
+    setFetchedInvitation(null);
   }, [id]);
   useEffect(() => {
-    if (!id) return;
+    if (!id) return undefined;
     const invRef = doc(db, 'invitations', id);
     const unsubscribe = onSnapshot(invRef, (snapshot) => {
       if (snapshot.exists()) {
         invitationDocSeenRef.current = true;
+        setFetchedInvitation({ id: snapshot.id, ...snapshot.data() });
         return;
       }
       if (!snapshot.exists() && invitationDocSeenRef.current) {
@@ -344,12 +328,24 @@ const InvitationDetails = () => {
     };
   }, [invitation?.id]); // use id not full object to avoid infinite effect runs
 
-  // REDIRECTION GUARD: must be before any early returns (Rules of Hooks)
+  // Hosted social/private invites live in social_invitations — redirect if this id is hosted.
   useEffect(() => {
-    if (invitation?.privacy === 'private' && id) {
-      navigate(getHostedInvitationDetailsPath({ id, ...invitation }), { replace: true });
-    }
-  }, [invitation, id, navigate]);
+    if (!id) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const hosted = await loadHostedInvitationById(id);
+        if (!cancelled && hosted) {
+          navigate(getHostedInvitationDetailsPath(hosted), { replace: true });
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, navigate]);
 
   const [showCopiedToast, setShowCopiedToast] = useState(false);
 
@@ -583,9 +579,10 @@ const InvitationDetails = () => {
   const thumbnailUrl = isVideo ?
   pickSafeDisplayImageUrl(videoThumbnail, customImage, restaurantImage, image) || safeStillImage :
   mediaUrl;
-  const isHost = author?.id === currentUser?.id;
-  const isAccepted = joined.includes(currentUser?.id);
-  const isPending = requests.includes(currentUser?.id);
+  const myUid = currentUser?.uid || currentUser?.id;
+  const isHost = Boolean(myUid && author?.id === myUid);
+  const isAccepted = Boolean(myUid && joined.includes(myUid));
+  const isPending = Boolean(myUid && requests.includes(myUid));
   const spotsLeft = guestsNeeded - joined.length;
 
 
@@ -706,13 +703,14 @@ const InvitationDetails = () => {
 
     if (isPending) {
       console.log('🔴 Canceling request for invitation:', id);
-      cancelRequest(id);
+      await cancelRequest(id);
+      showToast(t('request_cancelled', { defaultValue: 'Join request cancelled.' }), 'info');
     } else {
       console.log('🟢 Requesting to join invitation:', id);
       const ok = await requestToJoin(id);
       if (!ok) return;
       console.log('✅ Request sent successfully');
-      navigate('/', { replace: true });
+      showToast(t('request_sent_waiting', { defaultValue: 'Request sent — waiting for host approval.' }), 'success');
     }
   };
 

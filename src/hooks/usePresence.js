@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ref, set, onDisconnect, serverTimestamp, get, onValue } from 'firebase/database';
 import { rtdb } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
@@ -105,10 +105,13 @@ export const getUserPresence = async (uid) => {
 /**
  * Live online status for another member (RTDB presence).
  * @param {string | null | undefined} uid
- * @param {{ fallback?: boolean }} [options]
+ * @param {{ fallback?: boolean, live?: boolean }} [options]
+ *   `live: false` — use fallback only (no RTDB listener). Prefer for long lists.
  */
-export function useUserPresence(uid, { fallback = false } = {}) {
+export function useUserPresence(uid, { fallback = false, live = true } = {}) {
     const [online, setOnline] = useState(Boolean(fallback));
+    const fallbackRef = useRef(Boolean(fallback));
+    fallbackRef.current = Boolean(fallback);
 
     useEffect(() => {
         if (!uid) {
@@ -116,7 +119,9 @@ export function useUserPresence(uid, { fallback = false } = {}) {
             return undefined;
         }
 
-        setOnline(Boolean(fallback));
+        setOnline(Boolean(fallbackRef.current));
+        if (!live) return undefined;
+
         const presenceRef = ref(rtdb, `presence/${uid}`);
         const unsub = onValue(
             presenceRef,
@@ -124,11 +129,11 @@ export function useUserPresence(uid, { fallback = false } = {}) {
                 const val = snap.val();
                 setOnline(Boolean(val?.online));
             },
-            () => setOnline(Boolean(fallback))
+            () => setOnline(Boolean(fallbackRef.current))
         );
 
         return unsub;
-    }, [uid, fallback]);
+    }, [uid, live]);
 
     return online;
 }

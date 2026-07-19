@@ -4,9 +4,22 @@ import { PUBLIC_INVITE_GEOFENCE_RADIUS_KM } from './invitationRules';
 export const NEARBY_RADIUS_KM = 10;
 
 export function parseBusinessLatLng(business) {
-    const lat = Number(business?.lat);
-    const lng = Number(business?.lng);
+    // Avoid Number(null) === 0 (Null Island). Prefer nested coordinate shapes.
+    if (business?.lat == null || business?.lng == null || business?.lat === '' || business?.lng === '') {
+        const nested = business?.coordinates || business?.location;
+        if (nested && typeof nested === 'object') {
+            const lat = Number(nested.lat ?? nested.latitude);
+            const lng = Number(nested.lng ?? nested.longitude);
+            if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+                return { lat, lng };
+            }
+        }
+        return null;
+    }
+    const lat = Number(business.lat);
+    const lng = Number(business.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat === 0 && lng === 0) return null;
     return { lat, lng };
 }
 

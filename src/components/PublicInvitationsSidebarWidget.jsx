@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaClock } from 'react-icons/fa';
@@ -31,17 +31,9 @@ export default function PublicInvitationsSidebarWidget() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { invitations, loadingInvitations } = useInvitations();
-  const snapshottedRef = useRef(false);
-  const [latestPublic, setLatestPublic] = useState([]);
+  const latestPublic = pickLatestPublic(invitations);
 
-  useEffect(() => {
-    if (snapshottedRef.current) return;
-    if (loadingInvitations) return;
-    snapshottedRef.current = true;
-    setLatestPublic(pickLatestPublic(invitations));
-  }, [invitations, loadingInvitations]);
-
-  if (!snapshottedRef.current && loadingInvitations) {
+  if (loadingInvitations && !latestPublic.length) {
     return (
       <div className="ds-widget-card" aria-busy="true">
         <div className="ds-widget-header">

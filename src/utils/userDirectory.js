@@ -13,9 +13,9 @@ import { isConsumerDirectoryMember } from './consumerDirectory';
 import { mapPublicProfileDocToUserShape } from './publicProfileMap';
 import { normalizeLookingFor } from '../constants/personalInviteCategories';
 import { normalizeInvitePreference } from '../constants/privateProfileOptions';
-import { isUserOpenToDating, normalizeOpenToDating } from './openToDating';
+import { isUserOpenToDating } from './openToDating';
 import { resolveProfileAvatarUrl, resolveProfileCoverUrl, resolveSwipeProfilePhotoUrl } from './profileGallery';
-import { readFavoritePlaces } from './favoritePlacesUtils';
+import { getUserDocLatLng } from './userDocCoords';
 
 import { DEFAULT_PROFILE_COVER_FALLBACK } from '../constants/defaultProfileMedia';
 
@@ -47,12 +47,12 @@ export function mapDirectoryUser(publicDoc, userDoc = null) {
             resolveSwipeProfilePhotoUrl(u) ||
             resolveProfileAvatarUrl(u) ||
             USER_DIRECTORY_DEFAULT_SWIPE_PHOTO,
-        profileGallery: Array.isArray(u.profileGallery) ? u.profileGallery : [],
+        profileGallery: Array.isArray(u.profileGallery) ? u.profileGallery.slice(0, 3) : [],
         directoryCoverIndex: u.directoryCoverIndex ?? 0,
         bio: String(u.bio || u.shortBio || '').slice(0, 120),
         ageRange: u.ageRange || u.ageCategory || '',
         ageCategory: u.ageCategory || u.ageRange || '',
-        favoritePlaces: readFavoritePlaces(u),
+        favoritePlaces: [],
         city: userPublic.city || u.city || '',
         country: userPublic.country || u.country || '',
         countryCode: userPublic.countryCode || u.countryCode || u.country_code || '',
@@ -68,6 +68,7 @@ export function mapDirectoryUser(publicDoc, userDoc = null) {
         role: u.role || publicDoc.accountRole || 'user',
         accountRole: publicDoc.accountRole || u.role || 'user',
         isOnline: Boolean(u.isOnline),
+        ...(getUserDocLatLng({ ...userPublic, ...u }) || getUserDocLatLng(u) || {}),
     };
 }
 

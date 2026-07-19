@@ -4,7 +4,10 @@ import CommunityChatMessages from './CommunityChatMessages';
 import CommunityChatComposer from './CommunityChatComposer';
 import { getAppTextDirection } from '../../utils/bidiText';
 
-/** Guest/member chat — host messages in thread; pin bar and banner bubble are separate. */
+/**
+ * Bubbles zone includes the text editor — one shared frame (not a separate bar below).
+ * Parent supplies the top panel (media / pin bar).
+ */
 export default function CommunityGuestChatBody({ room, className = '' }) {
   const { t, i18n } = useTranslation();
   const contentDir = getAppTextDirection(i18n.language);
@@ -82,46 +85,52 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
     [hideMessageFromBanner]
   );
 
-  const rootClass = ['community-guest-chat', className].filter(Boolean).join(' ');
+  const rootClass = ['community-guest-chat', 'community-chat-layout__body', className]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div className={rootClass} dir={contentDir}>
-      <div className="community-guest-chat__frame">
-        <CommunityChatMessages
-          messages={messages}
-          currentUserId={currentUserId}
-          partnerId={partnerId}
-          isHost={isHost}
-          onReplyToMessage={isHost ? handleReply : undefined}
-          onMuteMember={isHost ? handleMute : undefined}
-          onDeleteMessage={handleDelete}
-          onPinHostMessage={isHost ? handlePin : undefined}
-          onUnpinHostMessage={isHost ? handleUnpin : undefined}
-          onShowOnBanner={isHost ? handleShowOnBanner : undefined}
-          onHideFromBanner={isHost ? handleHideFromBanner : undefined}
-          variant="normal"
-        />
+      <section
+        className="community-guest-chat__frame community-chat-layout__bubbles"
+        aria-label="Messages">
+        <div className="community-guest-chat__messages-scroll">
+          <CommunityChatMessages
+            messages={messages}
+            currentUserId={currentUserId}
+            partnerId={partnerId}
+            isHost={isHost}
+            onReplyToMessage={isHost ? handleReply : undefined}
+            onMuteMember={isHost ? handleMute : undefined}
+            onDeleteMessage={handleDelete}
+            onPinHostMessage={isHost ? handlePin : undefined}
+            onUnpinHostMessage={isHost ? handleUnpin : undefined}
+            onShowOnBanner={isHost ? handleShowOnBanner : undefined}
+            onHideFromBanner={isHost ? handleHideFromBanner : undefined}
+            variant="normal"
+          />
 
-        {isMutedInChat ? (
-          <div className="community-main-chat__muted" role="status">
-            {t(
-              'community_chat_muted_notice',
-              'You are muted in this chat and cannot send messages.'
-            )}
-          </div>
-        ) : null}
-      </div>
+          {isMutedInChat ? (
+            <div className="community-main-chat__muted" role="status">
+              {t(
+                'community_chat_muted_notice',
+                'You are muted in this chat and cannot send messages.'
+              )}
+            </div>
+          ) : null}
+        </div>
 
-      <div className="community-main-chat__composer">
-        <CommunityChatComposer
-          sendMessage={sendMessage}
-          sendImageMessage={sendImageMessage}
-          isMutedInChat={isMutedInChat}
-          uploadingImage={uploadingChatImage}
-          pendingReplyTo={isHost ? pendingReplyTo : null}
-          onCancelReply={cancelReplyToMessage}
-        />
-      </div>
+        <div className="community-main-chat__composer community-chat-layout__editor" aria-label="Message editor">
+          <CommunityChatComposer
+            sendMessage={sendMessage}
+            sendImageMessage={sendImageMessage}
+            isMutedInChat={isMutedInChat}
+            uploadingImage={uploadingChatImage}
+            pendingReplyTo={isHost ? pendingReplyTo : null}
+            onCancelReply={cancelReplyToMessage}
+          />
+        </div>
+      </section>
     </div>
   );
 }

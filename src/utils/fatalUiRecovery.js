@@ -54,6 +54,7 @@ export function getFatalUiRecoveryTarget(pathname = '') {
     if (p === '/create-featured-post') return '/create-featured-post';
     if (p === '/create-post') return '/create-post';
     if (p.startsWith('/community/')) return p.split('?')[0];
+    if (p.startsWith('/stage/')) return p.split('?')[0];
     if (p.startsWith('/chat/')) return p.split('?')[0];
     if (p === '/messages' || p.startsWith('/messages')) return p.split('?')[0];
     return '/posts-feed';
@@ -108,6 +109,7 @@ export function recoverFromFatalUiError(error, options = {}) {
 
     const stayOnPath =
         window.location.pathname.startsWith('/community/') ||
+        window.location.pathname.startsWith('/stage/') ||
         window.location.pathname.startsWith('/chat/');
     if (stayOnPath) {
         return false;

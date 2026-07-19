@@ -180,10 +180,12 @@ html {
 }
 
 @media (max-width: 1023px) {
+    /* JS chat-vv-shell already pins shell.top to clear the status bar —
+       do not add safe-area padding on the header again (that drops it). */
     .chat-vv-shell > .chat-header {
         height: auto;
         min-height: 60px;
-        padding-top: env(safe-area-inset-top, 0px);
+        padding-top: 0;
         box-sizing: border-box;
     }
 }

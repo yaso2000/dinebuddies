@@ -1,6 +1,6 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { isPendingInviteForUser, uidStr } from './inviteLanding';
+import { canViewerOpenHostedInvitation, isPendingInviteForUser, uidStr } from './inviteLanding';
 
 const HOSTED_COLLECTIONS = ['social_invitations', 'private_invitations'];
 
@@ -22,14 +22,29 @@ export async function loadHostedInvitationById(invitationId) {
 
 /**
  * Whether a `social_invitation` notification still points at a pending invite for this user.
+ * (Landing / inbox queue only — not for deleting after RSVP.)
  */
 export function isActionableSocialInvitationNotification(inv, viewerUid) {
     if (!inv?.id) return false;
     return isPendingInviteForUser(inv, viewerUid);
 }
 
+/** Notification still useful as a link to invitation details. */
+export function isOpenableSocialInvitationNotification(inv, viewerUid) {
+    return canViewerOpenHostedInvitation(inv, viewerUid);
+}
+
 export function getNotificationInvitationId(notif) {
-    return notif?.invitationId || notif?.metadata?.invitationId || null;
+    const direct = notif?.invitationId || notif?.metadata?.invitationId || null;
+    if (direct && typeof direct === 'string') return direct;
+
+    // Fallback: parse hosted paths written by Cloud Functions / older clients
+    // e.g. /invitation/social/{id}, /invitation/private/{id}/chat
+    const url = String(notif?.actionUrl || '');
+    const match = url.match(
+        /\/invitation\/(?:social|private|dating)(?:\/preview)?\/([^/?#]+)/i
+    );
+    return match?.[1] || null;
 }
 
 export function isSocialInvitationNotificationType(notif) {
@@ -38,7 +53,9 @@ export function isSocialInvitationNotificationType(notif) {
 }
 
 /**
- * @returns {Promise<boolean>} true if notification was stale and should be removed
+ * Stale = invite missing or viewer has no access.
+ * Accepted/declined invites stay so the panel link still opens details.
+ * @returns {Promise<boolean>} true if notification should be removed
  */
 export async function validateSocialInvitationNotification(notif, viewerUid) {
     if (!isSocialInvitationNotificationType(notif)) return false;
@@ -46,10 +63,7 @@ export async function validateSocialInvitationNotification(notif, viewerUid) {
     if (!invId) return true;
     const inv = await loadHostedInvitationById(invId);
     if (!inv) return true;
-    if (notif.type === 'social_invitation') {
-        return !isActionableSocialInvitationNotification(inv, viewerUid);
-    }
-    return false;
+    return !canViewerOpenHostedInvitation(inv, viewerUid);
 }
 
 /** Batch-evaluate notifications; returns ids that are stale. */
@@ -57,7 +71,7 @@ export async function findStaleSocialInvitationNotificationIds(notifications, vi
     const uid = uidStr(viewerUid);
     if (!uid || !Array.isArray(notifications)) return [];
 
-    const inviteNotifs = notifications.filter((n) => n?.type === 'social_invitation');
+    const inviteNotifs = notifications.filter((n) => isSocialInvitationNotificationType(n));
     const stale = [];
 
     await Promise.all(

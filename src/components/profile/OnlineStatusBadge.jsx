@@ -17,8 +17,9 @@ export default function OnlineStatusBadge({
 
   return (
     <span
-      className={`online-status-badge${sizeClass}${className ? ` ${className}` : ''}`}
-      role="status">
+      className={`online-status-badge${sizeClass}${className ? ` ${className}` : ''}${showLabel ? '' : ' online-status-badge--dot-only'}`}
+      role="status"
+      aria-label={t('status_online', 'Online')}>
       <span className="online-status-badge__dot" aria-hidden />
       {showLabel ? (
         <AppText as="span" format={false}>

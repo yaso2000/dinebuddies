@@ -123,6 +123,10 @@ export default function NotificationSwipeRow({
 
     const onPointerDown = (e) => {
         if (e.button !== undefined && e.button !== 0) return;
+        // Desktop mouse/trackpad: do not start swipe — otherwise tiny movement
+        // marks the gesture as "moved" and swallows the click (invites never open).
+        // Swipe actions remain for touch / pen.
+        if (e.pointerType === 'mouse') return;
         beginDrag(e.clientX, e.clientY);
         slideRef.current?.setPointerCapture?.(e.pointerId);
     };

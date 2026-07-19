@@ -1,54 +1,57 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaEllipsisH } from 'react-icons/fa';
 import { AppText } from '../base';
 import UserAvatar from '../UserAvatar';
 import CommunityChatMessageMenu from './CommunityChatMessageMenu';
 import { useLongPress } from './useLongPress';
-import { getAppTextDirection, prepareBidiDisplayText } from '../../utils/bidiText';
-import { formatAppTime } from '../../utils/localeFormat';
+import { prepareBidiDisplayText } from '../../utils/bidiText';
+import { formatAppDate, formatAppTime } from '../../utils/localeFormat';
 import { getMessageReceiptDisplay } from '../../utils/chatMessageReceipts';
+
+const NEAR_BOTTOM_PX = 72;
+/** Same sender within this window → one visual cluster. */
+const CLUSTER_GAP_MS = 5 * 60 * 1000;
+
+function isListNearBottom(list) {
+  if (!list) return true;
+  return list.scrollHeight - list.scrollTop - list.clientHeight <= NEAR_BOTTOM_PX;
+}
+
+function scrollListToBottom(list) {
+  if (!list) return;
+  list.scrollTop = list.scrollHeight;
+}
 
 function isStackableText(message) {
   const type = message?.type || 'text';
   return type === 'text';
 }
 
-function isAtomicMessage(message) {
-  const type = message?.type || 'text';
-  return type === 'emoji-big' || type === 'image';
+function isAudioMessage(message) {
+  const type = String(message?.type || '').toLowerCase();
+  return type === 'audio' || type === 'voice';
 }
 
-/** Consecutive text messages from the same sender → one stacked bubble. */
-function buildRenderGroups(messages) {
-  const groups = [];
-  let index = 0;
+function isAtomicMessage(message) {
+  const type = message?.type || 'text';
+  return type === 'emoji-big' || type === 'image' || isAudioMessage(message);
+}
 
-  while (index < messages.length) {
-    const message = messages[index];
+function resolveImageSrc(message) {
+  return message?.imageUrl || message?.text || '';
+}
 
-    if (isAtomicMessage(message)) {
-      groups.push({ kind: 'atomic', messages: [message] });
-      index += 1;
-      continue;
-    }
+function resolveAudioUrl(message) {
+  return message?.audioUrl || message?.text || '';
+}
 
-    const batch = [message];
-    let next = index + 1;
-    while (
-      next < messages.length &&
-      isStackableText(messages[next]) &&
-      messages[next].senderId === message.senderId
-    ) {
-      batch.push(messages[next]);
-      next += 1;
-    }
-
-    groups.push({ kind: 'stacked', messages: batch });
-    index = next;
-  }
-
-  return groups;
+function formatAudioDuration(seconds) {
+  const n = Number(seconds);
+  if (!Number.isFinite(n) || n <= 0) return '0:00';
+  const mins = Math.floor(n / 60);
+  const secs = Math.floor(n % 60);
+  return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
 function messageTimeMs(message) {
@@ -59,10 +62,80 @@ function messageTimeMs(message) {
   return null;
 }
 
+function dayKeyFromMs(ms) {
+  if (ms == null) return null;
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
 function formatMessageTime(message, language) {
   const ms = messageTimeMs(message);
   if (!ms) return '';
   return formatAppTime(ms, language);
+}
+
+function formatDaySeparatorLabel(ms, language, t) {
+  if (ms == null) return '';
+  const date = new Date(ms);
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startMsg = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const diffDays = Math.round((startToday - startMsg) / 86400000);
+  if (diffDays === 0) return t('today', 'Today');
+  if (diffDays === 1) return t('yesterday', 'Yesterday');
+  return formatAppDate(date, language, { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function getClusterPosition(index, length) {
+  if (length <= 1) return 'single';
+  if (index === 0) return 'first';
+  if (index === length - 1) return 'last';
+  return 'middle';
+}
+
+function sameCluster(prevMessage, nextMessage) {
+  if (!isStackableText(nextMessage) || nextMessage.senderId !== prevMessage.senderId) {
+    return false;
+  }
+  const prevMs = messageTimeMs(prevMessage);
+  const nextMs = messageTimeMs(nextMessage);
+  if (prevMs == null || nextMs == null) return true;
+  return Math.abs(nextMs - prevMs) <= CLUSTER_GAP_MS;
+}
+
+/** Consecutive close text from same sender → stacked cluster; day chips between calendar days. */
+function buildRenderItems(messages) {
+  const items = [];
+  let index = 0;
+  let lastDayKey = null;
+
+  while (index < messages.length) {
+    const message = messages[index];
+    const ms = messageTimeMs(message);
+    const key = dayKeyFromMs(ms);
+    if (key && key !== lastDayKey) {
+      items.push({ kind: 'day', id: `day-${key}`, ms });
+      lastDayKey = key;
+    }
+
+    if (isAtomicMessage(message)) {
+      items.push({ kind: 'atomic', messages: [message] });
+      index += 1;
+      continue;
+    }
+
+    const batch = [message];
+    let next = index + 1;
+    while (next < messages.length && sameCluster(batch[batch.length - 1], messages[next])) {
+      batch.push(messages[next]);
+      next += 1;
+    }
+
+    items.push({ kind: 'stacked', messages: batch });
+    index = next;
+  }
+
+  return items;
 }
 
 function getMessagePermissions({
@@ -95,9 +168,31 @@ function getMessagePermissions({
   };
 }
 
+function BubbleMeta({ timeLabel, receipt }) {
+  if (!timeLabel && !receipt) return null;
+  return (
+    <div className="community-main-chat__bubble-meta">
+      {timeLabel ? (
+        <AppText as="span" className="community-main-chat__bubble-time" dir="ltr">
+          {timeLabel}
+        </AppText>
+      ) : null}
+      {receipt ? (
+        <span
+          className={`community-main-chat__bubble-status community-main-chat__bubble-status--${receipt.state}`}
+          aria-hidden
+        >
+          {receipt.ticks}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function CommunityChatMessageSegment({
   msg,
   outgoing,
+  isHostMessage,
   isPinned,
   canReply,
   canMute,
@@ -108,14 +203,15 @@ function CommunityChatMessageSegment({
   canDelete,
   onOpenMenu,
   language,
-  showMeta,
-  isStackTail = false,
+  clusterPosition = 'single',
 }) {
   const segmentRef = useRef(null);
-  const interactive = canReply || canMute || canPin || canUnpin || canShowOnBanner || canHideFromBanner || canDelete;
+  const interactive =
+    canReply || canMute || canPin || canUnpin || canShowOnBanner || canHideFromBanner || canDelete;
   const messageBidi = prepareBidiDisplayText(msg.text, language);
   const timeLabel = formatMessageTime(msg, language);
   const receipt = outgoing ? getMessageReceiptDisplay(msg, msg.senderId) : null;
+  const isTail = clusterPosition === 'last' || clusterPosition === 'single';
 
   const openMenu = () => {
     const rect = segmentRef.current?.getBoundingClientRect();
@@ -139,36 +235,39 @@ function CommunityChatMessageSegment({
 
   const longPress = useLongPress(openMenu, { disabled: !interactive });
 
+  const segmentClass = [
+    'community-main-chat__bubble-segment',
+    `community-main-chat__bubble-segment--${clusterPosition}`,
+    outgoing || isHostMessage
+      ? 'community-main-chat__bubble-segment--outgoing'
+      : 'community-main-chat__bubble-segment--incoming',
+    isHostMessage && !outgoing ? 'community-main-chat__bubble-segment--host' : '',
+    isPinned ? 'community-main-chat__bubble-segment--pinned' : '',
+    isTail ? 'community-main-chat__bubble-segment--tail' : '',
+    interactive ? 'community-main-chat__bubble-segment--interactive' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <div
       ref={segmentRef}
-      className={`community-main-chat__bubble-segment${interactive ? ' community-main-chat__bubble-segment--interactive' : ''}${isPinned ? ' community-main-chat__bubble-segment--pinned' : ''}${isStackTail ? ' community-main-chat__bubble-segment--tail' : ''}`}
+      className={segmentClass}
       onContextMenu={handleContextMenu}
       {...longPress}
     >
-      <AppText
-        as="p"
-        dir={messageBidi.dir}
-        lang={messageBidi.lang}
-        format={false}
-        className="community-main-chat__bubble-text"
-      >
-        {messageBidi.text}
-      </AppText>
-      {showMeta ? (
-        <div className="community-main-chat__bubble-meta">
-          {timeLabel ? (
-            <AppText as="span" className="community-main-chat__bubble-time" dir="ltr">
-              {timeLabel}
-            </AppText>
-          ) : null}
-          {receipt ? (
-            <span className={`community-main-chat__bubble-status community-main-chat__bubble-status--${receipt.state}`} aria-hidden>
-              {receipt.ticks}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="community-main-chat__bubble-inner">
+        <AppText
+          as="p"
+          dir={messageBidi.dir}
+          lang={messageBidi.lang}
+          format={false}
+          className="community-main-chat__bubble-text"
+        >
+          {messageBidi.text}
+        </AppText>
+        <BubbleMeta timeLabel={timeLabel} receipt={receipt} />
+      </div>
     </div>
   );
 }
@@ -190,6 +289,7 @@ function CommunityChatTextStack({
   language,
 }) {
   const first = messages[0];
+  const last = messages[messages.length - 1];
   const perms = getMessagePermissions({
     msg: first,
     currentUserId,
@@ -203,10 +303,11 @@ function CommunityChatTextStack({
     onHideFromBanner,
     onDeleteMessage,
   });
+  // Own + host stay on the physical right (list is dir=ltr for sides).
   const alignRight = perms.outgoing || perms.isHostMessage;
-  const showGuestAvatar = !alignRight;
+  const showGuestChrome = !alignRight;
   const showSender =
-    !perms.outgoing && !perms.isHostMessage && Boolean(first.senderName || first.senderId);
+    showGuestChrome && Boolean(first.senderName || first.senderId);
   const stackInteractive = messages.some((msg) => {
     const p = getMessagePermissions({
       msg,
@@ -234,7 +335,7 @@ function CommunityChatTextStack({
 
   const rowClass = [
     'community-main-chat__message',
-    alignRight ? 'community-main-chat__message--outgoing' : '',
+    alignRight ? 'community-main-chat__message--outgoing' : 'community-main-chat__message--incoming',
     perms.isHostMessage ? 'community-main-chat__message--host' : '',
     'community-main-chat__message--stacked',
     messages.length > 1 ? 'community-main-chat__message--stacked-multi' : 'community-main-chat__message--standalone',
@@ -246,18 +347,20 @@ function CommunityChatTextStack({
   return (
     <li className={rowClass}>
       <div className="community-main-chat__message-row">
-        {showGuestAvatar ? (
-          <div className="community-main-chat__avatar-slot">
-            <UserAvatar
-              user={{
-                photo_url: first.senderAvatar,
-                display_name: first.senderName,
-                gender: first.senderGender,
-              }}
-              className="community-main-chat__avatar"
-              style={{ width: 32, height: 32 }}
-              alt=""
-            />
+        {showGuestChrome ? (
+          <div className="community-main-chat__avatar-column" aria-hidden={!showGuestChrome}>
+            <div className="community-main-chat__avatar-slot community-main-chat__avatar-slot--tail">
+              <UserAvatar
+                user={{
+                  photo_url: last.senderAvatar || first.senderAvatar,
+                  display_name: last.senderName || first.senderName,
+                  gender: last.senderGender || first.senderGender,
+                }}
+                className="community-main-chat__avatar"
+                style={{ width: 32, height: 32 }}
+                alt=""
+              />
+            </div>
           </div>
         ) : null}
 
@@ -267,8 +370,13 @@ function CommunityChatTextStack({
               {first.senderName || t('user', 'User')}
             </AppText>
           ) : null}
+
           <div
-            className={`community-main-chat__bubble-stack${alignRight ? ' community-main-chat__bubble-stack--outgoing community-main-chat__bubble-stack--outer-end' : ' community-main-chat__bubble-stack--incoming community-main-chat__bubble-stack--outer-start'}${perms.isHostMessage && !perms.outgoing ? ' community-main-chat__bubble-stack--host' : ''}`}
+            className={`community-main-chat__bubble-stack${
+              alignRight
+                ? ' community-main-chat__bubble-stack--outgoing community-main-chat__bubble-stack--outer-end'
+                : ' community-main-chat__bubble-stack--incoming community-main-chat__bubble-stack--outer-start'
+            }${perms.isHostMessage && !perms.outgoing ? ' community-main-chat__bubble-stack--host' : ''}`}
           >
             {messages.map((msg, index) => {
               const segmentPerms = getMessagePermissions({
@@ -284,13 +392,13 @@ function CommunityChatTextStack({
                 onHideFromBanner,
                 onDeleteMessage,
               });
-              const isStackTail = index === messages.length - 1;
 
               return (
                 <CommunityChatMessageSegment
                   key={msg.id}
                   msg={msg}
                   outgoing={segmentPerms.outgoing}
+                  isHostMessage={segmentPerms.isHostMessage}
                   isPinned={Boolean(msg.pinned)}
                   canReply={segmentPerms.canReply}
                   canMute={segmentPerms.canMute}
@@ -301,8 +409,7 @@ function CommunityChatTextStack({
                   canDelete={segmentPerms.canDelete}
                   onOpenMenu={onOpenMenu}
                   language={language}
-                  showMeta
-                  isStackTail={isStackTail}
+                  clusterPosition={getClusterPosition(index, messages.length)}
                 />
               );
             })}
@@ -331,6 +438,7 @@ function CommunityChatMessageAtomic({
 }) {
   const bubbleRef = useRef(null);
   const isImage = msg.type === 'image';
+  const isAudio = isAudioMessage(msg);
   const isBigEmoji = msg.type === 'emoji-big';
   const perms = getMessagePermissions({
     msg,
@@ -346,8 +454,8 @@ function CommunityChatMessageAtomic({
     onDeleteMessage,
   });
   const alignRight = perms.outgoing || perms.isHostMessage;
-  const showGuestAvatar = !alignRight;
-  const showSender = !alignRight && !perms.isHostMessage && !isBigEmoji;
+  const showGuestChrome = !alignRight;
+  const showSender = showGuestChrome && !isBigEmoji;
   const interactive =
     perms.canReply ||
     perms.canMute ||
@@ -384,7 +492,7 @@ function CommunityChatMessageAtomic({
 
   const rowClass = [
     'community-main-chat__message',
-    alignRight ? 'community-main-chat__message--outgoing' : '',
+    alignRight ? 'community-main-chat__message--outgoing' : 'community-main-chat__message--incoming',
     perms.isHostMessage ? 'community-main-chat__message--host' : '',
     isBigEmoji ? 'community-main-chat__message--emoji' : 'community-main-chat__message--standalone',
     interactive ? 'community-main-chat__message--interactive' : '',
@@ -393,21 +501,27 @@ function CommunityChatMessageAtomic({
     .filter(Boolean)
     .join(' ');
 
+  const bubbleToneClass = alignRight
+    ? `community-main-chat__bubble--outgoing${perms.isHostMessage && !perms.outgoing ? ' community-main-chat__bubble--host' : ''}`
+    : 'community-main-chat__bubble--incoming';
+
   return (
     <li className={rowClass}>
       <div className={`community-main-chat__message-row${isBigEmoji ? ' community-main-chat__message-row--emoji' : ''}`}>
-        {showGuestAvatar ? (
-          <div className="community-main-chat__avatar-slot">
-            <UserAvatar
-              user={{
-                photo_url: msg.senderAvatar,
-                display_name: msg.senderName,
-                gender: msg.senderGender,
-              }}
-              className="community-main-chat__avatar"
-              style={{ width: 32, height: 32 }}
-              alt=""
-            />
+        {showGuestChrome ? (
+          <div className="community-main-chat__avatar-column">
+            <div className="community-main-chat__avatar-slot community-main-chat__avatar-slot--tail">
+              <UserAvatar
+                user={{
+                  photo_url: msg.senderAvatar,
+                  display_name: msg.senderName,
+                  gender: msg.senderGender,
+                }}
+                className="community-main-chat__avatar"
+                style={{ width: 32, height: 32 }}
+                alt=""
+              />
+            </div>
           </div>
         ) : null}
 
@@ -422,47 +536,71 @@ function CommunityChatMessageAtomic({
               {msg.senderName || t('user', 'User')}
             </AppText>
           ) : null}
+
           {isImage ? (
-            <div className="community-main-chat__bubble community-main-chat__bubble--image">
-              <img src={msg.text} alt="" className="community-main-chat__chat-image" />
-              {timeLabel ? (
+            <div className={`community-main-chat__bubble community-main-chat__bubble--image ${bubbleToneClass}`}>
+              <img src={resolveImageSrc(msg)} alt="" className="community-main-chat__chat-image" />
+              {timeLabel || receipt ? (
                 <div className="community-main-chat__bubble-meta community-main-chat__bubble-meta--overlay">
-                  <AppText as="span" className="community-main-chat__bubble-time" dir="ltr">
-                    {timeLabel}
-                  </AppText>
+                  {timeLabel ? (
+                    <AppText as="span" className="community-main-chat__bubble-time" dir="ltr">
+                      {timeLabel}
+                    </AppText>
+                  ) : null}
                   {receipt ? (
-                    <span className={`community-main-chat__bubble-status community-main-chat__bubble-status--${receipt.state}`} aria-hidden>
+                    <span
+                      className={`community-main-chat__bubble-status community-main-chat__bubble-status--${receipt.state}`}
+                      aria-hidden
+                    >
                       {receipt.ticks}
                     </span>
                   ) : null}
                 </div>
               ) : null}
             </div>
+          ) : isAudio ? (
+            <div className={`community-main-chat__bubble community-main-chat__bubble--audio ${bubbleToneClass} community-main-chat__bubble--single`}>
+              <div className="community-main-chat__bubble-inner">
+                <audio
+                  className="community-main-chat__chat-audio"
+                  controls
+                  preload="metadata"
+                  src={resolveAudioUrl(msg)}
+                />
+                <AppText as="span" className="community-main-chat__audio-duration" dir="ltr">
+                  {formatAudioDuration(msg.duration)}
+                </AppText>
+                <BubbleMeta timeLabel={timeLabel} receipt={receipt} />
+              </div>
+            </div>
           ) : (
             <div
-              className={`community-main-chat__bubble${isBigEmoji ? ' community-main-chat__bubble--emoji' : ''}${!isBigEmoji && alignRight ? ' community-main-chat__bubble--outgoing community-main-chat__bubble--outer-end' : ''}${!isBigEmoji && !alignRight ? ' community-main-chat__bubble--incoming community-main-chat__bubble--outer-start' : ''}${perms.isHostMessage && !perms.outgoing ? ' community-main-chat__bubble--host' : ''}`}
+              className={`community-main-chat__bubble${isBigEmoji ? ' community-main-chat__bubble--emoji' : ''} ${bubbleToneClass} community-main-chat__bubble--single`}
             >
-              <AppText
-                as="p"
-                dir={messageBidi.dir}
-                lang={messageBidi.lang}
-                format={false}
-                className={isBigEmoji ? 'community-main-chat__bubble-emoji-text' : 'community-main-chat__bubble-text'}
-              >
-                {messageBidi.text}
-              </AppText>
-              {!isBigEmoji && timeLabel ? (
-                <div className="community-main-chat__bubble-meta">
-                  <AppText as="span" className="community-main-chat__bubble-time" dir="ltr">
-                    {timeLabel}
+              {!isBigEmoji ? (
+                <div className="community-main-chat__bubble-inner">
+                  <AppText
+                    as="p"
+                    dir={messageBidi.dir}
+                    lang={messageBidi.lang}
+                    format={false}
+                    className="community-main-chat__bubble-text"
+                  >
+                    {messageBidi.text}
                   </AppText>
-                  {receipt ? (
-                    <span className={`community-main-chat__bubble-status community-main-chat__bubble-status--${receipt.state}`} aria-hidden>
-                      {receipt.ticks}
-                    </span>
-                  ) : null}
+                  <BubbleMeta timeLabel={timeLabel} receipt={receipt} />
                 </div>
-              ) : null}
+              ) : (
+                <AppText
+                  as="p"
+                  dir={messageBidi.dir}
+                  lang={messageBidi.lang}
+                  format={false}
+                  className="community-main-chat__bubble-emoji-text"
+                >
+                  {messageBidi.text}
+                </AppText>
+              )}
             </div>
           )}
         </div>
@@ -486,6 +624,16 @@ function CommunityChatMessageAtomic({
   );
 }
 
+function CommunityChatDaySeparator({ ms, language, t }) {
+  const label = formatDaySeparatorLabel(ms, language, t);
+  if (!label) return null;
+  return (
+    <li className="community-main-chat__day-sep" aria-label={label}>
+      <span className="community-main-chat__day-sep-chip">{label}</span>
+    </li>
+  );
+}
+
 /**
  * Shared community chat message list (center + focus screens).
  * @param {'normal' | 'focus'} variant
@@ -496,6 +644,7 @@ export default function CommunityChatMessages({
   variant = 'normal',
   isHost = false,
   partnerId,
+  emptyContent = null,
   onReplyToMessage,
   onMuteMember,
   onDeleteMessage,
@@ -505,16 +654,65 @@ export default function CommunityChatMessages({
   onHideFromBanner,
 }) {
   const { t, i18n } = useTranslation();
-  const contentDir = getAppTextDirection(i18n.language);
-  const messagesEndRef = useRef(null);
+  const listRef = useRef(null);
+  const pinnedToBottomRef = useRef(true);
   const [menu, setMenu] = useState(null);
-  const renderGroups = buildRenderGroups(messages);
+  const renderItems = buildRenderItems(messages);
+
+  const pinToBottomIfNeeded = useCallback(() => {
+    const list = listRef.current;
+    if (!list || !pinnedToBottomRef.current) return;
+    scrollListToBottom(list);
+    requestAnimationFrame(() => {
+      if (!pinnedToBottomRef.current) return;
+      scrollListToBottom(list);
+      requestAnimationFrame(() => {
+        if (pinnedToBottomRef.current) scrollListToBottom(list);
+      });
+    });
+  }, []);
 
   useEffect(() => {
-    const list = messagesEndRef.current?.parentElement;
-    if (!list) return;
-    list.scrollTop = list.scrollHeight;
-  }, [messages]);
+    const list = listRef.current;
+    if (!list) return undefined;
+
+    const onScroll = () => {
+      pinnedToBottomRef.current = isListNearBottom(list);
+    };
+
+    list.addEventListener('scroll', onScroll, { passive: true });
+    return () => list.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    pinToBottomIfNeeded();
+  }, [messages, pinToBottomIfNeeded]);
+
+  useEffect(() => {
+    const list = listRef.current;
+    const onViewportChange = () => pinToBottomIfNeeded();
+
+    window.visualViewport?.addEventListener('resize', onViewportChange);
+    window.visualViewport?.addEventListener('scroll', onViewportChange);
+    window.addEventListener('resize', onViewportChange);
+
+    const attrObserver = new MutationObserver(onViewportChange);
+    attrObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-chat-keyboard-open', 'data-keyboard-open'],
+    });
+
+    const resizeObserver = list ? new ResizeObserver(onViewportChange) : null;
+    if (list) resizeObserver.observe(list);
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', onViewportChange);
+      window.visualViewport?.removeEventListener('scroll', onViewportChange);
+      window.removeEventListener('resize', onViewportChange);
+      attrObserver.disconnect();
+      resizeObserver?.disconnect();
+    };
+  }, [pinToBottomIfNeeded]);
 
   const rootClass =
     variant === 'focus'
@@ -529,18 +727,35 @@ export default function CommunityChatMessages({
 
   return (
     <>
-      <ul className={rootClass} dir={contentDir} aria-label={t('community_chat', 'Community Chat')}>
+      {/* dir=ltr keeps own bubbles on the physical right in Arabic UI */}
+      <ul
+        ref={listRef}
+        className={rootClass}
+        dir="ltr"
+        aria-label={t('community_chat', 'Community Chat')}
+      >
         {messages.length === 0 ? (
           <li className="community-main-chat__empty">
-            <AppText as="p">{t('no_messages_yet', 'No messages yet')}</AppText>
+            {emptyContent || <AppText as="p">{t('no_messages_yet', 'No messages yet')}</AppText>}
           </li>
         ) : (
-          renderGroups.map((group) => {
-            if (group.kind === 'stacked') {
+          renderItems.map((item) => {
+            if (item.kind === 'day') {
+              return (
+                <CommunityChatDaySeparator
+                  key={item.id}
+                  ms={item.ms}
+                  language={i18n.language}
+                  t={t}
+                />
+              );
+            }
+
+            if (item.kind === 'stacked') {
               return (
                 <CommunityChatTextStack
-                  key={group.messages[0].id}
-                  messages={group.messages}
+                  key={item.messages[0].id}
+                  messages={item.messages}
                   currentUserId={currentUserId}
                   partnerId={partnerId}
                   isHost={isHost}
@@ -560,8 +775,8 @@ export default function CommunityChatMessages({
 
             return (
               <CommunityChatMessageAtomic
-                key={group.messages[0].id}
-                msg={group.messages[0]}
+                key={item.messages[0].id}
+                msg={item.messages[0]}
                 currentUserId={currentUserId}
                 partnerId={partnerId}
                 isHost={isHost}
@@ -579,7 +794,6 @@ export default function CommunityChatMessages({
             );
           })
         )}
-        <li ref={messagesEndRef} aria-hidden />
       </ul>
 
       <CommunityChatMessageMenu

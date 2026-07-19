@@ -23,6 +23,8 @@ const DISCOVERY_GREETINGS_COLLECTION = 'discovery_greetings';
 
 /** In-memory cache — avoids duplicate getDoc on every card mount. */
 const actionStatusCache = new Map();
+/** Deduplicate concurrent status fetches for the same pair. */
+const actionStatusInflight = new Map();
 
 export function primeDiscoveryActionStatus(viewerId, targetId, patch) {
     if (!viewerId || !targetId) return;
@@ -86,24 +88,36 @@ export async function getDiscoveryActionStatus(viewerId, targetId) {
         return { liked: cached.liked, greetedToday: cached.greetedToday };
     }
 
-    const [likeSnap, greetingSnap] = await Promise.all([
-        getDoc(getDiscoveryLikeRef(targetId, viewerId)),
-        getDoc(getDiscoveryGreetingRef(targetId, viewerId, dayKey)),
-    ]);
+    const pending = actionStatusInflight.get(key);
+    if (pending) return pending;
 
-    const result = {
-        liked: likeSnap.exists(),
-        greetedToday: greetingSnap.exists(),
-    };
-    const freshCache = actionStatusCache.get(key);
-    if (freshCache && freshCache.liked !== result.liked) {
-        return {
-            liked: freshCache.liked,
-            greetedToday: freshCache.greetedToday ?? result.greetedToday,
+    const request = (async () => {
+        const [likeSnap, greetingSnap] = await Promise.all([
+            getDoc(getDiscoveryLikeRef(targetId, viewerId)),
+            getDoc(getDiscoveryGreetingRef(targetId, viewerId, dayKey)),
+        ]);
+
+        const result = {
+            liked: likeSnap.exists(),
+            greetedToday: greetingSnap.exists(),
         };
+        const freshCache = actionStatusCache.get(key);
+        if (freshCache && freshCache.liked !== result.liked) {
+            return {
+                liked: freshCache.liked,
+                greetedToday: freshCache.greetedToday ?? result.greetedToday,
+            };
+        }
+        actionStatusCache.set(key, { ...result, dayKey });
+        return result;
+    })();
+
+    actionStatusInflight.set(key, request);
+    try {
+        return await request;
+    } finally {
+        actionStatusInflight.delete(key);
     }
-    actionStatusCache.set(key, { ...result, dayKey });
-    return result;
 }
 
 
@@ -131,10 +145,11 @@ export function getDiscoveryLikeRef(targetUserId, likerId) {
  * Map a directory user row to the discovery card shape.
 
  * @param {object} user
+ * @param {{ lat: number, lng: number } | null} [userLocation]
 
  */
 
-export function mapDirectoryUserToDiscoveryProfile(user) {
+export function mapDirectoryUserToDiscoveryProfile(user, userLocation = null) {
 
     if (!user?.id) return null;
 
@@ -167,6 +182,7 @@ export function mapDirectoryUserToDiscoveryProfile(user) {
         interests,
         city: user.city || '',
         country: user.country || '',
+        bio: String(user.bio || user.shortBio || '').trim(),
     };
 
 }

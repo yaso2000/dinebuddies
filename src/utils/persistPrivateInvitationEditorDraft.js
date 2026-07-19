@@ -8,6 +8,35 @@ import {
     getDefaultPrivateCardBackgroundId,
     isPrivateBackgroundIdForCategory,
 } from '../components/Invitations/privateCard/privateCardBackgrounds';
+import { resolveOccasionCategoryId } from '../components/Invitations/socialCard/socialCardOccasionMap';
+import {
+    DEFAULT_PRIVATE_CARD_BACKGROUND_ID,
+    getCardBackgroundOptions,
+    resolveCanonicalBackgroundId,
+} from '../components/Invitations/socialCard/socialCardBackgrounds';
+
+function sanitizeSocialCardBackgroundId(formData, cardBackgroundId, cardGradientId) {
+    if (cardGradientId) return null;
+    const categoryId = resolveOccasionCategoryId(formData?.occasionType);
+    if (!cardBackgroundId) return DEFAULT_PRIVATE_CARD_BACKGROUND_ID;
+    const canonical = resolveCanonicalBackgroundId(categoryId, cardBackgroundId);
+    const opts = getCardBackgroundOptions(categoryId);
+    if (opts.some((o) => o.id === canonical)) return canonical;
+    // Keep the original social id if category options are empty (catalog lag) rather than
+    // rewriting to a private/friendship template that breaks preview.
+    if (opts.length === 0) return cardBackgroundId;
+    return DEFAULT_PRIVATE_CARD_BACKGROUND_ID;
+}
+
+function sanitizePrivateCardBackgroundId(formData, cardBackgroundId, cardGradientId) {
+    if (cardGradientId) return null;
+    const inviteCategory = normalizePersonalInviteCategory(formData?.personalInviteCategory);
+    let safeCardBackgroundId = cardBackgroundId || null;
+    if (safeCardBackgroundId && !isPrivateBackgroundIdForCategory(safeCardBackgroundId, inviteCategory)) {
+        safeCardBackgroundId = getDefaultPrivateCardBackgroundId(inviteCategory);
+    }
+    return safeCardBackgroundId;
+}
 
 /**
  * Create or update a private/private invite Firestore draft from the editor.
@@ -59,11 +88,10 @@ export async function persistPrivateInvitationEditorDraft({
         initialRsvps[friendId] = 'pending';
     });
 
-    const inviteCategory = normalizePersonalInviteCategory(formData.personalInviteCategory);
-    let safeCardBackgroundId = cardGradientId ? null : cardBackgroundId || null;
-    if (safeCardBackgroundId && !isPrivateBackgroundIdForCategory(safeCardBackgroundId, inviteCategory)) {
-        safeCardBackgroundId = getDefaultPrivateCardBackgroundId(inviteCategory);
-    }
+    const safeCardBackgroundId =
+        type === 'Social'
+            ? sanitizeSocialCardBackgroundId(formData, cardBackgroundId, cardGradientId)
+            : sanitizePrivateCardBackgroundId(formData, cardBackgroundId, cardGradientId);
 
     const baseDraft = {
         ...formData,

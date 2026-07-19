@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FaSearch, FaStore, FaGlobe, FaTimes, FaMapMarkerAlt } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { searchPublishedAppVenues } from '../utils/appVenueDirectory';
+import { filterLoadedAppVenues, searchPublishedAppVenues } from '../utils/appVenueDirectory';
 import { sortDineBuddiesVenues } from '../utils/invitationVenueSearch';
 import { extractCityTokenFromAddress } from '../utils/locationUtils';
 import { resolveAppVenueFromGoogleSelection } from '../utils/resolveAppVenueFromGoogleSelection';
@@ -13,12 +13,13 @@ import {
 } from '../utils/unifiedVenueSearch';
 import { PLACES_AUTOCOMPLETE_DEBOUNCE_MS } from '../utils/placesCostControl';
 import { useToast } from '../context/ToastContext';
+import { useInvitations } from '../context/InvitationContext';
 import './venue-search.css';
 import { AppText, AppTextInput } from './base';
 
 /**
- * Unified venue search — one bar, DineBuddies results first (same city),
- * Google Places only when nothing matches in the app directory.
+ * Unified venue search — one bar, DineBuddies results first (loaded + directory),
+ * Google Places only when nothing matches in the app.
  */
 const VenueLocationPicker = ({
   value,
@@ -35,6 +36,8 @@ const VenueLocationPicker = ({
 }) => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
+  const invitationCtx = useInvitations();
+  const restaurants = invitationCtx?.restaurants || [];
   const [dbResults, setDbResults] = useState([]);
   const [googleResults, setGoogleResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -110,18 +113,33 @@ const VenueLocationPicker = ({
       setGoogleResults([]);
 
       try {
+        // 1) Already-loaded directory in the app, 2) Firestore published venues by name.
+        // City ranks results — do not hard-drop name matches (that forced Google-only).
+        const loadedHits = filterLoadedAppVenues(restaurants, trimmed);
         const dbRows = await searchPublishedAppVenues({
           queryText: trimmed,
           city,
           countryCode,
-          scope: 'local',
+          scope: 'country',
+          softCityFilter: true,
           userLat,
           userLng,
-          maxResults: 10,
+          maxResults: 12,
         });
         if (isStale()) return;
 
-        const ranked = sortDineBuddiesVenues(dbRows, city, invitationType, userLat, userLng);
+        const byId = new Map();
+        for (const row of [...loadedHits, ...dbRows]) {
+          if (!row?.id) continue;
+          if (!byId.has(row.id)) byId.set(row.id, row);
+        }
+        const ranked = sortDineBuddiesVenues(
+          [...byId.values()],
+          city,
+          invitationType,
+          userLat,
+          userLng
+        ).slice(0, 10);
         setDbResults(ranked);
 
         if (ranked.length === 0) {
@@ -170,7 +188,7 @@ const VenueLocationPicker = ({
         if (!isStale()) setLoading(false);
       }
     },
-    [city, countryCode, region, userLat, userLng, invitationType, lang, t]
+    [city, countryCode, region, userLat, userLng, invitationType, lang, t, restaurants]
   );
 
   const handleInput = (e) => {

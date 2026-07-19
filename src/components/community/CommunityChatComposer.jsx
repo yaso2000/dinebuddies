@@ -107,81 +107,82 @@ export default function CommunityChatComposer({
 
       <div className="community-main-chat__input-row">
         <div className="chat-composer-input community-composer-bubble">
-        <div className="community-main-chat__attachments">
-          <button
-            type="button"
-            className="community-main-chat__attach-btn"
-            aria-label={t('community_chat_attach_image', 'Attach image')}
-            title={t('community_chat_attach_image', 'Attach image')}
-            disabled={composerDisabled || !sendImageMessage}
-            onPointerDown={preventComposerControlBlur}
-            onMouseDown={preventComposerControlBlur}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <FaImage size={16} aria-hidden />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="community-main-chat__file-input"
-            onChange={(event) => void handleImagePick(event)}
-          />
-          {showComposerEmojiButton() ? (
-          <button
-            type="button"
-            className={`community-main-chat__attach-btn${showEmojiPicker ? ' community-main-chat__attach-btn--active' : ''}`}
-            aria-label={t('community_chat_add_emoji', 'Add emoji')}
-            title={t('community_chat_add_emoji', 'Add emoji')}
-            aria-pressed={showEmojiPicker}
-            disabled={isMutedInChat}
-            onPointerDown={preventComposerControlBlur}
-            onMouseDown={preventComposerControlBlur}
-            onClick={() => {
-              handleEmojiButtonClick({ inputRef, setPickerOpen: setShowEmojiPicker });
-            }}
-          >
-            <FaSmile size={16} aria-hidden />
-          </button>
-          ) : null}
-        </div>
+          <div className="community-main-chat__attachments">
+            <button
+              type="button"
+              className="community-main-chat__attach-btn"
+              aria-label={t('community_chat_attach_image', 'Attach image')}
+              title={t('community_chat_attach_image', 'Attach image')}
+              disabled={composerDisabled || !sendImageMessage}
+              onPointerDown={preventComposerControlBlur}
+              onMouseDown={preventComposerControlBlur}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <FaImage size={16} aria-hidden />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="community-main-chat__file-input"
+              onChange={(event) => void handleImagePick(event)}
+            />
+            {showComposerEmojiButton() ? (
+              <button
+                type="button"
+                className={`community-main-chat__attach-btn${showEmojiPicker ? ' community-main-chat__attach-btn--active' : ''}`}
+                aria-label={t('community_chat_add_emoji', 'Add emoji')}
+                title={t('community_chat_add_emoji', 'Add emoji')}
+                aria-pressed={showEmojiPicker}
+                disabled={isMutedInChat}
+                onPointerDown={preventComposerControlBlur}
+                onMouseDown={preventComposerControlBlur}
+                onClick={() => {
+                  handleEmojiButtonClick({ inputRef, setPickerOpen: setShowEmojiPicker });
+                }}
+              >
+                <FaSmile size={16} aria-hidden />
+              </button>
+            ) : null}
+          </div>
 
-        <AppTextInput
-          ref={inputRef}
-          type="text"
-          className="community-main-chat__input chat-input-field"
-          placeholder={t('message_placeholder', 'Type a message…')}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              void handleSend();
-            }
-          }}
-          disabled={composerDisabled}
-          aria-label={t('message_placeholder', 'Type a message…')}
-          dir={inputBidiProps.dir}
-          lang={inputBidiProps.lang}
-          style={inputBidiProps.style}
-        />
+          <AppTextInput
+            ref={inputRef}
+            type="text"
+            className="community-main-chat__input chat-input-field"
+            placeholder={t('message_placeholder', 'Type a message…')}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void handleSend();
+              }
+            }}
+            disabled={composerDisabled}
+            aria-label={t('message_placeholder', 'Type a message…')}
+            dir={inputBidiProps.dir}
+            lang={inputBidiProps.lang}
+            style={inputBidiProps.style}
+          />
+
+          <button
+            type="button"
+            className="community-main-chat__send-btn chat-send-btn"
+            aria-label={t('send', 'Send')}
+            disabled={composerDisabled || !draft.trim()}
+            onPointerDown={preventComposerControlBlur}
+            onMouseDown={preventComposerControlBlur}
+            onClick={() => void handleSend()}
+          >
+            <FaPaperPlane size={16} aria-hidden />
+            <AppText as="span" className="community-main-chat__send-label">
+              {uploadingImage
+                ? t('community_chat_uploading_image', 'Uploading…')
+                : t('send', 'Send')}
+            </AppText>
+          </button>
         </div>
-        <button
-          type="button"
-          className="community-main-chat__send-btn chat-send-btn"
-          aria-label={t('send', 'Send')}
-          disabled={composerDisabled || !draft.trim()}
-          onPointerDown={preventComposerControlBlur}
-          onMouseDown={preventComposerControlBlur}
-          onClick={() => void handleSend()}
-        >
-          <FaPaperPlane size={16} aria-hidden />
-          <AppText as="span" className="community-main-chat__send-label">
-            {uploadingImage
-              ? t('community_chat_uploading_image', 'Uploading…')
-              : t('send', 'Send')}
-          </AppText>
-        </button>
       </div>
     </div>
   );

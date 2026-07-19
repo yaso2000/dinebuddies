@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaBullhorn, FaThumbtack } from 'react-icons/fa';
+import { FaBullhorn, FaTimes } from 'react-icons/fa';
 import { AppText } from '../base';
 import { getAppTextDirection, prepareBidiDisplayText } from '../../utils/bidiText';
 import { extractQuotedFromMessage } from '../../utils/communityChatReply';
@@ -132,20 +132,14 @@ export default function CommunityPinnedHostBar({
                 {canUnpin ? (
                     <button
                         type="button"
-                        className="community-pinned-host-bar__pin-btn community-pinned-host-bar__pin--active"
+                        className="community-pinned-host-bar__unpin-btn"
                         aria-label={t('community_chat_unpin_bar', 'Unpin from bar')}
                         title={t('community_chat_unpin_bar', 'Unpin from bar')}
                         onClick={handleUnpin}
                     >
-                        <FaThumbtack size={13} aria-hidden />
+                        <FaTimes size={14} aria-hidden />
                     </button>
-                ) : (
-                    <FaThumbtack
-                        size={13}
-                        className="community-pinned-host-bar__pin community-pinned-host-bar__pin--active"
-                        aria-hidden
-                    />
-                )}
+                ) : null}
             </div>
         </div>
     );

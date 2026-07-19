@@ -20,7 +20,13 @@ const GIFT_RECIPIENT_VALUE_RATE = 0.5;
 
 const CREDIT_COSTS = {
     /** Public invitations use the `invitations` collection and are not charged via this constant. */
-    PRIVATE_INVITATION: 90,
+    /** Social hosted invite publish (`social_invitations`, multi-guest). */
+    SOCIAL_INVITATION: 90,
+    /** Personal/private 1-on-1 hosted invite publish. */
+    PRIVATE_INVITATION: 185,
+    /** @deprecated Use SOCIAL_INVITATION — kept for older call sites during deploy rollout. */
+    PRIVATE_INVITATION_LEGACY_SOCIAL: 90,
+    /** @deprecated Use PRIVATE_INVITATION — former dating cost key. */
     DATING_INVITATION: 185,
     INVITATION_BOOST: 50,
     AI_TEXT_REGULAR: 10,
@@ -57,7 +63,12 @@ function getBusinessMonthlyPriceId() {
  * @param {string|null|undefined} raw
  */
 function normalizeBusinessSubscriptionTier(raw) {
-    return String(raw || 'free').trim().toLowerCase() === 'paid' ? 'paid' : 'free';
+    const t = String(raw || 'free').trim().toLowerCase();
+    // Keep in sync with src/config/businessPlanFeatures.js normalizeBusinessPlanTier.
+    if (t === 'paid' || t === 'elite' || t === 'professional' || t === 'pro' || t === 'business') {
+        return 'paid';
+    }
+    return 'free';
 }
 
 /** @param {number} giftSentAmount */

@@ -3,6 +3,8 @@
  * `id` must match the filename stem on disk. Legacy Firestore ids are mapped in BIRTHDAY_LEGACY_CANONICAL_ID.
  * Optional per-row `fileStem` / `ext` — see resolveCardBackgroundUrlCandidates.
  */
+import { resolveOccasionCategoryId } from './socialCardOccasionMap';
+
 /** Template ids whose artwork is predominantly dark — frame text must be lifted for contrast */
 export const DARK_TEMPLATE_BACKGROUND_IDS = new Set(['birthday-dark', 'birthday-dark-1', 'birthday-dark-neon']);
 
@@ -341,9 +343,27 @@ export function getSocialInvitationHeroCoverFromInvitation(invitation) {
     if (vid) {
         return { src: vid, mediaType: 'video', poster: invitation.videoThumbnail || null };
     }
-    const img = invitation.customImage || invitation.image;
-    if (!img || typeof img !== 'string') return null;
-    return { src: img, mediaType: 'image', poster: null };
+    const img =
+        invitation.customImage ||
+        invitation.image ||
+        invitation.restaurantImage ||
+        invitation.coverImage ||
+        invitation.videoThumbnail;
+    if (img && typeof img === 'string') {
+        // Template assets saved as customImage should resolve via cardBackgroundId instead.
+        if (!parsePrivateInvitationCardBackgroundFromUrl(img)) {
+            return { src: img, mediaType: 'image', poster: null };
+        }
+    }
+    // Template-only social invites have no uploaded image — resolve from cardBackgroundId.
+    if (invitation.cardBackgroundId && !invitation.cardGradientId) {
+        const categoryId = resolveOccasionCategoryId(invitation.occasionType);
+        const templateUrl = resolveCardBackgroundUrl(categoryId, invitation.cardBackgroundId);
+        if (templateUrl && templateUrl !== CARD_BACKGROUND_IMAGE_PLACEHOLDER) {
+            return { src: templateUrl, mediaType: 'image', poster: null };
+        }
+    }
+    return null;
 }
 
 /**
