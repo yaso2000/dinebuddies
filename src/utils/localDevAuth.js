@@ -131,8 +131,11 @@ export function preferOAuthRedirectOnThisDevice() {
  * - Facebook → popup first (redirect fallback only if blocked)
  */
 export function preferOAuthRedirectForProvider(providerId) {
+    // Localhost: keep popup — Firebase redirect + authDomain is unreliable on Vite ports.
+    if (isLocalDevHost() || isEmbeddedPreviewBrowser() || isAndroidTouchDevice()) {
+        return false;
+    }
     if (preferOAuthRedirectOnThisDevice()) return true;
-    if (isAndroidTouchDevice() || isEmbeddedPreviewBrowser()) return false;
     const id = String(providerId || '');
     return id === 'google.com' || id === 'apple.com';
 }
