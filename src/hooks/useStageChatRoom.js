@@ -697,11 +697,15 @@ export function useStageChatRoom(stageId) {
                 });
 
                 if (uid === hostId && banner?.hostSpotlightAuto) {
-                    await setDoc(
-                        doc(db, 'stages', partnerId),
-                        { host_spotlight_dismissed: false, ownerId: hostId || partnerId },
-                        { merge: true }
-                    );
+                    try {
+                        await setDoc(
+                            doc(db, 'stages', partnerId),
+                            { host_spotlight_dismissed: false, ownerId: hostId || partnerId },
+                            { merge: true }
+                        );
+                    } catch (spotlightErr) {
+                        console.warn('[useStageChatRoom] host spotlight update skipped', spotlightErr);
+                    }
                 }
 
                 if (uid !== hostId && hostId) {
@@ -714,6 +718,8 @@ export function useStageChatRoom(stageId) {
                                 ? t('community_chat_image_notification', 'Sent a photo')
                                 : String(text).slice(0, 80),
                         actionUrl: `/stage/${partnerId}`,
+                    }).catch((notifErr) => {
+                        console.warn('[useStageChatRoom] host notify skipped', notifErr);
                     });
                 }
 

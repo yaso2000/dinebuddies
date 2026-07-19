@@ -15,6 +15,7 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
     messages,
     isMutedInChat,
     isHost,
+    isStageClosed,
     sendMessage,
     sendImageMessage,
     uploadingChatImage,
@@ -30,6 +31,7 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
     showMessageOnBanner,
     hideMessageFromBanner,
   } = room;
+  const composerBlocked = Boolean(isMutedInChat || isStageClosed);
 
   const handleReply = useCallback(
     (message) => {
@@ -110,7 +112,14 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
             variant="normal"
           />
 
-          {isMutedInChat ? (
+          {isStageClosed ? (
+            <div className="community-main-chat__muted" role="status">
+              {t(
+                'stage_closed_cannot_write',
+                'This Stage is closed. The host can reopen it within 24 hours.'
+              )}
+            </div>
+          ) : isMutedInChat ? (
             <div className="community-main-chat__muted" role="status">
               {t(
                 'community_chat_muted_notice',
@@ -124,7 +133,7 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
           <CommunityChatComposer
             sendMessage={sendMessage}
             sendImageMessage={sendImageMessage}
-            isMutedInChat={isMutedInChat}
+            isMutedInChat={composerBlocked}
             uploadingImage={uploadingChatImage}
             pendingReplyTo={isHost ? pendingReplyTo : null}
             onCancelReply={cancelReplyToMessage}
