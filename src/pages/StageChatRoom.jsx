@@ -216,7 +216,7 @@ export default function StageChatRoom() {
 
   let shellContent;
 
-  if (room.loading && !canEnterChat) {
+  if (room.loading) {
     shellContent = (
       <div
         ref={containerRef}

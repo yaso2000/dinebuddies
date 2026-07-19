@@ -168,19 +168,24 @@ export function useStageChatRoom(stageId) {
 
     const bannerToggleDisabled = !isHost && hostBannerVisible === false;
 
-    // Stage room doc + host profile (theme/membership on stage; display from host)
+    // Stage room doc + host profile (theme/membership on stage; display from host).
+    // Depend on uid only — AuthContext rebuilds currentUser every render via toSessionAuthUser().
     useEffect(() => {
-        if (!partnerId || !currentUser) {
+        if (!partnerId || !uid) {
             setLoading(false);
+            setPartner(null);
             return undefined;
         }
 
+        let cancelled = false;
         let unsubStage = () => {};
         let unsubHost = () => {};
         let stageData = null;
         let hostProfile = null;
+        let loadTimer = null;
 
         const publish = () => {
+            if (cancelled) return;
             if (!stageData) {
                 setPartner(null);
                 return;
@@ -225,9 +230,22 @@ export function useStageChatRoom(stageId) {
         };
 
         setLoading(true);
+        // Safety: never leave the Stage shell stuck on "Loading…" forever.
+        loadTimer = window.setTimeout(() => {
+            if (!cancelled) {
+                console.warn('[useStageChatRoom] stage snapshot timed out');
+                setLoading(false);
+            }
+        }, 10000);
+
         unsubStage = onSnapshot(
             doc(db, 'stages', partnerId),
             (snap) => {
+                if (cancelled) return;
+                if (loadTimer) {
+                    window.clearTimeout(loadTimer);
+                    loadTimer = null;
+                }
                 if (!snap.exists()) {
                     stageData = null;
                     setPartner(null);
@@ -248,22 +266,32 @@ export function useStageChatRoom(stageId) {
                 unsubHost = onSnapshot(
                     doc(db, 'users', stageHostId),
                     (hostSnap) => {
+                        if (cancelled) return;
                         hostProfile = hostSnap.exists() ? hostSnap.data() : null;
                         publish();
                     },
                     () => {
+                        if (cancelled) return;
                         hostProfile = null;
                         publish();
                     }
                 );
             },
             (err) => {
+                if (cancelled) return;
+                if (loadTimer) {
+                    window.clearTimeout(loadTimer);
+                    loadTimer = null;
+                }
                 console.error('[useStageChatRoom] stage snapshot', err);
+                setPartner(null);
                 setLoading(false);
             }
         );
 
         return () => {
+            cancelled = true;
+            if (loadTimer) window.clearTimeout(loadTimer);
             try {
                 unsubStage();
             } catch {
@@ -275,7 +303,7 @@ export function useStageChatRoom(stageId) {
                 /* ignore */
             }
         };
-    }, [partnerId, currentUser, uid]);
+    }, [partnerId, uid]);
 
     // Single-slot banner on stages/{stageId}
     useEffect(() => {

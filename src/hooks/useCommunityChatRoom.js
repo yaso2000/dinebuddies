@@ -185,7 +185,7 @@ export function useCommunityChatRoom(partnerId) {
 
     // Partner profile + moderation (users/{partnerId}, fallback restaurants/{partnerId})
     useEffect(() => {
-        if (!partnerId || !currentUser) {
+        if (!partnerId || !uid) {
             setLoading(false);
             return undefined;
         }
@@ -265,7 +265,8 @@ export function useCommunityChatRoom(partnerId) {
             cancelled = true;
             unsubPartner();
         };
-    }, [partnerId, currentUser, uid]);
+    // uid only — AuthContext rebuilds currentUser object every render.
+    }, [partnerId, uid]);
 
     // Single-slot banner on communities/{partnerId}
     useEffect(() => {
