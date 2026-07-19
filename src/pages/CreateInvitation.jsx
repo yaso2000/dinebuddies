@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { FaCalendarAlt, FaMapMarkerAlt, FaCheckCircle, FaClock, FaUserFriends, FaVenusMars, FaMoneyBillWave, FaLock, FaGlobe } from 'react-icons/fa';
 import { IoMale, IoFemale, IoMaleFemale } from 'react-icons/io5';
 import { HiUser } from 'react-icons/hi2';
@@ -19,10 +19,10 @@ import { canCreateInvitation } from '../utils/cancellationPolicy';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { detectLiveUserGps, geocode } from '../utils/locationUtils';
-import { resolveVenueCoordinates } from '../utils/invitationCoords';
+import { getInvitationLatLng, resolveVenueCoordinates } from '../utils/invitationCoords';
 import { validatePublicInvitationCreate, invitationErrorI18nKey } from '../utils/invitationRules';
 import { extractCityTokenFromAddress } from '../utils/locationUtils';
-import { TEMPLATE_STYLES, LEGACY_PUBLIC_TEMPLATE_MAP, TEMPLATE_PICKER_KEYS, normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
+import { normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
 import { PUBLIC_VENUE_CATEGORIES } from '../constants/publicVenueCategories';
 import {
   PUBLIC_VENUE_TYPES,
@@ -38,12 +38,12 @@ import AIFloatingLauncher from '../components/AIFloatingLauncher';
 import { extractAIContentFields } from '../utils/aiContentFieldMapper';
 import { buildPublicInvitationAiUserPrompt } from '../utils/aiPromptLocale';
 import { parseAiStudioImageFromState } from '../utils/aiStudioImagePayload';
-import { useDragScrollRail } from '../hooks/useDragScrollRail';
-import { scheduleScrollPageToTop, scrollElementIntoHorizontalContainer } from '../utils/scrollPageToTop';
+import { scheduleScrollPageToTop } from '../utils/scrollPageToTop';
 
 import { goToLogin } from '../utils/goToLogin';
 import { resolveVenueCountryIso } from '../utils/countryIso';
 import { AppText, AppTextInput } from "../components/base";
+import { resolveHostInvitationNavigationState } from '../utils/hostInvitationFromBusiness';
 
 const MAX_PUBLIC_GUESTS = 10;
 
@@ -51,6 +51,7 @@ const CreateInvitation = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { addInvitation, currentUser, restaurants } = useInvitations();
   const { showToast } = useToast();
   const { currentUser: authUser, userProfile, updateUserProfile } = useAuth(); // Get userProfile for guest check
@@ -115,24 +116,24 @@ const CreateInvitation = () => {
     return detected;
   }, []);
 
-  const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
+  const hostNavState = useMemo(
+    () =>
+      resolveHostInvitationNavigationState({
+        locationState: location.state,
+        businessId: searchParams.get('businessId'),
+        restaurants,
+      }),
+    [location.state, restaurants, searchParams]
+  );
+  const restaurantData = hostNavState?.restaurantData || location.state?.selectedRestaurant;
   const prefilledData = location.state?.prefilledData; // From BusinessProfile
   const offerData = location.state?.offerData; // From Special Offer
-  const fromRestaurant = location.state?.fromRestaurant || !!restaurantData;
+  const fromRestaurant = hostNavState?.fromRestaurant || location.state?.fromRestaurant || !!restaurantData;
   const editingDraft = location.state?.editingDraft; // Editing draft from preview
   const draftId = location.state?.draftId; // Draft ID to load
   const editingInvitation = location.state?.editingInvitation; // Editing PUBLISHED invitation
   const editVideoHydratedRef = useRef(null);
   const mediaLibraryHydratedRef = useRef(false);
-  const templateCarouselScrollTimerRef = useRef(null);
-  const {
-    railRef: templateCarouselRef,
-    onPointerDown: onTemplateCarouselDown,
-    onPointerMove: onTemplateCarouselMove,
-    onPointerUp: onTemplateCarouselUp,
-    onPointerCancel: onTemplateCarouselCancel,
-    wasDragged: templateCarouselWasDragged
-  } = useDragScrollRail();
 
   const mediaLibraryStorageKey = React.useMemo(() => {
     const userId = currentUser?.id || authUser?.uid;
@@ -319,6 +320,10 @@ const CreateInvitation = () => {
     return ['18-24', '25-34', '35-44', '45-54', '55+'];
   }, [editingInvitation]);
 
+  const initialVenueCoords =
+    getInvitationLatLng(offerData) ||
+    getInvitationLatLng(restaurantData) ||
+    getInvitationLatLng(prefilledData);
 
   const [formData, setFormData] = useState({
     title: offerData?.title ?
@@ -346,9 +351,14 @@ const CreateInvitation = () => {
     paymentType: 'Split',
     description: String(offerData?.description || '').slice(0, invitationMessageMaxLength),
     image: offerData?.image || restaurantData?.image || prefilledData?.restaurantImage || null,
-    // Get coordinates from multiple possible sources
-    lat: offerData?.lat || restaurantData?.lat || restaurantData?.coordinates?.lat || prefilledData?.lat,
-    lng: offerData?.lng || restaurantData?.lng || restaurantData?.coordinates?.lng || prefilledData?.lng,
+    lat: initialVenueCoords?.lat,
+    lng: initialVenueCoords?.lng,
+    countryCode:
+      offerData?.countryCode ||
+      restaurantData?.countryCode ||
+      restaurantData?.country ||
+      prefilledData?.countryCode ||
+      null,
     privacy: 'public',
 
     // Special Offer constraints
@@ -357,9 +367,7 @@ const CreateInvitation = () => {
     lastLocationUpdate: serverTimestamp(),
     inviteMood: 'social',
     colorScheme: editingInvitation?.colorScheme || prefilledData?.colorScheme || 'oceanBlue',
-    templateType: normalizePublicCardTemplateKey(
-      editingInvitation?.templateType || prefilledData?.templateType || 'hero_4_5'
-    ),
+    templateType: 'classic',
     cardFontFamily: editingInvitation?.cardFontFamily || '',
     // Override with editingInvitation data if present
     ...(editingInvitation ? {
@@ -376,7 +384,7 @@ const CreateInvitation = () => {
       genderGroups: editingInvitation.genderGroups || ['male', 'female', 'unspecified'],
       ageGroups: editingInvitation.ageGroups || ['18-24', '25-34', '35-44', '45-54', '55+'],
       colorScheme: editingInvitation.colorScheme || 'oceanBlue',
-      templateType: normalizePublicCardTemplateKey(editingInvitation.templateType || 'hero_4_5'),
+      templateType: 'classic',
       cardFontFamily: editingInvitation.cardFontFamily || '',
       inviteMood:
       editingInvitation.inviteMood ||
@@ -421,9 +429,6 @@ const CreateInvitation = () => {
 
   // Mutual friend fetching removed (Private-only feature)
 
-
-
-
   // Update title when language changes if from restaurant
   useEffect(() => {
     if (restaurantData) {
@@ -461,13 +466,12 @@ const CreateInvitation = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handlePreview = async (e, templateKeyOverride) => {
+  const handlePreview = async (e) => {
     if (e?.preventDefault) e.preventDefault();
-    const templateType = templateKeyOverride || formData.templateType;
-    if (templateKeyOverride && templateKeyOverride !== formData.templateType) {
-      setFormData((prev) => ({ ...prev, templateType: templateKeyOverride }));
+    const templateType = 'classic';
+    if (formData.templateType !== 'classic') {
+      setFormData((prev) => ({ ...prev, templateType: 'classic' }));
     }
-    console.log('🔍 handlePreview called');
 
     // Check if user is guest
     if (!currentUser || currentUser.id === 'guest' || !authUser) {
@@ -478,25 +482,21 @@ const CreateInvitation = () => {
     }
 
     if (isSubmitting) {
-      console.log('⚠️ Already submitting, returning');
       return;
     }
 
     // Validation
     if (!formData.title.trim()) {
-      console.log('❌ Title validation failed');
       showToast(t('please_enter_title'), 'error');
       return;
     }
 
     if (!formData.date || !formData.time) {
-      console.log('❌ Date/Time validation failed');
       showToast(t('please_set_datetime'), 'error');
       return;
     }
 
     if (!formData.location.trim()) {
-      console.log('❌ Location validation failed');
       showToast(t('please_enter_location'), 'error');
       return;
     }
@@ -506,8 +506,6 @@ const CreateInvitation = () => {
       showToast(t('location_not_determined'), 'error');
       return;
     }
-
-
 
     // Validate Gender Groups (Must have at least one)
     if (!formData.genderGroups || formData.genderGroups.length === 0) {
@@ -521,10 +519,8 @@ const CreateInvitation = () => {
       return;
     }
 
-
     // Check for cancellation restrictions
     if (restrictionInfo && !restrictionInfo.canCreate) {
-      console.log('❌ Restriction check failed');
       showToast(t('cannot_create_restricted', {
         date: restrictionInfo.until?.toLocaleDateString()
       }), 'error');
@@ -532,7 +528,6 @@ const CreateInvitation = () => {
     }
 
     // Check daily invitation limit
-    console.log('✅ Starting validation check...');
     const userId = currentUser?.id || authUser?.uid;
     if (!userId) {
       showToast(t('login_required') || 'Authentication required', 'error');
@@ -546,7 +541,6 @@ const CreateInvitation = () => {
       validation = await validateInvitationCreation(userId);
     }
     if (!validation.valid) {
-      console.log('❌ Daily limit validation failed:', validation.error);
       const confirmMessage = `${validation.error}\n\nDo you want to go to your current invitation?`;
 
       if (window.confirm(confirmMessage)) {
@@ -555,7 +549,6 @@ const CreateInvitation = () => {
       return;
     }
 
-    console.log('✅ All validations passed, starting submission...');
     setIsSubmitting(true);
     setUploadProgress(0);
 
@@ -564,7 +557,6 @@ const CreateInvitation = () => {
 
       // Process media (image or video)
       if (mediaData) {
-        console.log('📤 Processing media...');
         setUploadProgress(20);
 
         try {
@@ -575,9 +567,7 @@ const CreateInvitation = () => {
             throw new Error('User not authenticated');
           }
 
-          console.log('👤 Using User ID:', userId);
           mediaFields = await processInvitationMedia(mediaData, userId);
-          console.log('✅ Media processed:', mediaFields);
 
           if (mediaFields.mediaSource === 'restaurant' || mediaFields.mediaSource === 'google_place' || mediaData.source === 'google_place' || mediaData.source === 'venue') {
             // For updates, use deleteField. For new docs, just exclude them.
@@ -641,6 +631,7 @@ const CreateInvitation = () => {
       draftData = stripUndefined(draftData);
       delete draftData.coverAnimationType;
 
+      draftData.templateType = 'classic';
       draftData.userCity = liveGps.city || '';
       draftData.userLat = liveGps.latitude;
       draftData.userLng = liveGps.longitude;
@@ -649,8 +640,14 @@ const CreateInvitation = () => {
       if (draftData.restaurantId && Array.isArray(restaurants)) {
         const venue = restaurants.find((r) => r.id === draftData.restaurantId);
         if (venue) {
-          if (venue.lat != null && draftData.lat == null) draftData.lat = venue.lat;
-          if (venue.lng != null && draftData.lng == null) draftData.lng = venue.lng;
+          const venueCoords = getInvitationLatLng(venue);
+          if (venueCoords && draftData.lat == null) {
+            draftData.lat = venueCoords.lat;
+            draftData.lng = venueCoords.lng;
+          }
+          if (!draftData.countryCode && (venue.countryCode || venue.country)) {
+            draftData.countryCode = venue.countryCode || venue.country;
+          }
           draftData.restaurantCity =
           draftData.restaurantCity ||
           draftData.city ||
@@ -665,13 +662,10 @@ const CreateInvitation = () => {
         delete draftData.image;
       }
 
-      console.log('📝 Creating draft with data:', draftData);
-
       let finalDraftId;
 
       if (editingDraft && draftId) {
         // Update existing draft
-        console.log('🔄 Updating existing draft:', draftId);
         const ruleBlock = validatePublicInvitationCreate({
           creatorProfile: userProfile,
           creatorCoords: {
@@ -689,18 +683,19 @@ const CreateInvitation = () => {
         const invitationRef = doc(db, 'invitations', draftId);
         await updateDoc(invitationRef, {
           ...draftData,
+          templateType: 'classic',
           userCity: draftData.userCity || null,
           userLat: draftData.userLat ?? null,
           userLng: draftData.userLng ?? null,
+          userCountryCode: draftData.userCountryCode || null,
+          countryCode: draftData.countryCode || null,
           restaurantCity: draftData.restaurantCity || draftData.city || null,
           coverAnimationType: deleteField()
         });
         finalDraftId = draftId;
       } else {
         // Create new draft
-        console.log('➕ Creating new draft...');
         finalDraftId = await addInvitation(draftData);
-        console.log('✅ Draft created with ID:', finalDraftId);
       }
 
       const draftIdResult =
@@ -711,7 +706,6 @@ const CreateInvitation = () => {
       null;
 
       if (draftIdResult) {
-        console.log('🚀 Navigating to preview:', `/invitation/preview/${draftIdResult}`);
         navigate(`/invitation/preview/${draftIdResult}`);
       } else if (typeof finalDraftId === 'object' && finalDraftId?.ok === false) {
         // Rule errors already toasted in InvitationContext — avoid false business-account mapping.
@@ -737,7 +731,6 @@ const CreateInvitation = () => {
   // Keep original handleSubmit for backward compatibility (if needed)
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('🚀 Publishing invitation directly/updating...');
 
     if (isSubmitting) return;
 
@@ -764,8 +757,6 @@ const CreateInvitation = () => {
       showToast(t('please_enter_location'), 'error');
       return;
     }
-
-
 
     // Check for cancellation restrictions
     if (restrictionInfo && !restrictionInfo.canCreate) {
@@ -799,7 +790,6 @@ const CreateInvitation = () => {
 
       // 1. Process New Media from MediaSelector (Prioritized)
       if (mediaData) {
-        console.log('📤 Processing media from MediaSelector...');
         setUploadProgress(20);
 
         try {
@@ -807,7 +797,6 @@ const CreateInvitation = () => {
           if (!userId) throw new Error('User ID missing');
 
           mediaFields = await processInvitationMedia(mediaData, userId);
-          console.log('✅ Media processed successfully:', mediaFields);
 
           if (mediaFields.mediaSource === 'restaurant' || mediaFields.mediaSource === 'google_place' || mediaData.source === 'google_place' || mediaData.source === 'venue') {
             if (editingInvitation) {
@@ -846,7 +835,6 @@ const CreateInvitation = () => {
       }
       // 2. Fallback: Legacy Image Upload (if imageFile exists and no mediaData)
       else if (imageFile) {
-        console.log('📤 Uploading image (Legacy)...');
         const invitationId = editingInvitation ? editingInvitation.id : `temp_${Date.now()}`;
         const url = await uploadInvitationPhoto(
           imageFile,
@@ -856,7 +844,6 @@ const CreateInvitation = () => {
           (progress) => setUploadProgress(progress)
         );
         finalImageUrl = url;
-        console.log('✅ Image uploaded:', url);
 
         // Construct legacy media fields
         mediaFields = {
@@ -894,22 +881,17 @@ const CreateInvitation = () => {
       // Remove purely UI fields if strictly necessary, but Firestore ignores undefined usually.
       // If mediaFields provided a video, ensure we don't accidentally keep old image as primary if unnecessary
       if (mediaFields.mediaType === 'video') {
+        // Thumbnail comes from processInvitationMedia (restaurantImage / videoThumbnail).
+      }
 
-
-
-        // If video, maybe clear image field if it was a photo? 
-        // But usually we need a thumbnail. processInvitationMedia returns thumbnail in restaurantImage or similar? 
-        // Let's rely on mediaFields return values.
-      }if (editingInvitation) {console.log('📝 Upprivate invite:', editingInvitation.id);
+      if (editingInvitation) {
         const invitationRef = doc(db, 'invitations', editingInvitation.id);
 
         await updateDoc(invitationRef, { ...cleanData, coverAnimationType: deleteField() });
-        console.log('✅ Invitation updated');
         showToast(t('invitation_updated', { defaultValue: 'Invitation updated successfully' }), 'success');
         navigate(`/invitation/${editingInvitation.id}`);
       } else {
         // This path is usually handled by handlePreview -> Draft -> Publish, but logic remains
-        console.log('📝 Creating invitation via direct submit...');
         const createResult = await addInvitation(cleanData);
         const newId =
         typeof createResult === 'object' && createResult?.ok === true ?
@@ -1086,7 +1068,7 @@ const CreateInvitation = () => {
   currentUser?.displayName ||
   t('host', 'Host');
 
-  /** Shared invitation payload for live template carousel (templateType set per slide). */
+  /** Live header-layout preview for the create form. */
   const previewInvitationBase = useMemo(() => {
     const heroUrl = previewHeroUrl;
     const useVideo = mediaData?.type === 'video';
@@ -1121,7 +1103,8 @@ const CreateInvitation = () => {
       mediaSource: mediaData?.source,
       inviteMood: formData.inviteMood,
       colorScheme: formData.colorScheme,
-      cardFontFamily: formData.cardFontFamily || undefined
+      cardFontFamily: formData.cardFontFamily || undefined,
+      templateType: 'classic',
     };
   }, [
   formData.title,
@@ -1145,57 +1128,6 @@ const CreateInvitation = () => {
   currentUser?.id,
   authUser?.uid]
   );
-
-  const syncTemplateTypeFromCarouselScroll = useCallback(() => {
-    const root = templateCarouselRef.current;
-    if (!root) return;
-    const center = root.getBoundingClientRect().left + root.clientWidth / 2;
-    const slides = root.querySelectorAll('[data-template-slide="1"]');
-    let bestKey = null;
-    let bestDist = Infinity;
-    slides.forEach((el) => {
-      const key = el.getAttribute('data-template-key');
-      if (!key) return;
-      const r = el.getBoundingClientRect();
-      const mid = (r.left + r.right) / 2;
-      const d = Math.abs(mid - center);
-      if (d < bestDist) {
-        bestDist = d;
-        bestKey = key;
-      }
-    });
-    if (!bestKey) return;
-    setFormData((prev) => prev.templateType === bestKey ? prev : { ...prev, templateType: bestKey });
-  }, []);
-
-  const onTemplateCarouselScroll = useCallback(() => {
-    if (templateCarouselScrollTimerRef.current) {
-      clearTimeout(templateCarouselScrollTimerRef.current);
-    }
-    templateCarouselScrollTimerRef.current = setTimeout(() => {
-      syncTemplateTypeFromCarouselScroll();
-    }, 90);
-  }, [syncTemplateTypeFromCarouselScroll]);
-
-  useEffect(
-    () => () => {
-      if (templateCarouselScrollTimerRef.current) {
-        clearTimeout(templateCarouselScrollTimerRef.current);
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    const root = templateCarouselRef.current;
-    if (!root) return;
-    const esc = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(formData.templateType) : formData.templateType;
-    const slide = root.querySelector(`[data-template-key="${esc}"]`);
-    if (!slide) return;
-    requestAnimationFrame(() => {
-      scrollElementIntoHorizontalContainer(root, slide);
-    });
-  }, [formData.templateType]);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -1319,7 +1251,6 @@ const CreateInvitation = () => {
             if (editingInvitation) handleSubmit(e);
           }}
           className="create-form">
-
 
                 {!editingInvitation &&
           <div className="ui-card venue-search-stack" style={{ marginBottom: '1rem', padding: '1rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
@@ -1849,124 +1780,38 @@ const CreateInvitation = () => {
               }>
 
                     <div
-                ref={templateCarouselRef}
-                role="listbox"
-                aria-label={t('invitation_card_layout', { defaultValue: 'Card layout' })}
-                onScroll={onTemplateCarouselScroll}
-                onPointerDown={onTemplateCarouselDown}
-                onPointerMove={onTemplateCarouselMove}
-                onPointerUp={onTemplateCarouselUp}
-                onPointerCancel={onTemplateCarouselCancel}
                 style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  overflowX: 'auto',
-                  scrollSnapType: 'x mandatory',
-                  WebkitOverflowScrolling: 'touch',
-                  gap: '12px',
-                  padding: '4px 12px 12px',
-                  margin: '0 -12px',
-                  scrollbarWidth: 'none',
-                  msOverflowStyle: 'none',
-                  cursor: 'grab'
-                }}
-                className="hide-scroll-bar invitation-template-carousel">
-
-                        {TEMPLATE_PICKER_KEYS.map((key) => {
-                  const resolvedKey = LEGACY_PUBLIC_TEMPLATE_MAP[key] || key;
-                  const tmpl = TEMPLATE_STYLES[resolvedKey] || TEMPLATE_STYLES.photoBottom;
-                  const isSel = formData.templateType === key;
-                  return (
-                    <div
-                      key={key}
-                      role="option"
-                      aria-selected={isSel}
-                      data-template-slide="1"
-                      data-template-key={key}
-                      tabIndex={0}
-                      onClick={() => {
-                        if (templateCarouselWasDragged()) return;
-                        setFormData((prev) => ({ ...prev, templateType: key }));
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setFormData((prev) => ({ ...prev, templateType: key }));
-                        }
-                      }}
-                      style={{
-                        flex: '0 0 min(88vw, 380px)',
-                        scrollSnapAlign: 'center',
-                        cursor: 'pointer',
-                        outline: 'none'
-                      }}>
-
-                                    <div
-                        style={{
-                          borderRadius: '16px',
-                          overflow: 'hidden',
-                          border: isSel ? '3px solid var(--primary)' : '1px solid var(--border-color)',
-                          boxShadow: isSel ?
-                          '0 8px 28px rgba(139, 92, 246, 0.35)' :
-                          '0 4px 16px rgba(0,0,0,0.12)',
-                          background: 'var(--bg-card)',
-                          transition: 'border-color 0.2s, box-shadow 0.2s'
-                        }}>
-
-                                        <div
-                          style={{
-                            width: '100%',
-                            overflow: 'hidden',
-                            position: 'relative',
-                            pointerEvents: 'none',
-                            touchAction: 'pan-y'
-                          }}>
-
-                                            <InvitationCard
-                            invitation={{
-                              ...previewInvitationBase,
-                              templateType: key
-                            }} />
-
-                                        </div>
-                                    </div>
-                                    <div
-                        style={{
-                          textAlign: 'center',
-                          marginTop: '10px',
-                          fontSize: '0.75rem',
-                          fontWeight: 800,
-                          color: isSel ? 'var(--primary)' : 'var(--text-secondary)'
-                        }}>
-
-                                        {t(`invitation_template_${key}`, { defaultValue: tmpl.name })}
-                                    </div>
-                                    {!editingInvitation &&
-                      <button
-                        type="button"
-                        className="ui-btn ui-btn--primary invitation-template-preview-btn"
-                        disabled={isSubmitting}
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          handlePreview(ev, key);
-                        }}
-                        style={{
-                          width: '100%',
-                          marginTop: '10px',
-                          minHeight: '44px',
-                          fontSize: '0.85rem',
-                          fontWeight: 800
-                        }}>
-
-                                            {isSubmitting ?
-                        t('loading') :
-                        t('preview_invitation', { defaultValue: 'Preview invitation' })}
-                                        </button>
-                      }
-                                </div>);
-
-                })}
+                  maxWidth: 420,
+                  margin: '0 auto',
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  border: '1px solid var(--border-color)',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                  background: 'var(--bg-card)',
+                }}>
+                        <InvitationCard invitation={previewInvitationBase} />
                     </div>
+                    {!editingInvitation &&
+          <button
+            type="button"
+            className="ui-btn ui-btn--primary invitation-template-preview-btn"
+            disabled={isSubmitting}
+            onClick={handlePreview}
+            style={{
+              width: '100%',
+              maxWidth: 420,
+              display: 'block',
+              margin: '14px auto 0',
+              minHeight: '44px',
+              fontSize: '0.85rem',
+              fontWeight: 800
+            }}>
+
+                            {isSubmitting ?
+            t('loading') :
+            t('preview_invitation', { defaultValue: 'Preview invitation' })}
+                        </button>
+          }
                     </PublicInviteCardStyleStudio>
                     <AppText as="p" style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center', lineHeight: 1.4 }}>
                         {t('public_invitation_guests_hint', { defaultValue: 'Public invitations appear in the feed; guests tap join on the card after you publish.' })}

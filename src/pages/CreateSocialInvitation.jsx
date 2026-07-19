@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
   FaCalendarAlt, FaTimes, FaCheckCircle,
   FaClock, FaLock, FaChevronLeft,
@@ -90,6 +90,7 @@ import { goToLogin, getCurrentReturnPath } from '../utils/goToLogin';
 import { scheduleScrollPageToTop } from '../utils/scrollPageToTop';
 import { resolveCardStructureFromBackgroundId } from '../utils/cardStructure';
 import { AppText, AppTextInput } from "../components/base";
+import { resolveHostInvitationNavigationState } from '../utils/hostInvitationFromBusiness';
 
 function resolvePrivateInvitationAuthorUid(authUser, invitationContextUser) {
   return authUser?.uid || invitationContextUser?.uid || invitationContextUser?.id || null;
@@ -100,13 +101,23 @@ const CreateSocialInvitation = () => {
   const bidiFieldProps = useMemo(() => getAppBidiFieldProps(i18n.language), [i18n.language]);
   const navigate = useNavigate();
   const location = useLocation();
-  const { addHostedInvitation, currentUser, canCreateSocialInvitation } = useInvitations();
+  const [searchParams] = useSearchParams();
+  const { addHostedInvitation, currentUser, canCreateSocialInvitation, restaurants } = useInvitations();
   const { showToast } = useToast();
   const { currentUser: authUser, userProfile } = useAuth();
 
   const quotaInfo = canCreateSocialInvitation('social');
 
-  const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
+  const hostNavState = useMemo(
+    () =>
+      resolveHostInvitationNavigationState({
+        locationState: location.state,
+        businessId: searchParams.get('businessId'),
+        restaurants,
+      }),
+    [location.state, restaurants, searchParams]
+  );
+  const restaurantData = hostNavState?.restaurantData || location.state?.selectedRestaurant;
   const editInvitation = location.state?.editInvitation;
 
   // UI State
@@ -240,7 +251,6 @@ const CreateSocialInvitation = () => {
   // Populate data when editing
   useEffect(() => {
     if (editInvitation) {
-      console.log('📝 Editing existing invitation:', editInvitation);
       setExistingDraftId(editInvitation.id);
       setFormData({
         title: editInvitation.title || '',
@@ -358,6 +368,25 @@ const CreateSocialInvitation = () => {
       goToLogin({ returnPath: getCurrentReturnPath() || '/create-social' });
     }
   }, [userProfile, currentUser]);
+
+  // Prefill / re-apply venue when arriving from partners directory (or late restaurants load).
+  useEffect(() => {
+    if (!restaurantData?.id) return;
+    setFormData((prev) => {
+      if (prev.restaurantId === restaurantData.id && prev.restaurantName) return prev;
+      return {
+        ...prev,
+        title: prev.title?.trim() ? prev.title : `${t('dinner_at')} ${restaurantData.name}`,
+        restaurantId: restaurantData.id,
+        restaurantName: restaurantData.name || '',
+        city: restaurantData.city || prev.city,
+        location: restaurantData.address || restaurantData.location || prev.location,
+        lat: restaurantData.lat ?? restaurantData.coordinates?.lat ?? prev.lat,
+        lng: restaurantData.lng ?? restaurantData.coordinates?.lng ?? prev.lng,
+        country: restaurantData.country || prev.country,
+      };
+    });
+  }, [restaurantData, t]);
 
   // Unified location discovery for all users/pages.
   useEffect(() => {
@@ -892,7 +921,10 @@ const CreateSocialInvitation = () => {
     enabled: Boolean(editorUid),
     storageKey: editorDraftKey,
     ready: Boolean(editorUid),
-    skipRestore: Boolean(editInvitation) || Boolean(location.state?.aiStudioImage),
+    skipRestore:
+      Boolean(editInvitation) ||
+      Boolean(location.state?.aiStudioImage) ||
+      Boolean(restaurantData),
     buildPayload: buildSessionDraftPayload,
     buildSyncPayload: buildSyncDraftPayload,
     applyPayload: applySessionDraftPayload,
@@ -1246,7 +1278,7 @@ const CreateSocialInvitation = () => {
             t('unlimited_private_invitations', 'Unlimited private invitations') :
             t(
               'dine_credits_private_banner',
-              '{{balance}} Dine Credits — publishing uses {{cost}} credits (free pool is used first).',
+              '{{balance}} Dine Credits — publishing uses {{cost}} credits from your wallet.',
               { balance: dineBalance, cost: publishCost }
             )}
                         </AppText>
@@ -1394,10 +1426,14 @@ const CreateSocialInvitation = () => {
                     <div className="mb-4">
                         <AIFloatingLauncher
               postType="invitation"
-              subType="private"
+              subType="public"
               onTextSuccess={handlePrivateInvitationAiContent}
               buildContextPrompt={buildPrivateInvitationAiPrompt}
-              disabled={isSubmitting} />
+              disabled={isSubmitting}
+              invitationVenue={{
+                venueType: formData.occasionType || 'Social',
+                venueName: (formData.restaurantName || formData.location || '').trim(),
+              }} />
 
                     </div>
 
@@ -1483,7 +1519,6 @@ const CreateSocialInvitation = () => {
               buildBrief={buildPrivateInvitationAiPrompt}
               onUseImage={handleAiCoverImageGenerated}
               disabled={isSubmitting} />
-
 
                         <div className="form-group mb-0">
                             <div className="private-card-preview-with-bg">

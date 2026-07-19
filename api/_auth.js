@@ -3,7 +3,7 @@ import { ensureFirebaseAdmin } from './_firebaseAdmin.js';
 
 /**
  * Verifies a Firebase Auth ID token from `Authorization: Bearer <token>`.
- * @returns {{ ok: true, uid: string, claims: import('firebase-admin/auth').DecodedIdToken } | { ok: false, status: number, error: string }}
+ * @returns {{ ok: true, uid: string, claims: import('firebase-admin/auth').DecodedIdToken } | { ok: false, status: number, error: string, code?: string, message?: string, debugCode?: string }}
  */
 export async function requireAuth(req) {
     const rawHeader = req.headers.authorization || req.headers.Authorization;

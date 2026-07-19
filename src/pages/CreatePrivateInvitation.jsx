@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { flushSync } from 'react-dom';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
   FaCalendarAlt, FaTimes, FaCheckCircle,
   FaLock, FaChevronLeft,
@@ -102,6 +102,7 @@ import { resolveCardStructureFromBackgroundId } from '../utils/cardStructure';
 import { AppText, AppTextInput } from "../components/base";
 import LookingForChips from '../components/profile/LookingForChips';
 import { normalizeLookingFor } from '../constants/personalInviteCategories';
+import { resolveHostInvitationNavigationState } from '../utils/hostInvitationFromBusiness';
 
 function resolvePrivateInvitationAuthorUid(authUser, invitationContextUser) {
   return authUser?.uid || invitationContextUser?.uid || invitationContextUser?.id || null;
@@ -121,13 +122,23 @@ const CreatePrivateInvitation = () => {
   const bidiFieldProps = useMemo(() => getAppBidiFieldProps(i18n.language), [i18n.language]);
   const navigate = useNavigate();
   const location = useLocation();
-  const { addHostedInvitation, currentUser, canCreateSocialInvitation } = useInvitations();
+  const [searchParams] = useSearchParams();
+  const { addHostedInvitation, currentUser, canCreateSocialInvitation, restaurants } = useInvitations();
   const { showToast } = useToast();
   const { currentUser: authUser, userProfile } = useAuth();
 
   const quotaInfo = canCreateSocialInvitation('private');
 
-  const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
+  const hostNavState = useMemo(
+    () =>
+      resolveHostInvitationNavigationState({
+        locationState: location.state,
+        businessId: searchParams.get('businessId'),
+        restaurants,
+      }),
+    [location.state, restaurants, searchParams]
+  );
+  const restaurantData = hostNavState?.restaurantData || location.state?.selectedRestaurant;
   const editInvitation = location.state?.editInvitation;
   const preselectedInvitee = location.state?.preselectedInvitee;
 
@@ -603,6 +614,26 @@ const CreatePrivateInvitation = () => {
       goToLogin({ returnPath: getCurrentReturnPath() || '/create-private' });
     }
   }, [userProfile, currentUser]);
+
+  // Prefill / re-apply venue when arriving from partners directory (or late restaurants load).
+  useEffect(() => {
+    if (!restaurantData?.id) return;
+    setFormData((prev) => {
+      if (prev.restaurantId === restaurantData.id && prev.restaurantName) return prev;
+      return {
+        ...prev,
+        title: prev.title?.trim() ? prev.title : `${t('dinner_at')} ${restaurantData.name}`,
+        restaurantId: restaurantData.id,
+        restaurantName: restaurantData.name || '',
+        city: restaurantData.city || prev.city,
+        location: restaurantData.address || restaurantData.location || prev.location,
+        lat: restaurantData.lat ?? restaurantData.coordinates?.lat ?? prev.lat,
+        lng: restaurantData.lng ?? restaurantData.coordinates?.lng ?? prev.lng,
+        country: restaurantData.country || prev.country,
+        venueType: restaurantData.type || restaurantData.businessType || prev.venueType,
+      };
+    });
+  }, [restaurantData, t]);
 
   // Unified location discovery for all users/pages.
   useEffect(() => {
@@ -1246,7 +1277,10 @@ const CreatePrivateInvitation = () => {
     enabled: Boolean(editorUid),
     storageKey: editorDraftKey,
     ready: Boolean(editorUid),
-    skipRestore: Boolean(editInvitation) || Boolean(location.state?.aiStudioImage),
+    skipRestore:
+      Boolean(editInvitation) ||
+      Boolean(location.state?.aiStudioImage) ||
+      Boolean(restaurantData),
     buildPayload: buildSessionDraftPayload,
     buildSyncPayload: buildSyncDraftPayload,
     applyPayload: applySessionDraftPayload,
@@ -1619,7 +1653,6 @@ const CreatePrivateInvitation = () => {
                     </div> :
             null}
 
-
                     <div className="form-group mb-4">
                         <label className="elegant-label">
                             {t('personal_invite_category_label', 'Purpose of invitation')}
@@ -1863,7 +1896,6 @@ const CreatePrivateInvitation = () => {
               buildBrief={buildDatingInvitationAiPrompt}
               onUseImage={handleAiCoverImageGenerated}
               disabled={isSubmitting} />
-
 
                         <div className="form-group mb-0">
                             <div className="private-card-preview-with-bg">

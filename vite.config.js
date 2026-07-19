@@ -525,10 +525,15 @@ const devAuthApiProxy =
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [react(), devOperations()],
+    // Server-only packages used by scripts/API — never pull into the browser bundle.
+    optimizeDeps: {
+        exclude: ['firebase-admin', 'sharp'],
+    },
     build: {
         // Default 500 kB triggers noisy warnings; main app chunk is intentionally large until further code-splitting.
         chunkSizeWarningLimit: 2000,
         rollupOptions: {
+            external: ['firebase-admin', 'sharp'],
             output: {
                 manualChunks(id) {
                     if (!id.includes('node_modules')) return

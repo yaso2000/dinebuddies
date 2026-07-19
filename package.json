@@ -45,6 +45,7 @@
     "codemod:bidi": "node scripts/codemod-bidi.mjs --write",
     "fix:bidi-imports": "node scripts/fix-bidi-imports.mjs",
     "lint:ci": "eslint src api functions/scripts --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "typecheck:api": "tsc -p tsconfig.api.json --noEmit",
     "preview": "vite preview",
     "preview:live": "npx --yes serve dist -p 4173",
     "wipe-firebase-user-data": "node scripts/wipe-firebase-user-data.mjs",
@@ -96,11 +97,13 @@
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^6.22.0",
     "sharp": "^0.34.5",
+    "tz-lookup": "^6.1.25",
     "uuid": "^9.0.1",
     "vercel": "^50.42.0"
   },
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",
+    "@types/node": "^26.1.1",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",
@@ -113,6 +116,7 @@
     "eslint-plugin-react-refresh": "^0.4.5",
     "postcss": "^8.5.15",
     "tailwindcss": "^3.4.19",
+    "typescript": "^7.0.2",
     "vite": "^7.3.1"
   }
 }

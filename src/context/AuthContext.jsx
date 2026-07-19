@@ -848,7 +848,6 @@ export const AuthProvider = ({ children }) => {
 
             if (!userDoc.exists()) {
                 isNewUser = true;
-                console.log('Google Auth: New user detected, creating profile for:', result.user.uid);
                 await createUserProfile(result.user.uid, {
                     display_name: result.user.displayName,
                     email: result.user.email,
@@ -857,7 +856,6 @@ export const AuthProvider = ({ children }) => {
                 });
             } else {
                 assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
-                console.log('Google Auth: Existing user, syncing photos for:', result.user.uid);
                 await updateDoc(doc(db, 'users', result.user.uid), {
                     photo_url: result.user.photoURL || userDoc.data().photo_url,
                     last_active_time: serverTimestamp()
@@ -1542,7 +1540,6 @@ export const AuthProvider = ({ children }) => {
             window.location.replace(`${url.pathname}${url.search}`);
         }
     };
-
 
     // Continue as Guest — must sign out Firebase or the next onAuthStateChanged will restore the real user
     // and routing will treat them as logged-in (e.g. redirect /login → /).

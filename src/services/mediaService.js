@@ -113,23 +113,18 @@ export const uploadMedia = async (file, userId, type, folder = 'invitations') =>
  */
 export const uploadVideoWithThumbnail = async (videoFile, userId, folder = 'invitations') => {
     try {
-        console.log('📹 Starting video upload...');
 
         // Upload video first
         const videoUrl = await uploadMedia(videoFile, userId, 'video', folder);
-        console.log('✅ Video uploaded:', videoUrl);
 
         let thumbnailUrl = null;
 
         // Try to generate and upload thumbnail
         try {
-            console.log('🖼️ Generating thumbnail...');
             const thumbnailBlob = await generateThumbnail(videoFile, 0.5);
-            console.log('✅ Thumbnail generated:', thumbnailBlob.size, 'bytes');
 
             const thumbnailFile = new File([thumbnailBlob], 'thumbnail.jpg', { type: 'image/jpeg' });
             thumbnailUrl = await uploadMedia(thumbnailFile, userId, 'thumbnail', folder);
-            console.log('✅ Thumbnail uploaded:', thumbnailUrl);
         } catch (thumbError) {
             console.warn('⚠️ Thumbnail generation failed, using default:', thumbError);
             // Use a default thumbnail or the video URL itself
@@ -179,7 +174,6 @@ export const uploadPlacePhotoFromUrl = async (url, userId, folder = 'businesses'
     return null;
 };
 
-
 /**
  * Upload Google/External image via Proxy
  * @param {string} url - External URL
@@ -205,9 +199,7 @@ export const uploadGoogleImage = async (url, userId, folder = 'invitations') => 
         const blob = await fetchRemoteImageBlob(url);
         const filename = `google_place_${Date.now()}.jpg`;
         const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
-        console.log('📤 Uploading proxied image to storage...');
         const uploadedUrl = await uploadMedia(file, userId, 'image', folder);
-        console.log('✅ Image permanently stored:', uploadedUrl);
         return uploadedUrl;
     } catch (error) {
         console.error('Failed to upload Google image:', error);
@@ -272,7 +264,6 @@ export async function fetchRemoteImageBlob(url, { attempts = 3 } = {}) {
         throw new Error(`Storage fetch failed with status: ${lastStatus || 'unknown'}`);
     }
 
-    console.log('🔄 Fetching image via proxy to bypass CORS:', url);
     const proxyEndpoint = import.meta.env.DEV ? '/__dev/proxy-image' : '/api/proxy';
     const proxyUrl = `${proxyEndpoint}?url=${encodeURIComponent(url)}`;
     const response = await fetch(proxyUrl);
