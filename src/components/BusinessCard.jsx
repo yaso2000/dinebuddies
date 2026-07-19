@@ -9,6 +9,11 @@ import { getSafeAvatar, getSafeCoverImage } from '../utils/avatarUtils';
 import { getContrastText } from '../utils/colorUtils';
 import { getTheme } from '../utils/businessThemes';
 import { AppText } from "./base";
+import {
+  buildHostInvitationNavigationState,
+  withBusinessIdInPath,
+} from '../utils/hostInvitationFromBusiness';
+import { getBusinessCardCity } from '../utils/businessCardLocation';
 
 const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCount }) => {
   const navigate = useNavigate();
@@ -35,20 +40,19 @@ const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCo
 
   const handleCreateInvitation = (e) => {
     e.stopPropagation();
-    navigate('/create/manual', {
-      state: {
-        restaurantData: {
-          id: business.uid,
-          name: info.businessName,
-          type: info.businessType,
-          location: `${info.address || ''} ${info.city || ''}`.trim(),
-          image: info.coverImage,
-          lat: info.coordinates?.lat ?? info.lat,
-          lng: info.coordinates?.lng ?? info.lng,
-          countryCode: info.countryCode
-        }
-      }
+    e.preventDefault();
+    const state = buildHostInvitationNavigationState({
+      id: business.uid,
+      name: info.businessName,
+      type: info.businessType,
+      address: info.address,
+      city: info.city,
+      image: info.coverImage,
+      lat: info.coordinates?.lat ?? info.lat,
+      lng: info.coordinates?.lng ?? info.lng,
+      countryCode: info.countryCode,
     });
+    navigate(withBusinessIdInPath('/create/manual', business.uid), { state: state || {} });
   };
 
   const handleCardClick = () => {
@@ -65,7 +69,7 @@ const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCo
       title: shareTitle,
       image: info.coverImage || getSafeAvatar(business),
       description: info.description,
-      location: info.address || info.city,
+      location: info.city || '',
       hostName: shareTitle,
       hostImage: getSafeAvatar(business),
       shareUrl
@@ -326,8 +330,7 @@ const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCo
             overflow: 'hidden',
             textOverflow: 'ellipsis'
           }}>
-                        {info.city || 'Unknown City'}
-                        {info.address && `, ${info.address}`}
+                        {getBusinessCardCity(business) || t('unknown_city', 'Unknown City')}
                     </AppText>
                 </div>
 

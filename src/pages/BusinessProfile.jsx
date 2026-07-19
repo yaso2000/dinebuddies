@@ -37,9 +37,9 @@ import EnhancedGallery from '../components/EnhancedGallery';
 import EnhancedReviews from '../components/EnhancedReviews';
 import FeedbackSubmissionModal from '../components/FeedbackSubmissionModal';
 import MenuShowcase from '../components/MenuShowcase';
-import GroupChat from '../components/GroupChat';
 import ShareButtons from '../components/ShareButtons';
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
+import { buildHostInvitationNavigationState } from '../utils/hostInvitationFromBusiness';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
 import { shareNativeOrFallback } from '../utils/shareNativeOrFallback';
 import ServiceModal, { SERVICE_ICONS } from '../components/ServiceModal';
@@ -996,21 +996,19 @@ const BusinessProfile = () => {
     }
 
     const businessInfo = business.businessInfo || {};
-
-    setSelectorState({
-      restaurantData: {
-        id: profileId,
-        name: business.display_name,
-        image: businessInfo.coverImage,
-        address: businessInfo.address,
-        city: businessInfo.city,
-        lat: businessInfo.lat,
-        lng: businessInfo.lng,
-        countryCode: businessInfo.countryCode,
-        type: businessInfo.businessType || 'Restaurant'
-      },
-      fromRestaurant: true
+    const state = buildHostInvitationNavigationState({
+      id: profileId,
+      name: business.display_name,
+      image: businessInfo.coverImage,
+      address: businessInfo.address,
+      city: businessInfo.city,
+      lat: businessInfo.lat,
+      lng: businessInfo.lng,
+      countryCode: businessInfo.countryCode,
+      type: businessInfo.businessType || 'Restaurant',
     });
+    if (!state) return;
+    setSelectorState(state);
     setIsSelectorOpen(true);
   };
 
@@ -1780,6 +1778,11 @@ const BusinessProfile = () => {
                         openingHours: businessInfo.openingHours || business.openingHours,
                         workingHours: businessInfo.workingHours,
                         openNow: business.openNow,
+                        lat: businessInfo.lat ?? business.coordinates?.lat ?? business.lat,
+                        lng: businessInfo.lng ?? business.coordinates?.lng ?? business.lng,
+                        countryCode: businessInfo.countryCode || business.countryCode,
+                        country: businessInfo.country || business.country,
+                        timeZone: businessInfo.timeZone || businessInfo.timezone,
                       });
                       const badgePill = (color, dot, label) =>
                       <AppText as="span"

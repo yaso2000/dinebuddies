@@ -4,8 +4,26 @@ import { FaClock, FaEdit, FaSave, FaTimes, FaCheckCircle, FaTimesCircle } from '
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useToast } from '../context/ToastContext';
+import { syncBusinessPublicProfile } from '../services/businessPublicProfileSync';
+import {
+  getBusinessLocalClock,
+  isOpenFromBusinessHours,
+  resolveBusinessTimeZone,
+} from '../utils/businessLocalTime';
 import './BusinessHours.css';
 import { AppText } from "./base";
+
+const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+function minutesUntilClose(timeHm, closeHm) {
+  const [h, m] = String(timeHm || '00:00').split(':').map(Number);
+  const [ch, cm] = String(closeHm || '00:00').split(':').map(Number);
+  let nowM = h * 60 + m;
+  let closeM = ch * 60 + cm;
+  // Overnight: close is after midnight relative to now
+  if (closeM <= nowM) closeM += 24 * 60;
+  return closeM - nowM;
+}
 
 const BusinessHours = ({ businessId, businessInfo, isOwner, theme }) => {
   const { t } = useTranslation();
@@ -16,18 +34,28 @@ const BusinessHours = ({ businessId, businessInfo, isOwner, theme }) => {
   const [hours, setHours] = useState(businessInfo?.hours || getDefaultHours());
   const [saving, setSaving] = useState(false);
 
-  // Get today's day name for highlighting
-  const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+  const locationOpts = {
+    lat: businessInfo?.lat,
+    lng: businessInfo?.lng,
+    countryCode: businessInfo?.countryCode,
+    country: businessInfo?.country,
+    timeZone: businessInfo?.timeZone || businessInfo?.timezone,
+  };
+  const businessTimeZone = resolveBusinessTimeZone(locationOpts);
+  const localClock = getBusinessLocalClock(new Date(), businessTimeZone);
+  const todayKey = localClock.dayKey;
 
-  // Get current status
+  // Get current status — same overnight + timezone rules as directory cards
   const getCurrentStatus = () => {
     if (!hours) return { isOpen: false, message: '' };
 
-    const now = new Date();
-    const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][now.getDay()];
-    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
+    const dayName = localClock.dayKey;
+    const currentTime = localClock.timeHm;
     const todayHours = hours[dayName];
+    const closesAtMessage = (time) => `${t('closes_at', 'Closes at')} ${time}`.trim();
+    const opensAtMessage = (time) => `${t('opens_at', 'Opens at')} ${time}`.trim();
+
+    const openNow = isOpenFromBusinessHours(hours, locationOpts);
 
     if (!todayHours || todayHours.closed) {
       return {
@@ -38,41 +66,30 @@ const BusinessHours = ({ businessId, businessInfo, isOwner, theme }) => {
     }
 
     const { open, close } = todayHours;
-    const closesAtMessage = (time) => `${t('closes_at', 'Closes at')} ${time}`.trim();
-    const opensAtMessage = (time) => `${t('opens_at', 'Opens at')} ${time}`.trim();
 
-    // Check if currently open
-    if (currentTime >= open && currentTime < close) {
-      // Check if closing soon (within 30 minutes)
-      const closeTime = new Date();
-      const [closeHour, closeMin] = close.split(':');
-      closeTime.setHours(parseInt(closeHour), parseInt(closeMin), 0);
-
-      const timeDiff = (closeTime - now) / 1000 / 60; // minutes
-
-      if (timeDiff <= 30 && timeDiff > 0) {
+    if (openNow === true) {
+      const minsLeft = minutesUntilClose(currentTime, close);
+      if (minsLeft <= 30 && minsLeft > 0) {
         return {
           isOpen: true,
           closingSoon: true,
           message: closesAtMessage(close)
         };
       }
-
       return {
         isOpen: true,
         message: closesAtMessage(close)
       };
     }
 
-    // Check if will open today
-    if (currentTime < open) {
+    // Not open now — if still before today's open (same calendar day, non-overnight window)
+    if (close > open && currentTime < open) {
       return {
         isOpen: false,
         message: opensAtMessage(open)
       };
     }
 
-    // Closed for today, find next opening
     return {
       isOpen: false,
       message: t('closed_now', 'Closed'),
@@ -81,26 +98,21 @@ const BusinessHours = ({ businessId, businessInfo, isOwner, theme }) => {
   };
 
   const getNextOpenTime = () => {
-    const now = new Date();
-    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayNames = {
+      sunday: t('sunday', 'Sunday'),
+      monday: t('monday', 'Monday'),
+      tuesday: t('tuesday', 'Tuesday'),
+      wednesday: t('wednesday', 'Wednesday'),
+      thursday: t('thursday', 'Thursday'),
+      friday: t('friday', 'Friday'),
+      saturday: t('saturday', 'Saturday')
+    };
 
+    const startIdx = DAY_KEYS.indexOf(localClock.dayKey);
     for (let i = 1; i <= 7; i++) {
-      const nextDay = new Date(now);
-      nextDay.setDate(now.getDate() + i);
-      const dayName = days[nextDay.getDay()];
+      const dayName = DAY_KEYS[(startIdx + i) % 7];
       const dayHours = hours[dayName];
-
-      if (dayHours && !dayHours.closed) {
-        const dayNames = {
-          sunday: t('sunday', 'Sunday'),
-          monday: t('monday', 'Monday'),
-          tuesday: t('tuesday', 'Tuesday'),
-          wednesday: t('wednesday', 'Wednesday'),
-          thursday: t('thursday', 'Thursday'),
-          friday: t('friday', 'Friday'),
-          saturday: t('saturday', 'Saturday')
-        };
-
+      if (dayHours && !dayHours.closed && dayHours.open) {
         return `${dayNames[dayName]} ${dayHours.open}`;
       }
     }
@@ -119,6 +131,12 @@ const BusinessHours = ({ businessId, businessInfo, isOwner, theme }) => {
       await updateDoc(businessRef, {
         'businessInfo.hours': hours
       });
+      // Mirror into public_profiles so directory cards use the same schedule.
+      try {
+        await syncBusinessPublicProfile(businessId);
+      } catch (syncErr) {
+        console.warn('[BusinessHours] public profile sync after hours save', syncErr);
+      }
       setIsEditing(false);
     } catch (error) {
       console.error('Error saving hours:', error);

@@ -79,6 +79,14 @@ export function toPublicProfileFromUserDoc(userDocData, uid) {
                   lng: asFiniteNumber(businessInfo.lng ?? userData.lng),
                   brandKit: businessInfo.brandKit || null,
                   theme: asTrimmedString(businessInfo.theme),
+                  hours:
+                      businessInfo.hours && typeof businessInfo.hours === 'object'
+                          ? businessInfo.hours
+                          : null,
+                  openingHours:
+                      businessInfo.openingHours && typeof businessInfo.openingHours === 'object'
+                          ? businessInfo.openingHours
+                          : null,
               }
             : null;
 

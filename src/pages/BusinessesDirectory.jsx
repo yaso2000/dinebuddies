@@ -14,6 +14,7 @@ import { DEFAULT_BUSINESS_COVER, handleBusinessCoverImageError, resolveBusinessC
 import UserAvatar from '../components/UserAvatar';
 import { useUserPresence } from '../hooks/usePresence';
 import { resolveBusinessOpenNow } from '../utils/googlePlacesBusiness';
+import { getBusinessCardCity } from '../utils/businessCardLocation';
 import { getContrastText } from '../utils/colorUtils';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -36,6 +37,11 @@ import {
 '../utils/businessDirectoryGeoFilter';
 import { formatBiDiText, escapeHtmlText } from '../utils/formatBiDiText';
 import { AppText, AppTextInput } from "../components/base";
+import CreateInvitationSelector from '../components/CreateInvitationSelector';
+import {
+  buildHostInvitationNavigationState,
+  withBusinessIdInPath,
+} from '../utils/hostInvitationFromBusiness';
 
 const popupText = (value) =>
   `<span dir="auto" style="unicode-bidi:isolate;text-align:start">${escapeHtmlText(formatBiDiText(value))}</span>`;
@@ -224,11 +230,11 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
 
 };
 
-const BusinessDirectoryGridCard = React.memo(({ res }) => {
+const BusinessDirectoryGridCard = React.memo(({ res, onHostInvitation }) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const { userProfile, currentUser: authCurrentUser } = useAuth();
+  const { userProfile, currentUser: authCurrentUser, isGuest } = useAuth();
   const context = useInvitations();
   const currentUser = context?.currentUser || authCurrentUser || {};
   const likeUser = authCurrentUser || currentUser;
@@ -251,6 +257,11 @@ const BusinessDirectoryGridCard = React.memo(({ res }) => {
         openingHours: res.openingHours || res.businessInfo?.openingHours,
         workingHours: res.workingHours || res.businessInfo?.workingHours,
         openNow: res.openNow ?? res.businessInfo?.openNow,
+        lat: res.lat ?? res.businessInfo?.lat,
+        lng: res.lng ?? res.businessInfo?.lng,
+        countryCode: res.countryCode || res.businessInfo?.countryCode,
+        country: res.country || res.businessInfo?.country,
+        timeZone: res.timeZone || res.timezone || res.businessInfo?.timeZone,
       }),
     [
       res.hours,
@@ -261,6 +272,17 @@ const BusinessDirectoryGridCard = React.memo(({ res }) => {
       res.businessInfo?.workingHours,
       res.openNow,
       res.businessInfo?.openNow,
+      res.lat,
+      res.lng,
+      res.businessInfo?.lat,
+      res.businessInfo?.lng,
+      res.countryCode,
+      res.country,
+      res.businessInfo?.countryCode,
+      res.businessInfo?.country,
+      res.timeZone,
+      res.timezone,
+      res.businessInfo?.timeZone,
     ]
   );
   const effectiveJoined = isJoined;
@@ -295,6 +317,12 @@ const BusinessDirectoryGridCard = React.memo(({ res }) => {
       : '0.0';
 
   const openProfile = () => navigate(`/business/${res.id}`);
+
+  const handleHostInvitation = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onHostInvitation?.(res);
+  };
 
   const handleJoinOrChat = (e) => {
     handleBusinessCommunityJoinClick({
@@ -459,7 +487,20 @@ const BusinessDirectoryGridCard = React.memo(({ res }) => {
           <AppText as="h2" className="restaurant-grid-card__name" title={res.name}>
             {res.name}
           </AppText>
+          <AppText as="p" className="restaurant-grid-card__city">
+            {getBusinessCardCity(res) || t('unknown_city', 'Unknown City')}
+          </AppText>
         </button>
+        {!isOwner && !isBusinessAccount && !isGuest ? (
+          <button
+            type="button"
+            className="restaurant-grid-card__host-btn"
+            onClick={handleHostInvitation}
+          >
+            <FaStore aria-hidden />
+            <AppText as="span">{t('host_invitation_here')}</AppText>
+          </button>
+        ) : null}
       </div>
     </article>
   );
@@ -467,11 +508,11 @@ const BusinessDirectoryGridCard = React.memo(({ res }) => {
 
 BusinessDirectoryGridCard.displayName = 'BusinessDirectoryGridCard';
 
-const RestaurantCard = React.memo(({ res, onViewMembers }) => {
+const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const { userProfile, updateUserProfile, currentUser: authCurrentUser } = useAuth();
+  const { userProfile, updateUserProfile, currentUser: authCurrentUser, isGuest } = useAuth();
   const context = useInvitations();
   const { isDark } = useTheme();
   const currentUser = context?.currentUser || {};
@@ -527,6 +568,11 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
         openingHours: res.openingHours || res.businessInfo?.openingHours,
         workingHours: res.workingHours || res.businessInfo?.workingHours,
         openNow: res.openNow ?? res.businessInfo?.openNow,
+        lat: res.lat ?? res.businessInfo?.lat,
+        lng: res.lng ?? res.businessInfo?.lng,
+        countryCode: res.countryCode || res.businessInfo?.countryCode,
+        country: res.country || res.businessInfo?.country,
+        timeZone: res.timeZone || res.timezone || res.businessInfo?.timeZone,
       }),
     [
       res.hours,
@@ -537,6 +583,17 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
       res.businessInfo?.workingHours,
       res.openNow,
       res.businessInfo?.openNow,
+      res.lat,
+      res.lng,
+      res.businessInfo?.lat,
+      res.businessInfo?.lng,
+      res.countryCode,
+      res.country,
+      res.businessInfo?.countryCode,
+      res.businessInfo?.country,
+      res.timeZone,
+      res.timezone,
+      res.businessInfo?.timeZone,
     ]
   );
 
@@ -629,7 +686,8 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
 
   const handleCreateInvite = (e) => {
     e.stopPropagation();
-    navigate('/create/manual', { state: { restaurantData: res } });
+    e.preventDefault();
+    onHostInvitation?.(res);
   };
 
   return (
@@ -820,13 +878,15 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
               gap: '6px',
               marginTop: '4px'
             }}>
-                            <FaMapMarkedAlt size={14} style={{ color: '#fbbf24' }} /> {res.location}
+                            <FaMapMarkedAlt size={14} style={{ color: '#fbbf24' }} />{' '}
+                            {getBusinessCardCity(res) || t('unknown_city', 'Unknown City')}
                         </AppText>
                     </div>
 
                     {/* Host Invitation Button */}
-                    {!isOwner && !isBusinessAccount && !currentUser?.isGuest &&
+                    {!isOwner && !isBusinessAccount && !isGuest &&
           <button
+            type="button"
             onClick={handleCreateInvite}
             style={{
               width: '100%',
@@ -844,7 +904,9 @@ const RestaurantCard = React.memo(({ res, onViewMembers }) => {
               gap: '10px',
               cursor: 'pointer',
               boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              position: 'relative',
+              zIndex: 30
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'rgba(40, 40, 45, 1)';
@@ -959,6 +1021,7 @@ const BusinessesDirectory = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser, userProfile, isGuest } = useAuth();
+  const { showToast } = useToast();
   const context = useInvitations();
   const { isDark } = useTheme();
 
@@ -976,6 +1039,23 @@ const BusinessesDirectory = () => {
   const [selectedCommunityId, setSelectedCommunityId] = useState(null);
   const [selectedCommunityMembers, setSelectedCommunityMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(false);
+  const [inviteSelectorOpen, setInviteSelectorOpen] = useState(false);
+  const [inviteSelectorState, setInviteSelectorState] = useState(null);
+
+  const handleHostInvitation = (business) => {
+    if (!currentUser || isGuest) {
+      const nextPath = withBusinessIdInPath('/create/manual', business?.id);
+      goToLogin({ returnPath: nextPath });
+      return;
+    }
+    const state = buildHostInvitationNavigationState(business);
+    if (!state) {
+      showToast(t('something_went_wrong', 'Something went wrong.'), 'error');
+      return;
+    }
+    setInviteSelectorState(state);
+    setInviteSelectorOpen(true);
+  };
 
   const handleViewMembers = async (id) => {
     setMembersLoading(true);
@@ -1283,7 +1363,7 @@ const BusinessesDirectory = () => {
                         <div class="compact-popup-body">
                             <h4 class="compact-popup-title">${popupText(res.name)}</h4>
                             <div class="compact-popup-meta">
-                                ${popupText(`📍 ${res.location || 'Location'}`)}
+                                ${popupText(`📍 ${getBusinessCardCity(res) || t('unknown_city', 'Unknown City')}`)}
                             </div>
                             ${distance ? `
                                 <div class="compact-popup-stats">
@@ -1691,7 +1771,10 @@ const BusinessesDirectory = () => {
           style={{ display: viewMode === 'grid' ? 'grid' : 'none' }}>
           
                     {filteredRestaurants.map((res) =>
-          <BusinessDirectoryGridCard key={res.id} res={res} />
+          <BusinessDirectoryGridCard
+            key={res.id}
+            res={res}
+            onHostInvitation={handleHostInvitation} />
           )}
                     {filteredRestaurants.length === 0 && viewMode === 'grid' && (
           <AppText as="p" className="restaurant-list--grid-empty" style={{ textAlign: 'center', opacity: 0.5 }}>
@@ -1713,7 +1796,8 @@ const BusinessesDirectory = () => {
           <RestaurantCard
             key={res.id}
             res={res}
-            onViewMembers={handleViewMembers} />
+            onViewMembers={handleViewMembers}
+            onHostInvitation={handleHostInvitation} />
           )}
                     {filteredRestaurants.length === 0 && viewMode === 'list' && (
           <AppText as="p" style={{ textAlign: 'center', opacity: 0.5 }}>{t('no_results')}</AppText>
@@ -1731,6 +1815,14 @@ const BusinessesDirectory = () => {
         title={t ? t('community_members') : 'Community Members'} />
 
       }
+            <CreateInvitationSelector
+              isOpen={inviteSelectorOpen}
+              onClose={() => {
+                setInviteSelectorOpen(false);
+                setInviteSelectorState(null);
+              }}
+              navigationState={inviteSelectorState}
+            />
         </div>);
 
 };
