@@ -558,6 +558,10 @@ export default defineConfig({
         port: 5176,
         strictPort: true,
         open: '/login?tab=business',
+        // Allow Firebase OAuth popups to retain window.closed access under Chrome COOP.
+        headers: {
+            'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+        },
         proxy: {
             '/api': {
                 target: devAuthApiProxy,

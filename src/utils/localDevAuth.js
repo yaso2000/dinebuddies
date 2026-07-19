@@ -124,11 +124,17 @@ export function preferOAuthRedirectOnThisDevice() {
 }
 
 /**
- * Popup first for all providers (original working flow).
- * Redirect is only used as a desktop fallback when popup is blocked.
+ * Prefer redirect when popup OAuth is unreliable or floods COOP console noise.
+ * - iOS / Mac Safari / PWA → redirect (existing device policy)
+ * - Desktop Google/Apple → redirect (Chrome COOP blocks window.closed polling)
+ * - Android → popup (redirect + cross-origin authDomain breaks Google there)
+ * - Facebook → popup first (redirect fallback only if blocked)
  */
-export function preferOAuthRedirectForProvider(_providerId) {
-    return false;
+export function preferOAuthRedirectForProvider(providerId) {
+    if (preferOAuthRedirectOnThisDevice()) return true;
+    if (isAndroidTouchDevice() || isEmbeddedPreviewBrowser()) return false;
+    const id = String(providerId || '');
+    return id === 'google.com' || id === 'apple.com';
 }
 
 /** @deprecated Use preferOAuthRedirectOnThisDevice */
