@@ -10,7 +10,6 @@ import {
     hostSpotlightEnterClassName,
     pickHostSpotlightEnterAnimation,
 } from '../../utils/communityHostSpotlightAnimations';
-
 function isAudioMessage(message) {
     const type = String(message?.type || '').toLowerCase();
     return type === 'audio' || type === 'voice';

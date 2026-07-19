@@ -1,27 +1,32 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { FaAlignLeft, FaBold, FaBullhorn, FaHeading, FaImage, FaItalic, FaPalette, FaTh, FaTimes, FaTrash, FaYoutube } from 'react-icons/fa';
+import { FaAlignLeft, FaBold, FaBullhorn, FaHeading, FaImage, FaItalic, FaLink, FaPalette, FaTh, FaTimes, FaTrash, FaYoutube } from 'react-icons/fa';
 import { AppText, AppTextInput } from '../base';
 import UnifiedCamera from '../UnifiedCamera';
 import {
   BANNER_BG_PRESETS,
   BANNER_BG_TRANSPARENT,
+  BANNER_BODY_BUTTON_INDEX,
   BANNER_BODY_SLOT_COUNT,
+  BANNER_BODY_TEXT_INDEX,
   BANNER_TEXT_MAX_TOTAL,
   BANNER_TITLE_FONT_FAMILIES,
   DEFAULT_BANNER_BG,
   DEFAULT_BANNER_BG2,
   DEFAULT_BANNER_BG_DENSITY,
+  DEFAULT_BANNER_BUTTON_BG,
   DEFAULT_BANNER_FONT_SIZE,
   DEFAULT_BANNER_TITLE_FONT_SIZE,
   clampBannerBodySlotText,
   createDefaultBannerBodySlot,
   createDefaultBannerTitleStyle,
-  hasAnyBannerBodyText,
+  hasBannerBodyButton,
+  hasBannerBodyPlainText,
   isBannerBgTransparent,
   resolveBannerBackgroundStyle,
   resolveBannerBodyInlineStyle,
+  resolveBannerButtonInlineStyle,
   resolveBannerFontFamilyCss,
   resolveBannerFontSizeCss,
   resolveBannerTitleFontSizeCss,
@@ -30,6 +35,7 @@ import {
   sanitizeBannerBorderWidth,
   sanitizeBannerFontFamily,
   sanitizeBannerHexColor,
+  sanitizeBannerLinkUrl,
   sanitizeBannerTextColor,
   sanitizeBannerTextMaxWidth,
   sumBannerBodyChars,
@@ -122,11 +128,90 @@ function BannerIconBtn({ active, onClick, ariaLabel, title, children, className 
   );
 }
 
+const KEYBOARD_OPEN_THRESHOLD_PX = 100;
+
 function BannerToolModal({ title, titleId, onClose, children, footer, headerActions }) {
+  const overlayRef = useRef(null);
+  const bodyRef = useRef(null);
+
+  // Keep the sheet inside the visible viewport above the iOS/Android keyboard
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay || typeof window === 'undefined') return undefined;
+
+    const vv = window.visualViewport;
+    const clearGeometry = () => {
+      overlay.style.top = '';
+      overlay.style.left = '';
+      overlay.style.width = '';
+      overlay.style.height = '';
+      overlay.style.right = '';
+      overlay.style.bottom = '';
+      overlay.classList.remove('community-banner-modal--keyboard');
+    };
+
+    if (!vv) return clearGeometry;
+
+    const sync = () => {
+      overlay.style.top = `${vv.offsetTop}px`;
+      overlay.style.left = `${vv.offsetLeft}px`;
+      overlay.style.width = `${vv.width}px`;
+      overlay.style.height = `${vv.height}px`;
+      overlay.style.right = 'auto';
+      overlay.style.bottom = 'auto';
+
+      const keyboardOpen =
+        window.innerHeight - vv.height - vv.offsetTop > KEYBOARD_OPEN_THRESHOLD_PX;
+      overlay.classList.toggle('community-banner-modal--keyboard', keyboardOpen);
+
+      const active = document.activeElement;
+      if (
+        keyboardOpen &&
+        active &&
+        overlay.contains(active) &&
+        (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')
+      ) {
+        active.scrollIntoView({ block: 'center', behavior: 'auto' });
+      }
+    };
+
+    sync();
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    window.addEventListener('resize', sync);
+    return () => {
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
+      window.removeEventListener('resize', sync);
+      clearGeometry();
+    };
+  }, []);
+
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return undefined;
+
+    const scrollFocusedField = (el) => {
+      if (!el) return;
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+
+    const onFocusIn = (event) => {
+      const el = event.target;
+      if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA')) return;
+      requestAnimationFrame(() => scrollFocusedField(el));
+      window.setTimeout(() => scrollFocusedField(el), 280);
+    };
+
+    body.addEventListener('focusin', onFocusIn);
+    return () => body.removeEventListener('focusin', onFocusIn);
+  }, []);
+
   if (typeof document === 'undefined') return null;
 
   return createPortal(
     <div
+      ref={overlayRef}
       className="community-banner-modal"
       role="dialog"
       aria-modal="true"
@@ -150,7 +235,9 @@ function BannerToolModal({ title, titleId, onClose, children, footer, headerActi
             </button>
           </div>
         </div>
-        <div className="community-banner-modal__body">{children}</div>
+        <div ref={bodyRef} className="community-banner-modal__body">
+          {children}
+        </div>
         {footer ? <div className="community-banner-modal__footer">{footer}</div> : null}
       </div>
     </div>,
@@ -271,10 +358,10 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
   const [activeModal, setActiveModal] = useState(null);
   const [titleDraft, setTitleDraft] = useState('');
   const [titleStyleDraft, setTitleStyleDraft] = useState(createDefaultBannerTitleStyle());
-  const bodySlotCursorRef = useRef(0);
-  const [nextBodySlotLabel, setNextBodySlotLabel] = useState(1);
-  const [editingBodySlot, setEditingBodySlot] = useState(0);
-  const [bodySlotDraft, setBodySlotDraft] = useState(() => createDefaultBannerBodySlot(0));
+  const [editingBodySlot, setEditingBodySlot] = useState(BANNER_BODY_TEXT_INDEX);
+  const [bodySlotDraft, setBodySlotDraft] = useState(() =>
+    createDefaultBannerBodySlot(BANNER_BODY_TEXT_INDEX)
+  );
   const [bgColorDraft, setBgColorDraft] = useState(DEFAULT_BANNER_BG);
   const [bgColor2Draft, setBgColor2Draft] = useState(DEFAULT_BANNER_BG2);
   const [bgDensityDraft, setBgDensityDraft] = useState(DEFAULT_BANNER_BG_DENSITY);
@@ -319,14 +406,30 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
     setActiveModal('title');
   };
 
-  const openBodyModal = () => {
-    const slotIndex = bodySlotCursorRef.current;
-    bodySlotCursorRef.current = (slotIndex + 1) % BANNER_BODY_SLOT_COUNT;
-    setNextBodySlotLabel(bodySlotCursorRef.current + 1);
+  const openTextModal = () => {
+    const slotIndex = BANNER_BODY_TEXT_INDEX;
     const slot = (banner.texts || [])[slotIndex] || createDefaultBannerBodySlot(slotIndex);
     setEditingBodySlot(slotIndex);
-    setBodySlotDraft({ ...createDefaultBannerBodySlot(slotIndex), ...slot });
-    setActiveModal('body');
+    setBodySlotDraft({
+      ...createDefaultBannerBodySlot(slotIndex),
+      ...slot,
+      mode: 'text',
+      url: '',
+    });
+    setActiveModal('bodyText');
+  };
+
+  const openButtonModal = () => {
+    const slotIndex = BANNER_BODY_BUTTON_INDEX;
+    const slot = (banner.texts || [])[slotIndex] || createDefaultBannerBodySlot(slotIndex);
+    setEditingBodySlot(slotIndex);
+    setBodySlotDraft({
+      ...createDefaultBannerBodySlot(slotIndex),
+      ...slot,
+      mode: 'link',
+      buttonBg: sanitizeBannerTextColor(slot.buttonBg, DEFAULT_BANNER_BUTTON_BG),
+    });
+    setActiveModal('bodyButton');
   };
 
   const openBackgroundModal = () => {
@@ -438,11 +541,29 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
   };
 
   const publishBody = async () => {
-    const texts = (banner.texts || Array.from({ length: BANNER_BODY_SLOT_COUNT }, (_, index) =>
-      createDefaultBannerBodySlot(index)
-    )).map((slot, index) =>
+    const isButton = editingBodySlot === BANNER_BODY_BUTTON_INDEX;
+    const label = String(bodySlotDraft.text || '').trim();
+    const url = isButton ? sanitizeBannerLinkUrl(bodySlotDraft.url) : '';
+    if (!label) return;
+    if (isButton && !url) return;
+
+    const texts = (
+      banner.texts ||
+      Array.from({ length: BANNER_BODY_SLOT_COUNT }, (_, index) =>
+        createDefaultBannerBodySlot(index)
+      )
+    ).map((slot, index) =>
       index === editingBodySlot
-        ? { ...slot, ...bodySlotDraft, text: String(bodySlotDraft.text || '').trim() }
+        ? {
+            ...slot,
+            ...bodySlotDraft,
+            text: label,
+            mode: isButton ? 'link' : 'text',
+            url,
+            buttonBg: isButton
+              ? sanitizeBannerTextColor(bodySlotDraft.buttonBg, DEFAULT_BANNER_BUTTON_BG)
+              : DEFAULT_BANNER_BUTTON_BG,
+          }
         : slot
     );
     const ok = await updateBanner({ texts }, { clearSpotlight: true });
@@ -450,9 +571,12 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
   };
 
   const deleteBody = async () => {
-    const texts = (banner.texts || Array.from({ length: BANNER_BODY_SLOT_COUNT }, (_, index) =>
-      createDefaultBannerBodySlot(index)
-    )).map((slot, index) =>
+    const texts = (
+      banner.texts ||
+      Array.from({ length: BANNER_BODY_SLOT_COUNT }, (_, index) =>
+        createDefaultBannerBodySlot(index)
+      )
+    ).map((slot, index) =>
       index === editingBodySlot ? createDefaultBannerBodySlot(index) : slot
     );
     const ok = await updateBanner({ texts }, { clearSpotlight: true });
@@ -463,9 +587,12 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
     setBodySlotDraft((prev) => {
       const next = { ...prev, ...patch };
       if (patch.text !== undefined) {
-        const mergedSlots = (banner.texts || Array.from({ length: BANNER_BODY_SLOT_COUNT }, (_, index) =>
-          createDefaultBannerBodySlot(index)
-        )).map((slot, index) =>
+        const mergedSlots = (
+          banner.texts ||
+          Array.from({ length: BANNER_BODY_SLOT_COUNT }, (_, index) =>
+            createDefaultBannerBodySlot(index)
+          )
+        ).map((slot, index) =>
           index === editingBodySlot ? { ...slot, text: '' } : slot
         );
         next.text = clampBannerBodySlotText(patch.text, mergedSlots, editingBodySlot);
@@ -474,15 +601,22 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
     });
   };
 
-  const bodySlotsForBudget = (banner.texts || Array.from({ length: BANNER_BODY_SLOT_COUNT }, (_, index) =>
-    createDefaultBannerBodySlot(index)
-  )).map((slot, index) =>
+  const bodySlotsForBudget = (
+    banner.texts ||
+    Array.from({ length: BANNER_BODY_SLOT_COUNT }, (_, index) =>
+      createDefaultBannerBodySlot(index)
+    )
+  ).map((slot, index) =>
     index === editingBodySlot ? { ...slot, ...bodySlotDraft } : slot
   );
   const bodyCharUsed = sumBannerBodyChars(bodySlotsForBudget);
   const bannerBodySlotHasText = Boolean(
     String((banner.texts || [])[editingBodySlot]?.text || '').trim()
   );
+  const editingButton = editingBodySlot === BANNER_BODY_BUTTON_INDEX;
+  const bodyDraftUrlValid = !editingButton || Boolean(sanitizeBannerLinkUrl(bodySlotDraft.url));
+  const bodyPublishDisabled =
+    !String(bodySlotDraft.text || '').trim() || (editingButton && !bodyDraftUrlValid);
 
   const publishBackground = async () => {
     const transparent = isBannerBgTransparent(bgColorDraft);
@@ -660,15 +794,15 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
       </BannerToolModal>
     ) : null;
 
-  const bodyModal =
-    activeModal === 'body' ? (
+  const bodyTextModal =
+    activeModal === 'bodyText' ? (
       <BannerToolModal
-        title={t('community_banner_body_slot', 'Text {{n}}', { n: editingBodySlot + 1 })}
-        titleId="community-banner-body-modal"
+        title={t('community_banner_body_tool', 'Banner text')}
+        titleId="community-banner-body-text-modal"
         onClose={closeModal}
         footer={modalFooter(
           t('community_banner_publish_body', 'Publish text'),
-          !String(bodySlotDraft.text || '').trim(),
+          bodyPublishDisabled,
           publishBody,
           bannerBodySlotHasText,
           t('community_banner_delete_body', 'Delete text'),
@@ -678,15 +812,10 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
       >
         <div className="community-banner-modal__section community-banner-modal__section--compact">
           <AppText as="span" className="community-banner-modal__label">
-            {t('community_banner_body_slots', 'Text blocks')} ({bodyCharUsed}/{BANNER_TEXT_MAX_TOTAL})
-          </AppText>
-          <AppText as="span" className="community-banner-modal__hint">
-            {t(
-              'community_banner_body_cycle_hint',
-              'Tap the text icon again to edit the next text block.'
-            )}
+            {t('community_banner_body_tool', 'Banner text')} ({bodyCharUsed}/{BANNER_TEXT_MAX_TOTAL})
           </AppText>
         </div>
+
         <AppTextInput
           type="text"
           className="community-banner-modal__textarea community-banner-modal__textarea--body community-banner-modal__textarea--compact community-banner-modal__input--single-line"
@@ -695,6 +824,7 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
           value={bodySlotDraft.text || ''}
           onChange={(e) => updateBodySlotDraft({ text: e.target.value })}
         />
+
         <BannerToggleRow label={t('community_banner_body_style', 'Style')}>
           <div className="community-banner-modal__icon-toolbar">
             {FONT_SIZE_OPTIONS.map(({ key, labelKey, fallback }) => (
@@ -750,6 +880,139 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
             />
           </div>
         </BannerToggleRow>
+      </BannerToolModal>
+    ) : null;
+
+  const bodyButtonModal =
+    activeModal === 'bodyButton' ? (
+      <BannerToolModal
+        title={t('community_banner_button_tool', 'Banner button')}
+        titleId="community-banner-body-button-modal"
+        onClose={closeModal}
+        footer={modalFooter(
+          t('community_banner_publish_body_link', 'Publish button'),
+          bodyPublishDisabled,
+          publishBody,
+          bannerBodySlotHasText,
+          t('community_banner_delete_button', 'Delete button'),
+          deleteBody,
+          true
+        )}
+      >
+        <div className="community-banner-modal__section community-banner-modal__section--compact">
+          <AppText as="span" className="community-banner-modal__label">
+            {t('community_banner_body_link_url', 'Link URL')}
+          </AppText>
+          <AppTextInput
+            type="text"
+            inputMode="url"
+            autoComplete="url"
+            enterKeyHint="done"
+            className="community-banner-modal__textarea community-banner-modal__textarea--compact community-banner-modal__input--single-line"
+            placeholder={t(
+              'community_banner_body_link_url_placeholder',
+              'https://… or /path'
+            )}
+            value={bodySlotDraft.url || ''}
+            onChange={(e) => updateBodySlotDraft({ url: e.target.value })}
+            dir="ltr"
+          />
+          {String(bodySlotDraft.url || '').trim() && !bodyDraftUrlValid ? (
+            <AppText as="span" className="community-banner-modal__hint community-banner-modal__hint--error">
+              {t(
+                'community_banner_body_link_url_unsafe',
+                'This link is not allowed (unsafe scheme, shortener, or hidden destination).'
+              )}
+            </AppText>
+          ) : null}
+        </div>
+
+        <div className="community-banner-modal__section community-banner-modal__section--compact">
+          <AppText as="span" className="community-banner-modal__label">
+            {t('community_banner_body_link_label_placeholder', 'Button label…')} ({bodyCharUsed}/
+            {BANNER_TEXT_MAX_TOTAL})
+          </AppText>
+          <AppTextInput
+            type="text"
+            className="community-banner-modal__textarea community-banner-modal__textarea--body community-banner-modal__textarea--compact community-banner-modal__input--single-line"
+            style={resolveBannerButtonInlineStyle(bodySlotDraft)}
+            placeholder={t('community_banner_body_link_label_placeholder', 'Button label…')}
+            value={bodySlotDraft.text || ''}
+            onChange={(e) => updateBodySlotDraft({ text: e.target.value })}
+          />
+        </div>
+
+        <BannerToggleRow label={t('community_banner_button_style', 'Button style')}>
+          <div className="community-banner-modal__icon-toolbar">
+            <label
+              className="community-banner-modal__icon-btn community-banner-modal__icon-btn--color"
+              title={t('community_banner_button_bg_color', 'Button color')}
+            >
+              <input
+                type="color"
+                value={sanitizeBannerTextColor(bodySlotDraft.buttonBg, DEFAULT_BANNER_BUTTON_BG)}
+                onChange={(e) => updateBodySlotDraft({ buttonBg: e.target.value })}
+                aria-label={t('community_banner_button_bg_color', 'Button color')}
+              />
+              <i
+                className="community-banner-modal__color-swatch"
+                aria-hidden
+                style={{
+                  background: sanitizeBannerTextColor(
+                    bodySlotDraft.buttonBg,
+                    DEFAULT_BANNER_BUTTON_BG
+                  ),
+                }}
+              />
+            </label>
+            <label
+              className="community-banner-modal__icon-btn community-banner-modal__icon-btn--color"
+              title={t('community_banner_button_text_color', 'Label color')}
+            >
+              <input
+                type="color"
+                value={sanitizeBannerTextColor(bodySlotDraft.color)}
+                onChange={(e) => updateBodySlotDraft({ color: e.target.value })}
+                aria-label={t('community_banner_button_text_color', 'Label color')}
+              />
+              <FaPalette size={14} aria-hidden />
+            </label>
+            {FONT_SIZE_OPTIONS.map(({ key, labelKey, fallback }) => (
+              <BannerIconBtn
+                key={key}
+                active={bodySlotDraft.fontSize === key}
+                ariaLabel={t(labelKey, fallback)}
+                onClick={() => updateBodySlotDraft({ fontSize: key })}
+              >
+                {t(labelKey, fallback)}
+              </BannerIconBtn>
+            ))}
+            <BannerIconBtn
+              active={bodySlotDraft.bold}
+              ariaLabel={t('community_banner_body_bold', 'Bold')}
+              onClick={() => updateBodySlotDraft({ bold: !bodySlotDraft.bold })}
+            >
+              <FaBold size={14} aria-hidden />
+            </BannerIconBtn>
+          </div>
+        </BannerToggleRow>
+
+        <div className="community-banner-modal__section community-banner-modal__section--compact community-banner-modal__button-preview-wrap">
+          <AppText as="span" className="community-banner-modal__hint">
+            {t(
+              'community_banner_button_preview_hint',
+              'Guests can tap the button to open the link.'
+            )}
+          </AppText>
+          <AppText
+            as="span"
+            className="community-banner-draggable-body__link-btn community-banner-modal__button-preview"
+            style={resolveBannerButtonInlineStyle(bodySlotDraft)}
+          >
+            {bodySlotDraft.text ||
+              t('community_banner_body_link_label_placeholder', 'Button label…')}
+          </AppText>
+        </div>
       </BannerToolModal>
     ) : null;
 
@@ -1088,6 +1351,17 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
         >
           <FaTh size={16} />
         </button>
+        <button
+          type="button"
+          className={`community-banner-host-tools__btn community-banner-host-tools__btn--spotlight${banner.hostSpotlightAuto ? ' community-banner-host-tools__btn--active' : ''}`}
+          aria-label={t('community_host_spotlight_auto', 'Auto-show messages on banner')}
+          aria-pressed={banner.hostSpotlightAuto}
+          title={t('community_host_spotlight_auto', 'Auto-show messages on banner')}
+          onClick={() => void setHostSpotlightAuto(!banner.hostSpotlightAuto)}
+          disabled={uploadingBanner}
+        >
+          <FaBullhorn size={16} />
+        </button>
       </div>
     ) : null;
 
@@ -1133,16 +1407,23 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
       </button>
       <button
         type="button"
-        className={`community-banner-host-tools__btn community-banner-host-tools__btn--body${hasAnyBannerBodyText(banner.texts) ? ' community-banner-host-tools__btn--active' : ''}`}
-        aria-label={t('community_banner_body_slot_next', 'Banner text {{n}}', { n: nextBodySlotLabel })}
-        title={t('community_banner_body_slot_next', 'Banner text {{n}}', { n: nextBodySlotLabel })}
-        onClick={openBodyModal}
+        className={`community-banner-host-tools__btn community-banner-host-tools__btn--body${hasBannerBodyPlainText(banner.texts) ? ' community-banner-host-tools__btn--active' : ''}`}
+        aria-label={t('community_banner_body_tool', 'Banner text')}
+        title={t('community_banner_body_tool', 'Banner text')}
+        onClick={openTextModal}
         disabled={uploadingBanner}
       >
         <FaAlignLeft size={16} />
-        <AppText as="span" className="community-banner-host-tools__slot-badge" aria-hidden>
-          {nextBodySlotLabel}
-        </AppText>
+      </button>
+      <button
+        type="button"
+        className={`community-banner-host-tools__btn community-banner-host-tools__btn--button${hasBannerBodyButton(banner.texts) ? ' community-banner-host-tools__btn--active' : ''}`}
+        aria-label={t('community_banner_button_tool', 'Banner button')}
+        title={t('community_banner_button_tool', 'Banner button')}
+        onClick={openButtonModal}
+        disabled={uploadingBanner}
+      >
+        <FaLink size={16} />
       </button>
       <button
         type="button"
@@ -1154,28 +1435,30 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
       >
         <FaPalette size={16} />
       </button>
-      <button
-        type="button"
-        className={`community-banner-host-tools__btn community-banner-host-tools__btn--spotlight${banner.hostSpotlightAuto ? ' community-banner-host-tools__btn--active' : ''}`}
-        aria-label={t('community_host_spotlight_auto', 'Auto-show messages on banner')}
-        aria-pressed={banner.hostSpotlightAuto}
-        title={t('community_host_spotlight_auto', 'Auto-show messages on banner')}
-        onClick={() => void setHostSpotlightAuto(!banner.hostSpotlightAuto)}
-        disabled={uploadingBanner}
-      >
-        <FaBullhorn size={16} />
-      </button>
       {layout !== 'banner-rail' ? (
-        <button
-          type="button"
-          className={`community-banner-host-tools__btn${zoneThemeId && zoneThemeId !== 'default' ? ' community-banner-host-tools__btn--active' : ''}`}
-          aria-label={t('community_guest_frame_bg_tool', 'Chat background')}
-          title={t('community_guest_frame_bg_tool', 'Chat background')}
-          onClick={openZoneThemeModal}
-          disabled={uploadingBanner || zoneThemeSaving}
-        >
-          <FaTh size={16} />
-        </button>
+        <>
+          <button
+            type="button"
+            className={`community-banner-host-tools__btn community-banner-host-tools__btn--spotlight${banner.hostSpotlightAuto ? ' community-banner-host-tools__btn--active' : ''}`}
+            aria-label={t('community_host_spotlight_auto', 'Auto-show messages on banner')}
+            aria-pressed={banner.hostSpotlightAuto}
+            title={t('community_host_spotlight_auto', 'Auto-show messages on banner')}
+            onClick={() => void setHostSpotlightAuto(!banner.hostSpotlightAuto)}
+            disabled={uploadingBanner}
+          >
+            <FaBullhorn size={16} />
+          </button>
+          <button
+            type="button"
+            className={`community-banner-host-tools__btn${zoneThemeId && zoneThemeId !== 'default' ? ' community-banner-host-tools__btn--active' : ''}`}
+            aria-label={t('community_guest_frame_bg_tool', 'Chat background')}
+            title={t('community_guest_frame_bg_tool', 'Chat background')}
+            onClick={openZoneThemeModal}
+            disabled={uploadingBanner || zoneThemeSaving}
+          >
+            <FaTh size={16} />
+          </button>
+        </>
       ) : null}
     </div>
   );
@@ -1186,7 +1469,8 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
       {textRail}
 
       {titleModal}
-      {bodyModal}
+      {bodyTextModal}
+      {bodyButtonModal}
       {backgroundModal}
       {youtubeModal}
       {zoneThemeModal}

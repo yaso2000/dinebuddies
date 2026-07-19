@@ -3,6 +3,8 @@
  * Image, gradient background, title, and body text are independent layers.
  */
 
+import { classifyChatLink } from './chatLinkSafety';
+
 export const BANNER_BG_TRANSPARENT = 'transparent';
 
 export const BANNER_FONT_SIZES = {
@@ -24,13 +26,20 @@ export const DEFAULT_BANNER_TITLE_POS = { x: 50, y: 12.5 };
 export const DEFAULT_BANNER_TEXT_POS = { x: 50, y: 62.5 };
 export const DEFAULT_BANNER_GRADIENT_ANGLE = 135;
 export const DEFAULT_BANNER_BG_DENSITY = 100;
-export const BANNER_BODY_SLOT_COUNT = 3;
+export const BANNER_BODY_SLOT_COUNT = 2;
+/** Slot 0 = plain text, slot 1 = link button (fixed roles). */
+export const BANNER_BODY_TEXT_INDEX = 0;
+export const BANNER_BODY_BUTTON_INDEX = 1;
 export const BANNER_TEXT_MAX_TOTAL = 300;
 export const DEFAULT_BANNER_TEXT_COLOR = '#ffffff';
 export const DEFAULT_BANNER_TITLE_COLOR = '#ffffff';
 export const DEFAULT_BANNER_TITLE_FONT_SIZE = 'lg';
 export const DEFAULT_BANNER_TITLE_FONT_FAMILY = 'system';
 export const DEFAULT_BANNER_BODY_MAX_WIDTH = 88;
+export const BANNER_BODY_MODES = ['text', 'link'];
+export const DEFAULT_BANNER_BODY_MODE = 'text';
+export const DEFAULT_BANNER_BUTTON_BG = '#e86e2e';
+export const BANNER_LINK_URL_MAX = 500;
 
 export const BANNER_TITLE_FONT_FAMILIES = {
     system: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -40,11 +49,17 @@ export const BANNER_TITLE_FONT_FAMILIES = {
 };
 
 export const DEFAULT_BANNER_BODY_SLOT_POS = [
-    { x: 22, y: 58 },
-    { x: 50, y: 58 },
-    { x: 78, y: 58 },
+    { x: 50, y: 52 },
+    { x: 50, y: 74 },
 ];
 
+export function bannerBodyModeForIndex(index) {
+    return index === BANNER_BODY_BUTTON_INDEX ? 'link' : 'text';
+}
+
+export function isBannerBodyButtonIndex(index) {
+    return index === BANNER_BODY_BUTTON_INDEX;
+}
 export const BANNER_BG_PRESETS = [
     { id: 'midnight', color: '#0f2744', color2: '#1e3a5f', label: 'Midnight' },
     { id: 'ember', color: '#7c2d12', color2: '#c2410c', label: 'Ember' },
@@ -267,6 +282,46 @@ export function sanitizeBannerFontFamily(value) {
         : DEFAULT_BANNER_TITLE_FONT_FAMILY;
 }
 
+export function sanitizeBannerBodyMode(value) {
+    const mode = String(value || '').trim().toLowerCase();
+    return BANNER_BODY_MODES.includes(mode) ? mode : DEFAULT_BANNER_BODY_MODE;
+}
+
+/**
+ * Allow safe http(s) URLs and same-app paths (`/foo`) for the host banner button.
+ * Rejects dangerous schemes, credentials, IP hosts, and common URL shorteners.
+ */
+export function sanitizeBannerLinkUrl(value) {
+    const raw = String(value || '').trim().slice(0, BANNER_LINK_URL_MAX);
+    if (!raw) return '';
+
+    const info = classifyChatLink(raw);
+    if (!info || info.kind === 'blocked' || !info.href) return '';
+
+    return String(info.href).slice(0, BANNER_LINK_URL_MAX);
+}
+
+export function isBannerBodyLinkSlot(slot) {
+    return sanitizeBannerBodyMode(slot?.mode) === 'link';
+}
+
+export function bannerBodySlotIsVisible(slot) {
+    const text = String(slot?.text || '').trim();
+    if (!text) return false;
+    if (isBannerBodyLinkSlot(slot)) {
+        return Boolean(sanitizeBannerLinkUrl(slot?.url));
+    }
+    return true;
+}
+
+export function hasBannerBodyPlainText(texts = []) {
+    return bannerBodySlotIsVisible(texts?.[BANNER_BODY_TEXT_INDEX]);
+}
+
+export function hasBannerBodyButton(texts = []) {
+    return bannerBodySlotIsVisible(texts?.[BANNER_BODY_BUTTON_INDEX]);
+}
+
 export function resolveBannerFontFamilyCss(familyKey) {
     return BANNER_TITLE_FONT_FAMILIES[sanitizeBannerFontFamily(familyKey)];
 }
@@ -301,12 +356,16 @@ export function sanitizeBannerBool(value) {
 
 export function createDefaultBannerBodySlot(index = 0) {
     const pos = DEFAULT_BANNER_BODY_SLOT_POS[index] || DEFAULT_BANNER_TEXT_POS;
+    const mode = bannerBodyModeForIndex(index);
     return {
         text: '',
+        mode,
+        url: '',
+        buttonBg: DEFAULT_BANNER_BUTTON_BG,
         x: pos.x,
         y: pos.y,
         color: DEFAULT_BANNER_TEXT_COLOR,
-        bold: false,
+        bold: mode === 'link',
         italic: false,
         fontSize: DEFAULT_BANNER_FONT_SIZE,
         maxWidth: DEFAULT_BANNER_BODY_MAX_WIDTH,
@@ -339,7 +398,7 @@ export function sumBannerBodyChars(texts = []) {
 }
 
 export function hasAnyBannerBodyText(texts = []) {
-    return (texts || []).some((slot) => String(slot?.text || '').trim());
+    return (texts || []).some((slot) => bannerBodySlotIsVisible(slot));
 }
 
 /** @param {string} nextText @param {Array} slots @param {number} slotIndex */
@@ -357,6 +416,12 @@ function readBodySlotFromData(data, index) {
     const n = index + 1;
     const legacyText = index === 0 ? String(data?.banner_text || '').trim() : '';
     const text = String(data?.[`banner_text_${n}`] || '').trim() || legacyText;
+    const mode = bannerBodyModeForIndex(index);
+    // Always read URL for button slot (even if older docs stored mode incorrectly)
+    const url =
+        mode === 'link'
+            ? sanitizeBannerLinkUrl(data?.[`banner_text_${n}_url`])
+            : '';
     const hasTitle = Boolean(String(data?.banner_title || '').trim());
     const defaultPos = DEFAULT_BANNER_BODY_SLOT_POS[index] || DEFAULT_BANNER_TEXT_POS;
     const x = text
@@ -371,6 +436,12 @@ function readBodySlotFromData(data, index) {
     }
     return {
         text,
+        mode,
+        url,
+        buttonBg: sanitizeBannerTextColor(
+            data?.[`banner_text_${n}_button_bg`],
+            DEFAULT_BANNER_BUTTON_BG
+        ),
         x,
         y,
         color: sanitizeBannerTextColor(data?.[`banner_text_${n}_color`]),
@@ -382,9 +453,46 @@ function readBodySlotFromData(data, index) {
 }
 
 export function normalizeBannerBodySlots(data) {
-    return Array.from({ length: BANNER_BODY_SLOT_COUNT }, (_, index) =>
+    const slots = Array.from({ length: BANNER_BODY_SLOT_COUNT }, (_, index) =>
         readBodySlotFromData(data, index)
     );
+
+    // Older design: text slot could be a link. Move it to the button slot when empty.
+    const legacyLinkOnText =
+        sanitizeBannerBodyMode(data?.banner_text_1_mode) === 'link' &&
+        Boolean(sanitizeBannerLinkUrl(data?.banner_text_1_url));
+    if (legacyLinkOnText && !bannerBodySlotIsVisible(slots[BANNER_BODY_BUTTON_INDEX])) {
+        const label = String(data?.banner_text_1 || '').trim();
+        const url = sanitizeBannerLinkUrl(data?.banner_text_1_url);
+        if (label && url) {
+            slots[BANNER_BODY_BUTTON_INDEX] = {
+                ...createDefaultBannerBodySlot(BANNER_BODY_BUTTON_INDEX),
+                text: label,
+                mode: 'link',
+                url,
+                buttonBg: sanitizeBannerTextColor(
+                    data?.banner_text_1_button_bg,
+                    DEFAULT_BANNER_BUTTON_BG
+                ),
+                color: sanitizeBannerTextColor(data?.banner_text_1_color),
+                bold: true,
+                italic: sanitizeBannerBool(data?.banner_text_1_italic),
+                fontSize: sanitizeBannerFontSize(data?.banner_text_1_font_size),
+                maxWidth: sanitizeBannerTextMaxWidth(data?.banner_text_1_max_width),
+                x: sanitizeBannerAxis(
+                    data?.banner_text_1_x,
+                    DEFAULT_BANNER_BODY_SLOT_POS[BANNER_BODY_BUTTON_INDEX].x
+                ),
+                y: sanitizeBannerTextY(
+                    data?.banner_text_1_y,
+                    DEFAULT_BANNER_BODY_SLOT_POS[BANNER_BODY_BUTTON_INDEX].y
+                ),
+            };
+            slots[BANNER_BODY_TEXT_INDEX] = createDefaultBannerBodySlot(BANNER_BODY_TEXT_INDEX);
+        }
+    }
+
+    return slots;
 }
 
 export function normalizeBannerTitleStyle(data) {
@@ -420,33 +528,67 @@ export function resolveBannerBodyInlineStyle(slot = {}) {
     };
 }
 
+/** Inline styles for the banner CTA button (label color + fill). */
+export function resolveBannerButtonInlineStyle(slot = {}) {
+    const s = slot || createDefaultBannerBodySlot(BANNER_BODY_BUTTON_INDEX);
+    return {
+        ...resolveBannerBodyInlineStyle(s),
+        backgroundColor: sanitizeBannerTextColor(s.buttonBg, DEFAULT_BANNER_BUTTON_BG),
+        borderColor: 'rgba(255, 255, 255, 0.4)',
+    };
+}
+
 function serializeBodySlotsToFirestore(texts = [], hasTitle = false) {
     const out = { banner_text: '' };
     for (let i = 0; i < BANNER_BODY_SLOT_COUNT; i += 1) {
         const n = i + 1;
         const slot = texts[i] || createDefaultBannerBodySlot(i);
         const trimmed = String(slot.text || '').trim();
+        const mode = bannerBodyModeForIndex(i);
+        const url = mode === 'link' ? sanitizeBannerLinkUrl(slot.url) : '';
+        const active = Boolean(trimmed) && (mode !== 'link' || Boolean(url));
         const defaultPos = DEFAULT_BANNER_BODY_SLOT_POS[i] || DEFAULT_BANNER_TEXT_POS;
-        out[`banner_text_${n}`] = trimmed;
-        out[`banner_text_${n}_x`] = trimmed
+        out[`banner_text_${n}`] = active ? trimmed : '';
+        out[`banner_text_${n}_mode`] = active ? mode : '';
+        out[`banner_text_${n}_url`] = active && mode === 'link' ? url : '';
+        out[`banner_text_${n}_button_bg`] =
+            active && mode === 'link'
+                ? sanitizeBannerTextColor(slot.buttonBg, DEFAULT_BANNER_BUTTON_BG)
+                : '';
+        out[`banner_text_${n}_x`] = active
             ? sanitizeBannerAxis(slot.x, defaultPos.x)
             : '';
-        out[`banner_text_${n}_y`] = trimmed
+        out[`banner_text_${n}_y`] = active
             ? hasTitle
                 ? sanitizeBannerTextY(slot.y, defaultPos.y)
                 : sanitizeBannerAxis(slot.y, defaultPos.y)
             : '';
-        out[`banner_text_${n}_color`] = trimmed
+        out[`banner_text_${n}_color`] = active
             ? sanitizeBannerTextColor(slot.color)
             : '';
-        out[`banner_text_${n}_bold`] = trimmed ? Boolean(slot.bold) : false;
-        out[`banner_text_${n}_italic`] = trimmed ? Boolean(slot.italic) : false;
-        out[`banner_text_${n}_font_size`] = trimmed
+        out[`banner_text_${n}_bold`] = active ? Boolean(slot.bold) : false;
+        out[`banner_text_${n}_italic`] = active ? Boolean(slot.italic) : false;
+        out[`banner_text_${n}_font_size`] = active
             ? sanitizeBannerFontSize(slot.fontSize)
             : '';
-        out[`banner_text_${n}_max_width`] = trimmed
+        out[`banner_text_${n}_max_width`] = active
             ? sanitizeBannerTextMaxWidth(slot.maxWidth)
             : '';
+    }
+
+    // Clear legacy slot 3 leftovers when we moved from 3 → 2 body texts
+    for (const n of [3]) {
+        out[`banner_text_${n}`] = '';
+        out[`banner_text_${n}_mode`] = '';
+        out[`banner_text_${n}_url`] = '';
+        out[`banner_text_${n}_button_bg`] = '';
+        out[`banner_text_${n}_x`] = '';
+        out[`banner_text_${n}_y`] = '';
+        out[`banner_text_${n}_color`] = '';
+        out[`banner_text_${n}_bold`] = false;
+        out[`banner_text_${n}_italic`] = false;
+        out[`banner_text_${n}_font_size`] = '';
+        out[`banner_text_${n}_max_width`] = '';
     }
     return out;
 }
@@ -600,11 +742,17 @@ export function buildBannerUpdate({
     const transparent = isBannerBgTransparent(bgColor);
     const trimmedTitle = String(title || '').trim();
     const normalizedTexts = Array.isArray(texts)
-        ? texts.map((slot, index) => ({
-              ...createDefaultBannerBodySlot(index),
-              ...slot,
-              text: String(slot?.text || '').trim(),
-          }))
+        ? texts.map((slot, index) => {
+              const mode = bannerBodyModeForIndex(index);
+              return {
+                  ...createDefaultBannerBodySlot(index),
+                  ...slot,
+                  text: String(slot?.text || '').trim(),
+                  mode,
+                  url: mode === 'link' ? sanitizeBannerLinkUrl(slot?.url) : '',
+                  buttonBg: sanitizeBannerTextColor(slot?.buttonBg, DEFAULT_BANNER_BUTTON_BG),
+              };
+          })
         : normalizeBannerBodySlots({
               banner_text: String(text || '').trim(),
               banner_text_1: String(text || '').trim(),
@@ -679,17 +827,43 @@ export function mergeBannerPatch(current, patch = {}) {
         ...slot,
     }));
     if (patch.texts !== undefined && Array.isArray(patch.texts)) {
-        texts = texts.map((slot, index) => ({
-            ...slot,
-            ...(patch.texts[index] || {}),
-            text:
-                patch.texts[index]?.text !== undefined
-                    ? String(patch.texts[index].text || '').trim()
-                    : slot.text,
-        }));
+        texts = texts.map((slot, index) => {
+            const mode = bannerBodyModeForIndex(index);
+            const next = {
+                ...slot,
+                ...(patch.texts[index] || {}),
+                mode,
+                text:
+                    patch.texts[index]?.text !== undefined
+                        ? String(patch.texts[index].text || '').trim()
+                        : slot.text,
+            };
+            if (mode === 'link') {
+                next.url =
+                    patch.texts[index]?.url !== undefined
+                        ? sanitizeBannerLinkUrl(patch.texts[index].url)
+                        : sanitizeBannerLinkUrl(next.url);
+                if (patch.texts[index]?.buttonBg !== undefined) {
+                    next.buttonBg = sanitizeBannerTextColor(
+                        patch.texts[index].buttonBg,
+                        DEFAULT_BANNER_BUTTON_BG
+                    );
+                } else {
+                    next.buttonBg = sanitizeBannerTextColor(
+                        next.buttonBg,
+                        DEFAULT_BANNER_BUTTON_BG
+                    );
+                }
+            } else {
+                next.url = '';
+            }
+            return next;
+        });
     } else if (patch.text !== undefined) {
         texts = texts.map((slot, index) =>
-            index === 0 ? { ...slot, text: String(patch.text || '').trim() } : slot
+            index === BANNER_BODY_TEXT_INDEX
+                ? { ...slot, text: String(patch.text || '').trim(), mode: 'text', url: '' }
+                : slot
         );
     }
 

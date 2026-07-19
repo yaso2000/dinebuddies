@@ -2,24 +2,19 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaUtensils, FaUserTie, FaImage, FaPlay, FaYoutube, FaTiktok, FaInstagram } from 'react-icons/fa';
 import { AppText } from "./base";
+import { useExternalLinkGuard } from '../context/ExternalLinkGuardContext';
 
 const SharedContentBubble = ({ data }) => {
   const navigate = useNavigate();
+  const { requestOpenLink } = useExternalLinkGuard();
 
   if (!data) return null;
 
   const handleClick = () => {
     if (data.url) {
       try {
-        // Determine if it's an absolute URL
-        if (data.url.startsWith('http')) {
-          const parsedUrl = new URL(data.url);
-          // Use pathname for internal routing if it matches our domain, else open new tab
-          if (parsedUrl.hostname === window.location.hostname) {
-            navigate(parsedUrl.pathname + parsedUrl.search);
-          } else {
-            window.open(data.url, '_blank');
-          }
+        if (data.url.startsWith('http') || data.url.startsWith('www.')) {
+          requestOpenLink(data.url);
         } else {
           navigate(data.url);
         }
