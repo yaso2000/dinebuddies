@@ -1,0 +1,56 @@
+import { createRequire } from 'node:module';
+import assert from 'node:assert/strict';
+
+const require = createRequire(import.meta.url);
+const {
+    getCheckoutPlan,
+    getCheckoutPlanByPriceId,
+    getVerifiedCheckoutPlan,
+    normalizePlanId,
+} = require('../functions/paymentPlans.js');
+
+assert.equal(normalizePlanId('elite'), 'p5');
+assert.equal(normalizePlanId('vip'), 'p3');
+
+const pro = getCheckoutPlan('p2');
+assert.equal(pro.priceId, 'price_1T4DptKpQn3RDJUCrhwtOx0u');
+assert.equal(pro.mode, 'subscription');
+assert.equal(pro.tier, 'pro');
+
+const vip = getCheckoutPlan('p3');
+assert.equal(vip.tier, 'vip');
+assert.equal(vip.weeklyPrivateQuota, -1);
+
+const eliteAlias = getCheckoutPlan('elite');
+assert.equal(eliteAlias.id, 'p5');
+assert.equal(eliteAlias.tier, 'elite');
+
+const privatePack = getCheckoutPlan('c3');
+assert.equal(privatePack.mode, 'payment');
+assert.equal(privatePack.kind, 'private_pack');
+assert.equal(privatePack.grantField, 'purchasedPrivateCredits');
+assert.equal(privatePack.credits, 5);
+
+const offerPack = getCheckoutPlan('o1');
+assert.equal(offerPack.mode, 'payment');
+assert.equal(offerPack.kind, 'offer_pack');
+assert.equal(offerPack.grantField, 'offerCredits');
+
+assert.equal(getCheckoutPlanByPriceId('price_1T4DrkKpQn3RDJUC7cPercNu').id, 'p3');
+assert.equal(getCheckoutPlanByPriceId('price_not_allowed'), null);
+assert.equal(getCheckoutPlan('unknown'), null);
+
+assert.equal(
+    getVerifiedCheckoutPlan('elite', eliteAlias.priceId, 'subscription').id,
+    'p5'
+);
+assert.equal(
+    getVerifiedCheckoutPlan('elite', pro.priceId, 'subscription'),
+    null,
+    'a cheap Pro price must not grant the Elite tier'
+);
+assert.equal(
+    getVerifiedCheckoutPlan('elite', eliteAlias.priceId, 'payment'),
+    null,
+    'a one-time payment must not fulfill a subscription'
+);
