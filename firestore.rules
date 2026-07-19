@@ -103,12 +103,15 @@ service cloud.firestore {
     }
 
     // Consumer Stage rooms (event chat; host picks mutual follows)
+    function stageExists(stageId) {
+      return exists(/databases/$(database)/documents/stages/$(stageId));
+    }
+
     function stageDoc(stageId) {
       return get(/databases/$(database)/documents/stages/$(stageId)).data;
     }
 
-    function isStageMember(stageId) {
-      let stage = stageDoc(stageId);
+    function stageMemberFromData(stageId, stage) {
       let members = stage.get('memberIds', []);
       let communityMembers = stage.get('communityMembers', []);
       let blocked = stage.get('communityBlockedUserIds', []);
@@ -121,16 +124,22 @@ service cloud.firestore {
              !(request.auth.uid in blocked);
     }
 
+    function isStageMember(stageId) {
+      return stageExists(stageId) &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             stageMemberFromData(stageId, stageDoc(stageId));
+    }
+
     function isStageChatMuted(stageId) {
-      let muted = stageDoc(stageId).get('communityMutedUserIds', []);
-      return request.auth.uid in muted;
+      return stageExists(stageId) &&
+             request.auth.uid in stageDoc(stageId).get('communityMutedUserIds', []);
     }
 
     function canWriteStageChat(stageId) {
-      let stage = stageDoc(stageId);
-      return (isStageMember(stageId) || isAdmin()) &&
-             (request.auth.uid == stage.get('hostId', '') || !isStageChatMuted(stageId)) &&
-             stage.get('status', 'active') == 'active';
+      return stageExists(stageId) &&
+             (isStageMember(stageId) || isAdmin()) &&
+             (request.auth.uid == stageDoc(stageId).get('hostId', '') || !isStageChatMuted(stageId)) &&
+             stageDoc(stageId).get('status', 'active') == 'active';
     }
 
     function canReadStageChat(stageId) {
@@ -974,7 +983,12 @@ service cloud.firestore {
     // Room create/update primarily via Admin SDK callables.
     // ============================================
     match /stages/{stageId} {
-      allow read: if canReadStageChat(stageId);
+      // Prefer resource.data for the document being read (avoids extra get() failures).
+      allow get: if isAdmin() ||
+                    (isSignedIn() &&
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     stageMemberFromData(stageId, resource.data));
+      allow list: if false;
 
       // Clients must not create rooms; membership/lifecycle via callables; host may edit theme/banner.
       allow create: if false;

@@ -216,7 +216,9 @@ export default function StageChatRoom() {
 
   let shellContent;
 
-  if (room.loading) {
+  // Do not block the chat shell once membership is known (joinedStages / host).
+  // Waiting on the stage snapshot alone caused an indefinite Loading screen.
+  if (room.loading && !canEnterChat) {
     shellContent = (
       <div
         ref={containerRef}

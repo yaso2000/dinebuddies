@@ -1,5 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+    collection,
+    doc,
+    getDoc,
+    getDocs,
+    limit,
+    orderBy,
+    query,
+} from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app, { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
@@ -7,7 +15,7 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import { getUserPresence } from './usePresence';
 
 async function countOnlineMembers(memberIds = []) {
-    const ids = [...new Set((memberIds || []).filter(Boolean))];
+    const ids = [...new Set((memberIds || []).filter(Boolean))].slice(0, 40);
     if (ids.length === 0) return 0;
     const results = await Promise.all(ids.map((uid) => getUserPresence(uid)));
     return results.filter((p) => p?.online === true).length;
@@ -34,6 +42,11 @@ function isStageExpired(stageData, now = new Date()) {
     return false;
 }
 
+function joinedStagesKey(joinedStages) {
+    if (!Array.isArray(joinedStages) || joinedStages.length === 0) return '';
+    return [...joinedStages].map(String).sort().join('|');
+}
+
 async function buildStageCard(stageId, stageData, hostData, lastReadTimestamps, viewerIds, viewerUid) {
     const messagesRef = collection(db, 'stages', stageId, 'messages');
     let lastReadTime = new Date(0);
@@ -46,8 +59,11 @@ async function buildStageCard(stageId, stageData, hostData, lastReadTimestamps, 
     let lastMessageTime = null;
 
     try {
-        const messagesSnapshot = await getDocs(messagesRef);
-        messagesSnapshot.forEach((msgDoc) => {
+        // Recent messages only — full collection scans froze the Stages hub.
+        const recentSnap = await getDocs(
+            query(messagesRef, orderBy('createdAt', 'desc'), limit(40))
+        );
+        recentSnap.forEach((msgDoc) => {
             const msgData = msgDoc.data();
             const msgTime = msgData.createdAt?.toDate() || new Date(0);
 
@@ -61,7 +77,23 @@ async function buildStageCard(stageId, stageData, hostData, lastReadTimestamps, 
             }
         });
     } catch (msgError) {
-        console.warn(`Could not fetch stage messages for ${stageId}:`, msgError.message);
+        // Fallback without orderBy if index is missing.
+        try {
+            const messagesSnapshot = await getDocs(query(messagesRef, limit(40)));
+            messagesSnapshot.forEach((msgDoc) => {
+                const msgData = msgDoc.data();
+                const msgTime = msgData.createdAt?.toDate() || new Date(0);
+                if (msgTime > lastReadTime && !viewerIds.has(msgData.senderId)) {
+                    unreadCount += 1;
+                }
+                if (!lastMessageTime || msgTime > lastMessageTime) {
+                    lastMessageTime = msgTime;
+                    lastMessage = msgData.text || msgData.message || '';
+                }
+            });
+        } catch (fallbackErr) {
+            console.warn(`Could not fetch stage messages for ${stageId}:`, fallbackErr.message);
+        }
     }
 
     const memberIds = Array.isArray(stageData.memberIds)
@@ -112,8 +144,12 @@ export function useJoinedStages() {
     const { currentUser, userProfile } = useAuth();
     const [stages, setStages] = useState([]);
     const [loading, setLoading] = useState(true);
+    const fetchGenRef = useRef(0);
 
     const viewerUid = currentUser?.uid || userProfile?.id || null;
+    const joinedKey = joinedStagesKey(userProfile?.joinedStages);
+    const stageLastReadRef = useRef(userProfile?.stageLastRead || {});
+    stageLastReadRef.current = userProfile?.stageLastRead || {};
 
     const viewerIds = useMemo(() => {
         const ids = new Set();
@@ -123,15 +159,16 @@ export function useJoinedStages() {
     }, [userProfile?.id, currentUser?.uid]);
 
     const fetchStages = useCallback(async () => {
-        const joinedStages = userProfile?.joinedStages || [];
-        const lastReadTimestamps = userProfile?.stageLastRead || {};
+        const joinedStages = joinedKey ? joinedKey.split('|') : [];
+        const lastReadTimestamps = stageLastReadRef.current;
 
-        if (!userProfile || joinedStages.length === 0) {
+        if (!viewerUid || joinedStages.length === 0) {
             setStages([]);
             setLoading(false);
             return;
         }
 
+        const gen = ++fetchGenRef.current;
         setLoading(true);
         const now = new Date();
         try {
@@ -164,29 +201,24 @@ export function useJoinedStages() {
                     }
                 })
             );
+            if (gen !== fetchGenRef.current) return;
             setStages(rows.filter(Boolean));
         } catch (error) {
             console.error('Error fetching stages:', error);
-            setStages([]);
+            if (gen === fetchGenRef.current) setStages([]);
         } finally {
-            setLoading(false);
+            if (gen === fetchGenRef.current) setLoading(false);
         }
-    }, [userProfile, viewerIds, viewerUid]);
+    }, [joinedKey, viewerIds, viewerUid]);
 
     useEffect(() => {
-        if (userProfile && (userProfile.id || currentUser?.uid)) {
-            fetchStages();
-        } else if (userProfile !== undefined && !userProfile) {
+        if (!viewerUid) {
             setStages([]);
             setLoading(false);
+            return;
         }
-    }, [
-        userProfile?.joinedStages,
-        userProfile?.stageLastRead,
-        userProfile?.id,
-        currentUser?.uid,
-        fetchStages,
-    ]);
+        void fetchStages();
+    }, [viewerUid, joinedKey, fetchStages]);
 
     const totalUnread = useMemo(
         () => stages.reduce((sum, s) => sum + (s.unreadCount || 0), 0),
@@ -199,13 +231,16 @@ export function useJoinedStages() {
         setStages((prev) => prev.filter((s) => s.id !== stageId));
     }, []);
 
-    const leaveStage = useCallback(async (stageId) => {
-        const functions = getFunctions(app, 'us-central1');
-        const setStageMembership = httpsCallable(functions, 'setStageMembership');
-        await setStageMembership({ stageId, action: 'leave' });
-        removeStage(stageId);
-        return true;
-    }, [removeStage]);
+    const leaveStage = useCallback(
+        async (stageId) => {
+            const functions = getFunctions(app, 'us-central1');
+            const setStageMembership = httpsCallable(functions, 'setStageMembership');
+            await setStageMembership({ stageId, action: 'leave' });
+            removeStage(stageId);
+            return true;
+        },
+        [removeStage]
+    );
 
     return {
         stages,
