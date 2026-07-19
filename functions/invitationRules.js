@@ -22,10 +22,15 @@ const VENUE_LOCATION_NOT_DETERMINED_ERROR_MESSAGE =
     'Venue location could not be determined. Select a place with valid map coordinates.';
 
 function parseLatLng(pair) {
-    const lat = Number(pair?.lat);
-    const lng = Number(pair?.lng);
+    // Avoid Number(null) === 0 (Null Island) which falsely fails the 30 km gate.
+    if (pair?.lat == null || pair?.lng == null || pair?.lat === '' || pair?.lng === '') {
+        return null;
+    }
+    const lat = Number(pair.lat);
+    const lng = Number(pair.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    if (lat === 0 && lng === 0) return null;
     return { lat, lng };
 }
 
@@ -51,9 +56,11 @@ function distanceBetweenCoords(a, b) {
 }
 
 function normalizeCountryCode(raw) {
-    return String(raw ?? '')
+    const s = String(raw ?? '')
         .trim()
         .toUpperCase();
+    // Only treat real ISO-3166 alpha-2 as comparable (avoid "AU" vs "AUSTRALIA").
+    return /^[A-Z]{2}$/.test(s) ? s : '';
 }
 
 function crossesInternationalBorder(creatorCountryCode, venueCountryCode) {
@@ -141,6 +148,25 @@ function assertCreatorCanCreateInvitations(user) {
     return null;
 }
 
+function asSafeCoord(value) {
+    if (value == null || value === '') return null;
+    const n = typeof value === 'number' ? value : Number(String(value).trim());
+    return Number.isFinite(n) ? n : null;
+}
+
+function coordsFromBusinessLike(info, fallback = {}) {
+    const nested = info?.coordinates || info?.location || info?.geo || fallback.coordinates || {};
+    const pair = parseLatLng({
+        lat: info?.lat ?? nested.lat ?? nested.latitude ?? fallback.lat,
+        lng: info?.lng ?? nested.lng ?? nested.longitude ?? fallback.lng,
+    });
+    return {
+        lat: pair?.lat ?? null,
+        lng: pair?.lng ?? null,
+        countryCode: info?.countryCode || info?.country || fallback.countryCode || null,
+    };
+}
+
 async function resolveRestaurantGeo(db, restaurantId) {
     const id = String(restaurantId || '').trim();
     if (!id) return { lat: null, lng: null, countryCode: null };
@@ -149,25 +175,19 @@ async function resolveRestaurantGeo(db, restaurantId) {
     if (profileSnap.exists) {
         const data = profileSnap.data() || {};
         const info = data.businessPublic || {};
-        const lat = Number(info.lat);
-        const lng = Number(info.lng);
-        return {
-            lat: Number.isFinite(lat) ? lat : null,
-            lng: Number.isFinite(lng) ? lng : null,
-            countryCode: info.countryCode || data.countryCode || null,
-        };
+        return coordsFromBusinessLike(info, {
+            lat: asSafeCoord(data.lat),
+            lng: asSafeCoord(data.lng),
+            countryCode: data.countryCode || null,
+        });
     }
 
     const restSnap = await db.collection('restaurants').doc(id).get();
     if (restSnap.exists) {
         const data = restSnap.data() || {};
-        const lat = Number(data.lat);
-        const lng = Number(data.lng);
-        return {
-            lat: Number.isFinite(lat) ? lat : null,
-            lng: Number.isFinite(lng) ? lng : null,
+        return coordsFromBusinessLike(data, {
             countryCode: data.countryCode || null,
-        };
+        });
     }
 
     return { lat: null, lng: null, countryCode: null };

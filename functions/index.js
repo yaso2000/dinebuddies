@@ -5,7 +5,7 @@ const path = require('path');
 const admin = require('firebase-admin');
 admin.initializeApp();
 
-const { inferInviteCategory } = require('./inviteCategory');
+const { inferInviteCategory, isPrivateInviteDoc } = require('./inviteCategory');
 const { registerAdminBrowseUsers } = require('./adminBrowseUsers');
 const { registerAdminSearchUsers } = require('./adminSearchUsers');
 const { registerAdminDashboard } = require('./adminDashboard');
@@ -122,18 +122,18 @@ const {
     isCommunityOwnerRequester,
     collectCommunityMemberIds,
 } = require('./communityOwner');
+const { registerCommunityMemberBroadcast } = require('./communityMemberBroadcast');
 const { sendPushToUser, registerNotificationPushTrigger } = createPushMessaging({ db, admin });
+registerCommunityMemberBroadcast(exports, { db, admin });
 /** @param {Record<string, unknown>} inv */
 function isPrivateInvitationDocForBilling(inv) {
     if (!inv || typeof inv !== 'object') return false;
-    const occasionLc = String(inv.occasionType || inv.type || '')
-        .trim()
-        .toLowerCase();
-    return (
-        inv.type === 'Private' ||
-        occasionLc === 'private' ||
-        (inv.privateInvitationPreference != null && inv.privateInvitationPreference !== false)
-    );
+    // Prefer stored inviteCategory (set on draft create) so legacy social docs
+    // that still use type "Private" are not billed as 1-on-1 personal invites.
+    const cat = String(inv.inviteCategory || '').toLowerCase();
+    if (cat === 'social') return false;
+    if (cat === 'private' || cat === 'dating') return true;
+    return isPrivateInviteDoc(inv);
 }
 
 const USER_WEEKLY_PRIVATE_QUOTAS = {
@@ -153,6 +153,7 @@ const ALLOWED_NOTIFICATION_TYPES = new Set([
     'new_community_member',
     'community_removed',
     'community_message',
+    'stage_invite',
     'system_announcement',
     'follow',
     'invitation_accepted',
@@ -356,7 +357,10 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
 
     if (type === 'community_message' || type === 'community_removed') {
         const partnerId = metadata?.partnerId;
-        return typeof partnerId === 'string' && partnerId === senderId;
+        if (typeof partnerId !== 'string' || !partnerId.trim()) return false;
+        if (partnerId === senderId) return true;
+        const owner = await resolveCommunityOwner(db, partnerId);
+        return isCommunityOwnerRequester(owner, senderId);
     }
 
     if (type === 'follow') {
@@ -424,6 +428,8 @@ registerDirectorySearch(exports, { db, admin });
 registerConsumerAccountSearch(exports, { db });
 const { registerBusinessPostNotify } = require('./businessPostNotify');
 registerBusinessPostNotify(exports, { db, admin, enforceCallableRateLimit });
+const { registerStageRooms } = require('./stageRooms');
+registerStageRooms(exports, { db, admin, enforceCallableRateLimit });
 const { registerCommunityChatDisplay } = require('./communityChatDisplay');
 registerCommunityChatDisplay(exports, { db, admin, enforceCallableRateLimit });
 const { registerConnectMatchNotifications } = require('./connectMatchNotifications');
@@ -440,8 +446,11 @@ function asTrimmedString(value) {
 }
 
 function asFiniteNumber(value) {
-    const num = Number(value);
-    return Number.isFinite(num) ? num : null;
+    // Number(null) === 0 — treat missing coords as null, never Null Island.
+    if (value == null || value === '') return null;
+    const num = typeof value === 'number' ? value : Number(String(value).trim());
+    if (!Number.isFinite(num)) return null;
+    return num;
 }
 
 function detectPublicProfileType(userData) {
@@ -499,6 +508,12 @@ function toPublicProfile(userDocData, uid) {
     // AND explicit opt-in businessInfo.isPublished (manual hide/vacation).
     const authEmailVerified = userData.emailVerified === true;
     const userOptedIntoDirectory = businessInfo.isPublished === true;
+    const bizCoords =
+        businessInfo.coordinates && typeof businessInfo.coordinates === 'object'
+            ? businessInfo.coordinates
+            : userData.coordinates && typeof userData.coordinates === 'object'
+              ? userData.coordinates
+              : {};
     const businessPublic = profileType === 'business'
         ? {
             isPublished: authEmailVerified && userOptedIntoDirectory,
@@ -508,14 +523,31 @@ function toPublicProfile(userDocData, uid) {
                 asTrimmedString(businessInfo.country) ||
                 asTrimmedString(userData.country) ||
                 asTrimmedString(userData.countryCode),
+            countryCode:
+                asTrimmedString(businessInfo.countryCode) ||
+                asTrimmedString(userData.countryCode) ||
+                null,
             address: asTrimmedString(businessInfo.address) || asTrimmedString(userData.location),
             description: asTrimmedString(businessInfo.description) || asTrimmedString(userData.bio),
             coverImage: asTrimmedString(businessInfo.coverImage),
-            lat: asFiniteNumber(businessInfo.lat ?? userData.lat),
-            lng: asFiniteNumber(businessInfo.lng ?? userData.lng),
+            lat: asFiniteNumber(
+                businessInfo.lat ?? bizCoords.lat ?? bizCoords.latitude ?? userData.lat
+            ),
+            lng: asFiniteNumber(
+                businessInfo.lng ?? bizCoords.lng ?? bizCoords.longitude ?? userData.lng
+            ),
             // Expose visual identity so directory cards & maps can match business profile
             brandKit: businessInfo.brandKit || null,
-            theme: asTrimmedString(businessInfo.theme)
+            theme: asTrimmedString(businessInfo.theme),
+            // Directory open/closed must follow saved hours (not stale Google openNow).
+            hours:
+                businessInfo.hours && typeof businessInfo.hours === 'object'
+                    ? businessInfo.hours
+                    : null,
+            openingHours:
+                businessInfo.openingHours && typeof businessInfo.openingHours === 'object'
+                    ? businessInfo.openingHours
+                    : null,
         }
         : null;
 
@@ -896,6 +928,27 @@ function pickPrivateInvitationCardImageUrl(inv) {
     return null;
 }
 
+/** Deterministic inbox doc id — idempotent resend without composite indexes. */
+function socialInvitationNotificationDocId(invitationId, inviteeId) {
+    return `social_inv_${invitationId}_${inviteeId}`;
+}
+
+/** Skip invitees who already have a social_invitation notif for this invite. */
+async function filterInviteesNeedingSocialInvitationNotification(invitationId, inviteeIds) {
+    if (!Array.isArray(inviteeIds) || inviteeIds.length === 0) return [];
+    const needing = await Promise.all(
+        inviteeIds.map(async (fid) => {
+            if (!fid || typeof fid !== 'string') return null;
+            const snap = await db
+                .collection('notifications')
+                .doc(socialInvitationNotificationDocId(invitationId, fid))
+                .get();
+            return snap.exists ? null : fid;
+        })
+    );
+    return needing.filter(Boolean);
+}
+
 async function sendPrivateInvitationInviteeNotifications({ uid, invitationId, inviteeIds, invPre, userRef }) {
     if (!Array.isArray(inviteeIds) || inviteeIds.length === 0) return 0;
 
@@ -929,7 +982,9 @@ async function sendPrivateInvitationInviteeNotifications({ uid, invitationId, in
         const batch = db.batch();
         for (const friendId of chunk) {
             if (!friendId || typeof friendId !== 'string') continue;
-            const ref = db.collection('notifications').doc();
+            const ref = db
+                .collection('notifications')
+                .doc(socialInvitationNotificationDocId(invitationId, friendId));
             batch.set(ref, {
                 userId: friendId,
                 type: 'social_invitation',
@@ -993,26 +1048,6 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
 
         const userRef = db.collection('users').doc(uid);
 
-        if (invPre.publishedAt) {
-            // Idempotent path: return existing token — no rate limit, no Dine Credits charge.
-            let existingToken = invPre.shareToken || null;
-            if (!existingToken) {
-                existingToken = generatePrivateInvitationShareToken();
-                await invitationRef.update({
-                    shareToken: existingToken,
-                    externalInviteEnabled: true,
-                });
-            }
-            return { success: true, alreadyPublished: true, chargedSource: null, shareToken: existingToken };
-        }
-
-        await enforceCallableRateLimit(uid, 'publish_social_invitation', {
-            perMinute: 8,
-            perHour: 100,
-            perDay: 300,
-            cooldownMs: 1500, // P0: faster re-share without 429 (was 3000)
-        });
-
         const hostUserSnap = await userRef.get();
         if (!hostUserSnap.exists) {
             throw new functions.https.HttpsError('not-found', 'User not found.');
@@ -1023,9 +1058,6 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
             throwInvitationRuleError(creatorBlock);
         }
 
-        const hostFollowing = Array.isArray(hostUser.following) ? hostUser.following : [];
-        const requiresSenderFollowsInvitee = isPrivateInvitationDocForBilling(invPre);
-
         const rawIds = Array.isArray(invPre.invitedFriends) ? invPre.invitedFriends : [];
         functions.logger.info('publishPrivateInvitationDraft:prefilter_input', {
             invitationId,
@@ -1034,10 +1066,12 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
             status: invPre.status || null,
             hasPublishedAt: Boolean(invPre.publishedAt)
         });
+        // Do not require host→invitee follow: personal/social invites are often sent
+        // from directory/search before a follow relationship exists. Still filter
+        // blocked/muted/business/guest accounts.
         const filteredFriends = [];
         for (const fid of rawIds) {
             if (!fid || typeof fid !== 'string') continue;
-            if (requiresSenderFollowsInvitee && !hostFollowing.includes(fid)) continue;
             const fSnap = await db.collection('users').doc(fid).get();
             if (!fSnap.exists) continue;
             const fd = fSnap.data() || {};
@@ -1056,11 +1090,72 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
         if (rawIds.length > 0 && filteredFriends.length === 0) {
             throw new functions.https.HttpsError(
                 'failed-precondition',
-                requiresSenderFollowsInvitee
-                    ? 'You must follow each invitee before sending a private invitation.'
-                    : 'No valid invitees remained (blocked, muted, missing, or non-user account).'
+                'No valid invitees remained (blocked, muted, missing, or non-user account).'
             );
         }
+
+        // Already published: no re-charge; still deliver any missing invitee notifications.
+        if (invPre.publishedAt) {
+            let existingToken = invPre.shareToken || null;
+            if (!existingToken) {
+                existingToken = generatePrivateInvitationShareToken();
+                await invitationRef.update({
+                    shareToken: existingToken,
+                    externalInviteEnabled: true,
+                });
+            }
+
+            let notificationsSent = 0;
+            let notifyError = null;
+            const inviteesForNotify = filteredFriends.length > 0
+                ? filteredFriends
+                : rawIds.filter((id) => typeof id === 'string');
+            if (inviteesForNotify.length > 0) {
+                try {
+                    const needing = await filterInviteesNeedingSocialInvitationNotification(
+                        invitationId,
+                        inviteesForNotify
+                    );
+                    if (needing.length > 0) {
+                        notificationsSent = await sendPrivateInvitationInviteeNotifications({
+                            uid,
+                            invitationId,
+                            inviteeIds: needing,
+                            invPre,
+                            userRef,
+                        });
+                    }
+                    functions.logger.info('publishPrivateInvitationDraft:already_published_notify', {
+                        invitationId,
+                        notificationsSent,
+                        needing: needing.length,
+                    });
+                } catch (notifyErr) {
+                    notifyError = notifyErr?.message || 'notify_failed';
+                    functions.logger.error(
+                        'publishPrivateInvitationDraft: already-published invitee notifications failed',
+                        invitationId,
+                        notifyErr
+                    );
+                }
+            }
+
+            return {
+                success: true,
+                alreadyPublished: true,
+                chargedSource: null,
+                shareToken: existingToken,
+                notificationsSent,
+                notifyError,
+            };
+        }
+
+        await enforceCallableRateLimit(uid, 'publish_social_invitation', {
+            perMinute: 8,
+            perHour: 100,
+            perDay: 300,
+            cooldownMs: 1500, // P0: faster re-share without 429 (was 3000)
+        });
 
         const result = await db.runTransaction(async (tx) => {
             const [invSnap, userSnap] = await Promise.all([tx.get(invitationRef), tx.get(userRef)]);
@@ -1080,7 +1175,7 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
             }
 
             if (inv.publishedAt) {
-                return { alreadyPublished: true, chargedSource: null };
+                return { alreadyPublished: true, chargedSource: null, shareToken: inv.shareToken || null };
             }
 
             const currentRsvps = inv.rsvps && typeof inv.rsvps === 'object' ? inv.rsvps : {};
@@ -1097,9 +1192,10 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
             let chargedSource = null;
 
             if (!isBypassUser) {
-                const cost = isPrivateInvitationDocForBilling(inv)
+                const isPrivateBill = isPrivateInvitationDocForBilling(inv);
+                const cost = isPrivateBill
                     ? CREDIT_COSTS.PRIVATE_INVITATION
-                    : CREDIT_COSTS.PRIVATE_INVITATION;
+                    : CREDIT_COSTS.SOCIAL_INVITATION;
                 const accountRole = isBusinessUserDoc(user) ? 'business' : 'user';
                 try {
                     spendCreditsInTransaction(tx, userRef, user, {
@@ -1107,7 +1203,7 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
                         accountRole,
                         amount: cost,
                         type: 'social_invitation_publish',
-                        reason: isPrivateInvitationDocForBilling(inv)
+                        reason: isPrivateBill
                             ? 'private_invitation_publish'
                             : 'social_invitation_publish',
                         relatedId: invitationId,
@@ -1146,20 +1242,28 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
         });
 
         let notificationsSent = 0;
-        if (!result.alreadyPublished && filteredFriends.length > 0) {
+        let notifyError = null;
+        if (filteredFriends.length > 0) {
             try {
-                notificationsSent = await sendPrivateInvitationInviteeNotifications({
-                    uid,
-                    invitationId,
-                    inviteeIds: filteredFriends,
-                    invPre,
-                    userRef
-                });
+                const needing = result.alreadyPublished
+                    ? await filterInviteesNeedingSocialInvitationNotification(invitationId, filteredFriends)
+                    : filteredFriends;
+                if (needing.length > 0) {
+                    notificationsSent = await sendPrivateInvitationInviteeNotifications({
+                        uid,
+                        invitationId,
+                        inviteeIds: needing,
+                        invPre,
+                        userRef
+                    });
+                }
                 functions.logger.info('publishPrivateInvitationDraft notifications', {
                     invitationId,
-                    notificationsSent
+                    notificationsSent,
+                    alreadyPublished: Boolean(result.alreadyPublished),
                 });
             } catch (notifyErr) {
+                notifyError = notifyErr?.message || 'notify_failed';
                 functions.logger.error('publishPrivateInvitationDraft: invitee notifications failed', invitationId, notifyErr);
             }
         }
@@ -1168,6 +1272,7 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
             success: true,
             ...result,
             notificationsSent,
+            notifyError,
             shareToken: result.shareToken || null,
         };
     } catch (err) {
@@ -1405,10 +1510,14 @@ exports.publishPublicInvitation = functions.https.onCall(async (data, context) =
             }
         }
 
+        // Prefer draft GPS country (set at create/preview) over possibly stale profile country.
+        const creatorCountryCode =
+            inv.userCountryCode || user.countryCode || user.country || null;
+
         const geofenceBlock = assertPublicInvitationGeofenceRule({
             creatorCoords: { lat: creatorLat, lng: creatorLng },
             venueCoords: { lat: venueLat, lng: venueLng },
-            creatorCountryCode: user.countryCode,
+            creatorCountryCode,
             venueCountryCode,
         });
         if (geofenceBlock) {
@@ -1542,7 +1651,19 @@ exports.createOrGetConversation = functions.https.onCall(async (data, context) =
     }
 
     const isSystemPeer = reqData.isSystemAccount === true || othData.isSystemAccount === true;
-    if (!isSystemPeer) {
+    // Paid business member messaging: owner may DM community members (and vice versa)
+    // without a dating/friendship Connect connection.
+    const reqIsBusiness = isBusinessUserDoc(reqData);
+    const othIsBusiness = isBusinessUserDoc(othData);
+    const othJoined = Array.isArray(othData.joinedCommunities) ? othData.joinedCommunities : [];
+    const reqJoined = Array.isArray(reqData.joinedCommunities) ? reqData.joinedCommunities : [];
+    const reqMembers = Array.isArray(reqData.communityMembers) ? reqData.communityMembers : [];
+    const othMembers = Array.isArray(othData.communityMembers) ? othData.communityMembers : [];
+    const isBusinessMemberChannel =
+        (reqIsBusiness && (othJoined.includes(uid) || reqMembers.includes(otherUserId))) ||
+        (othIsBusiness && (reqJoined.includes(otherUserId) || othMembers.includes(uid)));
+
+    if (!isSystemPeer && !isBusinessMemberChannel) {
         const hasConnection = await hasConnectConnection(uid, otherUserId, reqData, othData);
         if (!hasConnection) {
             throw new functions.https.HttpsError(

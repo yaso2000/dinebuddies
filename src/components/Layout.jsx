@@ -14,20 +14,18 @@ import {
   FaUser,
   FaSignInAlt,
   FaTimes,
-  FaLock,
-  FaHeart,
   FaImages,
   FaPenAlt,
   FaPhotoVideo,
-  FaGlobe,
   FaChevronRight,
   FaThLarge,
+  FaMicrophone,
 } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { useInvitations } from '../context/InvitationContext';
 import { useChat } from '../context/ChatContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
+import { useJoinedStages } from '../hooks/useJoinedStages';
 import { useTheme } from '../context/ThemeContext';
 import UnpublishedBusinessReminder from './UnpublishedBusinessReminder';
 import EmailVerificationBusinessBanner from './EmailVerificationBusinessBanner';
@@ -48,13 +46,13 @@ import { isBusinessUser } from '../utils/accountRole';
 import { needsEmailPasswordVerification, needsConsumerEmailVerification } from '../utils/emailVerification';
 import { buildLoginPath, goToLogin } from '../utils/goToLogin';
 import { isAdminIdentity } from '../utils/adminAccess';
-import { useToast } from '../context/ToastContext';
 import { attachIosAppHeaderViewportOffset } from '../utils/iosAppHeaderVisualViewport';
 import { attachHideBottomNavOnKeyboard } from '../utils/hideBottomNavOnKeyboard';
 import { isIOS, isStandalonePwa, markIosPwaLaunch } from '../services/notificationService';
 import { isAuthRoutePath } from '../utils/authRoutePaths';
 import { usePresence } from '../hooks/usePresence';
 import { AppText } from "./base";
+import InviteCreateTypePicker from './InviteCreateTypePicker';
 
 function DesktopNavGroup({ title, variant = 'default', children }) {
   const items = React.Children.toArray(children).filter(Boolean);
@@ -74,19 +72,15 @@ const Layout = ({ children }) => {
   const { t, i18n } = useTranslation();
   const { currentUser, userProfile, isGuest, isBusiness, loading } = useAuth();
   usePresence();
-  const invContext = useInvitations();
-  const {
-    canCreateSocialInvitation
-  } = invContext || {};
   const { unreadCount: chatUnreadCount, conversations = [] } = useChat();
   const { unreadCount, unreadBellCount = 0, unreadMessageCount = 0, markMessageNotificationsAsRead } = useNotifications();
   useStaleInvitationNotificationCleanup();
 
   // Total unread messages
   const totalChatUnread = chatUnreadCount + unreadMessageCount;
+  const { activeCount: stageActiveCount, totalUnread: stageUnreadCount } = useJoinedStages();
   const { themeMode } = useTheme();
   const isDesktopShell = useDesktopShell();
-  const { showToast } = useToast();
 
   const [businessCreateOpen, setBusinessCreateOpen] = useState(false);
   const [inviteCreateOpen, setInviteCreateOpen] = useState(false);
@@ -107,49 +101,6 @@ const Layout = ({ children }) => {
 
   const closeInviteCreate = () => {
     setInviteCreateOpen(false);
-  };
-
-  const finishInviteCreateManual = (kind) => {
-    if (kind === 'public') {
-      navigate('/create');
-      closeInviteCreate();
-      return;
-    }
-    if (kind === 'social') {
-      const q = canCreateSocialInvitation?.('social');
-      if (q && !q.profileLoading && !q.canCreate) {
-        showToast(
-          t(
-            'insufficient_dine_credits_wallet',
-            'Not enough Dine Credits. Open Settings → Dine Credits to top up.'
-          ),
-          'error'
-        );
-        navigate('/settings/credits');
-        closeInviteCreate();
-        return;
-      }
-      navigate('/create-social');
-      closeInviteCreate();
-      return;
-    }
-    if (kind === 'private' || kind === 'dating') {
-      const q = canCreateSocialInvitation?.('private');
-      if (q && !q.profileLoading && !q.canCreate) {
-        showToast(
-          t(
-            'insufficient_dine_credits_wallet',
-            'Not enough Dine Credits. Open Settings → Dine Credits to top up.'
-          ),
-          'error'
-        );
-        navigate('/settings/credits');
-        closeInviteCreate();
-        return;
-      }
-      navigate('/create-private');
-      closeInviteCreate();
-    }
   };
 
   useEffect(() => {
@@ -191,7 +142,8 @@ const Layout = ({ children }) => {
     path === '/messages' ||
     path.startsWith('/messages') ||
     path.startsWith('/invitation/') && path.endsWith('/chat') ||
-    path.startsWith('/community/');
+    path.startsWith('/community/') ||
+    path.startsWith('/stage/');
     const mq = typeof window !== 'undefined' ? window.matchMedia('(max-width: 1023px)') : null;
 
     let detach = () => {};
@@ -224,7 +176,12 @@ const Layout = ({ children }) => {
       const timer = window.setTimeout(() => markMessageNotificationsAsRead('/messages'), 400);
       return () => window.clearTimeout(timer);
     }
-    if (path.startsWith('/chat/') || path.startsWith('/community/') || path.startsWith('/invitation/')) {
+    if (
+      path.startsWith('/chat/') ||
+      path.startsWith('/community/') ||
+      path.startsWith('/stage/') ||
+      path.startsWith('/invitation/')
+    ) {
       const timer = window.setTimeout(() => markMessageNotificationsAsRead(path), 500);
       return () => window.clearTimeout(timer);
     }
@@ -275,9 +232,10 @@ const Layout = ({ children }) => {
   location.pathname.startsWith('/invitation/private/') ||
   location.pathname.startsWith('/invite/p/');
   const isCommunityChatPath = location.pathname.startsWith('/community/');
+  const isStageChatPath = location.pathname.startsWith('/stage/');
   const keepOutletMountedWhileLoading =
   isAuthRoutePath(location.pathname) ||
-  (isCommunityChatPath && Boolean(currentUser?.uid)) ||
+  ((isCommunityChatPath || isStageChatPath) && Boolean(currentUser?.uid)) ||
   (isAdminPath || isCreateInvitationPath || isPrivateInvitationDeepLink) &&
   Boolean(currentUser?.uid);
 
@@ -511,28 +469,37 @@ const Layout = ({ children }) => {
               
                                 <FaPenAlt />
                             </Link>
-                            {!isBusinessAccount &&
-            <Link
-              to="/search/list"
-              className={`notification-bell header-connect-btn${isSearchListRoute ? ' active' : ''}`}
-              title={t('user_directory_list_view', 'Card view')}
-              aria-label={t('user_directory_nav', 'Connect')}>
-              
-                                <FaUsers aria-hidden />
-                            </Link>
-            }
                             <Link
               to="/messages"
               className={`notification-bell${isMessagesHub || isNotificationsRoute ? ' active' : ''}`}
               aria-label={t('inbox_hub_title', 'Inbox')}
               title={t('inbox_hub_title', 'Inbox')}>
-                                <FaBell />
+                                <FaComments />
                                 {(totalChatUnread + unreadBellCount) > 0 && (
                                   <AppText as="span" className="badge">
                                     {(totalChatUnread + unreadBellCount) > 99 ? '99+' : totalChatUnread + unreadBellCount}
                                   </AppText>
                                 )}
                             </Link>
+                            {!isBusinessAccount ? (
+                              <Link
+                                to="/stages"
+                                className={`notification-bell header-stages-btn${location.pathname === '/stages' || location.pathname.startsWith('/stage/') ? ' active' : ''}`}
+                                aria-label={t('stages_hub_title', 'Stages')}
+                                title={t('stages_hub_title', 'Stages')}
+                              >
+                                <FaMicrophone />
+                                {(stageUnreadCount > 0 || stageActiveCount > 0) && (
+                                  <AppText as="span" className="badge">
+                                    {(stageUnreadCount > 0 ? stageUnreadCount : stageActiveCount) > 99
+                                      ? '99+'
+                                      : stageUnreadCount > 0
+                                        ? stageUnreadCount
+                                        : stageActiveCount}
+                                  </AppText>
+                                )}
+                              </Link>
+                            ) : null}
                             <Link
               to="/settings"
               className={`notification-bell${isActive('/settings') || location.pathname.startsWith('/settings/') ? ' active' : ''}`}
@@ -799,13 +766,10 @@ const Layout = ({ children }) => {
                         <div className="business-create-sheet__header">
                             <div className="business-create-sheet__titles">
                                 <AppText as="h2" id="invite-create-title" className="business-create-sheet__title">
-                                    {t('invite_create_title', 'Create invitation')}
+                                    {t('invite_create_title')}
                                 </AppText>
                                 <AppText as="p" className="business-create-sheet__subtitle">
-                                    {t(
-                  'invite_create_subtitle',
-                  'Choose the type of invitation you want to create.'
-                )}
+                                    {t('invite_create_subtitle')}
                                 </AppText>
                             </div>
                             <button
@@ -817,71 +781,10 @@ const Layout = ({ children }) => {
                                 <FaTimes />
                             </button>
                         </div>
-                        <div className="business-create-sheet__options">
-                            <button
-              type="button"
-              className="business-create-option"
-              onClick={() => finishInviteCreateManual('public')}>
-              
-                                <AppText as="span" className="business-create-option__icon business-create-option__icon--public" aria-hidden>
-                                    <FaGlobe />
-                                </AppText>
-                                <AppText as="span" className="business-create-option__text">
-                                    <AppText as="span" className="business-create-option__label">
-                                        {t('invite_create_public_title', 'Public invitation')}
-                                    </AppText>
-                                    <AppText as="span" className="business-create-option__desc">
-                                        {t(
-                    'invite_create_public_desc',
-                    'A discoverable invitation others can browse and join.'
-                  )}
-                                    </AppText>
-                                </AppText>
-                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
-                            </button>
-                            <button
-              type="button"
-              className="business-create-option"
-              onClick={() => finishInviteCreateManual('social')}>
-              
-                                <AppText as="span" className="business-create-option__icon business-create-option__icon--private" aria-hidden>
-                                    <FaLock />
-                                </AppText>
-                                <AppText as="span" className="business-create-option__text">
-                                    <AppText as="span" className="business-create-option__label">
-                                        {t('invite_create_social_title', 'Social Invite')}
-                                    </AppText>
-                                    <AppText as="span" className="business-create-option__desc">
-                                        {t(
-                    'invite_create_social_desc',
-                    'Invite specific guests with a private link.'
-                  )}
-                                    </AppText>
-                                </AppText>
-                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
-                            </button>
-                            <button
-              type="button"
-              className="business-create-option"
-              onClick={() => finishInviteCreateManual('private')}>
-              
-                                <AppText as="span" className="business-create-option__icon business-create-option__icon--dating" aria-hidden>
-                                    <FaHeart />
-                                </AppText>
-                                <AppText as="span" className="business-create-option__text">
-                                    <AppText as="span" className="business-create-option__label">
-                                        {t('invite_create_private_title', 'Personal Invite')}
-                                    </AppText>
-                                    <AppText as="span" className="business-create-option__desc">
-                                        {t(
-                    'invite_create_private_desc',
-                    'A private-style invitation for matched dining.'
-                  )}
-                                    </AppText>
-                                </AppText>
-                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
-                            </button>
-                        </div>
+                        <InviteCreateTypePicker
+                          variant="sheet"
+                          onAfterNavigate={closeInviteCreate}
+                        />
                     </div>
                 </div>
       }

@@ -76,7 +76,8 @@ export default function CommunitiesChatPanel({
         <div
           key={community.id}
           className={`messages-page__item community-chat-item${community.unreadCount > 0 ? ' unread' : ''}`}
-          onClick={() => navigate(`/community/${community.id}`)}>
+          onClick={() => navigate(`/community/${community.id}`)}
+        >
           <div className="messages-page__avatar community-chat-avatar">
             {community.logo ? (
               <img src={community.logo} alt={community.name} />
@@ -107,7 +108,8 @@ export default function CommunitiesChatPanel({
                 className="community-leave-btn"
                 onClick={(e) => handleLeave(e, community.id, community.name)}
                 title={t('Leave Community', 'Leave Community')}
-                aria-label={t('Leave Community', 'Leave Community')}>
+                aria-label={t('Leave Community', 'Leave Community')}
+              >
                 <FaTrash size={12} />
               </button>
             </div>

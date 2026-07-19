@@ -8,8 +8,10 @@ import UserAvatar from '../components/UserAvatar';
 import OnlineStatusBadge from '../components/profile/OnlineStatusBadge';
 import { useUserPresence } from '../hooks/usePresence';
 import CommunitiesChatPanel from '../components/Messages/CommunitiesChatPanel';
+import StagesChatPanel from '../components/Messages/StagesChatPanel';
 import NotificationsPanel from '../components/Messages/NotificationsPanel';
 import { useJoinedCommunities } from '../hooks/useJoinedCommunities';
+import { useJoinedStages } from '../hooks/useJoinedStages';
 import AppBackButton from '../components/AppBackButton';
 import { APP_HOME_PATH } from '../utils/appRouteShell';
 import { LuBell, LuMessageCircle, LuSearch } from 'react-icons/lu';
@@ -21,13 +23,17 @@ const PANEL_MESSAGES = 'messages';
 const PANEL_NOTIFICATIONS = 'notifications';
 const TAB_CHATS = 'chats';
 const TAB_COMMUNITIES = 'communities';
+const TAB_STAGES = 'stages';
 
 function readPanel(searchParams) {
   return searchParams.get('panel') === PANEL_NOTIFICATIONS ? PANEL_NOTIFICATIONS : PANEL_MESSAGES;
 }
 
 function readTab(searchParams) {
-  return searchParams.get('tab') === TAB_COMMUNITIES ? TAB_COMMUNITIES : TAB_CHATS;
+  const tab = searchParams.get('tab');
+  if (tab === TAB_COMMUNITIES) return TAB_COMMUNITIES;
+  if (tab === TAB_STAGES) return TAB_STAGES;
+  return TAB_CHATS;
 }
 
 function MessagesEmpty({ title, message, ctaLabel, ctaTo }) {
@@ -101,10 +107,16 @@ const ChatList = () => {
   const { unreadBellCount = 0, unreadMessageCount = 0 } = useNotifications();
   const { communities, loading: communitiesLoading, totalUnread: communityUnread, removeCommunity } =
     useJoinedCommunities();
+  const {
+    stages,
+    loading: stagesLoading,
+    totalUnread: stageUnread,
+    leaveStage,
+  } = useJoinedStages();
   const { userProfile } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
 
-  const messagesBadge = chatUnreadCount + communityUnread + unreadMessageCount;
+  const messagesBadge = chatUnreadCount + communityUnread + stageUnread + unreadMessageCount;
   const notificationsBadge = unreadBellCount;
 
   useEffect(() => {
@@ -113,17 +125,31 @@ const ChatList = () => {
     }
   }, [userProfile, navigate]);
 
+  useEffect(() => {
+    if (searchParams.get('tab') === TAB_STAGES) {
+      navigate('/stages', { replace: true });
+    }
+  }, [searchParams, navigate]);
+
   const setActivePanel = (panel) => {
     if (panel === PANEL_NOTIFICATIONS) {
       setSearchParams({ panel: PANEL_NOTIFICATIONS }, { replace: true });
     } else {
       const tab = searchParams.get('tab');
-      setSearchParams(tab === TAB_COMMUNITIES ? { tab: TAB_COMMUNITIES } : {}, { replace: true });
+      if (tab === TAB_COMMUNITIES || tab === TAB_STAGES) {
+        setSearchParams({ tab }, { replace: true });
+      } else {
+        setSearchParams({}, { replace: true });
+      }
     }
     setSearchQuery('');
   };
 
   const setActiveTab = (tab) => {
+    if (tab === TAB_STAGES) {
+      navigate('/stages');
+      return;
+    }
     if (tab === TAB_COMMUNITIES) {
       setSearchParams({ tab: TAB_COMMUNITIES }, { replace: true });
     } else {
@@ -168,12 +194,15 @@ const ChatList = () => {
   const searchPlaceholder =
     activeTab === TAB_COMMUNITIES
       ? t('search_communities', 'Search communities...')
-      : t('search_conversations', 'Search conversations...');
+      : activeTab === TAB_STAGES
+        ? t('search_stages', 'Search stages...')
+        : t('search_conversations', 'Search conversations...');
 
   const isLoading = activePanel === PANEL_MESSAGES && activeTab === TAB_CHATS && chatsLoading;
 
-  const messagesBody =
-    activeTab === TAB_CHATS ? (
+  let messagesBody;
+  if (activeTab === TAB_CHATS) {
+    messagesBody =
       filteredConversations.length === 0 ? (
         <MessagesEmpty
           title={t('no_conversations', 'No conversations yet')}
@@ -196,8 +225,18 @@ const ChatList = () => {
             />
           ))}
         </div>
-      )
-    ) : (
+      );
+  } else if (activeTab === TAB_STAGES) {
+    messagesBody = (
+      <StagesChatPanel
+        stages={stages}
+        loading={stagesLoading}
+        searchQuery={searchQuery}
+        onLeaveStage={leaveStage}
+      />
+    );
+  } else {
+    messagesBody = (
       <CommunitiesChatPanel
         communities={communities}
         loading={communitiesLoading}
@@ -205,6 +244,7 @@ const ChatList = () => {
         onLeaveCommunity={removeCommunity}
       />
     );
+  }
 
   const hubShell = (body) => (
     <div className="chat-list-container messages-page">
@@ -270,6 +310,25 @@ const ChatList = () => {
               {communityUnread > 0 ? (
                 <AppText as="span" className="messages-page__tab-badge">
                   {communityUnread > 99 ? '99+' : communityUnread}
+                </AppText>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TAB_STAGES}
+              className={`messages-page__tab${activeTab === TAB_STAGES ? ' active' : ''}`}
+              onClick={() => setActiveTab(TAB_STAGES)}>
+              {t('messages_tab_stages', 'Stages')}
+              {stageUnread > 0 || stages.length > 0 ? (
+                <AppText as="span" className="messages-page__tab-badge">
+                  {stageUnread > 0
+                    ? stageUnread > 99
+                      ? '99+'
+                      : stageUnread
+                    : stages.length > 99
+                      ? '99+'
+                      : stages.length}
                 </AppText>
               ) : null}
             </button>

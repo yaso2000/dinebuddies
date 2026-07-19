@@ -1,15 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
-import { FaSignOutAlt, FaTimes } from 'react-icons/fa';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { FaDoorClosed, FaDoorOpen, FaSignOutAlt, FaTimes } from 'react-icons/fa';
 import CommunityChatSwipePager from '../components/community/CommunityChatSwipePager';
 import CommunityFullChatView from '../components/community/CommunityFullChatView';
 import CommunityChatHeaderMenu from '../components/community/CommunityChatHeaderMenu';
 import UserAvatar from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
-import { useInvitations } from '../context/InvitationContext';
-import { useCommunityChatRoom } from '../hooks/useCommunityChatRoom';
+import { useToast } from '../context/ToastContext';
+import { useStageChatRoom } from '../hooks/useStageChatRoom';
 import { useDesktopShell } from '../hooks/useDesktopShell';
 import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
 import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
@@ -23,66 +24,22 @@ import '../components/community/CommunityChatSwipePager.css';
 import '../styles/chatReferenceTheme.css';
 import { AppText } from '../components/base';
 import { useChatTheme } from '../hooks/useChatTheme';
+import app from '../firebase/config';
 
-export default function CommunityChatRoom() {
+export default function StageChatRoom() {
   const { t } = useTranslation();
-  const { partnerId } = useParams();
+  const { stageId } = useParams();
   const { isBusiness } = useAuth();
-  const { joinCommunity, leaveCommunity, currentUser: inviteUser } = useInvitations();
-  const room = useCommunityChatRoom(partnerId);
-  const joinedCommunityIds = inviteUser?.joinedCommunities ?? [];
-  const canEnterChat =
-    room.isMember ||
-    room.isHost ||
-    (partnerId && joinedCommunityIds.includes(partnerId));
+  const { showToast } = useToast();
+  const room = useStageChatRoom(stageId);
+  const canEnterChat = room.isMember || room.isHost;
   const containerRef = useRef(null);
   const isDesktopShell = useDesktopShell();
-  const { goBack: goBackFromCommunity } = useAppBackNavigation({ fallback: '/messages?tab=communities' });
+  const { goBack: goBackFromStage } = useAppBackNavigation({ fallback: '/stages' });
   const useMobileFullscreen = !isDesktopShell;
-  const [joinStatus, setJoinStatus] = useState('idle');
-  const [leavingCommunity, setLeavingCommunity] = useState(false);
-  const joinAttemptRef = useRef(false);
   const { themeId: chatThemeId, setThemeId: setChatThemeId, themeStyle: chatThemeStyle } = useChatTheme();
-
-  const attemptJoin = useCallback(async () => {
-    if (!partnerId || joinAttemptRef.current) return;
-    joinAttemptRef.current = true;
-    setJoinStatus('joining');
-    try {
-      const ok = await joinCommunity(partnerId);
-      setJoinStatus(ok ? 'idle' : 'failed');
-    } catch {
-      setJoinStatus('failed');
-    } finally {
-      joinAttemptRef.current = false;
-    }
-  }, [joinCommunity, partnerId]);
-
-  useEffect(() => {
-    setJoinStatus('idle');
-    joinAttemptRef.current = false;
-  }, [partnerId]);
-
-  useEffect(() => {
-    if (room.loading || canEnterChat || room.isBlockedFromCommunity || !partnerId) return;
-    if (isBusiness) return;
-    if (joinStatus === 'joining' || joinStatus === 'failed') return;
-    void attemptJoin();
-  }, [
-    room.loading,
-    canEnterChat,
-    room.isBlockedFromCommunity,
-    partnerId,
-    isBusiness,
-    joinStatus,
-    attemptJoin,
-  ]);
-
-  useEffect(() => {
-    if (canEnterChat || room.isHost || joinStatus === 'failed' || room.loading || !partnerId) return;
-    const timer = window.setTimeout(() => setJoinStatus('failed'), 12000);
-    return () => window.clearTimeout(timer);
-  }, [canEnterChat, room.isHost, joinStatus, room.loading, partnerId]);
+  const [leaving, setLeaving] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
   useEffect(() => {
     if (!useMobileFullscreen) return undefined;
@@ -90,10 +47,16 @@ export default function CommunityChatRoom() {
     return detach;
   }, [useMobileFullscreen]);
 
-  const closeChat = goBackFromCommunity;
+  const closeChat = goBackFromStage;
 
-  const handleLeaveCommunity = useCallback(async () => {
-    const name = room.partner?.display_name || t('community_chat', 'Community Chat');
+  const callMembership = async (action) => {
+    const functions = getFunctions(app, 'us-central1');
+    const setStageMembership = httpsCallable(functions, 'setStageMembership');
+    return setStageMembership({ stageId, action });
+  };
+
+  const handleLeave = async () => {
+    const name = room.partner?.display_name || t('stage_chat', 'Stage');
     if (
       !window.confirm(
         `${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${name}?`
@@ -101,30 +64,92 @@ export default function CommunityChatRoom() {
     ) {
       return;
     }
-    setLeavingCommunity(true);
+    setLeaving(true);
     try {
-      const success = await leaveCommunity(partnerId);
-      if (success) closeChat();
-    } catch (error) {
-      console.error('[CommunityChatRoom] leave', error);
+      await callMembership('leave');
+      closeChat();
+    } catch (err) {
+      console.error('[StageChatRoom] leave', err);
+      showToast(t('stage_leave_failed', 'Could not leave Stage.'), 'error');
     } finally {
-      setLeavingCommunity(false);
+      setLeaving(false);
     }
-  }, [closeChat, leaveCommunity, partnerId, room.partner?.display_name, t]);
+  };
 
-  const headerMenuActions = useMemo(() => {
-    if (room.isHost || isBusiness) return [];
-    return [
-      {
-        id: 'leave',
-        label: t('Leave Community', 'Leave Community'),
-        icon: <FaSignOutAlt size={15} aria-hidden />,
-        danger: true,
-        disabled: leavingCommunity,
-        onClick: handleLeaveCommunity,
-      },
-    ];
-  }, [handleLeaveCommunity, isBusiness, leavingCommunity, room.isHost, t]);
+  const handleCloseStage = async () => {
+    if (
+      !window.confirm(
+        t(
+          'stage_close_confirm',
+          'Close this Stage temporarily? Guests cannot write until you reopen. The room stays available for 24 hours from creation.'
+        )
+      )
+    ) {
+      return;
+    }
+    setLifecycleBusy(true);
+    try {
+      await callMembership('close_stage');
+      showToast(t('stage_closed_toast', 'Stage closed. You can reopen it anytime within 24 hours.'), 'success');
+    } catch (err) {
+      console.error('[StageChatRoom] close', err);
+      showToast(t('stage_close_failed', 'Could not close Stage.'), 'error');
+    } finally {
+      setLifecycleBusy(false);
+    }
+  };
+
+  const handleReopenStage = async () => {
+    setLifecycleBusy(true);
+    try {
+      await callMembership('reopen_stage');
+      showToast(t('stage_reopened_toast', 'Stage reopened.'), 'success');
+    } catch (err) {
+      console.error('[StageChatRoom] reopen', err);
+      showToast(t('stage_reopen_failed', 'Could not reopen Stage.'), 'error');
+    } finally {
+      setLifecycleBusy(false);
+    }
+  };
+
+  const headerMenuActions = (() => {
+    if (room.isHost) {
+      if (room.isStageClosed) {
+        return [
+          {
+            id: 'reopen',
+            label: t('stage_reopen', 'Reopen Stage'),
+            icon: <FaDoorOpen size={15} aria-hidden />,
+            disabled: lifecycleBusy,
+            onClick: handleReopenStage,
+          },
+        ];
+      }
+      return [
+        {
+          id: 'close',
+          label: t('stage_close', 'Close Stage'),
+          icon: <FaDoorClosed size={15} aria-hidden />,
+          danger: true,
+          disabled: lifecycleBusy,
+          onClick: handleCloseStage,
+        },
+      ];
+    }
+    if (!isBusiness) {
+      return [
+        {
+          id: 'leave',
+          label: t('leave_stage', 'Leave Stage'),
+          icon: <FaSignOutAlt size={15} aria-hidden />,
+          danger: true,
+          disabled: leaving,
+          onClick: handleLeave,
+        },
+      ];
+    }
+    return [];
+  })();
 
   const shellClass = [
     'chat-room-container',
@@ -159,9 +184,7 @@ export default function CommunityChatRoom() {
     [zoneThemeInlineStyle, guestFrameBackgroundStyle, chatThemeStyle]
   );
 
-  let shellContent;
-
-  const renderJoinGate = (title, description, action = null) => (
+  const renderJoinGate = (title, description) => (
     <div
       ref={containerRef}
       className={`${shellClass} community-chat-join-gate`}
@@ -177,22 +200,21 @@ export default function CommunityChatRoom() {
       >
         <FaTimes size={18} />
       </button>
-      <AppText as="h2" style={{ margin: '0 0 10px', fontSize: '1.15rem' }}>{title}</AppText>
+      <AppText as="h2" style={{ margin: '0 0 10px', fontSize: '1.15rem' }}>
+        {title}
+      </AppText>
       {description ? (
         <AppText as="p" style={{ margin: '0 0 16px', opacity: 0.85, maxWidth: '320px', lineHeight: 1.5 }}>
           {description}
         </AppText>
       ) : null}
-      {action}
-      <button
-        type="button"
-        onClick={closeChat}
-        className="community-chat-join-gate__back"
-      >
+      <button type="button" onClick={closeChat} className="community-chat-join-gate__back">
         {t('go_back', 'Go back')}
       </button>
     </div>
   );
+
+  let shellContent;
 
   if (room.loading && !canEnterChat) {
     shellContent = (
@@ -215,49 +237,26 @@ export default function CommunityChatRoom() {
         >
           <FaTimes size={18} />
         </button>
-        {t('inbox_loading', 'Loadingâ€¦')}
+        {t('inbox_loading', 'Loading…')}
       </div>
     );
   } else if (!canEnterChat) {
     if (room.isBlockedFromCommunity) {
       shellContent = renderJoinGate(
-        t('community_chat_unavailable', 'This community is not available'),
-        t('community_chat_blocked_hint', 'You cannot access this chat room right now.')
+        t('stage_chat_unavailable', 'This Stage is not available'),
+        t('stage_chat_blocked_hint', 'You cannot access this Stage right now.')
       );
     } else if (isBusiness) {
       shellContent = renderJoinGate(
-        t('community_chat_business_title', 'Business accounts'),
-        t('business_cannot_join_community', 'Business accounts cannot join other communities.')
-      );
-    } else if (joinStatus === 'failed') {
-      shellContent = renderJoinGate(
-        t('community_chat_join_retry_title', 'Could not open chat right now'),
-        t(
-          'community_chat_join_retry_hint',
-          'This is not a problem with your account. Tap try again â€” you can chat with other members once you are in.'
-        ),
-        <button
-          type="button"
-          onClick={() => setJoinStatus('idle')}
-          style={{
-            padding: '12px 20px',
-            borderRadius: '14px',
-            border: 'none',
-            background: 'var(--brand-primary)',
-            color: 'var(--text-on-brand)',
-            fontWeight: 800,
-            cursor: 'pointer',
-          }}
-        >
-          {t('try_again', 'Try again')}
-        </button>
+        t('stage_chat_business_title', 'Business accounts'),
+        t('stage_business_cannot_join', 'Business accounts cannot join Stage rooms.')
       );
     } else {
       shellContent = renderJoinGate(
-        t('community_chat_joining', 'Opening community chatâ€¦'),
+        t('stage_chat_invite_only', 'Invite only'),
         t(
-          'community_chat_joining_hint',
-          'Hang tight â€” you will be able to chat with other members in a moment.'
+          'stage_chat_invite_only_hint',
+          'You need a Stage invitation from the host to enter this room.'
         )
       );
     }
@@ -327,14 +326,29 @@ export default function CommunityChatRoom() {
                   width: '100%',
                 }}
               >
-                {room.partner?.display_name || t('community_chat', 'Community Chat')}
+                {room.partner?.display_name || t('stage_chat', 'Stage')}
               </AppText>
               <AppText
                 as="span"
                 className="header-subtitle"
                 style={{ fontSize: '12px', color: 'var(--text-muted)' }}
               >
-                {room.partner?.communityMembers?.length || 0} {t('members', 'members')}
+                {room.isStageClosed
+                  ? t('stage_status_closed', 'Closed')
+                  : (() => {
+                      const memberCount =
+                        room.partner?.communityMembers?.length ||
+                        room.participants?.length ||
+                        0;
+                      const onlineCount = Array.isArray(room.participants)
+                        ? room.participants.filter((p) => p?.isOnline).length
+                        : 0;
+                      return `${t('stage_members_count', '{{count}} members', {
+                        count: memberCount,
+                      })} · ${t('stage_online_members', '{{count}} online', {
+                        count: onlineCount,
+                      })}`;
+                    })()}
               </AppText>
             </div>
           </div>
@@ -351,6 +365,30 @@ export default function CommunityChatRoom() {
           </div>
         </header>
 
+        {room.isStageClosed ? (
+          <AppText
+            as="div"
+            style={{
+              padding: '8px 12px',
+              fontSize: '13px',
+              textAlign: 'center',
+              background: 'color-mix(in srgb, var(--brand-primary) 14%, transparent)',
+              color: 'var(--text-primary)',
+              flexShrink: 0,
+            }}
+          >
+            {room.isHost
+              ? t(
+                  'stage_closed_banner_host',
+                  'Stage is closed. Guests can read but not write. Tap Reopen to continue.'
+                )
+              : t(
+                  'stage_closed_banner_guest',
+                  'Stage is temporarily closed by the host. You can still read messages.'
+                )}
+          </AppText>
+        ) : null}
+
         {isDesktopShell ? (
           <CommunityFullChatView room={room} />
         ) : (
@@ -365,4 +403,3 @@ export default function CommunityChatRoom() {
   }
   return shellContent;
 }
-

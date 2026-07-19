@@ -298,6 +298,15 @@
             ]
         },
         {
+            "collectionGroup": "public_profiles",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "profileType", "order": "ASCENDING" },
+                { "fieldPath": "businessPublic.isPublished", "order": "ASCENDING" },
+                { "fieldPath": "search.displayNameLower", "order": "ASCENDING" }
+            ]
+        },
+        {
             "collectionGroup": "payout_requests",
             "queryScope": "COLLECTION",
             "fields": [

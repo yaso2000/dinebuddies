@@ -102,6 +102,44 @@ service cloud.firestore {
               isCommunityMember(partnerId));
     }
 
+    // Consumer Stage rooms (event chat; host picks mutual follows)
+    function stageDoc(stageId) {
+      return get(/databases/$(database)/documents/stages/$(stageId)).data;
+    }
+
+    function isStageMember(stageId) {
+      let stage = stageDoc(stageId);
+      let members = stage.get('memberIds', []);
+      let communityMembers = stage.get('communityMembers', []);
+      let blocked = stage.get('communityBlockedUserIds', []);
+      let me = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let joined = me.get('joinedStages', []);
+      return (request.auth.uid == stage.get('hostId', '') ||
+             request.auth.uid in members ||
+             request.auth.uid in communityMembers ||
+             stageId in joined) &&
+             !(request.auth.uid in blocked);
+    }
+
+    function isStageChatMuted(stageId) {
+      let muted = stageDoc(stageId).get('communityMutedUserIds', []);
+      return request.auth.uid in muted;
+    }
+
+    function canWriteStageChat(stageId) {
+      let stage = stageDoc(stageId);
+      return (isStageMember(stageId) || isAdmin()) &&
+             (request.auth.uid == stage.get('hostId', '') || !isStageChatMuted(stageId)) &&
+             stage.get('status', 'active') == 'active';
+    }
+
+    function canReadStageChat(stageId) {
+      return isAdmin() ||
+             (isSignedIn() &&
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              isStageMember(stageId));
+    }
+
     function isChatParticipant(chatId) {
       let chat = get(/databases/$(database)/documents/chats/$(chatId)).data;
       return request.auth.uid in chat.participants;
@@ -460,15 +498,33 @@ service cloud.firestore {
                        resource.data.author.id == request.auth.uid;
       
       // Users can add themselves to requests (JOIN REQUEST)
+      // Treat missing `requests` as [] so the first join does not fail rules evaluation.
       allow update: if isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) &&
-                       request.resource.data.requests.hasAll(resource.data.requests) &&
-                       request.resource.data.requests.hasOnly([request.auth.uid].concat(resource.data.requests));
+                       request.resource.data.requests is list &&
+                       request.resource.data.requests.hasAll(
+                         resource.data.keys().hasAny(['requests']) && resource.data.requests is list
+                           ? resource.data.requests
+                           : []
+                       ) &&
+                       request.resource.data.requests.hasOnly(
+                         [request.auth.uid].concat(
+                           resource.data.keys().hasAny(['requests']) && resource.data.requests is list
+                             ? resource.data.requests
+                             : []
+                         )
+                       );
       
       // Users can remove themselves from requests
       allow update: if isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) &&
-                       resource.data.requests.hasAll(request.resource.data.requests);
+                       resource.data.keys().hasAny(['requests']) &&
+                       resource.data.requests is list &&
+                       request.resource.data.requests is list &&
+                       resource.data.requests.hasAll(request.resource.data.requests) &&
+                       resource.data.requests.hasOnly(
+                         [request.auth.uid].concat(request.resource.data.requests)
+                       );
       
       allow update: if isAdminOrPanelStaff();
       
@@ -909,6 +965,52 @@ service cloud.firestore {
         allow delete: if isSignedIn() &&
                          (resource.data.senderId == request.auth.uid ||
                           isOwner(partnerId) ||
+                          isAdmin());
+      }
+    }
+
+    // ============================================
+    // STAGES COLLECTION (Consumer Stage event chat)
+    // Room create/update primarily via Admin SDK callables.
+    // ============================================
+    match /stages/{stageId} {
+      allow read: if canReadStageChat(stageId);
+
+      // Clients must not create rooms; membership/lifecycle via callables; host may edit theme/banner.
+      allow create: if false;
+      allow update: if isSignedIn() &&
+                       (isAdmin() ||
+                        (request.auth.uid == resource.data.hostId &&
+                         request.resource.data.hostId == resource.data.hostId &&
+                         request.resource.data.get('ownerId', resource.data.hostId) == resource.data.hostId &&
+                         !request.resource.data.diff(resource.data).affectedKeys()
+                           .hasAny(['memberIds', 'invitedIds', 'communityMembers', 'status', 'createdAt', 'kind', 'endedAt'])));
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if canReadStageChat(stageId);
+
+        allow create: if isSignedIn() &&
+                         request.resource.data.senderId == request.auth.uid &&
+                         canWriteStageChat(stageId);
+
+        allow update: if isSignedIn() &&
+                         resource.data.senderId == request.auth.uid &&
+                         canWriteStageChat(stageId);
+
+        allow update: if isSignedIn() &&
+                         canWriteStageChat(stageId) &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
+
+        allow update: if isSignedIn() &&
+                         (isStageMember(stageId) || isAdmin()) &&
+                         isReceiptFieldsOnlyUpdate();
+
+        allow update: if isAdmin();
+
+        allow delete: if isSignedIn() &&
+                         (resource.data.senderId == request.auth.uid ||
+                          request.auth.uid == get(/databases/$(database)/documents/stages/$(stageId)).data.hostId ||
                           isAdmin());
       }
     }

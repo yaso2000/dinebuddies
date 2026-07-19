@@ -58,6 +58,9 @@ const ChatList = lazy(() => import('./pages/ChatList'));
 const Chat = lazy(() => import('./pages/Chat'));
 const CommunityChatRoom = lazy(() => import('./pages/CommunityChatRoom'));
 const CommunityChatCastPage = lazy(() => import('./pages/CommunityChatCastPage'));
+const StageChatRoom = lazy(() => import('./pages/StageChatRoom'));
+const CreateStage = lazy(() => import('./pages/CreateStage'));
+const StagesHub = lazy(() => import('./pages/StagesHub'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const HomeInvitations = lazy(() => import('./pages/Home'));
 
@@ -107,6 +110,7 @@ import { ToastProvider } from './context/ToastContext';
 import GlobalImageUploadIndicator from './components/GlobalImageUploadIndicator';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
+import { ExternalLinkGuardProvider } from './context/ExternalLinkGuardContext';
 import { InvitationProvider } from './context/InvitationContext';
 import { MatchCelebrationProvider } from './context/MatchCelebrationContext';
 import { SocialPingCelebrationProvider } from './context/SocialPingCelebrationContext';
@@ -161,6 +165,7 @@ function App() {
                 <Router>
                     <LoginRouterBridge />
                     <AuthProvider>
+                        <ExternalLinkGuardProvider>
                         <AccountThemeBridge />
                         <InvitationProvider>
                             <MatchCelebrationProvider>
@@ -290,6 +295,8 @@ function App() {
                                                     <Route path="/create" element={<GuestBlockedRoute><CreateInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-social" element={<GuestBlockedRoute><CreateSocialInvitation /></GuestBlockedRoute>} />
                                                     <Route path="/create-private" element={<GuestBlockedRoute><CreatePrivateInvitation /></GuestBlockedRoute>} />
+                                                    <Route path="/create-stage" element={<GuestBlockedRoute><CreateStage /></GuestBlockedRoute>} />
+                                                    <Route path="/stages" element={<GuestBlockedRoute><StagesHub /></GuestBlockedRoute>} />
                                                     <Route path="/create-post" element={<GuestBlockedRoute><BusinessCreatePostGate /></GuestBlockedRoute>} />
                                                     <Route path="/create-featured-post" element={<GuestBlockedRoute><CreateFeaturedPost /></GuestBlockedRoute>} />
                                                     <Route path="/create-story" element={<GuestBlockedRoute><CreateStory /></GuestBlockedRoute>} />
@@ -329,6 +336,7 @@ function App() {
                                                     />
                                                     <Route path="/community/:partnerId/cast" element={<CommunityChatCastPage />} />
                                                     <Route path="/community/:partnerId" element={<GuestBlockedRoute><CommunityChatRoom /></GuestBlockedRoute>} />
+                                                    <Route path="/stage/:stageId" element={<GuestBlockedRoute><StageChatRoom /></GuestBlockedRoute>} />
                                                     <Route path="/posts-feed" element={<PostsFeed />} />
                                                     <Route path="/invitations" element={<HomeInvitations />} />
 
@@ -359,6 +367,7 @@ function App() {
                             </SocialPingCelebrationProvider>
                             </MatchCelebrationProvider>
                         </InvitationProvider>
+                        </ExternalLinkGuardProvider>
                     </AuthProvider>
                 </Router>
             </ToastProvider>

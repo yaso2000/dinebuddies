@@ -69,10 +69,11 @@ import { AI_IMAGE_GENERATION_CREDITS } from '../utils/aiCreditCosts';
 import { syncMessageReceiptDocs } from '../utils/chatMessageReceipts';
 
 /**
- * Real-time community chat room state (messages + single-slot banner + membership).
- * @param {string | undefined} partnerId — business community owner uid
+ * Real-time Stage event chat (consumer) — mirrors community chat against stages/{stageId}.
+ * @param {string | undefined} stageId
  */
-export function useCommunityChatRoom(partnerId) {
+export function useStageChatRoom(stageId) {
+    const partnerId = stageId; // room id (UI still uses partnerId)
     const { t } = useTranslation();
     const { currentUser, userProfile } = useAuth();
     const { currentUser: inviteCurrentUser } = useInvitations();
@@ -98,54 +99,38 @@ export function useCommunityChatRoom(partnerId) {
     const readReceiptTimeoutRef = useRef(null);
 
     const uid = auth.currentUser?.uid ?? currentUser?.uid;
-    const isHost = Boolean(partnerId && uid && uid === partnerId);
+    const hostId = partner?.hostId || partner?.ownerId || null;
+    const isHost = Boolean(hostId && uid && uid === hostId);
     const functions = getFunctions(app, 'us-central1');
-    const joinedCommunities =
-        inviteCurrentUser?.joinedCommunities ??
-        userProfile?.joinedCommunities ??
+    const joinedStages =
+        inviteCurrentUser?.joinedStages ??
+        userProfile?.joinedStages ??
         [];
 
     const isMember = useMemo(() => {
-        if (isDisplaySession) return true;
         if (!partnerId || !uid) return false;
         if (isBlockedFromCommunity) return false;
-        if (uid === partnerId) return true;
-        if (joinedCommunities.includes(partnerId)) return true;
-        const members = Array.isArray(partner?.communityMembers) ? partner.communityMembers : [];
+        if (hostId && uid === hostId) return true;
+        if (joinedStages.includes(partnerId)) return true;
+        const members = Array.isArray(partner?.communityMembers)
+            ? partner.communityMembers
+            : Array.isArray(partner?.memberIds)
+              ? partner.memberIds
+              : [];
         return members.includes(uid);
-    }, [partnerId, uid, isBlockedFromCommunity, joinedCommunities, partner?.communityMembers, isDisplaySession]);
+    }, [
+        partnerId,
+        uid,
+        isBlockedFromCommunity,
+        joinedStages,
+        partner?.communityMembers,
+        partner?.memberIds,
+        hostId,
+    ]);
 
     useEffect(() => {
-        if (!partnerId || !uid) {
-            setIsDisplaySession(false);
-            return undefined;
-        }
-
-        const firebaseUser = auth.currentUser;
-        if (!firebaseUser || firebaseUser.uid !== uid) {
-            setIsDisplaySession(false);
-            return undefined;
-        }
-
-        let cancelled = false;
-        void firebaseUser
-            .getIdTokenResult()
-            .then((result) => {
-                if (cancelled) return;
-                const claims = result?.claims || {};
-                setIsDisplaySession(
-                    claims.communityDisplay === true &&
-                        String(claims.communityDisplayPartnerId || '') === partnerId
-                );
-            })
-            .catch(() => {
-                if (!cancelled) setIsDisplaySession(false);
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [uid, partnerId]);
+        setIsDisplaySession(false);
+    }, []);
 
     const bannerDisplay = useMemo(
         () => resolveCommunityBannerDisplay(banner, partner),
@@ -183,91 +168,116 @@ export function useCommunityChatRoom(partnerId) {
 
     const bannerToggleDisabled = !isHost && hostBannerVisible === false;
 
-    // Partner profile + moderation (users/{partnerId}, fallback restaurants/{partnerId})
+    // Stage room doc + host profile (theme/membership on stage; display from host)
     useEffect(() => {
         if (!partnerId || !currentUser) {
             setLoading(false);
             return undefined;
         }
 
-        let cancelled = false;
-        let unsubPartner = () => {};
+        let unsubStage = () => {};
+        let unsubHost = () => {};
+        let stageData = null;
+        let hostProfile = null;
 
-        const applyPartnerModeration = (partnerData) => {
-            if (!partnerData) return;
-            setPartner(partnerData);
+        const publish = () => {
+            if (!stageData) {
+                setPartner(null);
+                return;
+            }
+            const stageHostId = stageData.hostId || stageData.ownerId || null;
+            const merged = {
+                ...(hostProfile || {}),
+                ...stageData,
+                hostId: stageHostId,
+                ownerId: stageHostId,
+                id: partnerId,
+                display_name:
+                    stageData.title ||
+                    hostProfile?.display_name ||
+                    hostProfile?.displayName ||
+                    hostProfile?.name ||
+                    'Stage',
+                communityMembers: Array.isArray(stageData.memberIds)
+                    ? stageData.memberIds
+                    : Array.isArray(stageData.communityMembers)
+                      ? stageData.communityMembers
+                      : [],
+            };
+            setPartner(merged);
 
-            const mutedIds = Array.isArray(partnerData.communityMutedUserIds)
-                ? partnerData.communityMutedUserIds
+            const mutedIds = Array.isArray(merged.communityMutedUserIds)
+                ? merged.communityMutedUserIds
                 : [];
-            const blockedIds = Array.isArray(partnerData.communityBlockedUserIds)
-                ? partnerData.communityBlockedUserIds
+            const blockedIds = Array.isArray(merged.communityBlockedUserIds)
+                ? merged.communityBlockedUserIds
                 : [];
+            const viewerIsHost = Boolean(stageHostId && uid === stageHostId);
 
-            if (uid !== partnerId && blockedIds.includes(uid)) {
+            if (!viewerIsHost && blockedIds.includes(uid)) {
                 setIsBlockedFromCommunity(true);
                 setIsMutedInChat(false);
                 return;
             }
 
             setIsBlockedFromCommunity(false);
-            setIsMutedInChat(uid !== partnerId && mutedIds.includes(uid));
+            setIsMutedInChat(!viewerIsHost && mutedIds.includes(uid));
         };
 
         setLoading(true);
-
-        void (async () => {
-            try {
-                const userRef = doc(db, 'users', partnerId);
-                const restaurantRef = doc(db, 'restaurants', partnerId);
-                const [userSnap, restaurantSnap] = await Promise.all([
-                    getDoc(userRef),
-                    getDoc(restaurantRef),
-                ]);
-                if (cancelled) return;
-
-                const partnerRef = userSnap.exists()
-                    ? userRef
-                    : restaurantSnap.exists()
-                      ? restaurantRef
-                      : null;
-
-                if (!partnerRef) {
+        unsubStage = onSnapshot(
+            doc(db, 'stages', partnerId),
+            (snap) => {
+                if (!snap.exists()) {
+                    stageData = null;
                     setPartner(null);
                     setLoading(false);
                     return;
                 }
+                stageData = snap.data() || {};
+                const stageHostId = stageData.hostId || stageData.ownerId;
+                publish();
+                setLoading(false);
 
-                if (userSnap.exists()) {
-                    applyPartnerModeration(userSnap.data());
-                } else if (restaurantSnap.exists()) {
-                    applyPartnerModeration(restaurantSnap.data());
+                if (!stageHostId) return;
+                try {
+                    unsubHost();
+                } catch {
+                    /* ignore */
                 }
-
-                unsubPartner = onSnapshot(
-                    partnerRef,
-                    (snap) => {
-                        if (snap.exists()) applyPartnerModeration(snap.data());
-                        setLoading(false);
+                unsubHost = onSnapshot(
+                    doc(db, 'users', stageHostId),
+                    (hostSnap) => {
+                        hostProfile = hostSnap.exists() ? hostSnap.data() : null;
+                        publish();
                     },
-                    (err) => {
-                        console.error('[useCommunityChatRoom] partner snapshot', err);
-                        setLoading(false);
+                    () => {
+                        hostProfile = null;
+                        publish();
                     }
                 );
-            } catch (err) {
-                console.error('[useCommunityChatRoom] partner resolve', err);
-                if (!cancelled) setLoading(false);
+            },
+            (err) => {
+                console.error('[useStageChatRoom] stage snapshot', err);
+                setLoading(false);
             }
-        })();
+        );
 
         return () => {
-            cancelled = true;
-            unsubPartner();
+            try {
+                unsubStage();
+            } catch {
+                /* ignore */
+            }
+            try {
+                unsubHost();
+            } catch {
+                /* ignore */
+            }
         };
     }, [partnerId, currentUser, uid]);
 
-    // Single-slot banner on communities/{partnerId}
+    // Single-slot banner on stages/{stageId}
     useEffect(() => {
         if (!partnerId || !isMember) {
             setBanner(normalizeCommunityBanner(null));
@@ -275,12 +285,12 @@ export function useCommunityChatRoom(partnerId) {
         }
 
         const unsub = onSnapshot(
-            doc(db, 'communities', partnerId),
+            doc(db, 'stages', partnerId),
             (snap) => {
                 setBanner(normalizeCommunityBanner(snap.exists() ? snap.data() : null));
             },
             (err) => {
-                console.error('[useCommunityChatRoom] banner snapshot', err);
+                console.error('[useStageChatRoom] banner snapshot', err);
                 setBanner(normalizeCommunityBanner(null));
             }
         );
@@ -309,7 +319,7 @@ export function useCommunityChatRoom(partnerId) {
         const subscribe = () => {
             if (cancelled) return;
             const q = query(
-                collection(db, 'communities', partnerId, 'messages'),
+                collection(db, 'stages', partnerId, 'messages'),
                 orderBy('createdAt', 'asc')
             );
 
@@ -329,7 +339,7 @@ export function useCommunityChatRoom(partnerId) {
                     }
                 },
                 (err) => {
-                    console.error('[useCommunityChatRoom] messages snapshot', err);
+                    console.error('[useStageChatRoom] messages snapshot', err);
                     try {
                         unsub?.();
                     } catch {
@@ -400,7 +410,8 @@ export function useCommunityChatRoom(partnerId) {
         }
 
         const memberIds = Array.isArray(partner?.communityMembers) ? partner.communityMembers : [];
-        const uniqueIds = [...new Set([partnerId, ...memberIds.filter(Boolean)])];
+        const stageHostId = partner?.hostId || partner?.ownerId || null;
+        const uniqueIds = [...new Set([stageHostId, ...memberIds.filter(Boolean)].filter(Boolean))];
 
         if (uniqueIds.length === 0) {
             setParticipants([]);
@@ -439,7 +450,7 @@ export function useCommunityChatRoom(partnerId) {
                             avatar: getSafeAvatar(data),
                             photoURL: data.photo_url || data.photoURL,
                             isOnline: Boolean(data.isOnline),
-                            isHost: memberId === partnerId,
+                            isHost: Boolean(stageHostId && memberId === stageHostId),
                         });
                     }
                     publish();
@@ -459,7 +470,7 @@ export function useCommunityChatRoom(partnerId) {
         if (!isMember || !partnerId || !uid) return undefined;
 
         void updateDoc(doc(db, 'users', uid), {
-            [`communityLastRead.${partnerId}`]: serverTimestamp(),
+            [`stageLastRead.${partnerId}`]: serverTimestamp(),
         }).catch(() => {});
 
         return undefined;
@@ -468,8 +479,10 @@ export function useCommunityChatRoom(partnerId) {
     /** Unpin all host messages (banner edits no longer delete chat history). */
     const unpinAllHostMessages = useCallback(async () => {
         if (!partnerId) return;
-        const messagesRef = collection(db, 'communities', partnerId, 'messages');
-        const hostQuery = query(messagesRef, where('senderId', '==', partnerId));
+        const messagesRef = collection(db, 'stages', partnerId, 'messages');
+        const stageHostId = partner?.hostId || partner?.ownerId;
+        if (!stageHostId) return;
+        const hostQuery = query(messagesRef, where('senderId', '==', stageHostId));
         const snap = await getDocs(hostQuery);
         if (snap.empty) return;
         const batch = writeBatch(db);
@@ -489,7 +502,7 @@ export function useCommunityChatRoom(partnerId) {
             const payload = {
                 ...fields,
                 banner_updated_at: serverTimestamp(),
-                ownerId: partnerId,
+                ownerId: hostId || partnerId,
             };
             if (Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_id')) {
                 const ytId = String(fields.banner_youtube_id || '').trim();
@@ -499,7 +512,7 @@ export function useCommunityChatRoom(partnerId) {
                     payload.banner_youtube_sync_at = null;
                 }
             }
-            await setDoc(doc(db, 'communities', partnerId), payload, { merge: true });
+            await setDoc(doc(db, 'stages', partnerId), payload, { merge: true });
         },
         [isHost, partnerId]
     );
@@ -508,15 +521,15 @@ export function useCommunityChatRoom(partnerId) {
         if (!isHost || !partnerId || !banner.youtubeId) return;
         try {
             await setDoc(
-                doc(db, 'communities', partnerId),
+                doc(db, 'stages', partnerId),
                 {
                     banner_youtube_sync_at: serverTimestamp(),
-                    ownerId: partnerId,
+                    ownerId: hostId || partnerId,
                 },
                 { merge: true }
             );
         } catch (err) {
-            console.error('[useCommunityChatRoom] youtube sync', err);
+            console.error('[useStageChatRoom] youtube sync', err);
         }
     }, [isHost, partnerId, banner.youtubeId]);
 
@@ -529,7 +542,7 @@ export function useCommunityChatRoom(partnerId) {
                 const url = await uploadImage(file, uid);
                 await replaceBanner(buildBannerImageUpdate(url));
             } catch (err) {
-                console.error('[useCommunityChatRoom] banner image', err);
+                console.error('[useStageChatRoom] banner image', err);
                 notifyImageUploadError(showToast, err, t);
             } finally {
                 setUploadingBanner(false);
@@ -545,7 +558,7 @@ export function useCommunityChatRoom(partnerId) {
             await replaceBanner(buildBannerClearImageUpdate());
             return true;
         } catch (err) {
-            console.error('[useCommunityChatRoom] clear banner image', err);
+            console.error('[useStageChatRoom] clear banner image', err);
             showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
             return false;
         }
@@ -562,7 +575,7 @@ export function useCommunityChatRoom(partnerId) {
                 await replaceBanner(buildBannerYoutubeUpdate(id, { isShort }));
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] banner youtube', err);
+                console.error('[useStageChatRoom] banner youtube', err);
                 showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
                 return false;
             }
@@ -584,7 +597,7 @@ export function useCommunityChatRoom(partnerId) {
                 await replaceBanner(buildBannerUpdate(merged));
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] banner update', err);
+                console.error('[useStageChatRoom] banner update', err);
                 showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
                 return false;
             }
@@ -613,9 +626,23 @@ export function useCommunityChatRoom(partnerId) {
         }
     }, []);
 
+    const stageStatus = partner?.status || 'active';
+    const isStageClosed = stageStatus === 'closed';
+
     const postChatMessage = useCallback(
         async ({ text, type = 'text', replyTo = null }) => {
             if (!partnerId || !uid) return false;
+
+            if (isStageClosed || stageStatus !== 'active') {
+                showToast(
+                    t(
+                        'stage_closed_cannot_write',
+                        'This Stage is closed. The host can reopen it within 24 hours.'
+                    ),
+                    'error'
+                );
+                return false;
+            }
 
             if (isMutedInChat) {
                 showToast(
@@ -626,9 +653,9 @@ export function useCommunityChatRoom(partnerId) {
             }
 
             try {
-                const messagesRef = collection(db, 'communities', partnerId, 'messages');
+                const messagesRef = collection(db, 'stages', partnerId, 'messages');
                 const spotlightDefault =
-                    uid === partnerId
+                    uid === hostId
                         ? resolveNewHostSpotlightPosition({
                               hasTitle: Boolean(banner?.title),
                           })
@@ -669,30 +696,30 @@ export function useCommunityChatRoom(partnerId) {
                     return [...prev, localMessage];
                 });
 
-                if (uid === partnerId && banner?.hostSpotlightAuto) {
+                if (uid === hostId && banner?.hostSpotlightAuto) {
                     await setDoc(
-                        doc(db, 'communities', partnerId),
-                        { host_spotlight_dismissed: false, ownerId: partnerId },
+                        doc(db, 'stages', partnerId),
+                        { host_spotlight_dismissed: false, ownerId: hostId || partnerId },
                         { merge: true }
                     );
                 }
 
-                if (uid !== partnerId) {
+                if (uid !== hostId && hostId) {
                     void createNotification({
-                        userId: partnerId,
+                        userId: hostId,
                         type: 'message',
-                        title: userProfile?.display_name || 'New message in your community',
+                        title: userProfile?.display_name || 'New message in your Stage',
                         message:
                             type === 'image'
                                 ? t('community_chat_image_notification', 'Sent a photo')
                                 : String(text).slice(0, 80),
-                        actionUrl: `/community/${partnerId}`,
+                        actionUrl: `/stage/${partnerId}`,
                     });
                 }
 
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] postChatMessage', err);
+                console.error('[useStageChatRoom] postChatMessage', err);
                 showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
                 return false;
             }
@@ -701,11 +728,14 @@ export function useCommunityChatRoom(partnerId) {
             partnerId,
             uid,
             isMutedInChat,
+            isStageClosed,
+            stageStatus,
             userProfile,
             currentUser,
             showToast,
             t,
             banner,
+            hostId,
         ]
     );
 
@@ -742,7 +772,7 @@ export function useCommunityChatRoom(partnerId) {
                 }
                 return await postChatMessage({ text: url, type: 'image', replyTo });
             } catch (err) {
-                console.error('[useCommunityChatRoom] sendImageMessage', err);
+                console.error('[useStageChatRoom] sendImageMessage', err);
                 notifyImageUploadError(showToast, err, t);
                 return false;
             } finally {
@@ -760,13 +790,13 @@ export function useCommunityChatRoom(partnerId) {
             if (!canDelete) return false;
 
             try {
-                await deleteDoc(doc(db, 'communities', partnerId, 'messages', message.id));
+                await deleteDoc(doc(db, 'stages', partnerId, 'messages', message.id));
                 if (pendingReplyTo?.id === message.id) {
                     setPendingReplyTo(null);
                 }
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] deleteChatMessage', err);
+                console.error('[useStageChatRoom] deleteChatMessage', err);
                 showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
                 return false;
             }
@@ -788,28 +818,32 @@ export function useCommunityChatRoom(partnerId) {
 
     const muteMemberInChat = useCallback(
         async (memberId) => {
-            if (!isHost || !partnerId || !memberId || memberId === partnerId) return false;
+            if (!isHost || !partnerId || !memberId || memberId === hostId) return false;
 
-            const confirmMute = window.confirm(
+            const confirmRemove = window.confirm(
                 t(
-                    'mute_member_confirm',
-                    'Mute this member? They can read the chat but cannot write or react.'
+                    'stage_remove_member_confirm',
+                    'Remove this member from the Stage? They will lose access to the chat.'
                 )
             );
-            if (!confirmMute) return false;
+            if (!confirmRemove) return false;
 
             try {
-                const setCommunityMembership = httpsCallable(functions, 'setCommunityMembership');
-                await setCommunityMembership({ partnerId, action: 'muteMember', memberId });
-                showToast(t('member_muted_success', 'Member muted in group chat'), 'success');
+                const setStageMembership = httpsCallable(functions, 'setStageMembership');
+                await setStageMembership({
+                    stageId: partnerId,
+                    action: 'remove_member',
+                    targetUid: memberId,
+                });
+                showToast(t('stage_member_removed', 'Member removed from Stage'), 'success');
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] muteMemberInChat', err);
+                console.error('[useStageChatRoom] muteMemberInChat', err);
                 showToast(t('member_mute_error', 'Failed to update mute status'), 'error');
                 return false;
             }
         },
-        [isHost, partnerId, functions, showToast, t]
+        [isHost, partnerId, hostId, functions, showToast, t]
     );
 
     const deleteHostSpotlightMessage = useCallback(
@@ -817,10 +851,10 @@ export function useCommunityChatRoom(partnerId) {
             if (!isHost || !partnerId || !messageId) return false;
 
             try {
-                await deleteDoc(doc(db, 'communities', partnerId, 'messages', messageId));
+                await deleteDoc(doc(db, 'stages', partnerId, 'messages', messageId));
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] deleteHostSpotlightMessage', err);
+                console.error('[useStageChatRoom] deleteHostSpotlightMessage', err);
                 showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
                 return false;
             }
@@ -832,37 +866,37 @@ export function useCommunityChatRoom(partnerId) {
         async (messageId) => {
             if (!isHost || !partnerId || !messageId) return false;
             try {
-                const hostMessages = messages.filter((m) => m.senderId === partnerId);
+                const hostMessages = messages.filter((m) => m.senderId === hostId);
                 const target = hostMessages.find((m) => m.id === messageId);
                 if (!target) return false;
 
                 const batch = writeBatch(db);
                 hostMessages.forEach((m) => {
-                    batch.update(doc(db, 'communities', partnerId, 'messages', m.id), {
+                    batch.update(doc(db, 'stages', partnerId, 'messages', m.id), {
                         pinned: m.id === messageId,
                     });
                 });
                 await batch.commit();
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] pinHostMessage', err);
+                console.error('[useStageChatRoom] pinHostMessage', err);
                 showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
                 return false;
             }
         },
-        [isHost, messages, partnerId, showToast, t]
+        [isHost, messages, partnerId, hostId, showToast, t]
     );
 
     const unpinHostMessage = useCallback(
         async (messageId) => {
             if (!isHost || !partnerId || !messageId) return false;
             try {
-                await updateDoc(doc(db, 'communities', partnerId, 'messages', messageId), {
+                await updateDoc(doc(db, 'stages', partnerId, 'messages', messageId), {
                     pinned: false,
                 });
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] unpinHostMessage', err);
+                console.error('[useStageChatRoom] unpinHostMessage', err);
                 return false;
             }
         },
@@ -873,30 +907,30 @@ export function useCommunityChatRoom(partnerId) {
         async (messageId) => {
             if (!isHost || !partnerId || !messageId) return false;
             try {
-                const hostMessages = messages.filter((m) => m.senderId === partnerId);
+                const hostMessages = messages.filter((m) => m.senderId === hostId);
                 const target = hostMessages.find((m) => m.id === messageId);
                 if (!target) return false;
 
                 const batch = writeBatch(db);
                 hostMessages.forEach((m) => {
-                    batch.update(doc(db, 'communities', partnerId, 'messages', m.id), {
+                    batch.update(doc(db, 'stages', partnerId, 'messages', m.id), {
                         bannerSpotlight: m.id === messageId,
                     });
                 });
                 await batch.commit();
                 await setDoc(
-                    doc(db, 'communities', partnerId),
-                    { host_spotlight_dismissed: false, ownerId: partnerId },
+                    doc(db, 'stages', partnerId),
+                    { host_spotlight_dismissed: false, ownerId: hostId || partnerId },
                     { merge: true }
                 );
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] showMessageOnBanner', err);
+                console.error('[useStageChatRoom] showMessageOnBanner', err);
                 showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
                 return false;
             }
         },
-        [isHost, messages, partnerId, showToast, t]
+        [isHost, messages, partnerId, hostId, showToast, t]
     );
 
     const hideMessageFromBanner = useCallback(
@@ -904,18 +938,18 @@ export function useCommunityChatRoom(partnerId) {
             if (!isHost || !partnerId) return false;
             try {
                 if (messageId) {
-                    await updateDoc(doc(db, 'communities', partnerId, 'messages', messageId), {
+                    await updateDoc(doc(db, 'stages', partnerId, 'messages', messageId), {
                         bannerSpotlight: false,
                     });
                 }
                 await setDoc(
-                    doc(db, 'communities', partnerId),
-                    { host_spotlight_dismissed: true, ownerId: partnerId },
+                    doc(db, 'stages', partnerId),
+                    { host_spotlight_dismissed: true, ownerId: hostId || partnerId },
                     { merge: true }
                 );
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] hideMessageFromBanner', err);
+                console.error('[useStageChatRoom] hideMessageFromBanner', err);
                 return false;
             }
         },
@@ -927,13 +961,13 @@ export function useCommunityChatRoom(partnerId) {
             if (!isHost || !partnerId || !messageId) return false;
 
             try {
-                await updateDoc(doc(db, 'communities', partnerId, 'messages', messageId), {
+                await updateDoc(doc(db, 'stages', partnerId, 'messages', messageId), {
                     spotlightX: sanitizeBannerAxis(x),
                     spotlightY: sanitizeBannerAxis(y),
                 });
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] updateHostSpotlightPosition', err);
+                console.error('[useStageChatRoom] updateHostSpotlightPosition', err);
                 return false;
             }
         },
@@ -946,17 +980,17 @@ export function useCommunityChatRoom(partnerId) {
             const next = Boolean(enabled);
             try {
                 await setDoc(
-                    doc(db, 'communities', partnerId),
+                    doc(db, 'stages', partnerId),
                     {
                         host_spotlight_auto: next,
                         host_spotlight_dismissed: !next,
-                        ownerId: partnerId,
+                        ownerId: hostId || partnerId,
                     },
                     { merge: true }
                 );
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] setHostSpotlightAuto', err);
+                console.error('[useStageChatRoom] setHostSpotlightAuto', err);
                 showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
                 return false;
             }
@@ -971,7 +1005,7 @@ export function useCommunityChatRoom(partnerId) {
             try {
                 return await uploadImage(file, uid);
             } catch (err) {
-                console.error('[useCommunityChatRoom] uploadCommunityChatGuestFrameBackgroundFile', err);
+                console.error('[useStageChatRoom] uploadCommunityChatGuestFrameBackgroundFile', err);
                 notifyImageUploadError(showToast, err, t);
                 return null;
             } finally {
@@ -1023,7 +1057,7 @@ export function useCommunityChatRoom(partnerId) {
                 }
                 return imageUrl;
             } catch (err) {
-                console.error('[useCommunityChatRoom] generateCommunityChatGuestFrameBackgroundImage', err);
+                console.error('[useStageChatRoom] generateCommunityChatGuestFrameBackgroundImage', err);
                 showToast(t('ai_generate_failed'), 'error');
                 return null;
             } finally {
@@ -1093,14 +1127,14 @@ export function useCommunityChatRoom(partnerId) {
 
             setZoneThemeSaving(true);
             try {
-                await updateDoc(doc(db, 'users', partnerId), update);
+                await updateDoc(doc(db, 'stages', partnerId), update);
                 showToast(
                     t('community_chat_zone_theme_saved', 'Chat colors updated.'),
                     'success'
                 );
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] saveCommunityChatZoneThemeSettings', err);
+                console.error('[useStageChatRoom] saveCommunityChatZoneThemeSettings', err);
                 showToast(t('failed_save', 'Could not save. Please try again.'), 'error');
                 return false;
             } finally {
@@ -1133,7 +1167,7 @@ export function useCommunityChatRoom(partnerId) {
 
             setBannerVisibleSaving(true);
             try {
-                await updateDoc(doc(db, 'users', partnerId), {
+                await updateDoc(doc(db, 'stages', partnerId), {
                     communityChatBannerVisible: next,
                 });
                 showToast(
@@ -1144,7 +1178,7 @@ export function useCommunityChatRoom(partnerId) {
                 );
                 return true;
             } catch (err) {
-                console.error('[useCommunityChatRoom] setCommunityChatBannerVisible', err);
+                console.error('[useStageChatRoom] setCommunityChatBannerVisible', err);
                 showToast(t('failed_save', 'Could not save. Please try again.'), 'error');
                 return false;
             } finally {
@@ -1160,7 +1194,9 @@ export function useCommunityChatRoom(partnerId) {
         isBlockedFromCommunity,
         isHost,
         isDisplaySession,
-        isMutedInChat,
+        isMutedInChat: isMutedInChat || isStageClosed,
+        stageStatus,
+        isStageClosed,
         partner,
         messages,
         banner,
