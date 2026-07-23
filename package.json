@@ -15,7 +15,10 @@
     "preview": "vite preview",
     "preview:live": "npx --yes serve dist -p 4173",
     "wipe-firebase-user-data": "node scripts/wipe-firebase-user-data.mjs",
-    "wipe-firebase-user-data:execute": "node scripts/wipe-firebase-user-data.mjs --execute"
+    "wipe-firebase-user-data:execute": "node scripts/wipe-firebase-user-data.mjs --execute",
+    "test:payment-security": "node scripts/test-payment-plans.mjs",
+    "test:user-security": "npx -y firebase-tools@latest emulators:exec --only firestore \"node scripts/test-firestore-user-security.mjs\"",
+    "test:critical-security": "npm run test:payment-security && npm run test:user-security"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -49,6 +52,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",
