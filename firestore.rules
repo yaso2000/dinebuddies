@@ -16,22 +16,80 @@ service cloud.firestore {
     
     function isAdmin() {
       return isSignedIn() &&
-             (request.auth.token.admin == true ||
-              request.auth.token.role == 'admin' ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+             (request.auth.token.get('admin', false) == true ||
+              request.auth.token.get('role', '') == 'admin');
     }
 
     // Super owner check via Custom Claims only (no hardcoded emails or UIDs).
     // Grant via: admin.auth().setCustomUserClaims(uid, { superOwner: true })
     function isSuperOwner() {
-      return isSignedIn() && request.auth.token.superOwner == true;
+      return isSignedIn() && request.auth.token.get('superOwner', false) == true;
+    }
+
+    function serverManagedUserFields() {
+      return [
+        'admin', 'adminGrantedAt', 'adminGrantedBy', 'adminNotes',
+        'aiCredits', 'aiCreditsUsed', 'banReason', 'banned', 'bannedAt',
+        'billingStatus', 'communityMembers', 'currentPlan', 'freeCredits',
+        'isVerified', 'joinedCommunities', 'lastCreditGrantedAt',
+        'lastPrivateResetMonth', 'moderation', 'moderationStatus',
+        'offerCredits', 'offerSlotCredits', 'paidCredits', 'permissions',
+        'purchasedPrivateCredits', 'reputation', 'stripeCustomerId',
+        'stripeSubscriptionId', 'subscription', 'subscriptionEndDate',
+        'subscriptionId', 'subscriptionPlan', 'subscriptionStartDate',
+        'subscriptionStatus', 'subscriptionTier', 'superOwner',
+        'totalCreditsPurchased', 'totalCreditsSpent',
+        'usedPrivateCreditsThisMonth', 'usedPrivateCreditsThisWeek',
+        'weeklyPrivateQuota'
+      ];
+    }
+
+    function serverManagedBusinessInfoFields() {
+      return ['adminNotes', 'customLimits', 'customLimitsExpiry', 'lastAdminUpdate'];
+    }
+
+    function hasValidAuthIdentityFields() {
+      return (!request.resource.data.keys().hasAny(['emailVerified']) ||
+                request.resource.data.emailVerified == request.auth.token.get('email_verified', false)) &&
+             (!request.resource.data.keys().hasAny(['authEmail']) ||
+                request.resource.data.authEmail == request.auth.token.get('email', null));
+    }
+
+    function hasNoServerManagedUserFields() {
+      return !request.resource.data.keys().hasAny(serverManagedUserFields()) &&
+             !request.resource.data.get('businessInfo', {}).keys().hasAny(serverManagedBusinessInfoFields());
+    }
+
+    function changesNoServerManagedUserFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverManagedUserFields()) &&
+             !request.resource.data.get('businessInfo', {})
+               .diff(resource.data.get('businessInfo', {}))
+               .affectedKeys()
+               .hasAny(serverManagedBusinessInfoFields());
+    }
+
+    function hasSafeInitialUserRole() {
+      return request.resource.data.get('role', 'user') in ['user', 'business', 'partner', 'guest'] &&
+             request.resource.data.get('accountType', 'user') in ['user', 'business', 'partner'];
+    }
+
+    function isSafeOwnerUserCreate(userId) {
+      return isOwner(userId) &&
+             hasSafeInitialUserRole() &&
+             hasNoServerManagedUserFields() &&
+             hasValidAuthIdentityFields();
+    }
+
+    function isSafeOwnerUserUpdate() {
+      return changesNoServerManagedUserFields() &&
+             hasValidAuthIdentityFields();
     }
 
     // Business accounts (role 'business'); legacy 'partner' kept for backward compatibility
     function isPartner() {
       return isSignedIn() &&
-             (request.auth.token.partner == true ||
-              request.auth.token.role == 'business' ||
+             (request.auth.token.get('partner', false) == true ||
+              request.auth.token.get('role', '') == 'business' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'business' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner');
     }
@@ -112,24 +170,27 @@ service cloud.firestore {
       // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSafeOwnerUserCreate(userId);
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
       // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user';
+                       request.resource.data.role == 'user' &&
+                       isSafeOwnerUserUpdate();
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
-                       request.resource.data.keys().hasAny(['businessInfo']);
+                       request.resource.data.keys().hasAny(['businessInfo']) &&
+                       isSafeOwnerUserUpdate();
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
+      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent() && isSafeOwnerUserUpdate();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
+      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile() && isSafeOwnerUserUpdate();
       allow update: if isOwner(userId) && 
+                       isSafeOwnerUserUpdate() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'accountType']);
       allow update: if isAdmin();
