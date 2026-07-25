@@ -8,6 +8,11 @@
  * @returns {{ lat: number, lng: number } | null}
  */
 export function parseInvitationCoordinates(lat, lng) {
+    // Reject null/undefined/empty before Number() — Number(null) === 0.
+    if (lat == null || lng == null || lat === '' || lng === '') {
+        return null;
+    }
+
     const parsedLat = typeof lat === 'number' ? lat : Number(lat);
     const parsedLng = typeof lng === 'number' ? lng : Number(lng);
 
