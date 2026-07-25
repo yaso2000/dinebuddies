@@ -21,6 +21,7 @@ import { db } from '../firebase/config';
 import { callSuggestInvitationMessages } from '../utils/callSuggestInvitationMessages';
 import { detectUserLocationContext } from '../utils/locationUtils';
 import { COLOR_SCHEMES, TEMPLATE_STYLES, LEGACY_PUBLIC_TEMPLATE_MAP, TEMPLATE_PICKER_KEYS } from '../utils/invitationTemplates';
+import { parseInvitationCoordinates } from '../utils/invitationCoordinates';
 import InvitationTemplateSwatch from '../components/InvitationTemplateSwatch';
 import {
     defaultSmartBioOptions,
@@ -493,7 +494,16 @@ const CreateInvitation = () => {
             return;
         }
 
-
+        if (!parseInvitationCoordinates(formData.lat, formData.lng)) {
+            console.log('❌ Venue coordinates validation failed');
+            showToast(
+                t('please_select_venue_on_map', {
+                    defaultValue: 'Please select a venue from search so we can save its map location.',
+                }),
+                'error'
+            );
+            return;
+        }
 
         // Validate Gender Groups (Must have at least one)
         if (!formData.genderGroups || formData.genderGroups.length === 0) {
@@ -695,7 +705,15 @@ const CreateInvitation = () => {
             return;
         }
 
-
+        if (!parseInvitationCoordinates(formData.lat, formData.lng)) {
+            showToast(
+                t('please_select_venue_on_map', {
+                    defaultValue: 'Please select a venue from search so we can save its map location.',
+                }),
+                'error'
+            );
+            return;
+        }
 
         // Check for cancellation restrictions
         if (restrictionInfo && !restrictionInfo.canCreate) {
