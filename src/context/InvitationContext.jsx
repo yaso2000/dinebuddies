@@ -35,6 +35,7 @@ import { fetchIpLocation } from '../utils/locationUtils';
 import { deleteInvitationAndStorage } from '../utils/storageCleanup';
 import { incrementBusinessInvitationCount } from '../services/businessLikeService';
 import { filterInviteesWhoAcceptAuthor, asUidArray } from '../utils/userSocialLists';
+import { parseInvitationCoordinates } from '../utils/invitationCoordinates';
 
 const InvitationContext = createContext(null);
 
@@ -552,6 +553,11 @@ export const InvitationProvider = ({ children }) => {
         }
         try {
             if (!newInvite.title) return false;
+            const coords = parseInvitationCoordinates(newInvite.lat, newInvite.lng);
+            if (!coords) {
+                showToast('Please select a venue with a valid map location.', 'error');
+                return false;
+            }
             const inviteData = {
                 ...newInvite,
                 hostId: currentUser.id,
@@ -564,8 +570,8 @@ export const InvitationProvider = ({ children }) => {
                 requests: [], joined: [], chat: [], meetingStatus: 'planning',
                 date: newInvite.date || new Date().toISOString(),
                 time: newInvite.time || '20:30',
-                lat: newInvite.lat || (-33.8688 + (Math.random() - 0.5) * 0.1),
-                lng: newInvite.lng || (151.2093 + (Math.random() - 0.5) * 0.1),
+                lat: coords.lat,
+                lng: coords.lng,
                 privacy: newInvite.privacy || 'public',
                 createdAt: serverTimestamp()
             };
