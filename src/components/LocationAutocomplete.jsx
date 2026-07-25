@@ -322,7 +322,7 @@ const LocationAutocomplete = ({
                     fullAddress: data.address || place.full_description || place.address || '',
                     lat: data.lat,
                     lng: data.lng,
-                    placeId: data.placeId || place.placeId
+                    placeId: data.placeId || place.placeId,
                     types: [],
                     addressComponents: data.addressComponents || [],
                     photos: [],
