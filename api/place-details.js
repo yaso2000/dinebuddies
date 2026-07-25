@@ -54,7 +54,7 @@ export default async function handler(req, res) {
     if (!placeId || !key || !sessionToken) {
         return res.status(400).json({ error: 'Missing placeId/sessionToken/API key' });
     }
-    const fields = 'id,displayName,formattedAddress,addressComponents';
+    const fields = 'id,displayName,formattedAddress,addressComponents,location';
     try {
         const params = new URLSearchParams({
             sessionToken: String(sessionToken).slice(0, 36),
@@ -82,8 +82,8 @@ export default async function handler(req, res) {
             city,
             country,
             countryCode: countryCode || 'AU',
-            lat: null,
-            lng: null,
+            lat: Number.isFinite(place.location?.latitude) ? place.location.latitude : null,
+            lng: Number.isFinite(place.location?.longitude) ? place.location.longitude : null,
             placeId: place.id || placeId,
             phone: '',
             website: '',

@@ -320,9 +320,9 @@ const LocationAutocomplete = ({
                 onSelect({
                     name: data.businessName || place.name || '',
                     fullAddress: data.address || place.full_description || place.address || '',
-                    lat: null,
-                    lng: null,
-                    placeId: data.placeId || place.placeId,
+                    lat: data.lat,
+                    lng: data.lng,
+                    placeId: data.placeId || place.placeId
                     types: [],
                     addressComponents: data.addressComponents || [],
                     photos: [],
