@@ -15,7 +15,8 @@
     "preview": "vite preview",
     "preview:live": "npx --yes serve dist -p 4173",
     "wipe-firebase-user-data": "node scripts/wipe-firebase-user-data.mjs",
-    "wipe-firebase-user-data:execute": "node scripts/wipe-firebase-user-data.mjs --execute"
+    "wipe-firebase-user-data:execute": "node scripts/wipe-firebase-user-data.mjs --execute",
+    "test:chat-invitation-security": "firebase emulators:exec --only firestore --project demo-dinebuddies-chat-invite-security \"node scripts/test-chat-invitation-security.mjs\""
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
