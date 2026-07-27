@@ -80,6 +80,85 @@ service cloud.firestore {
       return !resource.data.keys().hasAny(['role']);
     }
 
+    // Social engagement helpers: prevent mass wipe / forgery of UID lists and append-only object lists.
+    function isSelfUidListAdd(field) {
+      let oldList = resource.data.get(field, []);
+      let newList = request.resource.data.get(field, []);
+      return oldList is list && newList is list &&
+             !(request.auth.uid in oldList) &&
+             request.auth.uid in newList &&
+             newList.size() == oldList.size() + 1 &&
+             newList.hasAll(oldList) &&
+             newList.hasOnly(oldList.concat([request.auth.uid]));
+    }
+
+    function isSelfUidListRemove(field) {
+      let oldList = resource.data.get(field, []);
+      let newList = request.resource.data.get(field, []);
+      return oldList is list && newList is list &&
+             request.auth.uid in oldList &&
+             !(request.auth.uid in newList) &&
+             oldList.size() == newList.size() + 1 &&
+             oldList.hasAll(newList) &&
+             oldList.hasOnly(newList.concat([request.auth.uid]));
+    }
+
+    function isSelfUidListUnchanged(field) {
+      return resource.data.get(field, []) == request.resource.data.get(field, []);
+    }
+
+    function isSelfUidListAddOrRemove(field) {
+      return isSelfUidListUnchanged(field) ||
+             isSelfUidListAdd(field) ||
+             isSelfUidListRemove(field);
+    }
+
+    function isSelfUidListAddOnly(field) {
+      return isSelfUidListUnchanged(field) || isSelfUidListAdd(field);
+    }
+
+    function isAppendOnlyList(field) {
+      let oldList = resource.data.get(field, []);
+      let newList = request.resource.data.get(field, []);
+      return oldList is list && newList is list &&
+             newList.size() == oldList.size() + 1 &&
+             newList.hasAll(oldList);
+    }
+
+    function isListUnchangedOrAppend(field) {
+      return resource.data.get(field, []) == request.resource.data.get(field, []) ||
+             isAppendOnlyList(field);
+    }
+
+    // Business ranking counters: only allow ±1 (likes) or +1 (views/shares/invitations).
+    function bizCounter(field) {
+      return resource.data.get('businessInfo', {}).get(field, 0);
+    }
+
+    function newBizCounter(field) {
+      return request.resource.data.get('businessInfo', {}).get(field, 0);
+    }
+
+    function bizCounterUnchanged(field) {
+      return bizCounter(field) == newBizCounter(field);
+    }
+
+    function bizCounterBumpedBy(field, delta) {
+      return (bizCounter(field) is int || bizCounter(field) is float) &&
+             (newBizCounter(field) is int || newBizCounter(field) is float) &&
+             newBizCounter(field) == bizCounter(field) + delta &&
+             newBizCounter(field) >= 0;
+    }
+
+    function validBusinessEngagementCounters() {
+      return (bizCounterUnchanged('profileViews') || bizCounterBumpedBy('profileViews', 1)) &&
+             (bizCounterUnchanged('profileShares') || bizCounterBumpedBy('profileShares', 1)) &&
+             (bizCounterUnchanged('totalInvitations') || bizCounterBumpedBy('totalInvitations', 1)) &&
+             (bizCounterUnchanged('profileLikes') ||
+              bizCounterBumpedBy('profileLikes', 1) ||
+              bizCounterBumpedBy('profileLikes', -1));
+    }
+
     // Mid-flow business signup (step 1) may have registrationIntent:business but role accidentally set to
     // 'user' (race with profile bootstrap). Allow one completion write to role:business + businessInfo.
     function isBusinessSignupCompletionFromIntent() {
@@ -133,12 +212,14 @@ service cloud.firestore {
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'accountType']);
       allow update: if isAdmin();
-      // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
+      // Allow any signed-in user to bump profile engagement counters only (±1 likes, +1 others).
+      // Absolute overwrites are denied so rankings cannot be forged or zeroed out.
       allow update: if isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['businessInfo']) &&
                        request.resource.data.get('businessInfo', {}).diff(resource.data.get('businessInfo', {})).affectedKeys()
-                         .hasOnly(['profileViews', 'profileLikes', 'profileShares', 'totalInvitations']);
+                         .hasOnly(['profileViews', 'profileLikes', 'profileShares', 'totalInvitations']) &&
+                       validBusinessEngagementCounters();
       
       // SUPER OWNER PROTECTION:
       // 1. Only Super Owner can delete Admins.
@@ -452,10 +533,13 @@ service cloud.firestore {
         (resource.data.author != null && resource.data.author.id == request.auth.uid) ||
         isAdmin()
       );
-      // Any signed-in user can like, repost, or comment (social interactions only)
+      // Social interactions: self-only like/repost UID changes; comments append-only (no mass wipe)
       allow update: if isSignedIn() &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['likes', 'reposts', 'comments']);
+          .hasOnly(['likes', 'reposts', 'comments']) &&
+        isSelfUidListAddOrRemove('likes') &&
+        isSelfUidListAddOrRemove('reposts') &&
+        isListUnchangedOrAppend('comments');
     }
 
     match /stories/{storyId} {
@@ -476,10 +560,13 @@ service cloud.firestore {
         (resource.data.author != null && resource.data.author.id == request.auth.uid) ||
         isAdmin()
       );
-      // Any signed-in user can add their reaction / like / view (append-only fields)
+      // Social interactions: self-only like/view UIDs; reactions append-only (no mass wipe)
       allow update: if isSignedIn() &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['reactions', 'likes', 'views']);
+          .hasOnly(['reactions', 'likes', 'views']) &&
+        isSelfUidListAddOrRemove('likes') &&
+        isSelfUidListAddOnly('views') &&
+        isListUnchangedOrAppend('reactions');
     }
 
     match /likes/{likeId} {
@@ -622,10 +709,13 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() &&
                                (resource.data.partnerId == request.auth.uid || isAdmin());
 
-      // Any signed-in user can like, comment, or repost (social interactions only)
+      // Social interactions: self-only like/repost UID changes; comments append-only (no mass wipe)
       allow update: if isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['likes', 'reposts', 'comments']);
+                         .hasOnly(['likes', 'reposts', 'comments']) &&
+                       isSelfUidListAddOrRemove('likes') &&
+                       isSelfUidListAddOrRemove('reposts') &&
+                       isListUnchangedOrAppend('comments');
     }
 
     // ============================================

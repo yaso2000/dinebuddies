@@ -667,8 +667,9 @@ const BusinessProfile = () => {
 
             try {
                 const businessRef = doc(db, 'users', profileId);
-                const currentViews = business?.businessInfo?.profileViews || 0;
-                await updateDoc(businessRef, { 'businessInfo.profileViews': currentViews + 1 });
+                // Use atomic increment so concurrent viewers cannot clobber counts and
+                // rules can require a +1 delta (absolute overwrites are denied).
+                await updateDoc(businessRef, { 'businessInfo.profileViews': increment(1) });
                 localStorage.setItem(viewKey, now.toString());
                 viewTracked.current = true;
             } catch (error) {
