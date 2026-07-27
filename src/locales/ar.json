@@ -219,6 +219,10 @@
   "admin_all": "الكل",
   "admin_badge_text": "نص الشارة",
   "admin_ban_permanent": "حظر نهائي",
+  "admin_ban_device": "حظر الجهاز",
+  "admin_unban_device": "إلغاء حظر الجهاز",
+  "admin_status_device_banned": "الجهاز محظور",
+  "admin_ban_device_confirm": "حظر جهاز هذا المستخدم حتى لا يتمكن من إنشاء حسابات جديدة من نفس الموبايل؟",
   "admin_basic_info": "المعلومات الأساسية",
   "admin_business_field_subscription": "Stripe / بيانات الاشتراك (JSON)",
   "admin_business_field_tier": "مستوى الاشتراك",
@@ -1001,6 +1005,7 @@
   "auth_failed_precondition": "تعذر إكمال الطلب. حاول مرة أخرى.",
   "auth_firebase_env_missing": "Firebase غير مُعدّ. انسخ .env.example إلى .env وأعد تشغيل npm run dev. المفقود: {{keys}}",
   "auth_in_app_browser_hint": "افتح dinebuddies.com في Safari أو Chrome لاستخدام تسجيل الدخول.",
+  "auth_oauth_busy": "جارٍ تسجيل الدخول…",
   "auth_invalid_credential": "الحساب غير موجود أو كلمة المرور غير صحيحة.",
   "auth_invalid_email": "أدخل بريداً إلكترونياً صالحاً.",
   "auth_invalid_email_or_password": "البريد أو كلمة المرور غير صحيحة.",
@@ -1019,6 +1024,7 @@
   "auth_permission_denied": "تعذر حفظ ملفك (رفض الوصول). حاول مرة أخرى أو تواصل مع الدعم.",
   "auth_personal_hide_email": "إخفاء نموذج البريد",
   "auth_personal_portal_only": "يجب الدخول عبر Google أو Facebook أو Apple من صفحة الدخول الشخصي.",
+  "auth_device_banned": "هذا الجهاز محظور من إنشاء أو استخدام حسابات على DineBuddies.",
   "auth_personal_show_email": "تسجيل الدخول بالبريد",
   "auth_personal_step1_subtitle": "سجّل الدخول أو أنشئ حساباً شخصياً عبر Google أو Facebook أو Apple فقط.",
   "auth_phone_login_cta": "المتابعة برقم الجوال",
@@ -1074,10 +1080,23 @@
   "biz_plan_dashboard_paid_only": "لوحة التحكم تتطلب خطة الأعمال المدفوعة",
   "biz_plan_featured_paid_hint": "رقِّ لإنشاء ونشر البوستات المميزة.",
   "biz_plan_featured_paid_only": "البوست المميز يتطلب الخطة المدفوعة",
-  "biz_plan_free_banner_desc": "ملف أساسي ومجتمع. حدود للمنشورات المتحركة؛ الذكاء الاصطناعي يستخدم Dine Credits.",
+  "biz_plan_free_banner_desc": "ملف أساسي وصفحة مجتمع. الشات الجماعي والبوست المتحرك يتطلبان المدفوعة؛ الذكاء الاصطناعي يستخدم Dine Credits.",
   "biz_plan_free_feat_ai_credits": "الذكاء الاصطناعي يتطلب Dine Credits",
   "biz_plan_free_feat_brand_kit": "Brand Kit (ألوان وسمة)",
-  "biz_plan_free_feat_community": "صفحة مجتمع ومحادثة المتابعين",
+  "biz_plan_free_feat_community": "صفحة المجتمع (الأعضاء والإحصائيات)",
+  "biz_plan_paid_feat_group_chat": "الشات الجماعي للمجتمع",
+  "community_chat_paid_only_title": "الشات الجماعي للمجتمع",
+  "community_chat_paid_only_host_hint": "الشات الجماعي يتطلب خطة أعمال مدفوعة.",
+  "community_chat_paid_only_member_hint": "الشات الجماعي متاح عندما يكون لهذا العمل خطة مدفوعة.",
+  "community_chat_share_action": "مشاركة شات المجتمع",
+  "community_chat_share_to_feed": "مشاركة شات المجتمع في الحائط",
+  "community_chat_share_desc": "انضم إلى الشات الجماعي للمجتمع",
+  "community_chat_join_gate_hint": "انضم إلى هذا المجتمع للدخول إلى الشات الجماعي.",
+  "shared_content_view_community_chat": "فتح شات المجتمع",
+  "shared_content_view_post": "عرض المنشور",
+  "shared_content_view_invitation": "عرض الدعوة",
+  "shared_content_view_profile": "عرض الملف",
+  "shared_content_view_content": "عرض المحتوى",
   "biz_plan_free_feat_contact_basic": "هاتف، بريد، عنوان، مدينة وساعات العمل",
   "biz_plan_free_feat_directory": "ظهور في الدليل عند نشر الملف",
   "biz_plan_free_feat_gallery_6": "معرض صور — حتى 6 صور",
@@ -1171,7 +1190,7 @@
   "business_claim_account_cta": "استعادة الحساب وتوثيقه عبر SMS",
   "business_contact_email_hint": "عادةً ما يكون هذا نفس البريد الذي سجّلت به — التسجيل يتطلب بريداً وكلمة مرور. يمكنك تعديله إذا كان اتصالك العام يجب أن يكون مختلفاً.",
   "business_contact_email_placeholder": "البريد للتواصل (من حسابك)",
-  "business_create_featured_desc": "أنشئ منشوراً عادياً أو منشوراً مميزاً لمنشأتك.",
+  "business_create_featured_desc": "منشور مميز في الخلاصة الرئيسية لجميع المستخدمين.",
   "business_create_featured_title": "منشور مميز",
   "business_create_menu": "إنشاء",
   "business_create_studio_desc": "منشور استوديو متحرك في موجز المجتمع.",
@@ -1458,6 +1477,24 @@
   "community_chat_muted": "أنت مكتوم في شات هذا المجتمع.",
   "community_chat_muted_notice": "أنت مكتوم في هذا الشات ولا يمكنك إرسال رسائل.",
   "community_chat_attach_image": "إرفاق صورة",
+  "community_chat_attach_media": "إرفاق صورة أو فيديو",
+  "community_chat_video_alt": "فيديو المحادثة",
+  "community_chat_video_notification": "أرسل فيديو",
+  "stage_video_too_long": "الفيديو طويل جداً. الحد الأقصى 15 ثانية.",
+  "stage_video_too_large": "الفيديو كبير جداً. الحد الأقصى 8 ميغابايت.",
+  "stage_video_compress_failed": "تعذّر تجهيز هذا الفيديو. جرّب مقطعاً أقصر أو متصفحاً آخر.",
+  "stage_video_upload_failed": "تعذّر رفع الفيديو. حاول مرة أخرى.",
+  "stage_video_uploading": "جاري رفع الفيديو…",
+  "stage_video_host_only": "مضيف المسرح فقط يمكنه إرسال فيديو.",
+  "media_download_failed": "تعذّر تنزيل هذا الملف.",
+  "community_banner_video_alt": "فيديو بانر المجتمع",
+  "community_banner_delete_video": "إزالة فيديو البانر",
+  "community_banner_add_photo": "إضافة صورة للبانر",
+  "community_banner_add_video": "إضافة فيديو للبانر (حتى 15 ثانية)",
+  "community_banner_camera_title_media": "صورة أو فيديو البانر",
+  "community_banner_camera_title_video": "فيديو البانر",
+  "community_banner_camera_hint_media": "بانر 16:9 — صورة أو فيديو حتى 15 ثانية",
+  "community_banner_camera_hint_video": "بانر 16:9 — سجّل أو اختر فيديو حتى 15 ثانية",
   "community_chat_add_emoji": "إضافة إيموجي",
   "community_chat_uploading_image": "جاري الرفع…",
   "community_chat_image_alt": "صورة من الشات",
@@ -1669,6 +1706,12 @@
   "community_chat_banner_toggle_off": "البانر مخفي",
   "community_chat_banner_toggle_hint": "إظهار أو إخفاء البانر العلوي للجميع",
   "community_chat_banner_toggle_hint_guest": "إظهار أو إخفاء البانر العلوي على جهازك",
+  "stage_adult_toggle_on": "+18 مفعّل",
+  "stage_adult_toggle_off": "+18 متوقّف",
+  "stage_adult_toggle_hint": "عند التفعيل: بانر المسرح وصور الشات وخلفيات الغرفة بدون مراقبة الذكاء الاصطناعي",
+  "stage_adult_badge": "+18",
+  "stage_adult_enabled_toast": "تم تفعيل +18 — البانر وصور الشات وخلفيات المسرح بدون مراقبة",
+  "stage_adult_disabled_toast": "تم إيقاف +18 — عادت مراقبة صور المسرح",
   "community_chat_banner_shown": "البانر العلوي ظاهر للجميع.",
   "community_chat_banner_hidden": "تم إخفاء البانر — شات عادي.",
   "community_chat_banner_shown_local": "البانر العلوي ظاهر على جهازك.",
@@ -1831,7 +1874,7 @@
   "delivery_link_url_placeholder": "https://example.com/your-restaurant",
   "delivery_links_edit_hint": "الصق رابط أي خدمة توصيل، ثم اضغط «جلب» لاكتشاف الاسم والأيقونة. حتى {{max}} روابط.",
   "delivery_links_empty_owner": "أضف روابط التوصيل ليتمكن الزبائن من الطلب من ملفك.",
-  "delivery_links_upgrade": "ترقية إلى Pro لتفعيل روابط التوصيل",
+  "delivery_links_upgrade": "رقِّ إلى Paid Business لفتح روابط التوصيل",
   "description": "الوصف",
   "description_placeholder": "صف هذا الطبق...",
   "deselect_all": "إلغاء التحديد",
@@ -2004,6 +2047,8 @@
   "failed_update_profile": "فشل تحديث البروفايل. يرجى المحاولة مرة أخرى.",
   "failed_update_status": "فشل تحديث الحالة. يرجى المحاولة مرة أخرى.",
   "failed_upload_image": "فشل رفع الصورة. حاول مرة أخرى.",
+  "image_upload_permission_denied": "تعذر رفع الصورة (صلاحية). سجّل الدخول مجدداً ثم حاول مرة أخرى.",
+  "image_upload_canceled": "تم إلغاء رفع الصورة.",
   "false_information": "معلومات خاطئة",
   "false_reports_warning": "التبليغات الكاذبة قد تؤدي إلى إيقاف حسابك.",
   "faq": {
@@ -2021,7 +2066,7 @@
       },
       {
         "q": "ما الفرق بين الدعوة العامة والخاصة ودعوات خاصة؟",
-        "a": "• الدعوة العامة: تظهر للجميع على الخريطة الرئيسية ويمكن لأي شخص طلب الانضمام.\n• الدعوة الخاصة: دعوة مخفية لا تظهر للعامة، بل ترسلها أنت كبطاقة إلكترونية لأشخاص محددين حصراً.\n• دعوات خاصة (Dating): دعوات مخصصة للارتباط، تتطلب باقة Premium وتشمل تقييمات موثوقة وفلاتر متقدمة."
+        "a": "• الدعوة العامة: تظهر للجميع على الخريطة الرئيسية ويمكن لأي شخص طلب الانضمام.\\n• الدعوة الخاصة: دعوة مخفية لا تظهر للعامة، بل ترسلها أنت كبطاقة إلكترونية لأشخاص محددين حصراً.\\n• دعوات خاصة (Dating): دعوات مخصصة للتعارف الرومانسي، وتُنشر باستخدام رصيد Dine Credits مثل الدعوات الخاصة الأخرى."
       },
       {
         "q": "كيف أقبل طلبات الانضمام لدعوتي؟",
@@ -2029,15 +2074,23 @@
       },
       {
         "q": "ما هو شات المجتمع (Community Chat)؟",
-        "a": "لكل مطعم في التطبيق 'مجتمع' خاص به. عند انضمامك لمجتمع المطعم، ستدخل في غرفة دردشة عامة مع إدارة المطعم وبقية الزبائن للاستفسار عن الأطباق، تبادل التوصيات، ورؤية العروض الحصرية."
+        "a": "حسابات البزنس على الخطة المدفوعة لديها شات جماعي للمجتمع. انضم للمجتمع من بروفايل البزنس، ثم افتح شات المجتمع للتحدث مع المضيف والأعضاء—اسأل عن الأطباق، شارك التوصيات، وتابع العروض. إذا شارك أحد رابط الشات في منشور أو رسالة، انضم للمجتمع أولاً ثم افتح الشات."
+      },
+      {
+        "q": "ما هو شات الـ Stage؟",
+        "a": "الـ Stage غرفة شات خاصة مؤقتة للحسابات الشخصية. أنشئها من (+) ← Stage. يمكنك دعوة المتابعين المتبادلين، أو فتح الغرفة وحدك ومشاركة رابط الانضمام. يمكن للآخرين طلب الانضمام؛ كمضيف تقبل أو ترفض. كل Stage يستمر حتى 24 ساعة، ويمكنك استضافة Stage واحد فقط في الوقت نفسه. يمكنك أيضاً مشاركة الـ Stage في الرسائل أو مجتمع أو الحائط."
+      },
+      {
+        "q": "ما الفرق بين شات الدعوة وشات المجتمع والـ Stage؟",
+        "a": "• شات الدعوة: يُفتح عند قبول الضيوف في دعوة الطعام—للتنسيق بين المضيف والضيوف.\n• شات المجتمع: غرفة جماعية مستمرة لأعضاء مجتمع بزنس على الخطة المدفوعة.\n• Stage: غرفة خاصة مؤقتة تستضيفها أو تنضم إليها بدعوة/طلب (حتى 24 ساعة)."
       },
       {
         "q": "كيف يمكنني رفع مستوى حسابي وتجميع نقاط السمعة؟",
         "a": "نقاط السمعة تُظهر مدى موثوقيتك! ترتفع نقاط السمعة عندما تحضر الدعوات في وقتها وتتلقى تقييمات إيجابية 5 نجوم من المنظمين أو الضيوف. بينما تنخفض عند الغياب أو تلقي شكاوى."
       },
       {
-        "q": "كيف أقوم بالترقية لباقة Premium (VIP)؟",
-        "a": "في صفحة الحساب، اذهب إلى (الاشتراكات/Subscriptions). باقة VIP تمنحك فلاتر بحث استثنائية، الوصول الكامل لدعوات خاصة، القدرة على معرفة من زار حسابك، ودعوات خاصة لامحدودة."
+        "q": "هل يحتاج المستخدم العادي إلى اشتراك؟",
+        "a": "لا. الحساب الشخصي مجاني. رصيد Dine Credits اختياري لدعوات خاصة وأدوات الذكاء الاصطناعي والهدايا. اشترِ الباقات من الإعدادات ← Dine Credits."
       },
       {
         "q": "كيف أقوم بحذف حسابي بشكل نهائي؟",
@@ -2054,28 +2107,40 @@
     ],
     "business_questions": [
       {
-        "q": "ما هي ميزة Business Pro Dashboard؟",
-        "a": "لوحة تحكم احترافية مصممة لشركاء ومطاعم داين باديز. تمنحك وصولاً لإدارة المنيو، ساعات العمل، المحادثات، ونشر العروض الإعلانية التي تظهر لكل مستخدمي التطبيق عبر المنصة."
+        "q": "ما هي لوحة تحكم البزنس؟",
+        "a": "لوحة تحكم لشركاء مطاعم داين باديز ضمن خطة Paid Business. تتيح إدارة المنيو وساعات العمل وأدوات المجتمع ونشر المنشورات التسويقية."
       },
       {
         "q": "كيف أقوم بنشر بوست إعلاني ليظهر لكل المستخدمين (Featured Post)؟",
-        "a": "من لوحة التحكم (Pro Dashboard)، اختر تبويب 'Featured Posts'، ارفع صورتك الإعلانية، واكتب نبذة لكي يظهر البوست الإعلاني للمستخدمين فوراً في قائمة الرئيسية وتلقي التفاعل."
+        "a": "من لوحة التحكم (خطة Paid)، افتح Featured Posts، ارفع الصورة واكتب نبذة ليظهر البوست في الخلاصة الرئيسية."
+      },
+      {
+        "q": "كيف يعمل الشات الجماعي للمجتمع في حساب البزنس؟",
+        "a": "الشات الجماعي للمجتمع ضمن خطة Paid Business. الأعضاء الذين ينضمون لمجتمعك يمكنهم الدخول للشات. كمضيف يمكنك تثبيت إعلانات على الشريط، تخصيص ألوان الشات، كتم الأعضاء عند الحاجة، ومشاركة الشات في الرسائل أو مجتمعات أخرى أو الحائط ليكتشفه المزيد وينضموا."
+      },
+      {
+        "q": "كيف أشارك شات المجتمع؟",
+        "a": "افتح شات مجتمعك، اختر مشاركة، ثم أرسله في رسالة مباشرة أو إلى مجتمع آخر أو انشره في الحائط. المستلمون ينضمون لمجتمعك إن لزم، ثم يفتحون الشات من البطاقة المشتركة."
+      },
+      {
+        "q": "هل يمكن لحساب البزنس إنشاء شات Stage؟",
+        "a": "لا. غرف الـ Stage للحسابات الشخصية فقط. البزنس يتفاعل مع العملاء عبر شات المجتمع الجماعي (الخطة المدفوعة) وبث الأعضاء والمنشورات المميزة."
       },
       {
         "q": "كيف أرسل إشعارات وعروض لجميع أعضاء مجتمعي؟",
-        "a": "كل مستخدم ينضم لـ 'الكميونتي' الخاص بك سيظهر في تبويب (الأعضاء). يمكنك إرسال التنبيهات أو طرح عروض في الـ(Community Chat) لتنشيط المبيعات في أوقات فراغ المطعم."
+        "a": "كل مستخدم ينضم لمجتمعك يظهر في تبويب الأعضاء. خطة Paid Business تفتح إشعارات الأعضاء والبث لتحفيز الزيارات في أوقات الفراغ."
       },
       {
         "q": "كيف أدير قائمة طعامي (المنيو)؟",
-        "a": "من لوحة التحكم ضمن (Menu & Services)، يمكنك إضافة أصناف الطعام مع صورها وأسعارها. ستظهر القائمة بأناقة في صفحتك لجميع الزوار مع إمكانية تحديثها في أي وقت."
+        "a": "من Menu & Services أضف الأصناف مع الصور والأسعار. نشر المنيو للعامة يتطلب خطة Paid Business."
       },
       {
-        "q": "ما الفرق بين باقات الشركاء (Professional و Elite)؟",
-        "a": "باقة الـ Pro تمنحك أساسيات الوصول للوحة التحكم الظهور في أدلة البحث. الباقة الخارقة (Elite) تمنحك ظهوراً أعلى (تفضيل في الخوارزمية الخاصة بالتطبيق) وقدرة على نشر بوستات إعلانية (Featured Slides) لامحدودة وحملات مخصصة."
+        "q": "ما خطط البزنس المتوفرة؟",
+        "a": "خطتان فقط: Free Business (بروفايل وصفحة مجتمع ودليل) وPaid Business (29$/شهر) لأدوات اللوحة وشات المجتمع الجماعي والمنشورات المميزة والروابط والقائمة/التوصيل وإشعارات الأعضاء وأولوية الترتيب. الذكاء الاصطناعي ما زال عبر Dine Credits."
       },
       {
         "q": "كيف أتعامل مع تقييمات الزوار (Reviews)؟",
-        "a": "في تبويب (Reviews)، ستتمكن من رؤية إحصائيات تقييمات الزبائن وتفصيلها. يمكنك أيضاً الرد رسمياً على التقييمات باسم المطعم للحفاظ على ولاء عملائك واهتمامك برأيهم."
+        "a": "في تبويب Reviews ترى إحصائيات التقييمات ويمكنك الرد رسمياً باسم المطعم."
       }
     ]
   },
@@ -2087,7 +2152,7 @@
   "faq_delete_account": "كيف أحذف حسابي؟",
   "faq_delete_answer": "يمكنك حذف حسابك من صفحة الإعدادات في بروفايلك، أو التواصل مع الدعم الفني.",
   "faq_description": "اعثر على إجابات للأسئلة الشائعة أو اتصل بنا مباشرة.",
-  "faq_free_answer": "نعم، التطبيق مجاني للاستخدام الأساسي. يمكنك الاشتراك في الباقات المميزة للحصول على ميزات إضافية.",
+  "faq_free_answer": "نعم. الاستخدام الشخصي مجاني. رصيد Dine Credits اختياري للدعوات الخاصة والذكاء الاصطناعي والهدايا. للبزنس: Free Business أو خطة Paid Business واحدة.",
   "faq_is_free": "هل التطبيق مجاني؟",
   "faq_reputation": "ما هي نقاط التقييم (السمعة)؟",
   "faq_reputation_answer": "نقاط السمعة هي مقياس لمصداقيتك في التطبيق. تزيد عند التزامك بالدعوات وحصولك على تقييمات إيجابية، وتقل عند تكرار الغياب.",
@@ -2239,7 +2304,7 @@
   "general": "عام",
   "generating": "جاري التوليد...",
   "get_directions": "الحصول على الاتجاهات",
-  "get_elite_features_promo": "احصل على شهر كامل من ميزات النخبة",
+  "get_elite_features_promo": "افتح أدوات اللوحة والمنشورات المميزة والقائمة وإشعارات الأعضاء.",
   "get_more": "شحن رصيد",
   "gift_badge": "هدية 🎁",
   "glass_effect_toggle": "تأثير زجاجي",
@@ -2446,11 +2511,12 @@
   "invite_create_subtitle": "اختر نوع الدعوة التي تريد إنشاءها.",
   "invite_create_title": "إنشاء دعوة",
   "create_stage_title": "افتح المسرح",
-  "create_stage_subtitle": "اختر حضوراً من المتابعات المتبادلة. تُفتح غرفة مسرح جديدة لهذا الحدث.",
+  "create_stage_subtitle": "يمكنك دعوة متابعات متبادلة اختيارياً، أو فتح المسرح وحدك ومشاركة رابط الانضمام.",
   "create_stage_title_label": "العنوان (اختياري)",
   "create_stage_title_placeholder": "مسرح الليلة",
   "create_stage_guests": "الحضور (متابعات متبادلة)",
   "create_stage_no_mutuals": "تحتاج إلى متابعة متبادلة واحدة على الأقل لفتح المسرح.",
+  "create_stage_no_mutuals_optional": "لا توجد متابعات متبادلة بعد. يمكنك فتح المسرح وحدك ومشاركة رابط الانضمام.",
   "create_stage_free_note": "مجاني الآن — تسعير المسرح لاحقاً.",
   "create_stage_one_at_a_time": "يمكنك استضافة مسرح واحد فقط في كل مرة. بعد 24 ساعة يُحذف ويمكنك فتح مسرح جديد.",
   "create_stage_open": "افتح المسرح",
@@ -2468,6 +2534,8 @@
   "stage_members_count": "{{count}} أعضاء",
   "stage_online_members": "{{count}} متصل",
   "stage_chat": "المسرح",
+  "stage_chat_share_action": "مشاركة شات المسرح",
+  "stage_chat_share_desc": "انضم إلى شات المسرح",
   "leave_stage": "مغادرة المسرح",
   "messages_tab_stages": "المسارح",
   "stages_hub_title": "المسارح",
@@ -2504,11 +2572,30 @@
   "stage_business_cannot_join": "حسابات الأعمال لا يمكنها الانضمام إلى غرف المسرح.",
   "stage_chat_invite_only": "بدعوة فقط",
   "stage_chat_invite_only_hint": "تحتاج إلى دعوة من المضيف لدخول هذه الغرفة.",
+  "stage_chat_join_request_hint": "هذا المسرح بدعوة فقط. اطلب الانضمام ويمكن للمضيف الموافقة.",
+  "stage_chat_join_pending_hint": "تم إرسال طلب الانضمام. يمكنك الدخول بعد موافقة المضيف.",
+  "stage_request_to_join": "طلب انضمام",
+  "stage_join_request_pending": "الطلب قيد الانتظار",
+  "stage_join_request_sent": "تم إرسال طلب الانضمام. بانتظار موافقة المضيف.",
+  "stage_join_request_failed": "تعذر إرسال طلب الانضمام.",
+  "stage_join_request_closed": "هذا المسرح لا يقبل طلبات الانضمام حالياً.",
+  "stage_join_already_member": "أنت بالفعل داخل هذا المسرح.",
+  "stage_join_request_banner_hint": "يريد الانضمام إلى هذا المسرح",
+  "stage_join_approved_toast": "تمت الموافقة على طلب الانضمام.",
+  "stage_join_rejected_toast": "تم رفض طلب الانضمام.",
+  "stage_join_review_failed": "تعذر تحديث طلب الانضمام.",
+  "shared_content_view_stage_chat": "فتح شات المسرح",
   "stage_remove_member_confirm": "إزالة هذا العضو من المسرح؟ سيفقد الوصول إلى الدردشة.",
   "stage_member_removed": "تمت إزالة العضو من المسرح",
   "failed_save": "تعذر الحفظ. حاول مرة أخرى.",
   "notif_title_stage_invite": "دعوة إلى المسرح",
   "notif_msg_stage_invite": "{{name}} دعاك إلى المسرح",
+  "notif_title_stage_join_request": "طلب انضمام إلى المسرح",
+  "notif_title_stage_join_approved": "تمت الموافقة على طلب المسرح",
+  "notif_title_stage_join_rejected": "تم رفض طلب المسرح",
+  "notif_msg_stage_join_request": "{{name}} طلب الانضمام إلى مسرحك",
+  "notif_msg_stage_join_approved": "تمت الموافقة على طلبك للانضمام إلى المسرح",
+  "notif_msg_stage_join_rejected": "تم رفض طلبك للانضمام إلى المسرح",
   "invite_friends": "دعوة ضيوف",
   "invite_friends_on_app": "أصدقاء على التطبيق (اختياري)",
   "invite_manual_hub_subtitle": "اختر نوع الدعوة، ثم أكمل النموذج.",
@@ -2585,6 +2672,8 @@
   "last_updated_month": "آخر تحديث: قبل شهر",
   "later": "لاحقاً",
   "latest_invitations": "أحدث الدعوات",
+  "latest_public_invitations": "أحدث الدعوات العامة",
+  "suggested_friends": "أصدقاء مقترحون",
   "leave_community": "مغادرة",
   "left": "متبقي",
   "liability_limitation": "5. قيود المسؤولية",
@@ -3259,6 +3348,16 @@
   "private_profile_custom_tag_placeholder": "أضف اهتمامك…",
   "private_profile_invite_pref_title": "من يمكنه إرسال دعوات خاصة لك؟",
   "private_profile_taste_desc": "ساعد الآخرين على معرفة أنشطتك المفضلة للقاءات الفردية",
+  "dining_persona_art": "فن",
+  "dining_persona_cinema": "سينما",
+  "dining_persona_coffee": "قهوة",
+  "dining_persona_healthy": "صحي",
+  "dining_persona_live_music": "موسيقى حية",
+  "dining_persona_pizza": "بيتزا",
+  "dining_persona_running": "جري",
+  "dining_persona_street_food": "أكل شارع",
+  "dining_persona_sushi": "سوشي",
+  "dining_persona_walking": "مشي",
   "private_profile_taste_title": "الجو العام والاهتمامات",
   "private_rail_camera_label": "فيديو",
   "private_rail_upload_label": "صورتك",
@@ -4097,7 +4196,7 @@
   "trial_ends_label": "✨ الخطة التجريبية Pro نشطة - تنتهي في:",
   "try_different_filter": "جرب فلتر أو كلمة بحث مختلفة",
   "try_different_filters": "جرب تعديل الفلاتر أو كلمات البحث",
-  "try_elite_free": "جرب شريك النخبة مجاناً!",
+  "try_elite_free": "الترقية إلى Paid Business",
   "try_google_places_hint": "جرب أماكن جوجل للمنشآت غير المسجلة",
   "try_osm_places_hint": "ابحث في كل الأماكن (OpenStreetMap) للمنشآت غير المسجلة",
   "tuesday": "الثلاثاء",
@@ -4389,5 +4488,9 @@
   "zoom_out": "تصغير",
   "🎯 Add-on Offer Slots": "🎯 خانات العروض الإضافية",
   "💕 Private Invite Packs": "💕 باقات دعوات خاصة",
-  "social_invite_publish_notify_warning": "نُشرت الدعوة، لكن تعذّر إيصال الإشعارات لجميع الأعضاء. حاول الإرسال مرة أخرى من المعاينة."
+  "social_invite_publish_notify_warning": "نُشرت الدعوة، لكن تعذّر إيصال الإشعارات لجميع الأعضاء. حاول الإرسال مرة أخرى من المعاينة.",
+  "business_upgrade_to_pro": "الترقية إلى Paid",
+  "business_pro_fields_notice": "الحقول التالية تتطلب خطة Paid Business لتظهر للزوار:",
+  "business_verified_badge": "موثّق",
+  "business_vip_badge": "VIP"
 }

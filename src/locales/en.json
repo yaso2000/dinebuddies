@@ -219,6 +219,10 @@
   "admin_all": "All",
   "admin_badge_text": "Badge Text",
   "admin_ban_permanent": "Permanent ban",
+  "admin_ban_device": "Ban device",
+  "admin_unban_device": "Unban device",
+  "admin_status_device_banned": "Device banned",
+  "admin_ban_device_confirm": "Ban this user's device so they cannot create new accounts from the same phone?",
   "admin_basic_info": "Basic Information",
   "admin_business_field_subscription": "Stripe / subscription payload (JSON)",
   "admin_business_field_tier": "Subscription tier",
@@ -1001,6 +1005,7 @@
   "auth_failed_precondition": "Request could not be completed. Please try again.",
   "auth_firebase_env_missing": "Firebase is not configured. Copy .env.example → .env and restart npm run dev. Missing: {{keys}}",
   "auth_in_app_browser_hint": "Please open dinebuddies.com in Safari or Chrome to use this login.",
+  "auth_oauth_busy": "Signing you in…",
   "auth_invalid_credential": "This account does not exist or the password is incorrect.",
   "auth_invalid_email": "Please enter a valid email address.",
   "auth_invalid_email_or_password": "Incorrect email or password.",
@@ -1019,6 +1024,7 @@
   "auth_permission_denied": "Could not save your profile (access denied). Try again or contact support.",
   "auth_personal_hide_email": "Hide email form",
   "auth_personal_portal_only": "This account must sign in with Google, Facebook, or Apple on the personal login page.",
+  "auth_device_banned": "This device is blocked from creating or using accounts on DineBuddies.",
   "auth_personal_show_email": "Sign in with email",
   "auth_personal_step1_subtitle": "Sign in or create a personal account with Google, Facebook, or Apple only.",
   "auth_phone_login_cta": "Continue with phone number",
@@ -1074,10 +1080,23 @@
   "biz_plan_dashboard_paid_only": "Business dashboard requires Paid Business",
   "biz_plan_featured_paid_hint": "Upgrade to create and publish featured posts.",
   "biz_plan_featured_paid_only": "Featured posts require Paid Business",
-  "biz_plan_free_banner_desc": "Core profile and community. Motion limits apply; AI uses Dine Credits.",
+  "biz_plan_free_banner_desc": "Core profile and community page. Group chat and motion require Paid; AI uses Dine Credits.",
   "biz_plan_free_feat_ai_credits": "AI requires Dine Credits",
   "biz_plan_free_feat_brand_kit": "Brand Kit (colors & theme)",
-  "biz_plan_free_feat_community": "Community page & follower chat",
+  "biz_plan_free_feat_community": "Community page (members & stats)",
+  "biz_plan_paid_feat_group_chat": "Community group chat",
+  "community_chat_paid_only_title": "Community group chat",
+  "community_chat_paid_only_host_hint": "Community group chat requires a Paid Business plan.",
+  "community_chat_paid_only_member_hint": "Group chat is available when this business has a Paid plan.",
+  "community_chat_share_action": "Share community chat",
+  "community_chat_share_to_feed": "Share community chat to feed",
+  "community_chat_share_desc": "Join the community group chat",
+  "community_chat_join_gate_hint": "Join this community to enter the group chat.",
+  "shared_content_view_community_chat": "Open community chat",
+  "shared_content_view_post": "View Post",
+  "shared_content_view_invitation": "View Invitation",
+  "shared_content_view_profile": "View Profile",
+  "shared_content_view_content": "View Content",
   "biz_plan_free_feat_contact_basic": "Phone, email, address, city & hours",
   "biz_plan_free_feat_directory": "Public listing when profile is published",
   "biz_plan_free_feat_gallery_6": "Photo gallery — up to 6 images",
@@ -1171,7 +1190,7 @@
   "business_claim_account_cta": "Claim account via SMS",
   "business_contact_email_hint": "This is usually the same email you used to register — signup requires email and password. You can edit it if your public contact should be different.",
   "business_contact_email_placeholder": "Contact email (from your account)",
-  "business_create_featured_desc": "Elite slide on the home feed for all users.",
+  "business_create_featured_desc": "Featured post on the home feed for all users.",
   "business_create_featured_title": "Featured Post",
   "business_create_menu": "Create",
   "business_create_studio_desc": "Animated studio post in the community feed.",
@@ -1458,10 +1477,28 @@
   "community_chat_muted": "You are muted in this community chat.",
   "community_chat_muted_notice": "You are muted in this chat and cannot send messages.",
   "community_chat_attach_image": "Attach image",
+  "community_chat_attach_media": "Attach photo or video",
   "community_chat_add_emoji": "Add emoji",
   "community_chat_uploading_image": "Uploading…",
   "community_chat_image_alt": "Chat image",
+  "community_chat_video_alt": "Chat video",
   "community_chat_image_notification": "Sent a photo",
+  "community_chat_video_notification": "Sent a video",
+  "stage_video_too_long": "Video is too long. Maximum length is 15 seconds.",
+  "stage_video_too_large": "Video is too large. Maximum size is 8 MB.",
+  "stage_video_compress_failed": "Could not prepare this video. Try a shorter clip or another browser.",
+  "stage_video_upload_failed": "Could not upload the video. Please try again.",
+  "stage_video_uploading": "Uploading video…",
+  "stage_video_host_only": "Only the Stage host can send videos.",
+  "media_download_failed": "Could not download this file.",
+  "community_banner_video_alt": "Community banner video",
+  "community_banner_delete_video": "Remove banner video",
+  "community_banner_add_photo": "Add banner photo",
+  "community_banner_add_video": "Add banner video (max 15s)",
+  "community_banner_camera_title_media": "Banner photo or video",
+  "community_banner_camera_title_video": "Banner video",
+  "community_banner_camera_hint_media": "16:9 banner — photo or video up to 15 seconds",
+  "community_banner_camera_hint_video": "16:9 banner — record or pick a video up to 15 seconds",
   "community_host_spotlight_delete": "Hide from banner",
   "community_host_spotlight_auto": "Auto-show new messages on banner",
   "community_host_spotlight_drag_hint": "Drag to move spotlight bubble",
@@ -1637,6 +1674,12 @@
   "community_chat_banner_toggle_off": "Banner off",
   "community_chat_banner_toggle_hint": "Show or hide the top media banner for everyone",
   "community_chat_banner_toggle_hint_guest": "Show or hide the top media banner on your device",
+  "stage_adult_toggle_on": "+18 on",
+  "stage_adult_toggle_off": "+18 off",
+  "stage_adult_toggle_hint": "When on, banner, chat photos, and Stage backgrounds skip AI image checks",
+  "stage_adult_badge": "+18",
+  "stage_adult_enabled_toast": "+18 on — banner, chat photos, and Stage backgrounds skip AI checks",
+  "stage_adult_disabled_toast": "+18 off — Stage image uploads are moderated again",
   "community_chat_banner_shown": "Top banner is visible for everyone.",
   "community_chat_banner_hidden": "Top banner hidden — normal chat layout.",
   "community_chat_banner_shown_local": "Top banner is visible on your device.",
@@ -1797,7 +1840,7 @@
   "delivery_link_url_placeholder": "https://example.com/your-restaurant",
   "delivery_links_edit_hint": "Paste any delivery link, then tap Fetch to detect the service name and icon. Up to {{max}} links.",
   "delivery_links_empty_owner": "Add delivery links so customers can order from your profile.",
-  "delivery_links_upgrade": "Upgrade to Pro to unlock delivery links",
+  "delivery_links_upgrade": "Upgrade to Paid Business to unlock delivery links",
   "description": "Description",
   "description_placeholder": "Describe this item...",
   "deselect_all": "Deselect All",
@@ -1970,6 +2013,8 @@
   "failed_update_profile": "Failed to update profile. Please try again.",
   "failed_update_status": "Failed to update status. Please try again.",
   "failed_upload_image": "Failed to upload image. Try again.",
+  "image_upload_permission_denied": "Could not upload the image (permission). Sign in again and try once more.",
+  "image_upload_canceled": "Image upload was canceled.",
   "false_information": "False Information",
   "false_reports_warning": "False reports may result in account suspension.",
   "faq": {
@@ -1987,7 +2032,7 @@
       },
       {
         "q": "What's the difference between Public, Private, and Private Invites?",
-        "a": "• Public: Visible on the main map for anyone to request joining.\n• Private: A hidden invitation sent exclusively via an elegant e-invite link to specific people.\n• Dating: Specially curated romantic encounters requiring a Premium subscription, featuring advanced filters and trusted reviews."
+        "a": "• Public: Visible on the main map for anyone to request joining.\n• Private: A hidden invitation sent exclusively via an elegant e-invite link to specific people.\n• Dating: Specially curated romantic encounters (uses Dine Credits to publish, same as other private invites)."
       },
       {
         "q": "How do I accept join requests for my invitation?",
@@ -1995,15 +2040,23 @@
       },
       {
         "q": "What is the Community Chat?",
-        "a": "Every restaurant on the app has its own 'Community'. By joining a restaurant's community, you enter a public chat room with the staff and other patrons to ask about dishes, share recommendations, and catch exclusive offers."
+        "a": "Paid businesses have a Community group chat. Join the community from the business profile, then open Community Chat to talk with the host and other members—ask about dishes, share tips, and catch offers. If someone shares a community chat in a post or message, join that community first, then open the chat."
+      },
+      {
+        "q": "What is a Stage chat?",
+        "a": "A Stage is a temporary private chat room for personal accounts. Create one from (+) → Stage. Invite mutual follows, or open alone and share a join link. Others can request to join; as host you approve or decline. Each Stage lasts up to 24 hours, and you can host only one at a time. You can also share a Stage to DMs, a community, or the feed."
+      },
+      {
+        "q": "What’s the difference between invitation chat, Community Chat, and Stage?",
+        "a": "• Invitation chat: unlocks when guests are accepted into a food invite—host and guests coordinate the meetup.\n• Community Chat: ongoing group chat for members of a Paid business community.\n• Stage: short-lived private room you host or join by invite/request (up to 24 hours)."
       },
       {
         "q": "How do I level up my account and earn Reputation Points?",
         "a": "Reputation Points show your reliability! They increase when you attend events on time and receive 5-star ratings from hosts or guests. Points drop if you no-show or receive complaints."
       },
       {
-        "q": "How do I upgrade to Premium (VIP)?",
-        "a": "Navigate to your Profile > Settings > Subscriptions. The VIP tier grants you exceptional search filters, full access to Private Invites, profile visitor insights, and unlimited private invites."
+        "q": "Do regular users need a subscription?",
+        "a": "No. Personal accounts are free. Optional Dine Credits power private invites, AI tools, and gifts. Buy credit packs in Settings → Dine Credits (Card, PayPal, or Google Play on Android)."
       },
       {
         "q": "How do I permanently delete my account?",
@@ -2020,28 +2073,40 @@
     ],
     "business_questions": [
       {
-        "q": "What is the Business Pro Dashboard?",
-        "a": "A tailored, professional control center for DineBuddies restaurant partners. It gives you full control over your Menu, operating hours, direct chats, and broadcasting marketing posts across the platform."
+        "q": "What is the Business Dashboard?",
+        "a": "A control center for DineBuddies restaurant partners on the Paid Business plan. Manage menu, hours, community tools, and marketing posts across the platform."
       },
       {
         "q": "How do I publish a Featured promotional post?",
-        "a": "From the Pro Dashboard, navigate to 'Featured Posts', upload your promotional image, and write a caption. Your post will instantly appear to all users in the main app feed."
+        "a": "From the Business Dashboard (Paid plan), open Featured Posts, upload your image, and write a caption. Your post appears in the main app feed."
+      },
+      {
+        "q": "How does Community group chat work for my business?",
+        "a": "Community group chat is included with Paid Business. Users who join your community can enter the chat. As host you can pin announcements to the banner, customize chat colors, mute members when needed, and share the chat to DMs, other communities, or the feed so more people can discover and join."
+      },
+      {
+        "q": "How do I share my Community Chat?",
+        "a": "Open your community chat, use Share, then send it in a direct message, to another community, or post it to the feed. Recipients join your community (if needed) and can open the group chat from the shared card."
+      },
+      {
+        "q": "Can my business create a Stage chat?",
+        "a": "No. Stage rooms are for personal accounts only. Businesses engage customers through Community group chat (Paid plan), member broadcasts, and featured posts."
       },
       {
         "q": "How do I broadcast offers to my community?",
-        "a": "Every user who joins your 'Community' shows up in your Members tab. You can drop massive discounts directly into the 'Community Chat' to instantly drive traffic during off-peak hours."
+        "a": "Every user who joins your Community shows up in your Members tab. Paid Business unlocks member notifications and broadcasts to drive traffic during off-peak hours."
       },
       {
         "q": "How do I manage my digital Menu?",
-        "a": "Under 'Menu & Services' in your dashboard, upload dishes with mouth-watering photos and pricing. The sleek digital menu updates instantly for all profile visitors."
+        "a": "Under Menu & Services, upload dishes with photos and pricing. Publishing the menu publicly for visitors requires the Paid Business plan."
       },
       {
-        "q": "What is the difference between Professional and Elite Partner tiers?",
-        "a": "The 'Pro' tier sets up your storefront and directory listing. The 'Elite' tier is our powerhouse package, supercharging your algorithm ranking and granting unlimited, priority Featured Slides for maximum visibility."
+        "q": "What business plans does DineBuddies offer?",
+        "a": "Two only: Free Business (profile, community page, directory listing) and Paid Business ($29/month) for dashboard tools, Community group chat, featured posts, clickable links, menu/delivery, member broadcasts, and ranking priority. AI still uses Dine Credits."
       },
       {
         "q": "How do I handle Customer Reviews?",
-        "a": "The 'Reviews' tab provides deep analytical breakdowns of your ratings. You also have the power to officially reply to reviews under your restaurant’s verified name to build lasting customer loyalty."
+        "a": "The Reviews tab provides breakdowns of your ratings. You can reply to reviews under your restaurant’s verified name to build lasting customer loyalty."
       }
     ]
   },
@@ -2053,7 +2118,7 @@
   "faq_delete_account": "How do I delete my account?",
   "faq_delete_answer": "You can delete your account from the settings page in your profile, or contact technical support.",
   "faq_description": "Find answers to common questions or contact us directly.",
-  "faq_free_answer": "Yes, the app is free for basic use. You can subscribe to premium plans for additional features.",
+  "faq_free_answer": "Yes. Personal use is free. Optional Dine Credits unlock private invites, AI, and gifts. Businesses can use Free Business or upgrade to one Paid Business plan.",
   "faq_is_free": "Is the app free?",
   "faq_reputation": "What are reputation points?",
   "faq_reputation_answer": "Reputation points are a measure of your credibility in the app. They increase when you commit to invitations and others rate you positively, and decrease with frequent absences.",
@@ -2205,7 +2270,7 @@
   "general": "General",
   "generating": "Generating...",
   "get_directions": "Get Directions",
-  "get_elite_features_promo": "Get a full month of Elite features",
+  "get_elite_features_promo": "Unlock dashboard tools, featured posts, menus, and member broadcasts.",
   "get_more": "Get Credits",
   "gift_badge": "GIFT 🎁",
   "glass_effect_toggle": "Glassmorphism",
@@ -2412,11 +2477,12 @@
   "invite_create_subtitle": "Choose the type of invitation you want to create.",
   "invite_create_title": "Create invitation",
   "create_stage_title": "Open Stage",
-  "create_stage_subtitle": "Pick mutual follows to invite. A new Stage room opens for this event.",
+  "create_stage_subtitle": "Optionally invite mutual follows, or open alone and share a join link.",
   "create_stage_title_label": "Title (optional)",
   "create_stage_title_placeholder": "Tonight’s Stage",
   "create_stage_guests": "Guests (mutual follows)",
   "create_stage_no_mutuals": "You need at least one mutual follow to open a Stage.",
+  "create_stage_no_mutuals_optional": "No mutual follows yet. You can still open the Stage alone and share a join link.",
   "create_stage_free_note": "Free for now — Stage pricing coming later.",
   "create_stage_one_at_a_time": "You can host only one Stage at a time. After 24 hours it is removed and you can open a new one.",
   "create_stage_open": "Open Stage",
@@ -2432,6 +2498,8 @@
   "community_banner_body_link_url_unsafe": "This link is not allowed (unsafe scheme, shortener, or hidden destination).",
   "community_chat_header_menu": "Chat options",
   "stage_chat": "Stage",
+  "stage_chat_share_action": "Share Stage chat",
+  "stage_chat_share_desc": "Join this Stage chat",
   "leave_stage": "Leave Stage",
   "messages_tab_stages": "Stages",
   "stages_hub_title": "Stages",
@@ -2468,6 +2536,19 @@
   "stage_business_cannot_join": "Business accounts cannot join Stage rooms.",
   "stage_chat_invite_only": "Invite only",
   "stage_chat_invite_only_hint": "You need a Stage invitation from the host to enter this room.",
+  "stage_chat_join_request_hint": "This Stage is invite-only. Request to join and the host can approve you.",
+  "stage_chat_join_pending_hint": "Your join request was sent. You can enter once the host approves.",
+  "stage_request_to_join": "Request to join",
+  "stage_join_request_pending": "Request pending",
+  "stage_join_request_sent": "Join request sent. Waiting for the host to approve.",
+  "stage_join_request_failed": "Could not send join request.",
+  "stage_join_request_closed": "This Stage is not accepting join requests right now.",
+  "stage_join_already_member": "You are already in this Stage.",
+  "stage_join_request_banner_hint": "Wants to join this Stage",
+  "stage_join_approved_toast": "Join request approved.",
+  "stage_join_rejected_toast": "Join request declined.",
+  "stage_join_review_failed": "Could not update join request.",
+  "shared_content_view_stage_chat": "Open Stage chat",
   "stage_remove_member_confirm": "Remove this member from the Stage? They will lose access to the chat.",
   "stage_member_removed": "Member removed from Stage",
   "failed_save": "Could not save. Please try again.",
@@ -2475,6 +2556,12 @@
   "stage_online_members": "{{count}} online",
   "notif_title_stage_invite": "Stage invitation",
   "notif_msg_stage_invite": "{{name}} invited you to a Stage",
+  "notif_title_stage_join_request": "Stage join request",
+  "notif_title_stage_join_approved": "Stage request approved",
+  "notif_title_stage_join_rejected": "Stage request declined",
+  "notif_msg_stage_join_request": "{{name}} requested to join your Stage",
+  "notif_msg_stage_join_approved": "Your request to join the Stage was approved",
+  "notif_msg_stage_join_rejected": "Your request to join the Stage was declined",
   "invite_friends": "Invite Guests",
   "invite_friends_on_app": "Friends on the app (optional)",
   "invite_manual_hub_subtitle": "Choose the invitation type, then complete the form.",
@@ -2551,6 +2638,8 @@
   "last_updated_month": "Last updated: 1 month ago",
   "later": "Later",
   "latest_invitations": "Latest Invitations",
+  "latest_public_invitations": "Latest Public Invitations",
+  "suggested_friends": "Suggested Friends",
   "leave_community": "Leave",
   "left": "left",
   "liability_limitation": "5. Limitation of Liability",
@@ -3225,6 +3314,16 @@
   "private_profile_custom_tag_placeholder": "Add your own…",
   "private_profile_invite_pref_title": "Who can send you Private Invites?",
   "private_profile_taste_desc": "Help others know your favorite activities for 1-on-1 meetups",
+  "dining_persona_art": "Art",
+  "dining_persona_cinema": "Cinema",
+  "dining_persona_coffee": "Coffee",
+  "dining_persona_healthy": "Healthy",
+  "dining_persona_live_music": "Live Music",
+  "dining_persona_pizza": "Pizza",
+  "dining_persona_running": "Running",
+  "dining_persona_street_food": "Street Food",
+  "dining_persona_sushi": "Sushi",
+  "dining_persona_walking": "Walking",
   "private_profile_taste_title": "Vibe & Interests",
   "private_rail_camera_label": "Video",
   "private_rail_upload_label": "Your photo",
@@ -4063,7 +4162,7 @@
   "trial_ends_label": "✨ Trial Pro Plan Active - Ends:",
   "try_different_filter": "Try a different filter or search term",
   "try_different_filters": "Try adjusting your filters or search terms",
-  "try_elite_free": "Try Elite Partner FREE!",
+  "try_elite_free": "Upgrade to Paid Business",
   "try_google_places_hint": "Try Google Places for unregistered venues",
   "try_osm_places_hint": "Search all places (OpenStreetMap) for unregistered venues",
   "tuesday": "Tuesday",
@@ -4355,5 +4454,9 @@
   "zoom_out": "Zoom Out",
   "🎯 Add-on Offer Slots": "🎯 Add-on Offer Slots",
   "💕 Private Invite Packs": "💕 Private Invite Packs",
-  "social_invite_publish_notify_warning": "Invitation published, but notifications could not be delivered to all members. Try sending again from preview."
+  "social_invite_publish_notify_warning": "Invitation published, but notifications could not be delivered to all members. Try sending again from preview.",
+  "business_upgrade_to_pro": "Upgrade to Paid",
+  "business_pro_fields_notice": "The following fields require a Paid Business plan to be visible to visitors:",
+  "business_verified_badge": "Verified",
+  "business_vip_badge": "VIP"
 }

@@ -119,4 +119,25 @@ Google Sign-In Error 10 was fixed by registering the **exact** device SHA-1 in F
 
 Near-miss that must **not** be used: `8f83e80478ebd15cdd2c84ef5abe63064d0688bd`.
 
+### Facebook Login (Android) — verified 2026-07-28, build 1.0.40+
+
+Meta Developer Console → App settings → Basic → Android:
+
+| Field | Value |
+|------|--------|
+| Package name | `com.dinebuddies.app` |
+| Class name | `com.dinebuddies.app.MainActivity` |
+| Key hashes | see below |
+
+Key hashes (keep all):
+
+```
+MsR9t8HW3P9E7f5C9YmkGop2Rak=
+7ukitpf0qRaaU7mvNKDt/qWmEps=
+j4PoBHjr0VzdLITvWr5jBkDWiL0=
+4AUl2AMRpERKOs0cijJFTKwcnSA=
+```
+
+Local secrets (gitignored): `android/facebook.properties` (`clientToken`), `android/app/google-services.json`, `android/keystore/`.
+
 After changing auth or web assets: `npm run android:sync`, then generate a new signed **AAB**/APK and bump `versionCode`.

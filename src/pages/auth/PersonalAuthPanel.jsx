@@ -297,13 +297,14 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     return () => clearTimeout(timer);
   }, [loading]);
 
-  const oauthButtonsLocked = loading && !isMobileTouchDevice();
+  const oauthButtonsLocked = loading;
 
   const handleOAuth = async (provider) => {
     clearGuestModeForSignIn();
     setLoading(true);
     setError('');
     let startedRedirect = false;
+    let authStarted = false;
     try {
       if (import.meta.env.DEV && !isFirebaseAuthorizedDevHost()) {
         setError(
@@ -316,12 +317,14 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
       }
       if (provider === 'google') {
         const googleRes = await signInWithGoogle();
+        authStarted = true;
         if (googleRes?.__oauthRedirect) {
           startedRedirect = true;
           return;
         }
       } else if (provider === 'facebook') {
         const fbRes = await signInWithFacebook();
+        authStarted = true;
         if (
           fbRes?.__oauthRedirect ||
           fbRes?.__facebookIosRedirect ||
@@ -332,6 +335,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
         }
       }
     } catch (err) {
+      authStarted = false;
       if (!isCoopPopupNoise(err)) {
         prepareOAuthSignInAttempt();
       }
@@ -366,7 +370,8 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
       }
     } finally {
       dismissFacebookSdkOverlay();
-      if (!startedRedirect) {
+      // Keep the busy indicator while Firebase finishes / navigates after a successful native sheet.
+      if (!startedRedirect && !authStarted) {
         setLoading(false);
       }
     }
@@ -497,9 +502,15 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
           onClick={() => handleOAuth('facebook')}
           disabled={oauthButtonsLocked}
           className="btn-auth-social btn-facebook personal-auth-social ios-tap-target"
-          style={{ ...btn, opacity: oauthButtonsLocked ? 0.65 : 1 }}>
+          style={{
+            ...btn,
+            background: '#1877F2',
+            color: '#ffffff',
+            borderColor: '#1877F2',
+            opacity: oauthButtonsLocked ? 0.65 : 1,
+          }}>
           
-                        <FaFacebook size={22} color="#1877F2" />{' '}
+                        <FaFacebook size={22} color="#ffffff" />{' '}
                         {t('continue_with_facebook', 'Continue with Facebook')}
                     </button>
                 </div>
@@ -546,6 +557,27 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
   return (
     <div id="personal-login-panel" style={{ width: '100%', minWidth: 0 }}>
             {singleCardShell ? body : <div style={cardShell}>{body}</div>}
+            {loading ? (
+              <div
+                className="auth-oauth-busy-overlay"
+                role="status"
+                aria-live="polite"
+                aria-busy="true"
+              >
+                <div className="auth-oauth-busy-overlay__card">
+                  <img
+                    src="/db-logo.svg"
+                    alt=""
+                    className="auth-oauth-busy__logo"
+                    width={52}
+                    height={52}
+                  />
+                  <AppText as="p" className="auth-oauth-busy__text">
+                    {t('auth_oauth_busy', 'Signing you in…')}
+                  </AppText>
+                </div>
+              </div>
+            ) : null}
         </div>);
 
 }
