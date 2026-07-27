@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaApple, FaFacebook, FaUser } from 'react-icons/fa';
+import { FaFacebook, FaUser } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getAuthErrorMessage } from '../../utils/errorMessages';
-import { isAffiliateAgent, isBusinessUser } from '../../utils/accountRole';
+import { isBusinessUser } from '../../utils/accountRole';
 import { sanitizeNextPath } from '../../utils/safeInternalPath';
 import { dismissFacebookSdkOverlay } from '../../utils/facebookSdkCleanup';
-import { prepareOAuthSignInAttempt } from '../../utils/firebaseOAuthSignIn';
+import { isNativeAndroid } from '../../platform/runtime';
+import { App as CapApp } from '@capacitor/app';
+import { isCoopPopupNoise, prepareOAuthSignInAttempt } from '../../utils/firebaseOAuthSignIn';
 import {
   consumeOAuthRedirectComplete,
   consumeOAuthRedirectError,
@@ -29,10 +31,11 @@ import {
 '../../utils/localDevAuth';
 
 /**
- * Consumer (personal) account only: Google, Facebook, and Apple — no email/password on this page.
- * Business → BusinessLoginPanel; affiliates → /affiliate/login.
+ * Consumer (personal) account only: Google and Facebook — no email/password on this page.
+ * Business → BusinessLoginPanel.
  * @param {{ singleCardShell?: boolean }} props
- */import { AppText } from "../../components/base";
+ */
+import { AppText } from "../../components/base";
 export default function PersonalAuthPanel({ singleCardShell = false }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -41,7 +44,6 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
   const {
     signInWithGoogle,
     signInWithFacebook,
-    signInWithApple,
     continueAsGuest,
     signOut,
     userProfile,
@@ -64,6 +66,23 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     return keys.
     filter(([, v]) => !v || String(v).includes('your-')).
     map(([k]) => k);
+  }, []);
+
+  const [nativeBuildLabel, setNativeBuildLabel] = useState('');
+
+  useEffect(() => {
+    if (!isNativeAndroid()) return undefined;
+    let cancelled = false;
+    CapApp.getInfo()
+      .then((info) => {
+        if (!cancelled) {
+          setNativeBuildLabel(`v${info.version} (${info.build})`);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const nextPath = sanitizeNextPath(new URLSearchParams(location.search).get('next'));
@@ -100,16 +119,6 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
   useEffect(() => {
     if (isBusinessLoginTab) return;
     if (authLoading || !currentUser || guestLike || !userProfile) return;
-    if (isAffiliateAgent(userProfile)) {
-      setError(
-        t(
-          'auth_affiliate_portal_only',
-          'This account is an affiliate partner. Sign in from the affiliate portal only.'
-        )
-      );
-      void rejectWrongAccountType();
-      return;
-    }
     if (isBusinessUser(userProfile)) {
       setError(
         t(
@@ -151,7 +160,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     showToast(
       t(
         'password_reset_done_sign_in_social',
-        'Password updated. Sign in with Google, Facebook, or Apple for your personal account.'
+        'Password updated. Sign in with Google or Facebook for your personal account.'
       ),
       'success'
     );
@@ -228,13 +237,18 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     }
     if (authLoading) return undefined;
 
+    // Must stay above AuthContext redirect timeout (35s) so we don't fake-fail mid recovery.
     const delayMs =
-      peekOAuthRedirectPending() || peekOAuthRedirectProvider() ? 15000 : 4500;
+      peekOAuthRedirectPending() || peekOAuthRedirectProvider() || hasFirebaseAuthReturnInUrl()
+        ? 40000
+        : 8000;
 
     const timer = setTimeout(() => {
       if (currentUser) return;
       releaseLoginButtons();
-      if (!peekOAuthRedirectPending() && !peekOAuthRedirectProvider()) return;
+      if (!peekOAuthRedirectPending() && !peekOAuthRedirectProvider() && !hasFirebaseAuthReturnInUrl()) {
+        return;
+      }
       const redirectErr = consumeOAuthRedirectError();
       if (redirectErr) {
         setError(getAuthErrorMessage(redirectErr) || redirectErr.message);
@@ -279,7 +293,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
 
   useEffect(() => {
     if (!loading) return undefined;
-    const timer = setTimeout(() => setLoading(false), 20000);
+    const timer = setTimeout(() => setLoading(false), 45000);
     return () => clearTimeout(timer);
   }, [loading]);
 
@@ -306,24 +320,24 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
           startedRedirect = true;
           return;
         }
-      } else if (provider === 'apple') {
-        const appleRes = await signInWithApple();
-        if (appleRes?.__oauthRedirect) {
-          startedRedirect = true;
-          return;
-        }
-      } else {
+      } else if (provider === 'facebook') {
         const fbRes = await signInWithFacebook();
-        if (fbRes?.__oauthRedirect || fbRes?.__facebookIosRedirect) {
+        if (
+          fbRes?.__oauthRedirect ||
+          fbRes?.__facebookIosRedirect ||
+          fbRes?.__facebookMobileRedirect
+        ) {
           startedRedirect = true;
           return;
         }
       }
     } catch (err) {
-      prepareOAuthSignInAttempt();
-      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-
-        /* ignore */} else if (
+      if (!isCoopPopupNoise(err)) {
+        prepareOAuthSignInAttempt();
+      }
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request' || isCoopPopupNoise(err)) {
+        /* ignore — COOP can reject while auth already succeeded; AuthContext recovers */
+      } else if (
       isEmbeddedPreviewBrowser() && (
       err.code === 'auth/popup-blocked' ||
       err.code === 'auth/cancelled-popup-request' ||
@@ -400,7 +414,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
       
                 {t(
         'auth_personal_step1_subtitle',
-        'Sign in or create a personal account with Google, Facebook, or Apple only.'
+        'Sign in or create a personal account with Google or Facebook.'
       )}
             </AppText>
 
@@ -488,21 +502,6 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
                         <FaFacebook size={22} color="#1877F2" />{' '}
                         {t('continue_with_facebook', 'Continue with Facebook')}
                     </button>
-                    <button
-          type="button"
-          onClick={() => handleOAuth('apple')}
-          disabled={oauthButtonsLocked}
-          className="btn-auth-social btn-apple personal-auth-social ios-tap-target"
-          style={{
-            ...btn,
-            background: '#000000',
-            color: '#ffffff',
-            border: '1px solid #000000',
-            opacity: oauthButtonsLocked ? 0.65 : 1
-          }}>
-          
-                        <FaApple size={22} aria-hidden /> {t('continue_with_apple', 'Continue with Apple')}
-                    </button>
                 </div>
 
                 <button
@@ -526,6 +525,20 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
         
                     {t('continue_as_guest', 'Continue as guest')}
                 </button>
+                {nativeBuildLabel ? (
+                  <p
+                    style={{
+                      marginTop: '0.75rem',
+                      marginBottom: 0,
+                      textAlign: 'center',
+                      color: '#9ca3af',
+                      fontSize: '0.72rem',
+                      letterSpacing: '0.02em',
+                    }}
+                  >
+                    {nativeBuildLabel}
+                  </p>
+                ) : null}
             </section>
         </div>;
 

@@ -1,0 +1,6 @@
+# Meta Facebook Login — Android native SDK
+# Copy to facebook.properties (gitignored) and set the Client token from:
+# https://developers.facebook.com/apps/1718617005774108/settings/advanced/
+#
+# clientToken=YOUR_CLIENT_TOKEN_HERE
+clientToken=

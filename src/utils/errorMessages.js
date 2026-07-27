@@ -21,11 +21,10 @@ const CODE_TO_I18N_KEY = {
     'auth/requires-recent-login': 'auth_requires_recent_login',
     'auth/account-exists-with-different-credential': 'auth_account_exists_with_different_credential',
     'auth/business-email-in-use': 'auth_business_email_conflict',
-    'auth/affiliate-email-in-use': 'auth_affiliate_email_in_use',
     'auth/business-portal-only': 'auth_business_portal_only',
     'auth/consumer-portal-only': 'auth_consumer_portal_only',
-    'auth/affiliate-portal-only': 'auth_affiliate_portal_only',
     'auth/personal-portal-only': 'auth_personal_portal_only',
+    'auth/device-banned': 'auth_device_banned',
     'auth/operation-not-allowed': 'auth_operation_not_allowed',
     'auth/configuration-not-found': 'auth_configuration_not_found',
     'auth/embedded-oauth-redirect-lost': 'auth_embedded_oauth_redirect_lost',
@@ -98,7 +97,36 @@ export function getAuthErrorMessage(error) {
             `Add "${host || 'localhost'}" in Firebase Console → Authentication → Settings → Authorized domains.`
         );
     }
+    if (/no credentials available|NoCredentialException|GET_NO_CREDENTIALS/i.test(combined)) {
+        return tAuth(
+            'auth_google_no_credentials',
+            'Google Sign-In could not find an account on this device. Add a Google account in Android Settings, or try again.'
+        );
+    }
+    if (
+        /\b10\b|DEVELOPER_ERROR|ApiException:\s*10|GOOGLE_NATIVE_NO_ID_TOKEN|WILL_BE_OVERRIDDEN|default_web_client_id|auth\/google-developer-error/i.test(
+            combined
+        )
+    ) {
+        // Prefer detailed native message (includes device SHA-1 / app version) when present.
+        const detail = String(error?.message || '').trim();
+        if (
+            detail &&
+            (/Device SHA-1:|SHA\/OAuth|failed on |APK SHA-1:|v?\d+\.\d+\.\d+\s*\(/i.test(detail) ||
+                /auth\/google-developer-error/i.test(String(error?.code || '')))
+        ) {
+            return detail;
+        }
+        return tAuth(
+            'auth_google_android_developer_error',
+            'Google Sign-In config error (10). Add the device SHA-1 in Firebase, replace google-services.json, rebuild.'
+        );
+    }
     if (!error?.code) {
+        const detail = String(error?.message || '').trim();
+        if (detail && detail.length < 160) {
+            return detail;
+        }
         return tAuth('auth_error_fallback', 'Something went wrong. Please try again.');
     }
     const i18nKey = CODE_TO_I18N_KEY[error.code];
