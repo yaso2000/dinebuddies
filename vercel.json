@@ -29,6 +29,12 @@
     ],
     "redirects": [
         {
+            "source": "/:path*",
+            "has": [{ "type": "host", "value": "dinebuddies.com" }],
+            "destination": "https://www.dinebuddies.com/:path*",
+            "permanent": true
+        },
+        {
             "source": "/business-signup",
             "destination": "/signup/business",
             "permanent": true
