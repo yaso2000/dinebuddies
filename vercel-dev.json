@@ -20,6 +20,14 @@
         {
             "source": "/business/:id",
             "destination": "/api/business-preview?id=:id"
+        },
+        {
+            "source": "/company",
+            "destination": "/company/index.html"
+        },
+        {
+            "source": "/company/",
+            "destination": "/company/index.html"
         }
     ]
 }
