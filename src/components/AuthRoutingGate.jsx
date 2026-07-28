@@ -7,24 +7,25 @@ import { resolveSignedInHomePath } from '../utils/accountKind';
 import { isAuthBootstrapPending } from '../utils/authBootstrap';
 import {
     canConsumerEnterApp,
+    shouldForceCompleteProfileRedirect,
     shouldSkipConsumerProfileCompletion,
 } from '../utils/consumerProfileComplete';
 import { needsConsumerEmailVerification } from '../utils/emailVerification';
 
 /**
- * Blocks app routes until Firebase auth + server profile sync finish.
- * Then routes consumers: incomplete → /complete-profile, complete → app shell.
+ * Blocks app routes only while Firebase Auth resolves.
+ * Never paint /complete-profile from a stale/partial cache before profileServerSynced —
+ * that flash is what completed users see on every cold start.
  */
 export default function AuthRoutingGate() {
     const location = useLocation();
     const { currentUser, userProfile, loading, profileServerSynced, isGuest } = useAuth();
 
     const pathNorm = (location.pathname || '/').replace(/\/$/, '') || '/';
+    const onCompleteProfile = pathNorm === '/complete-profile';
 
-    if (
-        isAuthBootstrapPending({ loading, currentUser, isGuest, profileServerSynced })
-    ) {
-        return <AppShellLoading variant="session" fullViewport />;
+    if (isAuthBootstrapPending({ loading })) {
+        return <AppShellLoading variant="session" />;
     }
 
     if (!currentUser || isGuest) {
@@ -32,14 +33,14 @@ export default function AuthRoutingGate() {
     }
 
     if (isAdminIdentity(currentUser, userProfile)) {
-        if (pathNorm === '/complete-profile') {
+        if (onCompleteProfile) {
             return <Navigate to="/admin/users" replace />;
         }
         return <Outlet />;
     }
 
     if (userProfile && shouldSkipConsumerProfileCompletion(userProfile)) {
-        if (pathNorm === '/complete-profile') {
+        if (onCompleteProfile) {
             return (
                 <Navigate
                     to={resolveSignedInHomePath(currentUser, userProfile, { isGuest })}
@@ -50,17 +51,44 @@ export default function AuthRoutingGate() {
         return <Outlet />;
     }
 
-    if (needsConsumerEmailVerification(currentUser, userProfile)) {
+    // Profile still hydrating: never force incomplete → /complete-profile.
+    // Firestore cache often has OAuth displayName but missing gender/age.
+    if (!profileServerSynced) {
+        if (userProfile && canConsumerEnterApp(userProfile)) {
+            if (onCompleteProfile) {
+                return (
+                    <Navigate
+                        to={resolveSignedInHomePath(currentUser, userProfile, { isGuest })}
+                        replace
+                    />
+                );
+            }
+            return <Outlet />;
+        }
+        if (onCompleteProfile) {
+            return <AppShellLoading variant="profile" />;
+        }
+        return <Outlet />;
+    }
+
+    if (userProfile && needsConsumerEmailVerification(currentUser, userProfile)) {
         if (pathNorm !== '/verify-email') {
             return <Navigate to="/verify-email" replace state={{ from: location }} />;
         }
         return <Outlet />;
     }
 
-    const profileComplete = canConsumerEnterApp(userProfile);
+    if (!userProfile) {
+        return <Outlet />;
+    }
 
-    if (!profileComplete) {
-        if (pathNorm !== '/complete-profile') {
+    if (
+        shouldForceCompleteProfileRedirect({
+            profileServerSynced,
+            profile: userProfile,
+        })
+    ) {
+        if (!onCompleteProfile) {
             return (
                 <Navigate
                     to="/complete-profile"
@@ -72,7 +100,7 @@ export default function AuthRoutingGate() {
         return <Outlet />;
     }
 
-    if (pathNorm === '/complete-profile') {
+    if (onCompleteProfile) {
         return (
             <Navigate
                 to={resolveSignedInHomePath(currentUser, userProfile, { isGuest })}

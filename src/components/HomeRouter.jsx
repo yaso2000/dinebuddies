@@ -1,10 +1,10 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import DesktopLanding from '../pages/DesktopLanding';
-import AppRouteLoading from '../components/AppRouteLoading';
 import AppShellLoading from '../components/AppShellLoading';
+import AppEntryIntro, { hasCompletedAppEntryIntro } from '../pages/AppEntryIntro';
 import { useAuth } from '../context/AuthContext';
 import { resolveSignedInHomePath } from '../utils/accountKind';
+import { canConsumerEnterApp } from '../utils/consumerProfileComplete';
 import { peekPostLogoutRedirect } from '../utils/localDevAuth';
 
 function isDesktopShell() {
@@ -12,26 +12,38 @@ function isDesktopShell() {
     return window.matchMedia('(min-width: 1024px)').matches;
 }
 
-/** `/` — landing for guests; signed-in users are routed by AuthRoutingGate + resolveSignedInHomePath. */
+/** `/` — entry intro for guests; signed-in users go to their home path. */
 const HomeRouter = () => {
-    const { currentUser, userProfile, isGuest } = useAuth();
+    const { currentUser, userProfile, profileServerSynced, isGuest } = useAuth();
 
     if (peekPostLogoutRedirect()) {
         return <Navigate to="/login" replace />;
     }
 
-    if (currentUser && userProfile) {
+    if (currentUser && userProfile && !isGuest) {
+        // Partial cache often looks incomplete; don't bounce to /complete-profile yet.
+        if (!canConsumerEnterApp(userProfile) && !profileServerSynced) {
+            if (!isDesktopShell()) {
+                return <Navigate to="/posts-feed" replace />;
+            }
+            return <AppShellLoading variant="profile" />;
+        }
         return <Navigate to={resolveSignedInHomePath(currentUser, userProfile, { isGuest })} replace />;
     }
 
-    if (currentUser && !userProfile) {
-        return isDesktopShell() ? <AppShellLoading variant="profile" /> : <AppRouteLoading variant="profile" fullViewport />;
+    // Never park mobile on a full-viewport black loading screen while profile hydrates.
+    if (currentUser && !userProfile && !isGuest) {
+        if (!isDesktopShell()) {
+            return <Navigate to="/posts-feed" replace />;
+        }
+        return <AppShellLoading variant="profile" />;
     }
 
-    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
+    if (hasCompletedAppEntryIntro()) {
         return <Navigate to="/posts-feed" replace />;
     }
-    return <DesktopLanding />;
+
+    return <AppEntryIntro />;
 };
 
 export default HomeRouter;

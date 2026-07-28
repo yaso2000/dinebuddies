@@ -35,7 +35,7 @@ export function shouldSkipConsumerProfileCompletion(profile) {
     if (!profile) return false;
     if (profile.isBusiness === true || profile.pendingBusinessRegistration === true) return true;
     const kind = accountKindFromProfileData(profile);
-    if (kind === AUTH_PORTAL.BUSINESS || kind === AUTH_PORTAL.AFFILIATE) return true;
+    if (kind === AUTH_PORTAL.BUSINESS) return true;
     const roleLc = String(profile.role || '').toLowerCase();
     if (['admin', 'staff', 'support', 'guest'].includes(roleLc)) return true;
     if (String(profile.registrationIntent || '').toLowerCase() === 'business') return true;
@@ -47,6 +47,17 @@ export function canConsumerEnterApp(profile) {
     if (!profile) return false;
     if (shouldSkipConsumerProfileCompletion(profile)) return true;
     return isConsumerProfileComplete(profile);
+}
+
+/**
+ * Force /complete-profile only after a server-synced incomplete profile.
+ * Early Firestore cache often has OAuth name but missing gender/age — using that
+ * to redirect paints the completion form for completed users (flash + hitch).
+ */
+export function shouldForceCompleteProfileRedirect({ profileServerSynced, profile }) {
+    if (!profileServerSynced) return false;
+    if (!profile) return false;
+    return !canConsumerEnterApp(profile);
 }
 
 /** Raw Firestore `users/{uid}` — same skip rules before profile is normalized in AuthContext. */
