@@ -6,11 +6,11 @@ import { clearFacebookIosLoginPending } from './facebookIosSignIn';
 import {
     clearOAuthRedirectPending,
     clearGuestModeForSignIn,
+    isAndroidTouchDevice,
     isIosTouchDevice,
-    isProductionWebHost,
     isStandalonePwa,
     markOAuthRedirectPending,
-    preferOAuthRedirectForProvider,
+    preferOAuthRedirectOnThisDevice,
 } from './localDevAuth';
 
 function resolveOAuthProviderId(provider) {
@@ -22,10 +22,14 @@ function resolveOAuthProviderId(provider) {
     return typeof fromClass === 'string' ? fromClass : '';
 }
 
-/** Apple/Facebook/mobile: popup only — redirect + firebaseapp.com authDomain fails on www. */
+/**
+ * Popup → redirect fallback is unsafe for Facebook/Apple and for Android with
+ * *.firebaseapp.com authDomain (storage partitioning → "missing initial state").
+ * Only allow a narrow desktop fallback when popup is blocked.
+ */
 function shouldFallbackPopupToRedirect(popupErr, providerId) {
     if (providerId === 'facebook.com' || providerId === 'apple.com') return false;
-    if (isIosTouchDevice() || isStandalonePwa()) return false;
+    if (isIosTouchDevice() || isStandalonePwa() || isAndroidTouchDevice()) return false;
     const code = popupErr?.code || '';
     const message = String(popupErr?.message || '');
     return (
@@ -70,7 +74,7 @@ function waitForPopupAuthUser(timeoutMs = 5000) {
     });
 }
 
-/** Clear stale redirect state before a fresh popup sign-in (user tapped a provider button). */
+/** Clear stale redirect state before a fresh OAuth attempt (user tapped a provider button). */
 export function prepareOAuthSignInAttempt() {
     clearOAuthRedirectPending();
     clearFacebookIosLoginPending();
@@ -91,11 +95,15 @@ async function startOAuthRedirect(provider) {
 }
 
 /**
- * iOS/Safari → redirect. Android/desktop → popup (redirect only when popup is blocked).
- * @returns {Promise<{ __oauthRedirect: true } | { result: import('firebase/auth').UserCredential }>}
+ * Do NOT force redirect on all production hosts — that lands users on
+ * *.firebaseapp.com with "missing initial state" under storage partitioning.
+ *
+ * - iPhone / iPad / Mac Safari / PWA → redirect (needs same-origin www authDomain)
+ * - Android Chrome + desktop → popup
  */
 export async function firebaseOAuthPopupOrRedirect(provider) {
-    if (!resolveOAuthProviderId(provider)) {
+    const providerId = resolveOAuthProviderId(provider);
+    if (!providerId) {
         const err = new Error('OAuth provider is required');
         err.code = 'auth/invalid-oauth-provider';
         throw err;
@@ -105,14 +113,12 @@ export async function firebaseOAuthPopupOrRedirect(provider) {
     clearGuestModeForSignIn();
     await auth.authStateReady();
 
-    const providerId = resolveOAuthProviderId(provider);
-    const forceProductionRedirect =
-        isProductionWebHost() && (providerId === 'google.com' || providerId === 'apple.com');
-    if (forceProductionRedirect || preferOAuthRedirectForProvider(providerId)) {
+    if (preferOAuthRedirectOnThisDevice()) {
         return startOAuthRedirect(provider);
     }
 
     try {
+        // First await must be signInWithPopup so the browser keeps user-activation for window.open.
         const result = await signInWithPopup(auth, provider);
         return { result };
     } catch (popupErr) {
@@ -123,6 +129,9 @@ export async function firebaseOAuthPopupOrRedirect(provider) {
             const recoveredUser = await waitForPopupAuthUser();
             if (recoveredUser) {
                 return { result: { user: recoveredUser, providerId } };
+            }
+            if (auth.currentUser) {
+                return { result: { user: auth.currentUser, providerId } };
             }
         }
         if (shouldFallbackPopupToRedirect(popupErr, providerId)) {
