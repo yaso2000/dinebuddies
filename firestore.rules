@@ -36,14 +36,14 @@ service cloud.firestore {
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner');
     }
 
+    // Membership must be server-authored on the partner doc (setCommunityMembership).
+    // Do NOT trust the caller's self-writable joinedCommunities list — that would let
+    // any signed-in user grant themselves access to any community chat.
     function isCommunityMember(partnerId) {
-      let me = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       let partner = get(/databases/$(database)/documents/users/$(partnerId)).data;
-      let joined = me.get('joinedCommunities', []);
       let members = partner.get('communityMembers', []);
       return request.auth.uid == partnerId ||
-             request.auth.uid in members ||
-             partnerId in joined;
+             request.auth.uid in members;
     }
 
     function isChatParticipant(chatId) {
@@ -129,9 +129,11 @@ service cloud.firestore {
       allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
       allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile();
+      // joinedCommunities / communityMembers are written only by trusted Cloud Functions
+      // (setCommunityMembership). Client self-writes would bypass community chat ACLs.
       allow update: if isOwner(userId) && 
                        !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
+                         .hasAny(['role', 'accountType', 'joinedCommunities', 'communityMembers']);
       allow update: if isAdmin();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
       allow update: if isSignedIn() &&

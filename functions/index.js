@@ -1308,14 +1308,15 @@ exports.adminUpdateBusinessLimits = functions.https.onCall(async (data, context)
         throw new functions.https.HttpsError('invalid-argument', 'targetUid is required.');
     }
 
-    await db.collection('users').doc(targetUid).set({
-        businessInfo: {
-            customLimits,
-            customLimitsExpiry,
-            adminNotes,
-            lastAdminUpdate: admin.firestore.FieldValue.serverTimestamp()
-        }
-    }, { merge: true });
+    // Use dotted-path update so existing businessInfo fields (logo, hours, gallery,
+    // counters, publish flags, etc.) are preserved. A merged top-level `businessInfo`
+    // map would replace the entire nested object and wipe profile data.
+    await db.collection('users').doc(targetUid).update({
+        'businessInfo.customLimits': customLimits,
+        'businessInfo.customLimitsExpiry': customLimitsExpiry,
+        'businessInfo.adminNotes': adminNotes,
+        'businessInfo.lastAdminUpdate': admin.firestore.FieldValue.serverTimestamp()
+    });
 
     return { success: true, targetUid };
 });
@@ -1339,12 +1340,20 @@ exports.consumeOfferCredit = functions.https.onCall(async (_data, context) => {
 
         if (isElite) return { consumed: false, remaining: null };
 
-        const credits = user.offerCredits || 0;
-        if (credits <= 0) {
+        // Prefer offerCredits (canonical). Also drain legacy offerSlotCredits written by
+        // older Stripe webhook fulfillment so paid packs remain usable.
+        const offerCredits = Number(user.offerCredits || 0);
+        const offerSlotCredits = Number(user.offerSlotCredits || 0);
+        const total = offerCredits + offerSlotCredits;
+        if (total <= 0) {
             throw new functions.https.HttpsError('failed-precondition', 'No offer credits remaining.');
         }
-        tx.update(userRef, { offerCredits: credits - 1 });
-        return { consumed: true, remaining: credits - 1 };
+        if (offerCredits > 0) {
+            tx.update(userRef, { offerCredits: offerCredits - 1 });
+            return { consumed: true, remaining: total - 1 };
+        }
+        tx.update(userRef, { offerSlotCredits: offerSlotCredits - 1 });
+        return { consumed: true, remaining: total - 1 };
     });
 
     return { success: true, ...result };

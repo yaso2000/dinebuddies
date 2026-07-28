@@ -29,7 +29,7 @@ export const publishOffer = async (restaurantId, offerData, file, offerId = null
 
         // Check for elite plan or available credits
         const isElite = data.subscriptionTier === 'elite';
-        const hasEnoughCredits = (data.offerCredits > 0) || isElite;
+        const hasEnoughCredits = ((data.offerCredits || 0) + (data.offerSlotCredits || 0) > 0) || isElite;
 
         if (!offerId && !hasEnoughCredits) {
             throw new Error("Insufficient offer credits. Please top up your balance.");
