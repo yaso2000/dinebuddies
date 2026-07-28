@@ -154,12 +154,12 @@ async function handleCheckoutComplete(session) {
 
     try {
         if (isOfferSlot) {
-            // Credit pack: add 1 offer slot credit
+            // Credit pack: add 1 offer credit (canonical field used by publish/consume)
             await db.collection('users').doc(userId).update({
-                offerSlotCredits: admin.firestore.FieldValue.increment(1),
+                offerCredits: admin.firestore.FieldValue.increment(1),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
-            console.log(`✅ User ${userId} received 1 offer slot credit`);
+            console.log(`✅ User ${userId} received 1 offer credit`);
         } else {
             // Subscription plan
             await db.collection('users').doc(userId).update({
