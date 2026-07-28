@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -13,13 +13,18 @@ import { updateProfile as updateAuthProfile } from 'firebase/auth';
 import ImageUpload from '../components/ImageUpload';
 import { uploadProfilePicture, validateImageFile } from '../utils/imageUpload';
 import { resolveSignedInHomePath } from '../utils/accountKind';
+import {
+  canConsumerEnterApp,
+  hasConsumerEntryOk,
+  markConsumerEntryOk,
+} from '../utils/consumerProfileComplete';
 import { buildDefaultProfileMediaPatch } from '../constants/defaultProfileMedia';
 import { AppText, AppTextInput } from "../components/base";
 
 const CompleteProfile = () => {
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const { currentUser, userProfile, updateProfile } = useAuth();
+  const { currentUser, userProfile, updateProfile, profileServerSynced, isGuest } = useAuth();
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -48,6 +53,19 @@ const CompleteProfile = () => {
       }));
     }
   }, [userProfile, currentUser]);
+
+  // Never paint this form for completed users (or while profile is still hydrating).
+  // This page itself was the flash — blank until server sync, then only show if still incomplete.
+  const alreadyComplete =
+    (currentUser?.uid && hasConsumerEntryOk(currentUser.uid)) ||
+    (userProfile && canConsumerEnterApp(userProfile));
+  if (alreadyComplete) {
+    const home = resolveSignedInHomePath(currentUser, userProfile, { isGuest });
+    return <Navigate to={home === '/complete-profile' ? '/posts-feed' : home} replace />;
+  }
+  if (!profileServerSynced) {
+    return null;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -134,6 +152,7 @@ const CompleteProfile = () => {
       }
 
       await updateProfile(updateData);
+      markConsumerEntryOk(currentUser.uid);
 
       const destination =
         location.state?.from?.pathname ||

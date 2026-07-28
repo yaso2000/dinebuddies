@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 import {
     canConsumerEnterApp,
+    clearConsumerEntryOk,
+    markConsumerEntryOk,
     shouldForceCompleteProfileRedirect,
 } from './consumerProfileComplete.js';
 
@@ -17,6 +19,10 @@ describe('shouldForceCompleteProfileRedirect', () => {
         ageCategory: '25-34',
         isProfileComplete: true,
     };
+
+    beforeEach(() => {
+        clearConsumerEntryOk('u1');
+    });
 
     it('never forces complete-profile before server sync (prevents flash)', () => {
         expect(
@@ -44,5 +50,16 @@ describe('shouldForceCompleteProfileRedirect', () => {
             })
         ).toBe(false);
         expect(canConsumerEnterApp(complete)).toBe(true);
+    });
+
+    it('does not force when session entry-ok is set for this uid', () => {
+        markConsumerEntryOk('u1');
+        expect(
+            shouldForceCompleteProfileRedirect({
+                profileServerSynced: true,
+                profile: incomplete,
+                uid: 'u1',
+            })
+        ).toBe(false);
     });
 });

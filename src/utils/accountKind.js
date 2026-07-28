@@ -1,18 +1,20 @@
 /**
- * Single routing model for account kinds — consumer, business, affiliate, staff, guest.
+ * Single routing model for account kinds — consumer, business, staff, guest.
  * Identity comes from Firestore + AuthContext normalization; portals must not mix flows.
  */
 import { accountKindFromProfileData, AUTH_PORTAL } from './authPortalGate';
-import { isAdminIdentity, shouldLandOnAdminDashboard } from './adminAccess';
-import { isAffiliateAgent } from './accountRole';
-import { canConsumerEnterApp, shouldSkipConsumerProfileCompletion } from './consumerProfileComplete';
+import { shouldLandOnAdminDashboard } from './adminAccess';
+import {
+    canConsumerEnterApp,
+    hasConsumerEntryOk,
+    shouldSkipConsumerProfileCompletion,
+} from './consumerProfileComplete';
 import { needsConsumerEmailVerification } from './emailVerification';
 import { sanitizeNextPath } from './safeInternalPath';
 
 export const ACCOUNT_KIND = {
     CONSUMER: 'consumer',
     BUSINESS: 'business',
-    AFFILIATE: 'affiliate',
     GUEST: 'guest',
     STAFF: 'staff',
 };
@@ -20,7 +22,6 @@ export const ACCOUNT_KIND = {
 const PORTAL_TO_KIND = {
     [AUTH_PORTAL.PERSONAL]: ACCOUNT_KIND.CONSUMER,
     [AUTH_PORTAL.BUSINESS]: ACCOUNT_KIND.BUSINESS,
-    [AUTH_PORTAL.AFFILIATE]: ACCOUNT_KIND.AFFILIATE,
 };
 
 /** @param {object | null | undefined} profile normalized or raw Firestore user */
@@ -30,7 +31,6 @@ export function resolveAccountKind(profile, { isGuest = false } = {}) {
     if (shouldLandOnAdminDashboard(null, profile) || ['admin', 'staff', 'support', 'moderator'].includes(String(profile.role || '').toLowerCase())) {
         return ACCOUNT_KIND.STAFF;
     }
-    if (isAffiliateAgent(profile)) return ACCOUNT_KIND.AFFILIATE;
     const portal = accountKindFromProfileData(profile);
     return PORTAL_TO_KIND[portal] || ACCOUNT_KIND.CONSUMER;
 }
@@ -57,10 +57,6 @@ export function resolveSignedInHomePath(currentUser, profile, opts = {}) {
         return next || '/admin/users';
     }
 
-    if (kind === ACCOUNT_KIND.AFFILIATE) {
-        return next?.startsWith('/affiliate') ? next : '/affiliate/dashboard';
-    }
-
     if (kind === ACCOUNT_KIND.BUSINESS) {
         if (next && (next.startsWith('/business') || next === '/business-dashboard')) return next;
         if (profile?.pendingBusinessRegistration) return '/business/onboarding';
@@ -72,12 +68,15 @@ export function resolveSignedInHomePath(currentUser, profile, opts = {}) {
         return '/verify-email';
     }
     if (!canConsumerEnterApp(profile)) {
+        const uid = currentUser?.uid || profile?.uid || profile?.id;
+        // Device already confirmed this consumer — avoid cold-start bounce to the form.
+        if (uid && hasConsumerEntryOk(uid)) return next || '/posts-feed';
         return '/complete-profile';
     }
     return next || '/posts-feed';
 }
 
-/** Layout subtree is consumer-first; business/affiliate/staff have dedicated shells. */
+/** Layout subtree is consumer-first; business/staff have dedicated shells. */
 export function shouldUseConsumerAppShell(profile, { isGuest = false } = {}) {
     const kind = resolveAccountKind(profile, { isGuest });
     return kind === ACCOUNT_KIND.CONSUMER || kind === ACCOUNT_KIND.GUEST || kind == null;

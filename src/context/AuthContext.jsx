@@ -5,6 +5,10 @@ import { isBusinessUser, isAffiliateAgent, cannotCreateInvitations, hasBusinessS
 import {
     mergeConsumerProfiles,
     isConsumerProfileComplete,
+    canConsumerEnterApp,
+    shouldSkipConsumerProfileCompletion,
+    markConsumerEntryOk,
+    clearConsumerEntryOk,
 } from '../utils/consumerProfileComplete';
 import { normalizeUserProfile as normalizeProfile } from '../utils/userProfileNormalize';
 import { getAvatarUrlOrNull } from '../utils/avatarUtils';
@@ -211,6 +215,10 @@ export const AuthProvider = ({ children }) => {
     const lastAuthUidRef = useRef(null);
     /** After a server snapshot, ignore stale persisted-cache snapshots that would re-open onboarding. */
     const profileServerSyncedRef = useRef(false);
+    /** Latest profile for bootstrap timers (avoid finishing sync on incomplete cache alone). */
+    const userProfileRef = useRef(null);
+    /** True after getDocFromServer or a fromCache:false snapshot for this uid. */
+    const profileServerReadDoneRef = useRef(false);
     /** Prevents profile listener from wiping sync after signInWithEmail already bootstrapped this uid. */
     const lastBootstrappedUidRef = useRef(null);
     const isSigningOutRef = useRef(false);
@@ -221,6 +229,10 @@ export const AuthProvider = ({ children }) => {
         if (uid) lastBootstrappedUidRef.current = uid;
         setProfileServerSynced(true);
         setLoading(false);
+        const profile = userProfileRef.current;
+        if (uid && profile && canConsumerEnterApp(profile)) {
+            markConsumerEntryOk(uid);
+        }
         if (uid && auth.currentUser?.uid === uid) {
             void runPushBootstrap(uid);
         }
@@ -228,7 +240,9 @@ export const AuthProvider = ({ children }) => {
 
     const resetSignedInSessionState = () => {
         profileServerSyncedRef.current = false;
+        profileServerReadDoneRef.current = false;
         lastBootstrappedUidRef.current = null;
+        userProfileRef.current = null;
         setProfileServerSynced(false);
         setUserProfile(null);
         setIsGuest(false);
@@ -237,12 +251,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const clearLegacyConsumerEntryCache = (uid) => {
-        if (!uid) return;
-        try {
-            sessionStorage.removeItem(`dineb_consumer_entry_ok_${uid}`);
-        } catch {
-            /* ignore */
-        }
+        clearConsumerEntryOk(uid);
     };
 
     // Guest profile template
@@ -360,6 +369,7 @@ export const AuthProvider = ({ children }) => {
         const uid = currentUser?.uid;
         if (!uid) {
             profileServerSyncedRef.current = false;
+            profileServerReadDoneRef.current = false;
             lastBootstrappedUidRef.current = null;
             setProfileServerSynced(false);
             return;
@@ -369,6 +379,7 @@ export const AuthProvider = ({ children }) => {
             lastBootstrappedUidRef.current === uid && profileServerSyncedRef.current;
         if (!alreadyBootstrapped) {
             profileServerSyncedRef.current = false;
+            profileServerReadDoneRef.current = false;
             setProfileServerSynced(false);
         }
         const userRef = doc(db, 'users', uid);
@@ -391,6 +402,7 @@ export const AuthProvider = ({ children }) => {
         const applyProfileDoc = (snap) => {
             if (!snap.exists()) {
                 if (!isDeletingAccountRef.current) {
+                    userProfileRef.current = null;
                     setUserProfile(null);
                 }
                 return;
@@ -401,7 +413,12 @@ export const AuthProvider = ({ children }) => {
                 ...snap.data(),
             });
             syncBusinessNavHint(normalized, snap.id);
-            setUserProfile((prev) => mergeConsumerProfiles(prev, normalized));
+            setUserProfile((prev) => {
+                const merged = mergeConsumerProfiles(prev, normalized);
+                userProfileRef.current = merged;
+                if (canConsumerEnterApp(merged)) markConsumerEntryOk(uid);
+                return merged;
+            });
         };
 
         const applySnapshotProfile = (normalized, docId, { fromCache = false } = {}) => {
@@ -412,26 +429,52 @@ export const AuthProvider = ({ children }) => {
                 if (fromCache) {
                     merged = mergeProfileSnapshot(merged, prev);
                 }
+                userProfileRef.current = merged;
+                if (!fromCache && canConsumerEnterApp(merged)) markConsumerEntryOk(uid);
                 return merged;
             });
         };
 
-        const finishBootstrap = () => {
+        const isIncompleteConsumer = (profile) =>
+            Boolean(
+                profile &&
+                    !shouldSkipConsumerProfileCompletion(profile) &&
+                    !canConsumerEnterApp(profile)
+            );
+
+        const finishBootstrap = ({ allowIncompleteCache = false } = {}) => {
             if (cancelled || profileServerSyncedRef.current) return;
+            const profile = userProfileRef.current;
+            if (
+                isIncompleteConsumer(profile) &&
+                !profileServerReadDoneRef.current &&
+                !allowIncompleteCache
+            ) {
+                // Cache-only incomplete OAuth docs must not open /complete-profile.
+                return;
+            }
             markProfileSynced(uid);
         };
 
+        // Soft timer: never open incomplete→/complete-profile on cache alone.
         const safetyTimer = setTimeout(() => {
             if (cancelled || profileServerSyncedRef.current) return;
             if (needsOAuthRedirectProfileFinish()) return;
             finishBootstrap();
         }, 25000);
 
+        // Last resort so brand-new users are not stuck forever if the server never answers.
+        const hardTimer = setTimeout(() => {
+            if (cancelled || profileServerSyncedRef.current) return;
+            finishBootstrap({ allowIncompleteCache: true });
+        }, 45000);
+
         (async () => {
             if (alreadyBootstrapped) return;
             try {
                 const snap = await getDocFromServer(userRef);
                 if (cancelled) return;
+                profileServerReadDoneRef.current = true;
                 applyProfileDoc(snap);
                 if (snap.exists()) {
                     finishBootstrap();
@@ -443,7 +486,8 @@ export const AuthProvider = ({ children }) => {
                     const snap = await getDoc(userRef);
                     if (cancelled) return;
                     applyProfileDoc(snap);
-                    if (snap.exists()) {
+                    // Cache fallback: only finish early when profile is already enterable.
+                    if (snap.exists() && !isIncompleteConsumer(userProfileRef.current)) {
                         finishBootstrap();
                     }
                 } catch (fallbackErr) {
@@ -467,10 +511,12 @@ export const AuthProvider = ({ children }) => {
                     });
                     applySnapshotProfile(normalized, docSnap.id, { fromCache });
                 } else if (!isDeletingAccountRef.current) {
+                    userProfileRef.current = null;
                     setUserProfile(null);
                 }
 
                 if (!fromCache && docSnap.exists()) {
+                    profileServerReadDoneRef.current = true;
                     finishBootstrap();
                 }
             },
@@ -485,6 +531,7 @@ export const AuthProvider = ({ children }) => {
         return () => {
             cancelled = true;
             clearTimeout(safetyTimer);
+            clearTimeout(hardTimer);
             unsubscribeSnapshot();
         };
     }, [currentUser?.uid]);

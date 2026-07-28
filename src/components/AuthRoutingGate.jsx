@@ -7,6 +7,7 @@ import { resolveSignedInHomePath } from '../utils/accountKind';
 import { isAuthBootstrapPending } from '../utils/authBootstrap';
 import {
     canConsumerEnterApp,
+    hasConsumerEntryOk,
     shouldForceCompleteProfileRedirect,
     shouldSkipConsumerProfileCompletion,
 } from '../utils/consumerProfileComplete';
@@ -30,6 +31,12 @@ export default function AuthRoutingGate() {
 
     if (!currentUser || isGuest) {
         return <Outlet />;
+    }
+
+    // Returning completed consumers: leave /complete-profile before profile hydrates.
+    if (onCompleteProfile && hasConsumerEntryOk(currentUser.uid)) {
+        const home = resolveSignedInHomePath(currentUser, userProfile, { isGuest });
+        return <Navigate to={home === '/complete-profile' ? '/posts-feed' : home} replace />;
     }
 
     if (isAdminIdentity(currentUser, userProfile)) {
@@ -88,6 +95,7 @@ export default function AuthRoutingGate() {
         shouldForceCompleteProfileRedirect({
             profileServerSynced,
             profile: userProfile,
+            uid: currentUser.uid,
         })
     ) {
         if (!onCompleteProfile) {
