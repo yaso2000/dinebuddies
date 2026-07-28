@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { consumeAuthGateNotice } from '../../utils/authGateNotice';
+import { sanitizeNextPath } from '../../utils/safeInternalPath';
 import PersonalAuthPanel from './PersonalAuthPanel';
 import BusinessLoginPanel from './BusinessLoginPanel';
 import AuthPageChrome from './AuthPageChrome';
@@ -11,7 +12,7 @@ import LocalDevOAuthNotice from '../../components/LocalDevOAuthNotice';
 import { isEmbeddedPreviewBrowser, peekPostLogoutRedirect, clearPostLogoutRedirect, hasFirebaseAuthReturnInUrl, peekOAuthRedirectPending, peekOAuthRedirectProvider } from '../../utils/localDevAuth';
 import { resolveSignedInHomePath } from '../../utils/accountKind';
 import { resolveBusinessPostLoginPath } from '../../utils/postAuthRedirect';
-import { isBusinessUser, hasBusinessSessionHint } from '../../utils/accountRole';
+import { isAffiliateAgent, isBusinessUser, hasBusinessSessionHint } from '../../utils/accountRole';
 import { shouldLandOnAdminDashboard } from '../../utils/adminAccess';
 import { canConsumerEnterApp } from '../../utils/consumerProfileComplete';
 import { AppText } from '../../components/base';
@@ -23,20 +24,33 @@ function readLoginTabFromLocation(location) {
     return businessFromQuery || businessFromPath ? 'business' : 'personal';
 }
 
+/** Exit /login after OAuth without parking on /complete-profile before server sync. */
+function resolveConsumerLeaveLoginPath(currentUser, userProfile, { isGuest, profileServerSynced } = {}) {
+    const home = resolveSignedInHomePath(currentUser, userProfile, { isGuest });
+    if (
+        home === '/complete-profile' &&
+        !profileServerSynced &&
+        !canConsumerEnterApp(userProfile)
+    ) {
+        return '/posts-feed';
+    }
+    return home;
+}
+
 /** Login hub — never full-screen block; show buttons while OAuth finishes in the background. */
 export default function LoginHub() {
     const { t } = useTranslation();
     const { showToast } = useToast();
     const location = useLocation();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [tab, setTab] = useState(() => readLoginTabFromLocation(location));
     const { currentUser, userProfile, profileServerSynced, isGuest } = useAuth();
 
     const postLogout = peekPostLogoutRedirect();
 
-    // Leave /login early only when the profile is already known-complete, or after
-    // server sync. Navigating on a partial cache sends completed users through
-    // /complete-profile for a frame (ugly flash + hitch).
+    // Leave as soon as a profile uid is present (or after server sync). Waiting only on
+    // profileServerSynced / canConsumerEnterApp hung Google redirect returns on /login.
     const signedInConsumerReady =
         Boolean(currentUser) &&
         !isGuest &&
@@ -44,9 +58,10 @@ export default function LoginHub() {
         Boolean(userProfile) &&
         userProfile?.isGuest !== true &&
         userProfile?.role !== 'guest' &&
+        (profileServerSynced || Boolean(userProfile?.uid || userProfile?.id)) &&
         !shouldLandOnAdminDashboard(currentUser, userProfile) &&
-        !isBusinessUser(userProfile) &&
-        (canConsumerEnterApp(userProfile) || profileServerSynced);
+        !isAffiliateAgent(userProfile) &&
+        !isBusinessUser(userProfile);
 
     const signedInBusinessReady =
         Boolean(currentUser) &&
@@ -63,12 +78,20 @@ export default function LoginHub() {
     }, [currentUser]);
 
     useEffect(() => {
+        const next = sanitizeNextPath(searchParams.get('next'));
+        if (next && next.startsWith('/affiliate')) {
+            const q = searchParams.toString();
+            navigate(q ? `/affiliate/login?${q}` : '/affiliate/login', { replace: true });
+        }
+    }, [searchParams, navigate]);
+
+    useEffect(() => {
         const notice = consumeAuthGateNotice();
         if (!notice) return;
         const text = notice.i18nKey
             ? t(notice.i18nKey, notice.message || '')
-            : notice.message || '';
-        if (text) showToast(text, notice.variant === 'info' ? 'info' : 'error');
+            : notice.message || t('auth_affiliate_web_only');
+        showToast(text, notice.variant === 'info' ? 'info' : 'error');
     }, [showToast, t]);
 
     useEffect(() => {
@@ -81,6 +104,17 @@ export default function LoginHub() {
         !profileServerSynced &&
         (hasFirebaseAuthReturnInUrl() || peekOAuthRedirectPending() || peekOAuthRedirectProvider());
 
+    // OAuth returned a session but profile doc not hydrated yet — leave login (do not hang).
+    if (
+        currentUser &&
+        !isGuest &&
+        !postLogout &&
+        !userProfile &&
+        (finishingOAuth || hasFirebaseAuthReturnInUrl() || peekOAuthRedirectPending())
+    ) {
+        return <Navigate to="/posts-feed" replace />;
+    }
+
     if (signedInBusinessReady && tab === 'business') {
         return <Navigate to={resolveBusinessPostLoginPath(location.search)} replace />;
     }
@@ -88,7 +122,10 @@ export default function LoginHub() {
     if (signedInConsumerReady) {
         return (
             <Navigate
-                to={resolveSignedInHomePath(currentUser, userProfile, { isGuest })}
+                to={resolveConsumerLeaveLoginPath(currentUser, userProfile, {
+                    isGuest,
+                    profileServerSynced,
+                })}
                 replace
             />
         );
@@ -123,25 +160,13 @@ export default function LoginHub() {
     };
 
     return (
-        <div className="auth-route-scroll login-hub login-hub-page login-hub-page--video">
-            <div className="login-hub-video-bg" aria-hidden="true">
-                <video
-                    className="login-hub-video-bg__media"
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    preload="auto"
-                >
-                    <source src="/videos/never-dine-alone-1.mp4" type="video/mp4" />
-                </video>
-                <div className="login-hub-video-bg__scrim" />
-            </div>
+        <div className="auth-route-scroll login-hub login-hub-page">
             <div className="login-hub-wrap">
                 <AuthPageChrome
                     accountTab={tab}
                     onSwitchToBusiness={goBusiness}
                     onSwitchToPersonal={goPersonal}
+                    showAffiliateLink={false}
                 />
                 <LocalDevOAuthNotice />
                 {finishingOAuth ? (

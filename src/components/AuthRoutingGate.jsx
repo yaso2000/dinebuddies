@@ -65,8 +65,10 @@ export default function AuthRoutingGate() {
             }
             return <Outlet />;
         }
+        // Never park on a loading shell at /complete-profile — that looked like a hang
+        // after Google account pick. Soft-defer by staying in the app shell instead.
         if (onCompleteProfile) {
-            return <AppShellLoading variant="profile" />;
+            return <Navigate to="/posts-feed" replace />;
         }
         return <Outlet />;
     }
