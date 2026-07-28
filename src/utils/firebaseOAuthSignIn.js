@@ -38,7 +38,7 @@ function shouldFallbackPopupToRedirect(popupErr, providerId) {
     );
 }
 
-function isCoopPopupNoise(err) {
+export function isCoopPopupNoise(err) {
     const code = err?.code || '';
     const message = String(err?.message || '');
     return (
