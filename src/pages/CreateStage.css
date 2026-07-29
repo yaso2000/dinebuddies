@@ -170,12 +170,6 @@
   opacity: 0.9;
 }
 
-.create-stage-page__pricing-note {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
 .create-stage-page__submit {
   border: none;
   border-radius: 14px;
