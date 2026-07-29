@@ -21,6 +21,7 @@ function resolveModeratedDestPath(purpose, uid, ext) {
     switch (purpose) {
         case 'chat':
         case 'chat_public':
+        case 'social_dm':
             return `chat_images/${uid}/${uid}_${ts}.jpg`;
         case 'invitation':
             return `invitations/${uid}/${ts}_image.${safeExt}`;
@@ -58,6 +59,7 @@ function resolveModeratedDestPath(purpose, uid, ext) {
 const ALLOWED_PURPOSES = new Set([
     'chat',
     'chat_public',
+    'social_dm',
     'invitation',
     'thumbnail',
     'post',
@@ -74,16 +76,14 @@ const ALLOWED_PURPOSES = new Set([
     'featured',
 ]);
 
+// Paths clients might write to directly. Profile media (avatars/covers/logos/gallery)
+// is omitted — only moderateImage (Admin SDK) writes those after Vision approval.
 const STORAGE_GUARD_PREFIXES = [
     'chat_images/',
     'invitations/',
     'community-posts/',
     'stories/',
-    'gallery/',
     'menus/',
-    // avatars/ covers/ logos/ intentionally omitted — written only by moderateImage.
-    // A previous onFinalize guard deleted those files when custom metadata raced,
-    // which made profile photos appear then vanish.
     'offers/',
     'premium_offers/',
     'business_photos/',
@@ -144,16 +144,23 @@ async function ensureDownloadToken(file) {
  * @param {string} objectPath
  */
 async function runSafeSearchDetection(bucketName, objectPath) {
+    // Fail-secure: never skip Vision. IMAGE_MODERATION_DISABLED must not bypass checks.
     if (process.env.IMAGE_MODERATION_DISABLED === 'true') {
-        console.warn('[imageModeration] IMAGE_MODERATION_DISABLED=true — skipping Vision scan');
-        return { skipped: true, safe: {} };
+        const err = new Error('IMAGE_MODERATION_DISABLED is not allowed — moderation is mandatory.');
+        err.code = 'moderation-required';
+        throw err;
     }
 
     const client = new vision.ImageAnnotatorClient();
     const gcsUri = `gs://${bucketName}/${objectPath}`;
     const [result] = await client.safeSearchDetection(gcsUri);
     const safe = result?.safeSearchAnnotation || null;
-    return { skipped: false, safe };
+    if (!safe || typeof safe !== 'object') {
+        const err = new Error('Vision Safe Search returned no annotation.');
+        err.code = 'moderation-unavailable';
+        throw err;
+    }
+    return { safe };
 }
 
 // Lazy logger reference set in register
@@ -238,7 +245,7 @@ function registerImageModeration(deps) {
         try {
             const detection = await runSafeSearchDetection(bucket.name, quarantinePath);
             safe = detection.safe;
-            if (!detection.skipped && !isSafeSearchAllowed(safe)) {
+            if (!isSafeSearchAllowed(safe)) {
                 await recordModerationStrike(uid, { purpose, quarantinePath, safe });
                 try {
                     await srcFile.delete();
@@ -251,7 +258,7 @@ function registerImageModeration(deps) {
             }
         } catch (err) {
             if (err instanceof functions.https.HttpsError) throw err;
-            functionsLogger.error('Vision Safe Search failed', err);
+            functionsLogger.error('Vision Safe Search failed — blocking upload (fail-secure)', err);
             try {
                 await srcFile.delete();
             } catch (_) { /* ignore */ }
@@ -309,11 +316,13 @@ function registerImageModeration(deps) {
             const filePath = object.name || '';
             if (!filePath) return null;
 
-            // Hard skip profile media even if someone re-adds them to the prefix list.
+            // Hard skip media written only by moderateImage (metadata race used to delete these).
             if (
                 filePath.startsWith('avatars/') ||
                 filePath.startsWith('covers/') ||
-                filePath.startsWith('logos/')
+                filePath.startsWith('logos/') ||
+                filePath.startsWith('gallery/') ||
+                filePath.startsWith('profile_photos/')
             ) {
                 return null;
             }

@@ -10,8 +10,9 @@ import {
 
 const FUNCTIONS_REGION = 'us-central1';
 
-/** Purposes accepted by moderateImage Cloud Function */
+/** Purposes accepted by moderateImage Cloud Function — every image zone. */
 export const MODERATION_PURPOSES = new Set([
+    ImageUploadZone.PRIVATE_DM,
     ImageUploadZone.PUBLIC_CHAT,
     ImageUploadZone.INVITATION,
     ImageUploadZone.THUMBNAIL,
@@ -30,6 +31,7 @@ export const MODERATION_PURPOSES = new Set([
     // legacy aliases (older clients / deploys)
     'chat',
     'invitation',
+    'social_dm',
 ]);
 
 export const IMAGE_MODERATION_REJECTED = 'image-rejected';
@@ -74,7 +76,7 @@ export function isImageModerationUnavailable(error) {
  * Upload image to quarantine, run Vision Safe Search via Cloud Function, return public URL.
  * @param {File|Blob} file
  * @param {string} userId
- * @param {string} purpose — ImageUploadZone (not PRIVATE_DM)
+ * @param {string} purpose — ImageUploadZone value
  * @param {{ onProgress?: (pct: number) => void }} [opts]
  * @returns {Promise<string>}
  */
@@ -82,7 +84,13 @@ export async function uploadImageWithModeration(file, userId, purpose, opts = {}
     const { onProgress } = opts;
     if (!userId) throw new Error('User ID required');
     const normalized =
-        purpose === 'chat' ? ImageUploadZone.PUBLIC_CHAT : purpose === 'invitation' ? ImageUploadZone.INVITATION : purpose;
+        purpose === 'chat'
+            ? ImageUploadZone.PUBLIC_CHAT
+            : purpose === 'invitation'
+              ? ImageUploadZone.INVITATION
+              : purpose === 'social_dm'
+                ? ImageUploadZone.PRIVATE_DM
+                : purpose;
     if (!MODERATION_PURPOSES.has(normalized)) {
         throw new Error(`Invalid moderation purpose: ${purpose}`);
     }

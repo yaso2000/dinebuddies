@@ -62,6 +62,15 @@ export const uploadImage = (file, path, onProgress = null, compressionOptions = 
             onProgress,
         });
     }
+    const looksImage =
+        Boolean(file?.type?.startsWith?.('image/')) ||
+        /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(String(file?.name || path || ''));
+    if (looksImage) {
+        return Promise.reject(
+            new Error('Image uploads require AI moderation (moderationZone + userId).')
+        );
+    }
+    // Non-image (e.g. video) direct path upload.
     return uploadImageToStoragePath(file, path, onProgress, compressionOptions);
 };
 
@@ -237,66 +246,23 @@ export async function prepareImageFileForUpload(file) {
 }
 
 /**
- * Consumer profile media (avatar / gallery / cover) → profile_photos/.
- * Avoids avatars|gallery|covers paths watched by enforceApprovedImageUpload,
- * which was deleting just-uploaded files (metadata race).
+ * Consumer profile media — always Vision-moderated (quarantine → moderateImage).
+ * Dest paths: avatars/ | gallery/ | covers/ (Admin SDK write after approval).
  */
-async function uploadToProfilePhotos(file, userId, filePrefix, onProgress = null) {
-    if (!userId) throw new Error('User ID required');
+export const uploadProfilePicture = async (file, userId, onProgress = null) => {
     const prepared = await prepareImageFileForUpload(file);
+    return uploadManagedImage(prepared, userId, ImageUploadZone.AVATAR, { onProgress });
+};
 
-    beginImageUploadSession('preparing');
-    const report = (pct, phase) => {
-        updateImageUploadSession(pct, phase);
-        if (onProgress) onProgress(pct);
-    };
+export const uploadProfileGalleryPhoto = async (file, userId, onProgress = null) => {
+    const prepared = await prepareImageFileForUpload(file);
+    return uploadManagedImage(prepared, userId, ImageUploadZone.GALLERY, { onProgress });
+};
 
-    try {
-        report(8, 'preparing');
-        const safePrefix = String(filePrefix || 'photo').replace(/[^a-z0-9_-]/gi, '') || 'photo';
-        const path = `profile_photos/${userId}/${safePrefix}_${Date.now()}.jpg`;
-        const storageRef = ref(storage, path);
-        report(15, 'uploading');
-
-        return await new Promise((resolve, reject) => {
-            const uploadTask = uploadBytesResumable(storageRef, prepared, {
-                contentType: 'image/jpeg',
-            });
-            uploadTask.on(
-                'state_changed',
-                (snapshot) => {
-                    const raw = snapshot.totalBytes
-                        ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-                        : 0;
-                    report(15 + raw * 0.85, 'uploading');
-                },
-                reject,
-                async () => {
-                    try {
-                        report(100, 'done');
-                        resolve(await getDownloadURL(uploadTask.snapshot.ref));
-                    } catch (err) {
-                        reject(err);
-                    }
-                }
-            );
-        });
-    } finally {
-        finishImageUploadSession();
-    }
-}
-
-/** Profile avatar → profile_photos/{uid}/avatar_*.jpg */
-export const uploadProfilePicture = async (file, userId, onProgress = null) =>
-    uploadToProfilePhotos(file, userId, 'avatar', onProgress);
-
-/** Profile gallery slot → profile_photos/{uid}/gallery_*.jpg */
-export const uploadProfileGalleryPhoto = async (file, userId, onProgress = null) =>
-    uploadToProfilePhotos(file, userId, 'gallery', onProgress);
-
-/** Profile cover → profile_photos/{uid}/cover_*.jpg */
-export const uploadProfileCoverPhoto = async (file, userId, onProgress = null) =>
-    uploadToProfilePhotos(file, userId, 'cover', onProgress);
+export const uploadProfileCoverPhoto = async (file, userId, onProgress = null) => {
+    const prepared = await prepareImageFileForUpload(file);
+    return uploadManagedImage(prepared, userId, ImageUploadZone.COVER, { onProgress });
+};
 
 /**
  * Upload invitation photo

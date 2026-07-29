@@ -1,8 +1,8 @@
 /**
- * Where an image is uploaded — drives moderation (Vision) vs direct private DM upload.
+ * Where an image is uploaded — every zone runs Vision Safe Search moderation.
  */
 export const ImageUploadZone = {
-    /** 1:1 private conversation only — no Vision moderation */
+    /** 1:1 private conversation — moderated (same pipeline as public chat) */
     PRIVATE_DM: 'social_dm',
     /** Community chat, invitation group chat, any public chat room */
     PUBLIC_CHAT: 'chat_public',
@@ -21,11 +21,6 @@ export const ImageUploadZone = {
     PLACE: 'place',
     FEATURED: 'featured',
 };
-
-/** @param {string} zone */
-export function isPrivateDmZone(zone) {
-    return zone === ImageUploadZone.PRIVATE_DM;
-}
 
 /** @param {string} folder */
 export function folderToImageZone(folder, type) {

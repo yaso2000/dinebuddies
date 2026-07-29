@@ -8,7 +8,7 @@ import { ImageUploadZone } from '../services/imageUploadZones';
  * Compress and upload image to Firebase Storage.
  * @param {File} file
  * @param {string} userId
- * @param {{ zone?: string }} [options] — zone defaults to PUBLIC_CHAT (moderated). Use PRIVATE_DM for 1:1 DMs only.
+ * @param {{ zone?: string }} [options] — zone defaults to PUBLIC_CHAT. All zones are Vision-moderated.
  * @returns {Promise<string>}
  */
 export const uploadImage = async (file, userId, options = {}) => {

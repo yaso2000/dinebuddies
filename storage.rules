@@ -96,14 +96,10 @@ service firebase.storage {
                    && request.resource.size < 20 * 1024 * 1024; // Max 20MB
     }
     
-    // Profile photos (avatars) — client upload path that is NOT watched by
-    // enforceApprovedImageUpload (that trigger was deleting moderated avatars/).
+    // Legacy unmoderated profile path — read-only. All new uploads go quarantine → moderateImage.
     match /profile_photos/{userId}/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == userId
-                   && isImage()
-                   && request.resource.size < 8 * 1024 * 1024;
+      allow write: if false;
       allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
@@ -136,12 +132,10 @@ service firebase.storage {
     }
 
     // Partner gallery
+    // Gallery — public read; writes only via moderateImage (Admin SDK).
     match /gallery/{partnerId}/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == partnerId
-                   && isImage()
-                   && request.resource.size < 8 * 1024 * 1024;
+      allow write: if false;
     }
 
     // Partner menu images
