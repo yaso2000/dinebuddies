@@ -21,8 +21,9 @@ function isAcceptableImageFile(file) {
 }
 
 /**
- * Never uses FileReader data-URLs (break on Android WebView for camera photos).
- * Converts to JPEG first, then previews via blob: URL.
+ * Preview via JPEG blob URL (not FileReader data-URLs).
+ * Keep the local blob until the saved remote URL actually loads — otherwise a
+ * brief 404/race looks like the photo was deleted.
  */
 const ImageUpload = ({
   currentImage = null,
@@ -38,7 +39,6 @@ const ImageUpload = ({
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [localPreview, setLocalPreview] = useState(null);
-  const [brokenRemote, setBrokenRemote] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
@@ -52,16 +52,30 @@ const ImageUpload = ({
     setLocalPreview(null);
   };
 
-  useEffect(() => {
-    if (currentImage && typeof currentImage === 'string' && !currentImage.startsWith('blob:')) {
-      revokeLocalPreview();
-      setBrokenRemote(false);
-    }
-  }, [currentImage]);
-
   useEffect(() => () => revokeLocalPreview(), []);
 
-  const displaySrc = localPreview || (!brokenRemote ? currentImage : null);
+  // When Firestore/Storage URL arrives, only drop the blob after that URL actually loads.
+  useEffect(() => {
+    const remote = typeof currentImage === 'string' ? currentImage.trim() : '';
+    if (!remote || remote.startsWith('blob:') || !localPreview) return undefined;
+
+    let cancelled = false;
+    const probe = new Image();
+    probe.onload = () => {
+      if (!cancelled) revokeLocalPreview();
+    };
+    probe.onerror = () => {
+      // Keep local preview — remote missing usually means Storage delete race.
+    };
+    probe.src = remote;
+    return () => {
+      cancelled = true;
+      probe.onload = null;
+      probe.onerror = null;
+    };
+  }, [currentImage, localPreview]);
+
+  const displaySrc = localPreview || currentImage || null;
   const isBusy = busy || preparing;
 
   const handleFileSelect = async (file) => {
@@ -84,7 +98,6 @@ const ImageUpload = ({
       const objectUrl = URL.createObjectURL(prepared);
       objectUrlRef.current = objectUrl;
       setLocalPreview(objectUrl);
-      setBrokenRemote(false);
 
       if (onImageSelect) {
         await Promise.resolve(onImageSelect(prepared));
@@ -127,7 +140,6 @@ const ImageUpload = ({
   const handleRemove = () => {
     if (isBusy) return;
     revokeLocalPreview();
-    setBrokenRemote(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (onImageRemove) onImageRemove();
   };
@@ -152,13 +164,6 @@ const ImageUpload = ({
             <img
               src={displaySrc}
               alt=""
-              onError={() => {
-                if (localPreview && displaySrc === localPreview) {
-                  revokeLocalPreview();
-                } else {
-                  setBrokenRemote(true);
-                }
-              }}
             />
           </div>
         ) : (

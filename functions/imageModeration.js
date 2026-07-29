@@ -81,15 +81,27 @@ const STORAGE_GUARD_PREFIXES = [
     'stories/',
     'gallery/',
     'menus/',
-    'covers/',
-    'logos/',
-    'avatars/',
+    // avatars/ covers/ logos/ intentionally omitted — written only by moderateImage.
+    // A previous onFinalize guard deleted those files when custom metadata raced,
+    // which made profile photos appear then vanish.
     'offers/',
     'premium_offers/',
     'business_photos/',
     'featured_posts/',
     'users/',
 ];
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isModerationApproved(customMeta) {
+    const custom = customMeta && typeof customMeta === 'object' ? customMeta : {};
+    return (
+        custom.moderationStatus === 'approved' ||
+        custom.moderatedBy === 'vision-safe-search'
+    );
+}
 
 function likelihoodAtLeast(value, threshold) {
     const v = LIKELIHOOD_RANK[value] ?? 0;
@@ -287,7 +299,9 @@ function registerImageModeration(deps) {
         (process.env.GCLOUD_PROJECT ? `${process.env.GCLOUD_PROJECT}.firebasestorage.app` : null) ||
         'dinebuddies.firebasestorage.app';
 
-    // Safety net: delete direct uploads to public image paths without approval metadata.
+    // Safety net: delete direct client uploads to moderated public paths that lack approval.
+    // Never touch avatars/covers/logos (see STORAGE_GUARD_PREFIXES). Always re-read metadata
+    // before delete — onFinalize often races ahead of custom metadata visibility.
     exports.enforceApprovedImageUpload = functions.storage
         .bucket(storageBucket)
         .object()
@@ -295,7 +309,14 @@ function registerImageModeration(deps) {
             const filePath = object.name || '';
             if (!filePath) return null;
 
-            const bucket = getBucket();
+            // Hard skip profile media even if someone re-adds them to the prefix list.
+            if (
+                filePath.startsWith('avatars/') ||
+                filePath.startsWith('covers/') ||
+                filePath.startsWith('logos/')
+            ) {
+                return null;
+            }
 
             const isPublicImagePath = STORAGE_GUARD_PREFIXES.some((prefix) => filePath.startsWith(prefix));
             if (!isPublicImagePath) return null;
@@ -303,12 +324,28 @@ function registerImageModeration(deps) {
             const contentType = object.contentType || '';
             if (!contentType.startsWith('image/')) return null;
 
-            const custom = object.metadata || {};
-            if (custom.moderationStatus === 'approved') return null;
+            if (isModerationApproved(object.metadata)) return null;
+
+            const bucket = getBucket();
+            const file = bucket.file(filePath);
+
+            try {
+                await sleep(2000);
+                const [meta] = await file.getMetadata();
+                if (isModerationApproved(meta.metadata)) return null;
+            } catch (err) {
+                if (err?.code === 404) return null;
+                functionsLogger.warn('Could not re-read image metadata before guard', {
+                    filePath,
+                    message: err?.message,
+                });
+                // Fail open for profile-adjacent uncertainty — do not delete when unsure.
+                return null;
+            }
 
             functionsLogger.warn('Removing unmoderated public image upload', { filePath });
             try {
-                await bucket.file(filePath).delete();
+                await file.delete();
             } catch (err) {
                 if (err.code !== 404) {
                     functionsLogger.error('Failed to delete unmoderated image', err);

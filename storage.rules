@@ -96,49 +96,34 @@ service firebase.storage {
                    && request.resource.size < 20 * 1024 * 1024; // Max 20MB
     }
     
-    // User avatars (flat naming pattern: avatars/{uid}_{timestamp}.jpg)
+    // User avatars — public read; writes only via Cloud Function (moderateImage → Admin SDK).
+    // Client must upload to quarantine/ first. Direct client writes are denied so we never
+    // need a Storage trigger that falsely deletes just-approved avatars.
     match /avatars/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && uidPrefixed(fileName)
-                   && isImage()
-                   && request.resource.size < 5 * 1024 * 1024;
+      allow write: if false;
     }
 
-    // User avatars (folder naming pattern: avatars/{uid}/{fileName})
     match /avatars/{userId}/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == userId
-                   && isImage()
-                   && request.resource.size < 5 * 1024 * 1024;
+      allow write: if false;
     }
 
-    // Covers (flat naming pattern: covers/{uid}_{timestamp}.jpg)
+    // Covers — same policy as avatars (quarantine → moderateImage only).
     match /covers/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && uidPrefixed(fileName)
-                   && isImage()
-                   && request.resource.size < 8 * 1024 * 1024;
+      allow write: if false;
     }
 
-    // Covers (folder naming pattern: covers/{uid}/cover.jpg)
     match /covers/{userId}/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == userId
-                   && isImage()
-                   && request.resource.size < 8 * 1024 * 1024;
+      allow write: if false;
     }
 
     // Business/partner logos (logos/{userId}/logo.jpg)
     match /logos/{userId}/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == userId
-                   && isImage()
-                   && request.resource.size < 2 * 1024 * 1024; // Max 2MB
+      allow write: if false;
     }
 
     // Partner gallery
