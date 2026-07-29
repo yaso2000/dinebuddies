@@ -19,11 +19,9 @@ import {
   FaCheckCircle } from
 'react-icons/fa';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { uploadManagedImage } from '../services/managedImageUpload';
-import { ImageUploadZone } from '../services/imageUploadZones';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
-import { prepareImageFileForUpload } from '../utils/imageUpload';
-import { db, storage } from '../firebase/config';
+import { uploadProfileCoverPhoto } from '../utils/imageUpload';
+import { db } from '../firebase/config';
 import './ProfileEnhancements.css';
 
 // ================================
@@ -59,8 +57,7 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
 
     setUploading(true);
     try {
-      const prepared = await prepareImageFileForUpload(file);
-      const downloadURL = await uploadManagedImage(prepared, userId, ImageUploadZone.COVER);
+      const downloadURL = await uploadProfileCoverPhoto(file, userId);
 
       onUpdate?.(downloadURL);
 

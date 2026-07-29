@@ -237,11 +237,11 @@ export async function prepareImageFileForUpload(file) {
 }
 
 /**
- * Upload profile picture — direct to profile_photos/ (not avatars/).
- * The Storage trigger enforceApprovedImageUpload was deleting files under avatars/
- * right after moderateImage wrote them (metadata race), so photos appeared then vanished.
+ * Consumer profile media (avatar / gallery / cover) → profile_photos/.
+ * Avoids avatars|gallery|covers paths watched by enforceApprovedImageUpload,
+ * which was deleting just-uploaded files (metadata race).
  */
-export const uploadProfilePicture = async (file, userId, onProgress = null) => {
+async function uploadToProfilePhotos(file, userId, filePrefix, onProgress = null) {
     if (!userId) throw new Error('User ID required');
     const prepared = await prepareImageFileForUpload(file);
 
@@ -253,11 +253,12 @@ export const uploadProfilePicture = async (file, userId, onProgress = null) => {
 
     try {
         report(8, 'preparing');
-        const path = `profile_photos/${userId}/avatar_${Date.now()}.jpg`;
+        const safePrefix = String(filePrefix || 'photo').replace(/[^a-z0-9_-]/gi, '') || 'photo';
+        const path = `profile_photos/${userId}/${safePrefix}_${Date.now()}.jpg`;
         const storageRef = ref(storage, path);
         report(15, 'uploading');
 
-        const downloadURL = await new Promise((resolve, reject) => {
+        return await new Promise((resolve, reject) => {
             const uploadTask = uploadBytesResumable(storageRef, prepared, {
                 contentType: 'image/jpeg',
             });
@@ -280,11 +281,22 @@ export const uploadProfilePicture = async (file, userId, onProgress = null) => {
                 }
             );
         });
-        return downloadURL;
     } finally {
         finishImageUploadSession();
     }
-};
+}
+
+/** Profile avatar → profile_photos/{uid}/avatar_*.jpg */
+export const uploadProfilePicture = async (file, userId, onProgress = null) =>
+    uploadToProfilePhotos(file, userId, 'avatar', onProgress);
+
+/** Profile gallery slot → profile_photos/{uid}/gallery_*.jpg */
+export const uploadProfileGalleryPhoto = async (file, userId, onProgress = null) =>
+    uploadToProfilePhotos(file, userId, 'gallery', onProgress);
+
+/** Profile cover → profile_photos/{uid}/cover_*.jpg */
+export const uploadProfileCoverPhoto = async (file, userId, onProgress = null) =>
+    uploadToProfilePhotos(file, userId, 'cover', onProgress);
 
 /**
  * Upload invitation photo

@@ -887,6 +887,14 @@ const Profile = () => {
                     profileGallery,
                     directoryCoverIndex
                   }));
+                  // Persist gallery immediately (same as avatar) — do not wait for full Save.
+                  void updateProfile({
+                    profileGallery,
+                    directoryCoverIndex,
+                  }).catch((err) => {
+                    console.error('Gallery save failed:', err);
+                    showToast(t('failed_save_profile', 'Failed to save profile'), 'error');
+                  });
                   }} /> :
 
                 null}
