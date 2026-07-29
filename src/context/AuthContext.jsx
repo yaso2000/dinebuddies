@@ -758,6 +758,9 @@ export const AuthProvider = ({ children }) => {
 
     // Delete User Account
     // Pass { password } for email users when re-auth is required (auth/requires-recent-login).
+    // CRITICAL: re-authenticate BEFORE deleting Firestore. A stale session used to wipe
+    // users/{uid} first; if Auth then demanded re-login and the user cancelled, profile
+    // data (credits, invitations, business info) was permanently lost while Auth remained.
     const deleteUserAccount = async (options = {}) => {
         const { password } = options;
         if (!currentUser) return false;
@@ -766,6 +769,7 @@ export const AuthProvider = ({ children }) => {
         if (!user) return false;
 
         const uid = user.uid;
+        const providerIds = (user.providerData || []).map((p) => p.providerId);
 
         const doFirestoreDelete = async () => {
             await deleteDoc(doc(db, 'users', uid));
@@ -776,40 +780,44 @@ export const AuthProvider = ({ children }) => {
             await user.delete();
         };
 
-        const performDelete = async () => {
-            await doFirestoreDelete();
-            await doAuthDelete();
-            return true;
-        };
+        const reauthenticateForDeletion = async () => {
+            if (password) {
+                const cred = EmailAuthProvider.credential(user.email, password);
+                await reauthenticateWithCredential(user, cred);
+                return;
+            }
 
-        isDeletingAccountRef.current = true;
-        try {
-            return await performDelete();
-        } catch (error) {
-            const isRequiresRecentLogin = error?.code === 'auth/requires-recent-login';
-            if (isRequiresRecentLogin) {
-                if (password) {
-                    const cred = EmailAuthProvider.credential(user.email, password);
-                    await reauthenticateWithCredential(user, cred);
-                    await doAuthDelete();
-                    return true;
-                }
-                const providerIds = (user.providerData || []).map((p) => p.providerId);
-                let provider = null;
-                if (providerIds.includes('google.com')) provider = new GoogleAuthProvider();
-                else if (providerIds.includes('apple.com')) provider = new OAuthProvider('apple.com');
-                else if (providerIds.includes('facebook.com')) provider = new FacebookAuthProvider();
-                else if (providerIds.includes('twitter.com')) provider = new TwitterAuthProvider();
-                if (provider) {
-                    await reauthenticateWithPopup(user, provider);
-                    await doAuthDelete();
-                    return true;
-                }
+            // Password accounts: require password before any destructive write so the
+            // Settings password modal can collect it without wiping Firestore first.
+            if (providerIds.includes('password')) {
                 const err = new Error('Re-authentication required');
                 err.code = 'auth/requires-recent-login';
                 err.requirePassword = true;
                 throw err;
             }
+
+            let provider = null;
+            if (providerIds.includes('google.com')) provider = new GoogleAuthProvider();
+            else if (providerIds.includes('apple.com')) provider = new OAuthProvider('apple.com');
+            else if (providerIds.includes('facebook.com')) provider = new FacebookAuthProvider();
+            else if (providerIds.includes('twitter.com')) provider = new TwitterAuthProvider();
+
+            if (provider) {
+                await reauthenticateWithPopup(user, provider);
+                return;
+            }
+
+            // No interactive provider available — fall through; Auth delete may still
+            // succeed if the session is fresh enough for Firebase's sensitive-action window.
+        };
+
+        isDeletingAccountRef.current = true;
+        try {
+            await reauthenticateForDeletion();
+            await doFirestoreDelete();
+            await doAuthDelete();
+            return true;
+        } catch (error) {
             console.error('Error deleting account:', error);
             throw error;
         } finally {
