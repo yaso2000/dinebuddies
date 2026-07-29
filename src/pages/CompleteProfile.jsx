@@ -12,6 +12,8 @@ import { FaUser, FaCheckCircle, FaVenusMars, FaBirthdayCake, FaCamera } from 're
 import { updateProfile as updateAuthProfile } from 'firebase/auth';
 import ImageUpload from '../components/ImageUpload';
 import { uploadProfilePicture, validateImageFile } from '../utils/imageUpload';
+import { buildAvatarPersistFields } from '../utils/avatarUtils';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { resolveSignedInHomePath } from '../utils/accountKind';
 import {
   canConsumerEnterApp,
@@ -107,7 +109,9 @@ const CompleteProfile = () => {
         updatedAt: new Date(),
         email: currentUser.email || '',
         photoURL: formData.photoURL || currentUser.photoURL || '',
-        photo_url: formData.photoURL || currentUser.photoURL || ''
+        photo_url: formData.photoURL || currentUser.photoURL || '',
+        avatar: formData.photoURL || currentUser.photoURL || '',
+        avatarUrl: formData.photoURL || currentUser.photoURL || '',
       };
 
       Object.assign(
@@ -188,16 +192,20 @@ const CompleteProfile = () => {
     }
 
     try {
-      setUploadProgress(1); // Start
+      setUploadProgress(1);
       const url = await uploadProfilePicture(file, currentUser.uid, (progress) => {
-        setUploadProgress(progress);
+        setUploadProgress(Math.max(1, Number(progress) || 0));
       });
+      const photoFields = buildAvatarPersistFields(url);
       setFormData((prev) => ({ ...prev, photoURL: url }));
-      setUploadProgress(0); // Reset
-      console.log("📸 Photo uploaded:", url);
+      if (photoFields && updateProfile) {
+        await updateProfile(photoFields);
+      }
+      setUploadProgress(0);
+      showToast(t('profile_photo_saved', 'Profile photo saved.'), 'success');
     } catch (error) {
-      console.error("❌ Photo upload failed:", error);
-      showToast("Failed to upload photo. Please try again.", 'error');
+      console.error('Photo upload failed:', error);
+      notifyImageUploadError(showToast, error, t, 'failed_upload_image');
       setUploadProgress(0);
     }
   };

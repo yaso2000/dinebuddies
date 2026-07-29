@@ -22,6 +22,7 @@ import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'fireb
 import { uploadManagedImage } from '../services/managedImageUpload';
 import { ImageUploadZone } from '../services/imageUploadZones';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
+import { prepareImageFileForUpload } from '../utils/imageUpload';
 import { db, storage } from '../firebase/config';
 import './ProfileEnhancements.css';
 
@@ -39,28 +40,31 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
     const file = e.target.files?.[0];
     if (!file || !editable) return;
 
-    if (!file.type.startsWith('image/')) {
+    const type = String(file.type || '').toLowerCase();
+    const name = String(file.name || '').toLowerCase();
+    const looksImage =
+      type.startsWith('image/') ||
+      !type ||
+      type === 'application/octet-stream' ||
+      /\.(jpe?g|png|webp|heic|heif)$/i.test(name);
+    if (!looksImage) {
       showToast(t('only_images_allowed', 'Please select an image file.'), 'error');
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      showToast(t('file_too_large_5mb', 'File too large. Max 5MB'), 'error');
+    if (file.size > 25 * 1024 * 1024) {
+      showToast(t('file_too_large_5mb', 'File too large. Max 25MB'), 'error');
       return;
     }
 
     setUploading(true);
     try {
-      const downloadURL = await uploadManagedImage(file, userId, ImageUploadZone.COVER);
+      const prepared = await prepareImageFileForUpload(file);
+      const downloadURL = await uploadManagedImage(prepared, userId, ImageUploadZone.COVER);
 
       onUpdate?.(downloadURL);
 
-      if (editable) {
-        showToast(
-          t('cover_photo_save_profile_hint', 'Cover uploaded — tap Save to keep it on your profile.'),
-          'info'
-        );
-      } else if (updateProfile) {
+      if (updateProfile) {
         await updateProfile({ cover_photo: downloadURL });
         showToast(t('cover_photo_updated'), 'success');
       } else {

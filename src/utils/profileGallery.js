@@ -120,6 +120,23 @@ export function mergeProfileSnapshot(prev, incoming) {
         }
     }
 
+    // Stale cache / OAuth fields must not replace a just-uploaded Storage photo.
+    const looksLikeStorage = (url) =>
+        typeof url === 'string' &&
+        (/firebasestorage\.googleapis\.com/i.test(url) ||
+            /firebasestorage\.app/i.test(url) ||
+            /\.appspot\.com\/o\//i.test(url));
+    const pickStorage = (obj) =>
+        [obj?.avatar, obj?.avatarUrl, obj?.photo_url, obj?.photoURL].find(looksLikeStorage) || null;
+    const prevUpload = pickStorage(prev);
+    const nextUpload = pickStorage(next);
+    if (prevUpload && !nextUpload) {
+        next.avatar = prevUpload;
+        next.avatarUrl = prevUpload;
+        next.photo_url = prevUpload;
+        next.photoURL = prevUpload;
+    }
+
     return next;
 }
 

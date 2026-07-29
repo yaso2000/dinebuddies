@@ -8,14 +8,16 @@ import { AppText } from "./base";
 function isAcceptableImageFile(file) {
   if (!file) return false;
   const type = String(file.type || '').toLowerCase();
-  if (['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(type)) return true;
-  // Android WebView / gallery often returns empty or octet-stream MIME.
-  if (!type || type === 'application/octet-stream' || type === 'image/*') {
-    const name = String(file.name || '').toLowerCase();
-    if (!name) return true;
-    return /\.(jpe?g|png|webp)$/i.test(name);
+  const name = String(file.name || '').toLowerCase();
+  if (['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(type)) {
+    return true;
   }
-  return false;
+  // Android / iOS gallery often returns empty or octet-stream MIME.
+  if (!type || type === 'application/octet-stream' || type === 'image/*') {
+    if (!name) return true;
+    return /\.(jpe?g|png|webp|heic|heif)$/i.test(name);
+  }
+  return /\.(jpe?g|png|webp|heic|heif)$/i.test(name);
 }
 
 const ImageUpload = ({
@@ -43,20 +45,13 @@ const ImageUpload = ({
     if (!file || busy) return;
 
     if (!isAcceptableImageFile(file)) {
-      const type = String(file.type || '').toLowerCase();
-      if (type.includes('heic') || type.includes('heif') || /\.heic$/i.test(file.name || '')) {
-        showToast(
-          t('image_upload_heic_error', 'Please choose a JPG or PNG photo (HEIC is not supported).'),
-          'error'
-        );
-        return;
-      }
       showToast(t('image_upload_type_error', 'Only JPG, PNG, and WebP images are allowed'), 'error');
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      showToast(t('image_upload_size_error', 'Image size must be less than 5MB'), 'error');
+    // Allow large camera photos — upload pipeline compresses to JPEG.
+    if (file.size > 25 * 1024 * 1024) {
+      showToast(t('image_upload_size_error', 'Image size must be less than 25MB'), 'error');
       return;
     }
 
@@ -76,7 +71,7 @@ const ImageUpload = ({
     if (file) {
       handleFileSelect(file);
     }
-    // Allow selecting the same file again on Android.
+    // Allow selecting the same file again on mobile.
     e.target.value = '';
   };
 
@@ -173,7 +168,7 @@ const ImageUpload = ({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/jpeg,image/jpg,image/png,image/webp,image/*"
+        accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,image/*"
         onChange={handleInputChange}
         style={{ display: 'none' }}
       />

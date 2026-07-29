@@ -150,13 +150,6 @@ const uploadImageToStoragePath = (file, path, onProgress = null, compressionOpti
 };
 
 /**
- * Upload profile picture
- * @param {File} file - Image file
- * @param {string} userId - User ID
- * @param {Function} onProgress - Progress callback
- * @returns {Promise<string>} Download URL
- */
-/**
  * Upload community post media: images are moderated; videos upload directly.
  */
 export const uploadPostMedia = (file, userId, path, onProgress = null, mediaType = 'image') => {
@@ -170,9 +163,89 @@ export const uploadPostMedia = (file, userId, path, onProgress = null, mediaType
     });
 };
 
+/**
+ * Decode any gallery/camera file (incl. iOS HEIC / empty MIME) into a JPEG File.
+ * Mobile Photos often exceed old 5MB checks and use formats browsers upload poorly.
+ * @param {File|Blob} file
+ * @returns {Promise<File>}
+ */
+export async function prepareImageFileForUpload(file) {
+    if (!file) throw new Error('No file selected');
+
+    const loadBitmap = async () => {
+        if (typeof createImageBitmap === 'function') {
+            return createImageBitmap(file);
+        }
+        const objectUrl = URL.createObjectURL(file);
+        try {
+            const img = await new Promise((resolve, reject) => {
+                const el = new Image();
+                el.onload = () => resolve(el);
+                el.onerror = () => reject(new Error('Could not read image'));
+                el.src = objectUrl;
+            });
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth || img.width;
+            canvas.height = img.naturalHeight || img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            return canvas;
+        } finally {
+            URL.revokeObjectURL(objectUrl);
+        }
+    };
+
+    try {
+        const source = await loadBitmap();
+        const srcW = source.width || source.naturalWidth || 0;
+        const srcH = source.height || source.naturalHeight || 0;
+        if (!srcW || !srcH) throw new Error('Invalid image dimensions');
+
+        const maxEdge = 1600;
+        const scale = Math.min(1, maxEdge / Math.max(srcW, srcH));
+        const w = Math.max(1, Math.round(srcW * scale));
+        const h = Math.max(1, Math.round(srcH * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(source, 0, 0, w, h);
+        if (typeof source.close === 'function') source.close();
+
+        const blob = await new Promise((resolve, reject) => {
+            canvas.toBlob(
+                (b) => (b ? resolve(b) : reject(new Error('Could not encode image'))),
+                'image/jpeg',
+                0.88
+            );
+        });
+        return new File([blob], 'photo.jpg', { type: 'image/jpeg', lastModified: Date.now() });
+    } catch (err) {
+        const type = String(file.type || '').toLowerCase();
+        if (
+            ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(type) ||
+            (!type && file.size > 0)
+        ) {
+            return file instanceof File
+                ? file
+                : new File([file], 'photo.jpg', { type: type || 'image/jpeg' });
+        }
+        throw new Error(
+            err?.message || 'Could not process this image. Please choose a JPG or PNG.'
+        );
+    }
+}
+
+/**
+ * Upload profile picture
+ * @param {File} file - Image file
+ * @param {string} userId - User ID
+ * @param {Function} onProgress - Progress callback
+ * @returns {Promise<string>} Download URL
+ */
 export const uploadProfilePicture = async (file, userId, onProgress = null) => {
-    void onProgress;
-    return uploadManagedImage(file, userId, ImageUploadZone.AVATAR);
+    const prepared = await prepareImageFileForUpload(file);
+    return uploadManagedImage(prepared, userId, ImageUploadZone.AVATAR, { onProgress });
 };
 
 /**
@@ -221,19 +294,24 @@ export const deleteImage = async (imageUrl) => {
  * @param {number} maxSize - Max size in MB (default: 5)
  * @returns {Object} { valid: boolean, error: string }
  */
-export const validateImageFile = (file, maxSize = 5) => {
-    // Check if file exists
+export const validateImageFile = (file, maxSize = 20) => {
     if (!file) {
         return { valid: false, error: 'No file selected' };
     }
 
-    // Check file type
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
+    const type = String(file.type || '').toLowerCase();
+    const name = String(file.name || '').toLowerCase();
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    const okType =
+        validTypes.includes(type) ||
+        !type ||
+        type === 'application/octet-stream' ||
+        type === 'image/*' ||
+        /\.(jpe?g|png|webp|heic|heif)$/i.test(name);
+    if (!okType) {
         return { valid: false, error: 'Only JPG, PNG, and WebP images are allowed' };
     }
 
-    // Check file size
     const maxSizeBytes = maxSize * 1024 * 1024;
     if (file.size > maxSizeBytes) {
         return { valid: false, error: `Image size must be less than ${maxSize}MB` };

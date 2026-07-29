@@ -124,6 +124,24 @@ export function pickPreferredAvatarUrl(userData, opts = {}) {
 }
 
 /**
+ * Fields to persist when the user sets a profile photo.
+ * Keep every alias in sync so public profile + UI pickers stay consistent.
+ * @param {string} url
+ * @returns {{ avatar: string, avatarUrl: string, photo_url: string, photoURL: string } | null}
+ */
+export function buildAvatarPersistFields(url) {
+    const u = String(url || '').trim();
+    if (!u || u.length < 10) return null;
+    if (!(u.startsWith('http') || u.startsWith('data:image'))) return null;
+    return {
+        avatar: u,
+        avatarUrl: u,
+        photo_url: u,
+        photoURL: u,
+    };
+}
+
+/**
  * Whether OAuth may write photo fields onto an existing users/{uid} doc.
  * Never overwrites a manually uploaded Storage photo.
  * @returns {{ photo_url: string, photoURL: string, avatar: string } | null}

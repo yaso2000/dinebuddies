@@ -14,7 +14,7 @@ import GiftShieldSection from '../components/gifts/GiftShieldSection';
 import { FavoritePlaces } from '../components/ProfileEnhancementsExtended';
 import { useTheme } from '../context/ThemeContext';
 import { FaSun, FaMoon } from 'react-icons/fa';
-import { getSafeAvatar, getGenderBorderColor, isUserUploadedPhotoUrl, isProviderAccountPhotoUrl } from '../utils/avatarUtils';
+import { getSafeAvatar, getGenderBorderColor, isUserUploadedPhotoUrl, isProviderAccountPhotoUrl, buildAvatarPersistFields } from '../utils/avatarUtils';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { goToLogin } from '../utils/goToLogin';
 import { normalizeBusinessTier } from '../utils/businessSubscription';
@@ -495,20 +495,17 @@ const Profile = () => {
     setUploadProgress(5);
     try {
       const url = await uploadProfilePicture(file, currentUser.uid, (progress) =>
-        setUploadProgress(progress)
+        setUploadProgress(Math.max(5, Number(progress) || 0))
       );
-      await updateProfile({
-        avatar: url,
-        photo_url: url,
-        photoURL: url,
-      });
+      const photoFields = buildAvatarPersistFields(url);
+      if (!photoFields) {
+        throw new Error('Upload did not return a usable photo URL');
+      }
+      await updateProfile(photoFields);
       setFormData((prev) => ({ ...prev, avatar: url }));
       setRealtimeUser((prev) => ({
         ...(prev || {}),
-        avatar: url,
-        photo_url: url,
-        photoURL: url,
-        avatarUrl: url,
+        ...photoFields,
       }));
       setAvatarFile(null);
       setUploadProgress(0);
@@ -600,7 +597,7 @@ const Profile = () => {
         invitePreference: normalizeInvitePreference(formData.invitePreference),
       };
       if (photoIsReal) {
-        payload.avatar = finalAvatar;
+        Object.assign(payload, buildAvatarPersistFields(finalAvatar) || { avatar: finalAvatar });
       }
 
       const gallerySave = buildProfileGallerySavePayload(
@@ -634,7 +631,7 @@ const Profile = () => {
         displayName: trimmedName,
         name: trimmedName,
         ...(photoIsReal
-          ? { avatar: finalAvatar, photo_url: finalAvatar, photoURL: finalAvatar }
+          ? buildAvatarPersistFields(finalAvatar) || { avatar: finalAvatar, photo_url: finalAvatar, photoURL: finalAvatar }
           : {}),
       });
       const nextMedia = readProfileMedia(savedView);

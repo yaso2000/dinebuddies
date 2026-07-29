@@ -1429,8 +1429,11 @@ export const AuthProvider = ({ children }) => {
         if (!currentUser) return;
 
         try {
+            const cleanUpdates = Object.fromEntries(
+                Object.entries(updates || {}).filter(([, v]) => v !== undefined)
+            );
             await updateDoc(doc(db, 'users', currentUser.uid), {
-                ...updates,
+                ...cleanUpdates,
                 last_active_time: serverTimestamp()
             });
 
@@ -1439,22 +1442,32 @@ export const AuthProvider = ({ children }) => {
                     prev,
                     mergeProfileSnapshot(prev, {
                         ...prev,
-                        ...updates,
+                        ...cleanUpdates,
                         uid: currentUser.uid,
                         id: currentUser.uid
                     })
                 )
             );
 
-            if (updates.displayName || updates.display_name || updates.photoURL || updates.photo_url) {
-                const nextAuthPhoto = updates.photoURL || updates.photo_url || auth.currentUser.photoURL;
+            if (
+                cleanUpdates.displayName ||
+                cleanUpdates.display_name ||
+                cleanUpdates.photoURL ||
+                cleanUpdates.photo_url ||
+                cleanUpdates.avatar
+            ) {
+                const nextAuthPhoto =
+                    cleanUpdates.photoURL ||
+                    cleanUpdates.photo_url ||
+                    cleanUpdates.avatar ||
+                    auth.currentUser.photoURL;
                 // Firebase Auth photoURL has a hard length limit; Storage download URLs can exceed it.
                 const authPhotoSafe =
                     typeof nextAuthPhoto === 'string' && nextAuthPhoto.length > 0 && nextAuthPhoto.length < 1900
                         ? nextAuthPhoto
                         : auth.currentUser.photoURL;
                 void updateAuthProfile(auth.currentUser, {
-                    displayName: updates.displayName || updates.display_name || auth.currentUser.displayName,
+                    displayName: cleanUpdates.displayName || cleanUpdates.display_name || auth.currentUser.displayName,
                     photoURL: authPhotoSafe || undefined,
                 }).catch((authError) => {
                     console.warn('Auth sync failed:', authError);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    buildAvatarPersistFields,
     getSafeAvatar,
     isProviderAccountPhotoUrl,
     isUserUploadedPhotoUrl,
@@ -56,5 +57,15 @@ describe('consumer avatar priority', () => {
             photoURL: GOOGLE,
             avatar: GOOGLE,
         });
+    });
+
+    it('buildAvatarPersistFields writes every alias', () => {
+        expect(buildAvatarPersistFields(UPLOAD)).toEqual({
+            avatar: UPLOAD,
+            avatarUrl: UPLOAD,
+            photo_url: UPLOAD,
+            photoURL: UPLOAD,
+        });
+        expect(buildAvatarPersistFields('')).toBe(null);
     });
 });
