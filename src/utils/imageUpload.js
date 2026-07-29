@@ -237,15 +237,53 @@ export async function prepareImageFileForUpload(file) {
 }
 
 /**
- * Upload profile picture
- * @param {File} file - Image file
- * @param {string} userId - User ID
- * @param {Function} onProgress - Progress callback
- * @returns {Promise<string>} Download URL
+ * Upload profile picture — direct to profile_photos/ (not avatars/).
+ * The Storage trigger enforceApprovedImageUpload was deleting files under avatars/
+ * right after moderateImage wrote them (metadata race), so photos appeared then vanished.
  */
 export const uploadProfilePicture = async (file, userId, onProgress = null) => {
+    if (!userId) throw new Error('User ID required');
     const prepared = await prepareImageFileForUpload(file);
-    return uploadManagedImage(prepared, userId, ImageUploadZone.AVATAR, { onProgress });
+
+    beginImageUploadSession('preparing');
+    const report = (pct, phase) => {
+        updateImageUploadSession(pct, phase);
+        if (onProgress) onProgress(pct);
+    };
+
+    try {
+        report(8, 'preparing');
+        const path = `profile_photos/${userId}/avatar_${Date.now()}.jpg`;
+        const storageRef = ref(storage, path);
+        report(15, 'uploading');
+
+        const downloadURL = await new Promise((resolve, reject) => {
+            const uploadTask = uploadBytesResumable(storageRef, prepared, {
+                contentType: 'image/jpeg',
+            });
+            uploadTask.on(
+                'state_changed',
+                (snapshot) => {
+                    const raw = snapshot.totalBytes
+                        ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+                        : 0;
+                    report(15 + raw * 0.85, 'uploading');
+                },
+                reject,
+                async () => {
+                    try {
+                        report(100, 'done');
+                        resolve(await getDownloadURL(uploadTask.snapshot.ref));
+                    } catch (err) {
+                        reject(err);
+                    }
+                }
+            );
+        });
+        return downloadURL;
+    } finally {
+        finishImageUploadSession();
+    }
 };
 
 /**

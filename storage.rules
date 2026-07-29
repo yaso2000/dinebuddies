@@ -96,9 +96,18 @@ service firebase.storage {
                    && request.resource.size < 20 * 1024 * 1024; // Max 20MB
     }
     
-    // User avatars — public read; writes only via Cloud Function (moderateImage → Admin SDK).
-    // Client must upload to quarantine/ first. Direct client writes are denied so we never
-    // need a Storage trigger that falsely deletes just-approved avatars.
+    // Profile photos (avatars) — client upload path that is NOT watched by
+    // enforceApprovedImageUpload (that trigger was deleting moderated avatars/).
+    match /profile_photos/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && isImage()
+                   && request.resource.size < 8 * 1024 * 1024;
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // User avatars — legacy moderated path (Admin SDK / moderateImage only).
     match /avatars/{fileName} {
       allow read: if true;
       allow write: if false;
