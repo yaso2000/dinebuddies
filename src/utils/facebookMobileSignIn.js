@@ -2,33 +2,30 @@ import { dismissFacebookSdkOverlay } from './facebookSdkCleanup';
 import {
     clearOAuthRedirectPending,
     isAndroidTouchDevice,
-    isIosTouchDevice,
 } from './localDevAuth';
 
 /** Meta app id — same as Firebase Facebook provider. */
 const FB_APP_ID = '1718617005774108';
 const FB_MOBILE_LOGIN_KEY = 'dineb_fb_mobile_login';
 
+let sdkLoadPromise = null;
+
 function loadFacebookSDK() {
-    return new Promise((resolve, reject) => {
-        if (typeof window === 'undefined') {
-            reject(new Error('Facebook login requires a browser'));
-            return;
-        }
-        if (window.FB) {
-            resolve(window.FB);
-            return;
-        }
-        const existing = document.getElementById('facebook-jssdk');
-        if (!existing) {
-            const script = document.createElement('script');
-            script.id = 'facebook-jssdk';
-            script.src = 'https://connect.facebook.net/en_US/sdk.js';
-            script.async = true;
-            script.defer = true;
-            script.onerror = () => reject(new Error('Failed to load Facebook SDK'));
-            document.head.appendChild(script);
-        }
+    if (typeof window === 'undefined') {
+        return Promise.reject(new Error('Facebook login requires a browser'));
+    }
+    if (window.FB) return Promise.resolve(window.FB);
+    if (sdkLoadPromise) return sdkLoadPromise;
+
+    sdkLoadPromise = new Promise((resolve, reject) => {
+        const finish = (FB) => {
+            resolve(FB);
+        };
+        const fail = (err) => {
+            sdkLoadPromise = null;
+            reject(err);
+        };
+
         window.fbAsyncInit = () => {
             try {
                 window.FB.init({
@@ -37,12 +34,34 @@ function loadFacebookSDK() {
                     cookie: true,
                     xfbml: false,
                 });
-                resolve(window.FB);
+                finish(window.FB);
             } catch (err) {
-                reject(err);
+                fail(err);
             }
         };
+
+        const existing = document.getElementById('facebook-jssdk');
+        if (existing) {
+            if (window.FB) finish(window.FB);
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.id = 'facebook-jssdk';
+        script.src = 'https://connect.facebook.net/en_US/sdk.js';
+        script.async = true;
+        script.defer = true;
+        script.onerror = () => fail(new Error('Failed to load Facebook SDK'));
+        document.head.appendChild(script);
     });
+
+    return sdkLoadPromise;
+}
+
+/** Warm the Meta SDK on Android login so the tap→FB.login gap stays short. */
+export function preloadFacebookMobileSdk() {
+    if (!shouldUseFacebookMobileSdk()) return;
+    void loadFacebookSDK().catch(() => {});
 }
 
 function readFacebookAccessToken(FB) {
@@ -91,7 +110,6 @@ export function clearFacebookIosLoginPending() {
 export function clearFacebookMobileLoginPending() {
     try {
         sessionStorage.removeItem(FB_MOBILE_LOGIN_KEY);
-        // Legacy key from iOS-only path
         sessionStorage.removeItem('dineb_fb_ios_login');
     } catch {
         /* ignore */
@@ -99,14 +117,15 @@ export function clearFacebookMobileLoginPending() {
 }
 
 /**
- * Phone browsers: Meta JS SDK + Firebase credential.
- * Avoids Firebase /__/auth on firebaseapp.com ("missing initial state" on Android).
+ * Meta JS SDK path — Android only.
+ * iPhone Safari blocks FB.login after any await (lost user gesture), so iOS uses
+ * Firebase Facebook redirect instead (same-origin www authDomain).
  */
 export function shouldUseFacebookMobileSdk() {
-    return isIosTouchDevice() || isAndroidTouchDevice();
+    return isAndroidTouchDevice();
 }
 
-/** @deprecated Use shouldUseFacebookMobileSdk */
+/** @deprecated Name kept for callers; now means “use Meta mobile SDK” (Android). */
 export function shouldUseFacebookIosSdk() {
     return shouldUseFacebookMobileSdk();
 }
@@ -139,11 +158,11 @@ export async function completeFacebookIosRedirectReturn() {
 }
 
 /**
- * Start Facebook login on phone browsers via Meta SDK (not Firebase redirect/popup).
+ * Start Facebook login on Android via Meta SDK (not Firebase redirect/popup).
  */
 export async function startFacebookMobileLogin() {
     if (!shouldUseFacebookMobileSdk()) {
-        const err = new Error('Facebook mobile SDK login called on non-mobile device');
+        const err = new Error('Facebook mobile SDK login called on non-Android device');
         err.code = 'auth/operation-not-allowed';
         throw err;
     }
@@ -152,6 +171,10 @@ export async function startFacebookMobileLogin() {
     markFacebookMobileLoginPending();
 
     const FB = await loadFacebookSDK();
+    const redirectUri =
+        typeof window !== 'undefined'
+            ? `${window.location.origin}/login`
+            : 'https://www.dinebuddies.com/login';
 
     return new Promise((resolve, reject) => {
         let settled = false;
@@ -193,7 +216,12 @@ export async function startFacebookMobileLogin() {
                 clearFacebookMobileLoginPending();
                 finish(reject, new Error(`Facebook login failed: ${response.status}`));
             },
-            { scope: 'email,public_profile', return_scopes: true }
+            {
+                scope: 'email,public_profile',
+                return_scopes: true,
+                // Helps Meta fall back to redirect when the dialog cannot open.
+                fallback_redirect_uri: redirectUri,
+            }
         );
     });
 }

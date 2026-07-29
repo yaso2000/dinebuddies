@@ -952,7 +952,8 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Facebook — iOS: Meta SDK + credential. Android/desktop: Firebase popup.
+    // Facebook — Android: Meta SDK + credential. iOS/desktop: Firebase redirect/popup.
+    // (iPhone Safari blocks Meta FB.login after any await — lost user gesture.)
     const signInWithFacebook = async () => {
         if (isInAppBrowser()) {
             const openedExternal = openInExternalBrowser();
@@ -981,11 +982,11 @@ export const AuthProvider = ({ children }) => {
                         FacebookAuthProvider.credential(token)
                     );
                     return finishFacebookOAuthResult(result);
-                } catch (iosErr) {
+                } catch (androidFbErr) {
                     if (peekFacebookIosLoginPending()) {
-                        return { __facebookIosRedirect: true };
+                        return { __facebookIosRedirect: true, __facebookMobileRedirect: true };
                     }
-                    throw iosErr;
+                    throw androidFbErr;
                 }
             }
 
@@ -1316,7 +1317,7 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // iPhone: complete Meta SDK Facebook redirect when user returns to /login.
+    // Android: complete Meta SDK Facebook return when user lands back on /login.
     useEffect(() => {
         if (!shouldUseFacebookIosSdk()) return undefined;
         if (typeof window === 'undefined' || !window.location.pathname.startsWith('/login')) {

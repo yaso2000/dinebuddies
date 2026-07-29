@@ -9,6 +9,10 @@ import { getAuthErrorMessage } from '../../utils/errorMessages';
 import { isBusinessUser } from '../../utils/accountRole';
 import { sanitizeNextPath } from '../../utils/safeInternalPath';
 import { dismissFacebookSdkOverlay } from '../../utils/facebookSdkCleanup';
+import {
+  peekFacebookMobileLoginPending,
+  preloadFacebookMobileSdk,
+} from '../../utils/facebookMobileSignIn';
 import { isNativeAndroid } from '../../platform/runtime';
 import { App as CapApp } from '@capacitor/app';
 import { isCoopPopupNoise, prepareOAuthSignInAttempt } from '../../utils/firebaseOAuthSignIn';
@@ -29,6 +33,16 @@ import {
   isRecentOAuthRedirectAttempt,
   peekOAuthRedirectProvider } from
 '../../utils/localDevAuth';
+
+/** True after the account picker returns — not while waiting for Google/Facebook to open. */
+function isOAuthReturnBusy() {
+  return (
+    hasFirebaseAuthReturnInUrl() ||
+    peekOAuthRedirectPending() ||
+    Boolean(peekOAuthRedirectProvider()) ||
+    peekFacebookMobileLoginPending()
+  );
+}
 
 /**
  * Consumer (personal) account only: Google and Facebook — no email/password on this page.
@@ -52,7 +66,8 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     loading: authLoading
   } = useAuth();
 
-  const [loading, setLoading] = useState(false);
+  // Busy logo only when returning from the account picker / finishing sign-in — never before it opens.
+  const [loading, setLoading] = useState(() => isOAuthReturnBusy());
   const [error, setError] = useState('');
 
   const missingFirebaseEnv = useMemo(() => {
@@ -69,6 +84,10 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
   }, []);
 
   const [nativeBuildLabel, setNativeBuildLabel] = useState('');
+
+  useEffect(() => {
+    preloadFacebookMobileSdk();
+  }, []);
 
   useEffect(() => {
     if (!isNativeAndroid()) return undefined;
@@ -275,21 +294,20 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     return () => clearTimeout(timer);
   }, [authLoading, currentUser, t]);
 
+  // After account pick: keep the floating logo until LoginHub navigates away.
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && !isGuest) {
+      setLoading(true);
+      return;
+    }
+    if (isOAuthReturnBusy()) {
+      setLoading(true);
+      return;
+    }
+    if (!authLoading) {
       setLoading(false);
     }
-  }, [currentUser]);
-
-  useEffect(() => {
-    const oauthBusy =
-      hasFirebaseAuthReturnInUrl() ||
-      peekOAuthRedirectPending() ||
-      peekOAuthRedirectProvider();
-    if (!oauthBusy && !authLoading) {
-      setLoading(false);
-    }
-  }, [authLoading, currentUser]);
+  }, [authLoading, currentUser, isGuest]);
 
   useEffect(() => {
     if (!loading) return undefined;
@@ -297,14 +315,15 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     return () => clearTimeout(timer);
   }, [loading]);
 
-  const oauthButtonsLocked = loading;
+  // Lock buttons only while finishing return — never while the picker should open.
+  const oauthButtonsLocked = loading && (Boolean(currentUser) || isOAuthReturnBusy());
 
   const handleOAuth = async (provider) => {
     clearGuestModeForSignIn();
-    setLoading(true);
+    // Do not show the busy logo before Google/Facebook account UI opens.
     setError('');
     let startedRedirect = false;
-    let authStarted = false;
+    let authFinished = false;
     try {
       if (import.meta.env.DEV && !isFirebaseAuthorizedDevHost()) {
         setError(
@@ -317,30 +336,38 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
       }
       if (provider === 'google') {
         const googleRes = await signInWithGoogle();
-        authStarted = true;
         if (googleRes?.__oauthRedirect) {
           startedRedirect = true;
+          // Page is leaving for the account picker — logo shows on return via pending flags.
           return;
         }
+        authFinished = true;
+        setLoading(true);
       } else if (provider === 'facebook') {
         const fbRes = await signInWithFacebook();
-        authStarted = true;
         if (
           fbRes?.__oauthRedirect ||
           fbRes?.__facebookIosRedirect ||
           fbRes?.__facebookMobileRedirect
         ) {
           startedRedirect = true;
+          if (peekFacebookMobileLoginPending()) {
+            setLoading(true);
+          }
           return;
         }
+        authFinished = true;
+        setLoading(true);
       }
     } catch (err) {
-      authStarted = false;
+      authFinished = false;
+      setLoading(false);
       if (!isCoopPopupNoise(err)) {
         prepareOAuthSignInAttempt();
       }
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request' || isCoopPopupNoise(err)) {
         /* ignore — COOP can reject while auth already succeeded; AuthContext recovers */
+        if (currentUser) setLoading(true);
       } else if (
       isEmbeddedPreviewBrowser() && (
       err.code === 'auth/popup-blocked' ||
@@ -370,8 +397,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
       }
     } finally {
       dismissFacebookSdkOverlay();
-      // Keep the busy indicator while Firebase finishes / navigates after a successful native sheet.
-      if (!startedRedirect && !authStarted) {
+      if (!startedRedirect && !authFinished && !currentUser && !isOAuthReturnBusy()) {
         setLoading(false);
       }
     }

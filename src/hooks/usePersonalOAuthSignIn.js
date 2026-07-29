@@ -26,7 +26,7 @@ export function usePersonalOAuthSignIn(onBeforeOAuth, onOAuthRedirect) {
     const runOAuth = useCallback(
         async (provider) => {
             prepareOAuthSignInAttempt();
-            setLoading(true);
+            // Busy state only after the provider returns (account chosen) — not before the picker opens.
             setError('');
             let startedRedirect = false;
             try {
@@ -51,14 +51,20 @@ export function usePersonalOAuthSignIn(onBeforeOAuth, onOAuthRedirect) {
                     result = await signInWithFacebook();
                 }
 
-                if (result?.__oauthRedirect) {
+                if (
+                    result?.__oauthRedirect ||
+                    result?.__facebookIosRedirect ||
+                    result?.__facebookMobileRedirect
+                ) {
                     startedRedirect = true;
                     onOAuthRedirect?.();
                     return { ok: true, redirect: true };
                 }
 
+                setLoading(true);
                 return { ok: true, redirect: false };
             } catch (err) {
+                setLoading(false);
                 prepareOAuthSignInAttempt();
                 if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
                     return { ok: false, cancelled: true };
@@ -92,8 +98,8 @@ export function usePersonalOAuthSignIn(onBeforeOAuth, onOAuthRedirect) {
                 }
                 return { ok: false };
             } finally {
-                if (!startedRedirect) {
-                    setLoading(false);
+                if (startedRedirect) {
+                    /* return trip shows busy via OAuth pending flags */
                 }
             }
         },

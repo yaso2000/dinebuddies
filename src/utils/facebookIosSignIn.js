@@ -1,6 +1,6 @@
 /**
- * Compatibility re-exports — Facebook phone login lives in facebookMobileSignIn.js
- * (Android + iOS Meta SDK path; avoids firebaseapp.com missing-initial-state).
+ * Compatibility re-exports — Facebook phone login lives in facebookMobileSignIn.js.
+ * Meta SDK is Android-only; iOS uses Firebase Facebook redirect (user-gesture safe).
  */
 export {
     peekFacebookIosLoginPending,
@@ -13,4 +13,5 @@ export {
     completeFacebookMobileRedirectReturn,
     startFacebookIosRedirectLogin,
     startFacebookMobileLogin,
+    preloadFacebookMobileSdk,
 } from './facebookMobileSignIn';
