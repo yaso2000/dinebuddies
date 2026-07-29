@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
+import { useJoinedStages } from './useJoinedStages';
 import { blockPublicInviteFromBusinessVenue } from '../utils/publicInviteVenueGate';
 import {
   resolveHostInvitationNavigationState,
@@ -23,11 +24,17 @@ export function useInviteCreateNavigation({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { cannotCreateInvitations } = useAuth();
+  const { cannotCreateInvitations, currentUser } = useAuth();
   const { canCreateSocialInvitation, restaurants: restaurantsFromContext } = useInvitations();
+  const { stages: joinedStages } = useJoinedStages();
   const [publicGateChecking, setPublicGateChecking] = useState(false);
 
   const restaurants = restaurantsProp ?? restaurantsFromContext;
+
+  const activeHostedStage = useMemo(
+    () => joinedStages.find((s) => s.isHost && s.id) || null,
+    [joinedStages]
+  );
 
   const resolvedState = useMemo(
     () =>
@@ -112,15 +119,26 @@ export function useInviteCreateNavigation({
       }
 
       if (kind === 'stage') {
-        // Always free — fixed 24h TTL, then hard-deleted (no day pricing / credits).
+        // One live Stage per host for 24h — enter it instead of creating another.
+        if (activeHostedStage?.id) {
+          navigate(`/stage/${activeHostedStage.id}`, {
+            state: {
+              stageHostId: currentUser?.uid || null,
+            },
+          });
+          onAfterNavigate?.();
+          return;
+        }
         navigate('/create-stage', { state });
         onAfterNavigate?.();
       }
     },
     [
+      activeHostedStage,
       businessId,
       canCreateSocialInvitation,
       cannotCreateInvitations,
+      currentUser?.uid,
       navigate,
       onAfterNavigate,
       publicGateChecking,
@@ -136,5 +154,6 @@ export function useInviteCreateNavigation({
     resolvedState,
     businessId,
     cannotCreateInvitations,
+    activeHostedStage,
   };
 }

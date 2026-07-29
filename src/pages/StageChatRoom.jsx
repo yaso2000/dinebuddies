@@ -146,27 +146,9 @@ export default function StageChatRoom() {
     }
   };
 
-  const handleCloseStage = async () => {
-    if (
-      !window.confirm(
-        t(
-          'stage_close_confirm',
-          'Close this Stage temporarily? Guests cannot write until you reopen. The room stays available for 24 hours from creation.'
-        )
-      )
-    ) {
-      return;
-    }
-    setLifecycleBusy(true);
-    try {
-      await callMembership('close_stage');
-      showToast(t('stage_closed_toast', 'Stage closed. You can reopen it anytime within 24 hours.'), 'success');
-    } catch (err) {
-      console.error('[StageChatRoom] close', err);
-      showToast(t('stage_close_failed', 'Could not close Stage.'), 'error');
-    } finally {
-      setLifecycleBusy(false);
-    }
+  // Host "close" only leaves the screen — the Stage stays live until the 24h TTL.
+  const handleExitStageUi = () => {
+    closeChat();
   };
 
   const handleReopenStage = async () => {
@@ -184,6 +166,7 @@ export default function StageChatRoom() {
 
   const headerMenuActions = (() => {
     if (room.isHost) {
+      // Legacy soft-closed rooms can still be reopened; new UX never soft-closes.
       if (room.isStageClosed) {
         return [
           {
@@ -197,12 +180,10 @@ export default function StageChatRoom() {
       }
       return [
         {
-          id: 'close',
-          label: t('stage_close', 'Close Stage'),
+          id: 'exit',
+          label: t('stage_exit_ui', 'Leave screen'),
           icon: <FaDoorClosed size={15} aria-hidden />,
-          danger: true,
-          disabled: lifecycleBusy,
-          onClick: handleCloseStage,
+          onClick: handleExitStageUi,
         },
       ];
     }

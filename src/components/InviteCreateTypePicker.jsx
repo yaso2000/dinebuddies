@@ -27,11 +27,13 @@ export default function InviteCreateTypePicker({
   className = '',
 }) {
   const { t } = useTranslation();
-  const { goCreate, publicGateChecking } = useInviteCreateNavigation({
+  const { goCreate, publicGateChecking, activeHostedStage } = useInviteCreateNavigation({
     navigationState,
     businessId,
     onAfterNavigate,
   });
+
+  const hasLiveStage = Boolean(activeHostedStage?.id);
 
   const options = [
     {
@@ -66,11 +68,18 @@ export default function InviteCreateTypePicker({
       className: 'social',
       sheetIconClass: 'business-create-option__icon--private',
       icon: FaMicrophone,
-      title: t('invite_create_stage_title', 'Stage'),
-      desc: t(
-        'invite_create_stage_desc',
-        'Open a private event chat with mutual follows.'
-      ),
+      title: hasLiveStage
+        ? t('invite_enter_stage_title', 'Enter Stage')
+        : t('invite_create_stage_title', 'Stage'),
+      desc: hasLiveStage
+        ? t(
+            'invite_enter_stage_desc',
+            'You already have a live Stage. Tap to enter — it stays open for 24 hours.'
+          )
+        : t(
+            'invite_create_stage_desc',
+            'Open a free Stage for 24 hours. Guests are optional.'
+          ),
     },
   ];
 
