@@ -1447,9 +1447,15 @@ export const AuthProvider = ({ children }) => {
             );
 
             if (updates.displayName || updates.display_name || updates.photoURL || updates.photo_url) {
+                const nextAuthPhoto = updates.photoURL || updates.photo_url || auth.currentUser.photoURL;
+                // Firebase Auth photoURL has a hard length limit; Storage download URLs can exceed it.
+                const authPhotoSafe =
+                    typeof nextAuthPhoto === 'string' && nextAuthPhoto.length > 0 && nextAuthPhoto.length < 1900
+                        ? nextAuthPhoto
+                        : auth.currentUser.photoURL;
                 void updateAuthProfile(auth.currentUser, {
                     displayName: updates.displayName || updates.display_name || auth.currentUser.displayName,
-                    photoURL: updates.photoURL || updates.photo_url || auth.currentUser.photoURL
+                    photoURL: authPhotoSafe || undefined,
                 }).catch((authError) => {
                     console.warn('Auth sync failed:', authError);
                 });

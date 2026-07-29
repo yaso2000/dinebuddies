@@ -14,7 +14,8 @@ import GiftShieldSection from '../components/gifts/GiftShieldSection';
 import { FavoritePlaces } from '../components/ProfileEnhancementsExtended';
 import { useTheme } from '../context/ThemeContext';
 import { FaSun, FaMoon } from 'react-icons/fa';
-import { getSafeAvatar, getGenderBorderColor } from '../utils/avatarUtils';
+import { getSafeAvatar, getGenderBorderColor, isUserUploadedPhotoUrl, isProviderAccountPhotoUrl } from '../utils/avatarUtils';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { goToLogin } from '../utils/goToLogin';
 import { normalizeBusinessTier } from '../utils/businessSubscription';
 import { isPrivateInvitationDraft } from '../utils/socialInvitationDraft';
@@ -168,6 +169,7 @@ const Profile = () => {
   const [activeTab, setActiveTab] = useState('public');
   const [isSaving, setIsSaving] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarSaving, setAvatarSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [mutualFriendsCount, setMutualFriendsCount] = useState(0);
   const [visibilitySaving, setVisibilitySaving] = useState('');
@@ -481,7 +483,47 @@ const Profile = () => {
       directoryCoverIndex: media.directoryCoverIndex,
       cover_photo: media.cover_photo || ''
     }));
+    setAvatarFile(null);
     setIsEditing(true);
+  };
+
+  /** Save photo as soon as the user picks it — do not wait for full profile Save. */
+  const handleAvatarSelect = async (file) => {
+    if (!file || !currentUser?.uid || avatarSaving) return;
+    setAvatarFile(file);
+    setAvatarSaving(true);
+    setUploadProgress(5);
+    try {
+      const url = await uploadProfilePicture(file, currentUser.uid, (progress) =>
+        setUploadProgress(progress)
+      );
+      await updateProfile({
+        avatar: url,
+        photo_url: url,
+        photoURL: url,
+      });
+      setFormData((prev) => ({ ...prev, avatar: url }));
+      setRealtimeUser((prev) => ({
+        ...(prev || {}),
+        avatar: url,
+        photo_url: url,
+        photoURL: url,
+        avatarUrl: url,
+      }));
+      setAvatarFile(null);
+      setUploadProgress(0);
+      showToast(
+        t('profile_photo_saved', 'Profile photo saved.'),
+        'success'
+      );
+    } catch (error) {
+      console.error('Avatar upload failed:', error);
+      notifyImageUploadError(showToast, error, t, 'failed_upload_image');
+      setAvatarFile(null);
+      setUploadProgress(0);
+    } finally {
+      setAvatarSaving(false);
+    }
   };
 
   const handleSave = async () => {
@@ -538,11 +580,13 @@ const Profile = () => {
         );
       }
 
+      const photoIsReal =
+        isUserUploadedPhotoUrl(finalAvatar) || isProviderAccountPhotoUrl(finalAvatar);
+
       const payload = {
         name: trimmedName,
         bio: formData.bio,
         availableForPrivateInvite: true,
-        avatar: finalAvatar,
         diningPersona: normalizeDiningPersona(formData.diningPersona),
         firstDatePlaceHint: normalizeFirstDatePlaceHint(formData.firstDatePlaceHint),
         joinReasons: normalizeJoinReasons(formData.joinReasons, {
@@ -555,6 +599,9 @@ const Profile = () => {
         openToDating: normalizeOpenToDating(formData.openToDating),
         invitePreference: normalizeInvitePreference(formData.invitePreference),
       };
+      if (photoIsReal) {
+        payload.avatar = finalAvatar;
+      }
 
       const gallerySave = buildProfileGallerySavePayload(
         formData.profileGallery,
@@ -586,8 +633,9 @@ const Profile = () => {
         display_name: trimmedName,
         displayName: trimmedName,
         name: trimmedName,
-        avatar: finalAvatar,
-        photo_url: finalAvatar
+        ...(photoIsReal
+          ? { avatar: finalAvatar, photo_url: finalAvatar, photoURL: finalAvatar }
+          : {}),
       });
       const nextMedia = readProfileMedia(savedView);
       setProfileMedia(nextMedia);
@@ -598,7 +646,7 @@ const Profile = () => {
         ...prev,
         name: trimmedName,
         bio: payload.bio ?? prev.bio,
-        avatar: finalAvatar,
+        avatar: photoIsReal ? finalAvatar : prev.avatar,
         diningPersona: payload.diningPersona ?? prev.diningPersona,
         firstDatePlaceHint: payload.firstDatePlaceHint ?? prev.firstDatePlaceHint,
         joinReasons: payload.joinReasons ?? prev.joinReasons,
@@ -698,14 +746,16 @@ const Profile = () => {
                             {isEditing ?
                   <>
                                     <ImageUpload
-                      currentImage={getSafeAvatar(formData)}
-                      onImageSelect={setAvatarFile}
+                      currentImage={formData.avatar || getSafeAvatar(realtimeUser || userProfile)}
+                      onImageSelect={handleAvatarSelect}
                       onImageRemove={() => setAvatarFile(null)}
                       shape="circle"
                       size="large"
-                      label={t('change_photo')} />
+                      label={t('change_photo')}
+                      busy={avatarSaving || isSaving}
+                    />
                     
-                                    {uploadProgress > 0 && uploadProgress < 100 &&
+                                    {(avatarSaving || (uploadProgress > 0 && uploadProgress < 100)) &&
                     <div style={{
                       marginTop: '10px',
                       background: 'var(--card-bg)',
@@ -714,7 +764,7 @@ const Profile = () => {
                       fontSize: '0.85rem'
                     }}>
                                             <div style={{ marginBottom: '5px', color: 'var(--text-secondary)' }}>
-                                                {t('uploading_progress')} {Math.round(uploadProgress)}%
+                                                {t('uploading_progress')} {Math.round(uploadProgress) || '…'}%
                                             </div>
                                             <div style={{
                         height: '4px',
@@ -725,7 +775,7 @@ const Profile = () => {
                                                 <div style={{
                           height: '100%',
                           background: 'var(--primary)',
-                          width: `${uploadProgress}%`,
+                          width: `${Math.max(uploadProgress, 8)}%`,
                           transition: 'width 0.3s'
                         }} />
                                             </div>
