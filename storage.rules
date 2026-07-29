@@ -23,20 +23,6 @@ service firebase.storage {
       return fileName.matches('^' + request.auth.uid + '(_.*)?(\\..+)?$');
     }
 
-    function isAdminOrPanelStaff() {
-      return isSignedIn() && (
-        request.auth.token.admin == true ||
-        request.auth.token.role == 'admin' ||
-        request.auth.uid == 'xTgHC1v00LZIZ6ESA9YGjGU5zW33' ||
-        (request.auth.token.email != null &&
-          request.auth.token.email.matches('(?i)^(admin@dinebuddies\\.com|yaser@dinebuddies\\.com|info@dinebuddies\\.com\\.au|y\\.abohamed@gmail\\.com)$')) ||
-        (
-          firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
-          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.get('role', '') in ['admin', 'moderator', 'support', 'staff']
-        )
-      );
-    }
-
     // Host of a hosted invitation (social + personal — Firestore social_invitations, legacy private_invitations).
     function isPrivateInvitationHost(invitationId) {
       let socialDoc = firestore.get(/databases/(default)/documents/social_invitations/$(invitationId));
@@ -61,22 +47,16 @@ service firebase.storage {
       allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
-    // Chat images (current app path: chat_images/{uid}/{fileName})
+    // Chat images — client write locked; only moderateImage (Admin SDK) publishes after Vision.
     match /chat_images/{userId}/{fileName} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() 
-                   && request.auth.uid == userId
-                   && isImage()
-                   && request.resource.size < 5 * 1024 * 1024; // Max 5MB
+      allow write: if false;
     }
 
-    // Legacy chat-images path (kept for backward compatibility)
+    // Legacy chat-images path (read-only; new writes go quarantine → moderateImage)
     match /chat-images/{userId}/{fileName} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn()
-                   && request.auth.uid == userId
-                   && isImage()
-                   && request.resource.size < 5 * 1024 * 1024;
+      allow write: if false;
     }
 
     // Voice messages
@@ -138,21 +118,18 @@ service firebase.storage {
       allow write: if false;
     }
 
-    // Partner menu images
+    // Partner menu images — Vision-only (Admin SDK via moderateImage)
     match /menus/{partnerId}/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == partnerId
-                   && isImage()
-                   && request.resource.size < 8 * 1024 * 1024;
+      allow write: if false;
     }
 
-    // User stories
+    // User stories — videos may upload directly; images must go quarantine → Vision
     match /stories/{userId}/{fileName} {
       allow read: if true;
       allow write: if isSignedIn()
                    && request.auth.uid == userId
-                   && (isImage() || isVideo())
+                   && isVideo()
                    && request.resource.size < 25 * 1024 * 1024;
     }
 
@@ -161,7 +138,7 @@ service firebase.storage {
       allow read: if true;
       allow write: if isSignedIn()
                    && uidPrefixed(fileName)
-                   && (isImage() || isVideo())
+                   && isVideo()
                    && request.resource.size < 30 * 1024 * 1024;
     }
 
@@ -170,11 +147,12 @@ service firebase.storage {
       allow read: if true;
       allow write: if isSignedIn()
                    && uidPrefixed(fileName)
-                   && (isImage() || isVideo())
+                   && isVideo()
                    && request.resource.size < 30 * 1024 * 1024;
     }
 
     // Invitation media — uid subfolder enforces upload ownership.
+    // Images: quarantine → moderateImage. Videos: direct client write.
     // Modern apps upload to: invitations/{userId}/{fileName}
     // Legacy app uploads to: invitations/{invitationId}/{userId}/{fileName}
     
@@ -183,7 +161,7 @@ service firebase.storage {
       allow read: if true;
       allow write: if isSignedIn()
                    && request.auth.uid == userId
-                   && (isImage() || isVideo())
+                   && isVideo()
                    && request.resource.size < 50 * 1024 * 1024; // Max 50MB
     }
 
@@ -192,7 +170,7 @@ service firebase.storage {
       allow read: if true;
       allow write: if isSignedIn()
                    && request.auth.uid == userId
-                   && (isImage() || isVideo())
+                   && isVideo()
                    && request.resource.size < 50 * 1024 * 1024;
     }
 
@@ -205,49 +183,37 @@ service firebase.storage {
     // Legacy flat path (read-only for backwards compatibility with existing URLs)
     // Example: invitations/{invitationId}/{fileName} (where fileName is not a UID folder)
 
-    // User place images
+    // User place images — Vision-only
     match /users/{userId}/places/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == userId
-                   && isImage()
-                   && request.resource.size < 8 * 1024 * 1024;
+      allow write: if false;
     }
 
-    // Featured posts (Elite animated posts – background images)
+    // Featured posts (Elite animated posts – background images) — Vision-only
     match /featured_posts/{userId}/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == userId
-                   && (request.resource.contentType == null || request.resource.contentType.matches('image/.*'))
-                   && request.resource.size < 10 * 1024 * 1024;
+      allow write: if false;
     }
 
-    // Community posts media (images/videos for feed posts)
+    // Community posts media — videos direct; images quarantine → Vision
     match /community-posts/{userId}/{fileName} {
       allow read: if true;
       allow write: if isSignedIn()
                    && request.auth.uid == userId
-                   && (isImage() || isVideo())
+                   && isVideo()
                    && request.resource.size < 25 * 1024 * 1024;
     }
 
-    // Standalone AI Design Studio generated images
+    // AI Design Studio — server / moderateImage only (no direct client image write)
     match /ai-design-studio/{userId}/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == userId
-                   && isImage()
-                   && request.resource.size < 15 * 1024 * 1024;
+      allow write: if false;
     }
 
-    // Business motion / Smart Post Studio cover images
+    // Business motion / Smart Post Studio cover images — Vision-only
     match /business-motion/{userId}/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == userId
-                   && isImage()
-                   && request.resource.size < 15 * 1024 * 1024;
+      allow write: if false;
     }
 
     // Legacy AI image path (server-side uploads before folder fix — read-only for existing URLs)
@@ -256,19 +222,11 @@ service firebase.storage {
       allow write: if false;
     }
 
-    // Featured posts background images (Business Pro feature)
-    match /featured_posts/{userId}/{fileName} {
-      allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == userId
-                   && isImage()
-                   && request.resource.size < 5 * 1024 * 1024; // Max 5MB
-    }
-
-    // Business feedback/complaint proof media
+    // Business feedback/complaint proof media — require auth; images via Vision only
     match /feedback_media/{businessId}/{fileName} {
       allow read: if true;
-      allow write: if (isImage() || isVideo() || isAudio())
+      allow write: if isSignedIn()
+                   && (isVideo() || isAudio())
                    && request.resource.size < 30 * 1024 * 1024;
     }
 
@@ -288,28 +246,16 @@ service firebase.storage {
                    && isPrivateInvitationHost(invitationId);
     }
 
-    // Google Business source photos (synced during registration)
+    // Google Business source photos — Vision-only (moderateImage / Admin SDK)
     match /business_photos/{userId}/{fileName} {
       allow read: if true;
-      // Some clients send blobs with missing/wrong contentType even when metadata is set — allow common image extensions.
-      allow write: if isSignedIn()
-                   && request.auth.uid == userId
-                   && request.resource.size < 10 * 1024 * 1024
-                   && (
-                     isImage() ||
-                     request.resource.contentType == null ||
-                     fileName.matches('.*\\.(jpg|jpeg|png|webp|gif)$')
-                   );
+      allow write: if false;
     }
 
-    // Admin demo user profile uploads (manual seeding from admin panel)
+    // Legacy admin demo path — read-only; new admin images use quarantine → Vision
     match /demo-users/uploads/{adminUid}/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == adminUid
-                   && isAdminOrPanelStaff()
-                   && isImage()
-                   && request.resource.size < 8 * 1024 * 1024;
+      allow write: if false;
     }
 
     // Deny everything else by default

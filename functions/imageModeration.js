@@ -338,19 +338,30 @@ function registerImageModeration(deps) {
             const bucket = getBucket();
             const file = bucket.file(filePath);
 
-            try {
-                await sleep(2000);
-                const [meta] = await file.getMetadata();
-                if (isModerationApproved(meta.metadata)) return null;
-            } catch (err) {
-                if (err?.code === 404) return null;
-                functionsLogger.warn('Could not re-read image metadata before guard', {
-                    filePath,
-                    message: err?.message,
-                });
-                // Fail open for profile-adjacent uncertainty — do not delete when unsure.
-                return null;
+            // Fail-secure: retry metadata read, then delete if still unapproved / unreadable.
+            let approved = false;
+            let missing = false;
+            for (let attempt = 0; attempt < 3; attempt += 1) {
+                try {
+                    await sleep(attempt === 0 ? 2000 : 1500);
+                    const [meta] = await file.getMetadata();
+                    if (isModerationApproved(meta.metadata)) {
+                        approved = true;
+                        break;
+                    }
+                } catch (err) {
+                    if (err?.code === 404) {
+                        missing = true;
+                        break;
+                    }
+                    functionsLogger.warn('Could not re-read image metadata before guard', {
+                        filePath,
+                        attempt,
+                        message: err?.message,
+                    });
+                }
             }
+            if (missing || approved) return null;
 
             functionsLogger.warn('Removing unmoderated public image upload', { filePath });
             try {

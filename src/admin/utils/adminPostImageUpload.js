@@ -1,9 +1,9 @@
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '../../firebase/config';
-import { compressImage, validateImageFile } from '../../utils/imageUpload';
+import { validateImageFile } from '../../utils/imageUpload';
+import { uploadManagedImage } from '../../services/managedImageUpload';
+import { ImageUploadZone } from '../../services/imageUploadZones';
 
 /**
- * Admin-only upload for demo post media (no Vision moderation).
+ * Admin demo post media — Vision-moderated (same pipeline as community posts).
  * @param {File} file
  * @param {string} adminUid
  * @param {(pct: number) => void} [onProgress]
@@ -18,35 +18,12 @@ export async function uploadAdminPostImage(file, adminUid, onProgress) {
         throw new Error('Admin sign-in required to upload images.');
     }
 
-    const compressed = await compressImage(file, {
-        maxSizeMB: 1.2,
-        maxWidthOrHeight: 1600,
-        initialQuality: 0.85,
-    });
-
-    const ext =
-        compressed.type?.includes('webp') ? 'webp' : compressed.type?.includes('png') ? 'png' : 'jpg';
-    const path = `admin-posts/uploads/${adminUid}/post_${Date.now()}.${ext}`;
-    const storageRef = ref(storage, path);
-    const contentType =
-        compressed.type && compressed.type.startsWith('image/') ? compressed.type : 'image/jpeg';
-
-    return new Promise((resolve, reject) => {
-        const task = uploadBytesResumable(storageRef, compressed, { contentType });
-        task.on(
-            'state_changed',
-            (snapshot) => {
-                if (!onProgress || !snapshot.totalBytes) return;
-                onProgress(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100));
-            },
-            reject,
-            async () => {
-                try {
-                    resolve(await getDownloadURL(task.snapshot.ref));
-                } catch (err) {
-                    reject(err);
-                }
-            }
-        );
+    return uploadManagedImage(file, adminUid, ImageUploadZone.POST, {
+        onProgress,
+        compressionOptions: {
+            maxSizeMB: 1.2,
+            maxWidthOrHeight: 1600,
+            initialQuality: 0.85,
+        },
     });
 }
