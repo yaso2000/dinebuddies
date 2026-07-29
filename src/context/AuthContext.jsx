@@ -11,7 +11,7 @@ import {
     clearConsumerEntryOk,
 } from '../utils/consumerProfileComplete';
 import { normalizeUserProfile as normalizeProfile } from '../utils/userProfileNormalize';
-import { getAvatarUrlOrNull } from '../utils/avatarUtils';
+import { getAvatarUrlOrNull, resolveOAuthPhotoUpdate } from '../utils/avatarUtils';
 import { mergeProfilePreserveFavoritePlaces } from '../utils/favoritePlacesUtils';
 import { mergeProfileSnapshot } from '../utils/profileGallery';
 import { DEFAULT_ACCESS_PLATFORM } from '../constants/userProfileSchema';
@@ -180,15 +180,16 @@ function toSessionAuthUser(user) {
 
 /**
  * Backfill a normalized profile's avatar from the Firebase-auth photo
- * (Google/Facebook/Apple) when the Firestore doc has no usable photo.
- * Keeps the signed-in user's social avatar from flickering to a default.
+ * (Google/Facebook) only when there is no user-uploaded photo.
+ * Priority: upload → OAuth → letter (no overwrite of uploads).
  */
 function backfillProfileWithAuthPhoto(normalized) {
     const authPhotoUrl = String(auth.currentUser?.photoURL || '').trim();
-    if (authPhotoUrl && !getAvatarUrlOrNull(normalized)) {
-        normalized.photoURL = authPhotoUrl;
-        normalized.photo_url = authPhotoUrl;
-        normalized.avatar = authPhotoUrl;
+    const patch = resolveOAuthPhotoUpdate(normalized, authPhotoUrl);
+    if (patch) {
+        normalized.photoURL = patch.photoURL;
+        normalized.photo_url = patch.photo_url;
+        normalized.avatar = patch.avatar;
     }
     return normalized;
 }
@@ -385,16 +386,15 @@ export const AuthProvider = ({ children }) => {
         const userRef = doc(db, 'users', uid);
         let cancelled = false;
 
-        // Firebase-auth photo (Google/Facebook/Apple). Used as a fallback so the
-        // signed-in user's social avatar always shows even when the Firestore doc
-        // has no stored photo — prevents flicker between the social photo and a default.
+        // Firebase-auth photo (Google/Facebook). Never override a user-uploaded Storage photo.
         const authPhotoUrl = String(currentUser?.photoURL || currentUser?.avatar || '').trim();
         const normalizeWithAuthPhoto = (raw) => {
             const normalized = normalizeProfile(raw);
-            if (authPhotoUrl && !getAvatarUrlOrNull(normalized)) {
-                normalized.photoURL = authPhotoUrl;
-                normalized.photo_url = authPhotoUrl;
-                normalized.avatar = authPhotoUrl;
+            const patch = resolveOAuthPhotoUpdate(normalized, authPhotoUrl);
+            if (patch) {
+                normalized.photoURL = patch.photoURL;
+                normalized.photo_url = patch.photo_url;
+                normalized.avatar = patch.avatar;
             }
             return normalized;
         };
@@ -854,12 +854,10 @@ export const AuthProvider = ({ children }) => {
             assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
         }
         if (userDoc.exists() && result.user.photoURL) {
-            const data = userDoc.data();
-            const currentPhoto = data.photoURL || data.photo_url;
-            if (!currentPhoto || currentPhoto.includes('data:image/svg+xml') || currentPhoto.length < 10) {
+            const photoPatch = resolveOAuthPhotoUpdate(userDoc.data(), result.user.photoURL);
+            if (photoPatch) {
                 await updateDoc(doc(db, 'users', result.user.uid), {
-                    photoURL: result.user.photoURL,
-                    photo_url: result.user.photoURL,
+                    ...photoPatch,
                     updatedAt: serverTimestamp(),
                 });
             }
@@ -903,10 +901,10 @@ export const AuthProvider = ({ children }) => {
                 });
             } else {
                 assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
-                await updateDoc(doc(db, 'users', result.user.uid), {
-                    photo_url: result.user.photoURL || userDoc.data().photo_url,
-                    last_active_time: serverTimestamp()
-                });
+                const photoPatch = resolveOAuthPhotoUpdate(userDoc.data(), result.user.photoURL);
+                const googleUpdates = { last_active_time: serverTimestamp() };
+                if (photoPatch) Object.assign(googleUpdates, photoPatch);
+                await updateDoc(doc(db, 'users', result.user.uid), googleUpdates);
             }
             await finalizePopupOAuthSession(result.user.uid);
             return { user: result.user, isNewUser };
@@ -1079,10 +1077,17 @@ export const AuthProvider = ({ children }) => {
             } else {
                 assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
                 if (result.user.photoURL) {
-                    await updateDoc(doc(db, 'users', result.user.uid), {
-                        photo_url: result.user.photoURL || userDoc.data().photo_url,
-                        last_active_time: serverTimestamp(),
-                    });
+                    const photoPatch = resolveOAuthPhotoUpdate(userDoc.data(), result.user.photoURL);
+                    if (photoPatch) {
+                        await updateDoc(doc(db, 'users', result.user.uid), {
+                            ...photoPatch,
+                            last_active_time: serverTimestamp(),
+                        });
+                    } else {
+                        await updateDoc(doc(db, 'users', result.user.uid), {
+                            last_active_time: serverTimestamp(),
+                        });
+                    }
                 }
             }
             await finalizePopupOAuthSession(result.user.uid);
@@ -1258,25 +1263,16 @@ export const AuthProvider = ({ children }) => {
             });
         } else {
             assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
+            const photoPatch = resolveOAuthPhotoUpdate(userDoc.data(), user.photoURL);
             if (authProvider === 'google') {
+                const googleUpdates = { last_active_time: serverTimestamp() };
+                if (photoPatch) Object.assign(googleUpdates, photoPatch);
+                await updateDoc(doc(db, 'users', uid), googleUpdates);
+            } else if (photoPatch) {
                 await updateDoc(doc(db, 'users', uid), {
-                    photo_url: user.photoURL || userDoc.data().photo_url,
-                    last_active_time: serverTimestamp(),
+                    ...photoPatch,
+                    updatedAt: serverTimestamp(),
                 });
-            } else if (user.photoURL) {
-                const data = userDoc.data();
-                const currentPhoto = data.photoURL || data.photo_url;
-                if (
-                    !currentPhoto ||
-                    String(currentPhoto).includes('data:image/svg+xml') ||
-                    String(currentPhoto).length < 10
-                ) {
-                    await updateDoc(doc(db, 'users', uid), {
-                        photoURL: user.photoURL,
-                        photo_url: user.photoURL,
-                        updatedAt: serverTimestamp(),
-                    });
-                }
             }
         }
 

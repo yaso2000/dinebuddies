@@ -479,6 +479,37 @@ function resolvePublicAccountRole(userData, uid) {
     return asTrimmedString(userData.role)?.toLowerCase() || 'user';
 }
 
+/** Public avatar priority: user upload → Google/Facebook OAuth → null (clients show initials). */
+function pickPublicAvatarUrl(userData) {
+    const candidates = [
+        asTrimmedString(userData.photo_url),
+        asTrimmedString(userData.photoURL),
+        asTrimmedString(userData.avatar),
+        asTrimmedString(userData.avatarUrl),
+    ].filter(Boolean);
+
+    const isUpload = (url) =>
+        /firebasestorage\.googleapis\.com|firebasestorage\.app|\.appspot\.com\/o\/|\/v0\/b\/[^/]+\/o\//i.test(
+            url
+        );
+    const isOAuth = (url) =>
+        /^https?:\/\/lh\d+\.googleusercontent\.com\/a[-/]/i.test(url) ||
+        /(?:graph|scontent)[^/]*\.facebook\.com\/|fbcdn\.net\/|platform-lookaside\.fbsbx\.com\//i.test(
+            url
+        );
+    const isStockOrGenerated = (url) =>
+        /images\.unsplash\.com\//i.test(url) ||
+        url.startsWith('data:image/svg+xml') ||
+        url.includes('ui-avatars.com') ||
+        url.includes('dicebear');
+
+    const uploaded = candidates.find((url) => isUpload(url) && !isStockOrGenerated(url));
+    if (uploaded) return uploaded;
+    const oauth = candidates.find((url) => isOAuth(url));
+    if (oauth) return oauth;
+    return '';
+}
+
 // Shared mapper for sync trigger + backfill (phase-1 schema only).
 function toPublicProfile(userDocData, uid) {
     const userData = userDocData && typeof userDocData === 'object' ? userDocData : {};
@@ -492,9 +523,7 @@ function toPublicProfile(userDocData, uid) {
         asTrimmedString(userData.name) ||
         'User';
     const avatarUrl =
-        asTrimmedString(userData.photo_url) ||
-        asTrimmedString(userData.photoURL) ||
-        asTrimmedString(userData.avatar);
+        pickPublicAvatarUrl(userData) || null;
 
     const locationData = userData.location && typeof userData.location === 'object' ? userData.location : {};
     const userCity = asTrimmedString(userData.city) || asTrimmedString(locationData.city);

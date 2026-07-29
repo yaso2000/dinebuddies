@@ -1784,6 +1784,8 @@ export const InvitationProvider = ({ children }) => {
                 const photo = data.avatar || data.photoURL || data.photo_url;
                 updates.photo_url = photo;
                 updates.photoURL = photo;
+                updates.avatar = photo;
+                updates.avatarUrl = photo;
             }
 
             if (updateUserProfile) {

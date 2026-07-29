@@ -117,38 +117,16 @@ function isEmptyMediaUrl(url) {
     return !url || typeof url !== 'string' || url.trim().length < 12;
 }
 
-function isGeneratedPlaceholderAvatar(url) {
-    if (!url || typeof url !== 'string') return true;
-    if (url.startsWith('data:image/svg+xml')) return true;
-    if (url.includes('ui-avatars.com')) return true;
-    if (url.includes('dicebear')) return true;
-    return false;
-}
-
 /**
- * Merge default avatar/cover into a profile patch when the user has not uploaded custom media.
+ * Merge default cover into a profile patch when the user has not uploaded custom media.
+ * Does NOT write stock Unsplash avatars — consumer avatar priority is:
+ * uploaded → Google/Facebook → letter/initial.
  * @param {object} user — uid, gender, openToDating, photo_url, cover_photo, …
- * @returns {{ photo_url?: string, photoURL?: string, avatar?: string, avatarUrl?: string, cover_photo?: string }}
+ * @returns {{ cover_photo?: string }}
  */
 export function buildDefaultProfileMediaPatch(user = {}) {
     const patch = {};
-    const avatarCandidate =
-        user.photo_url || user.photoURL || user.avatar || user.avatarUrl || '';
     const coverCandidate = user.cover_photo || user.coverPhotoUrl || '';
-
-    const needsAvatar =
-        isEmptyMediaUrl(avatarCandidate) ||
-        isGeneratedPlaceholderAvatar(avatarCandidate);
-
-    if (needsAvatar) {
-        const avatar = pickDefaultProfileAvatar(user);
-        if (avatar) {
-            patch.photo_url = avatar;
-            patch.photoURL = avatar;
-            patch.avatar = avatar;
-            patch.avatarUrl = avatar;
-        }
-    }
 
     const needsCover =
         isEmptyMediaUrl(coverCandidate) || isBundledDefaultProfileCover(coverCandidate);

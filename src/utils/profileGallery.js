@@ -145,15 +145,40 @@ export function resolveProfileCoverUrl(user = {}) {
     return resolveDefaultProfileCover(user) || null;
 }
 
-/** Square / profile photo (avatar) — also the swipe discovery card background. */
+/** Square / profile photo (avatar) — also the swipe discovery card background.
+ * Priority: user upload → Google/Facebook → null (UI shows letter/initial).
+ * Kept local to avoid circular import with avatarUtils.
+ */
 export function resolveProfileAvatarUrl(user = {}) {
-    const url =
-        user.photo_url ||
-        user.photoURL ||
-        user.avatarUrl ||
-        user.avatar ||
-        '';
-    return typeof url === 'string' && url.trim() ? url.trim() : null;
+    const candidates = [
+        user.photo_url,
+        user.photoURL,
+        user.avatarUrl,
+        user.avatar,
+    ]
+        .filter((url) => typeof url === 'string' && url.trim().length > 10)
+        .map((url) => url.trim());
+
+    const isUpload = (url) =>
+        /firebasestorage\.googleapis\.com|firebasestorage\.app|\.appspot\.com\/o\/|\/v0\/b\/[^/]+\/o\//i.test(
+            url
+        );
+    const isOAuth = (url) =>
+        /^https?:\/\/lh\d+\.googleusercontent\.com\/a[-/]/i.test(url) ||
+        /(?:graph|scontent)[^/]*\.facebook\.com\/|fbcdn\.net\/|platform-lookaside\.fbsbx\.com\//i.test(
+            url
+        );
+    const isStockOrGenerated = (url) =>
+        /images\.unsplash\.com\//i.test(url) ||
+        url.startsWith('data:image/svg+xml') ||
+        url.includes('ui-avatars.com') ||
+        url.includes('dicebear');
+
+    const uploaded = candidates.find((url) => isUpload(url) && !isStockOrGenerated(url));
+    if (uploaded) return uploaded;
+    const oauth = candidates.find((url) => isOAuth(url));
+    if (oauth) return oauth;
+    return null;
 }
 
 /**

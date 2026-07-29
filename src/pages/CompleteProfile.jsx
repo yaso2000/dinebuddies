@@ -44,7 +44,7 @@ const CompleteProfile = () => {
         displayName: userProfile.displayName || userProfile.nickname || prev.displayName || '',
         ageCategory: userProfile.ageCategory || prev.ageCategory || '',
         gender: userProfile.gender || prev.gender || '',
-        photoURL: userProfile.photoURL || prev.photoURL || ''
+        photoURL: prev.photoURL || userProfile.photoURL || userProfile.photo_url || ''
       }));
     } else if (currentUser?.displayName) {
       setFormData((prev) => ({

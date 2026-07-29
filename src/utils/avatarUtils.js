@@ -2,10 +2,6 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { normalizeProfileGallery } from './profileGallery';
 import { mapPublicProfileDocToUserShape } from './publicProfileMap';
-import {
-    pickDefaultProfileAvatar,
-    resolveDefaultProfileCover,
-} from '../constants/defaultProfileMedia';
 
 /**
  * Google Places image URLs (JS PhotoService, REST /place/photo, etc.) are not persisted app media.
@@ -34,6 +30,130 @@ export function isPlacePhotoProxyUrl(url) {
 export function isGoogleAccountPhotoUrl(url) {
     if (!url || typeof url !== 'string') return false;
     return /^https?:\/\/lh\d+\.googleusercontent\.com\/a[-/]/i.test(url.trim());
+}
+
+/** Facebook / Meta account profile photos from OAuth. */
+export function isFacebookAccountPhotoUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    const u = url.trim();
+    return (
+        /(?:^https?:\/\/)?(?:graph|scontent)[^/]*\.facebook\.com\//i.test(u) ||
+        /(?:^https?:\/\/)?[^/]*fbcdn\.net\//i.test(u) ||
+        /platform-lookaside\.fbsbx\.com\//i.test(u)
+    );
+}
+
+/**
+ * Google or Facebook OAuth provider account photo (priority tier 2).
+ * Apple usually has no photoURL.
+ */
+export function isProviderAccountPhotoUrl(url) {
+    return isGoogleAccountPhotoUrl(url) || isFacebookAccountPhotoUrl(url);
+}
+
+/**
+ * Photo the user uploaded into our Storage (priority tier 1).
+ * Final moderated URLs live under Firebase Storage — never treat OAuth CDNs as uploads.
+ */
+export function isUserUploadedPhotoUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    const u = url.trim();
+    if (isProviderAccountPhotoUrl(u) || isGeneratedAvatarUrl(u) || isStockDefaultAvatarUrl(u)) {
+        return false;
+    }
+    if (/firebasestorage\.googleapis\.com/i.test(u)) return true;
+    if (/firebasestorage\.app/i.test(u)) return true;
+    if (/\.appspot\.com\/o\//i.test(u)) return true;
+    if (/\/v0\/b\/[^/]+\/o\//i.test(u)) return true;
+    return false;
+}
+
+/** Stock Unsplash defaults we used to persist — not a real user/OAuth photo. */
+export function isStockDefaultAvatarUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    return /images\.unsplash\.com\//i.test(url.trim());
+}
+
+/**
+ * Avatar display priority (exact):
+ * 1) user-uploaded Storage photo
+ * 2) Google / Facebook OAuth photo
+ * 3) none → caller shows letter/initial
+ *
+ * @param {Record<string, unknown> | null | undefined} userData
+ * @param {{ authPhotoUrl?: string | null }} [opts]
+ * @returns {string | null}
+ */
+export function pickPreferredAvatarUrl(userData, opts = {}) {
+    if (!userData && !opts?.authPhotoUrl) return null;
+
+    const raw = [
+        userData?.avatarUrl,
+        userData?.avatar,
+        userData?.avatar_url,
+        userData?.photoURL,
+        userData?.photo_url,
+        userData?.swipePhotoUrl,
+        firstProfileGalleryAvatarUrl(userData),
+        userData?.userPhoto,
+        userData?.profilePicture,
+        opts?.authPhotoUrl,
+    ];
+
+    const usable = [];
+    for (const url of raw) {
+        if (!url || typeof url !== 'string' || url.length < 10) continue;
+        if (!(url.startsWith('http') || url.startsWith('data:image'))) continue;
+        if (isInvalidDirectImageUrl(url) && !isProviderAccountPhotoUrl(url)) continue;
+        if (isGeneratedAvatarUrl(url) || isStockDefaultAvatarUrl(url)) continue;
+        usable.push(url.trim());
+    }
+
+    const uploaded = usable.find((u) => isUserUploadedPhotoUrl(u));
+    if (uploaded) return uploaded;
+
+    const authPhoto = String(opts?.authPhotoUrl || '').trim();
+    if (authPhoto && isProviderAccountPhotoUrl(authPhoto) && !isInvalidDirectImageUrl(authPhoto)) {
+        return authPhoto;
+    }
+
+    const provider = usable.find((u) => isProviderAccountPhotoUrl(u));
+    if (provider) return provider;
+
+    return null;
+}
+
+/**
+ * Whether OAuth may write photo fields onto an existing users/{uid} doc.
+ * Never overwrites a manually uploaded Storage photo.
+ * @returns {{ photo_url: string, photoURL: string, avatar: string } | null}
+ */
+export function resolveOAuthPhotoUpdate(existingData, authPhotoUrl) {
+    const next = String(authPhotoUrl || '').trim();
+    if (!next || !isProviderAccountPhotoUrl(next)) return null;
+
+    const current =
+        String(
+            existingData?.photo_url ||
+                existingData?.photoURL ||
+                existingData?.avatar ||
+                existingData?.avatarUrl ||
+                ''
+        ).trim();
+
+    if (current && isUserUploadedPhotoUrl(current)) return null;
+
+    if (
+        !current ||
+        isGeneratedAvatarUrl(current) ||
+        isStockDefaultAvatarUrl(current) ||
+        isProviderAccountPhotoUrl(current) ||
+        current.length < 10
+    ) {
+        return { photo_url: next, photoURL: next, avatar: next };
+    }
+
+    return null;
 }
 
 /** Ephemeral Google CDN URLs (Places photoUri) — do not persist or render. Account avatars are allowed. */
@@ -137,44 +257,33 @@ export function firstProfileGalleryAvatarUrl(userData) {
 
 /**
  * Returns a persisted avatar URL when one exists, otherwise null (no generated fallback).
+ * Consumer priority: user upload → Google/Facebook OAuth → null (caller uses letter/initial).
  * @param {Record<string, unknown> | null | undefined} userData
+ * @param {{ authPhotoUrl?: string | null }} [opts]
  */
-export function getAvatarUrlOrNull(userData) {
-    if (!userData) return null;
-
-    const candidates = [
-        userData.avatarUrl,
-        userData.avatar,
-        userData.avatar_url,
-        userData.photoURL,
-        userData.photo_url,
-        userData.swipePhotoUrl,
-        firstProfileGalleryAvatarUrl(userData),
-        userData.userPhoto,
-        userData.logo,
-        userData.logoImage,
-        userData.profilePicture,
-        userData.businessInfo?.coverImage,
-        userData.businessInfo?.logo,
-        userData.businessInfo?.logoImage,
-        userData.partnerLogo,
-    ];
-
-    const fallbackName =
-        userData.display_name || userData.displayName || userData.nickname || userData.name || '';
-
-    for (const url of candidates) {
-        if (url && typeof url === 'string' && url.length > 10) {
-            if (url.startsWith('http') || url.startsWith('data:image')) {
-                if (isUiAvatarsUrl(url)) {
-                    return normalizeAvatarDisplayUrl(url, fallbackName);
+export function getAvatarUrlOrNull(userData, opts = {}) {
+    if (userData && isBusinessAvatarUser(userData)) {
+        const businessCandidates = [
+            userData.avatarUrl,
+            userData.avatar,
+            userData.photoURL,
+            userData.photo_url,
+            userData.logo,
+            userData.logoImage,
+            userData.businessLogoUrl,
+            userData.businessInfo?.logo,
+            userData.businessInfo?.logoImage,
+            userData.partnerLogo,
+        ];
+        for (const url of businessCandidates) {
+            if (url && typeof url === 'string' && url.length > 10) {
+                if ((url.startsWith('http') || url.startsWith('data:image')) && !isInvalidDirectImageUrl(url)) {
+                    return url;
                 }
-                if (!isInvalidDirectImageUrl(url)) return url;
             }
         }
     }
-
-    return null;
+    return pickPreferredAvatarUrl(userData, opts);
 }
 
 /** Normalize all common avatar field aliases from the best available URL. */
@@ -244,19 +353,14 @@ export async function hydrateUsersAvatarFields(users = []) {
 }
 
 /**
- * Unified logic to retrieve a safe avatar URL for a user
- * Checks multiple possible fields and provides a consistent fallback
+ * Unified avatar URL: uploaded → OAuth → letter/initial.
+ * Does not use Unsplash stock photos as the profile avatar.
  */
 export const getSafeAvatar = (userData) => {
     if (!userData) return getDefaultAvatar();
 
     const picked = getAvatarUrlOrNull(userData);
     if (picked) return picked;
-
-    if (!isBusinessAvatarUser(userData)) {
-        const pooled = pickDefaultProfileAvatar(userData);
-        if (pooled) return pooled;
-    }
 
     const fallbackName =
         userData.display_name || userData.displayName || userData.nickname || userData.name || '';

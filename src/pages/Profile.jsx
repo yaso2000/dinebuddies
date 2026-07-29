@@ -572,10 +572,7 @@ const Profile = () => {
         photo_url: finalAvatar,
         cover_photo: String(formData.cover_photo || profileMedia.cover_photo || '').trim(),
       });
-      if (mediaPatch.photo_url) {
-        finalAvatar = mediaPatch.photo_url;
-        payload.avatar = finalAvatar;
-      }
+      // Never replace a just-uploaded / existing avatar with stock media.
       payload.cover_photo = String(
         mediaPatch.cover_photo ||
           formData.cover_photo ||
