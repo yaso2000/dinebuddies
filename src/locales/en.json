@@ -2479,6 +2479,7 @@
   "create_stage_no_mutuals_optional": "No mutual follows yet. You can still open the Stage alone and share a join link.",
   "create_stage_free_note": "Free — no charge. Live for 24 hours, then the Stage and all its media are deleted.",
   "create_stage_one_at_a_time": "You can host only one Stage at a time. After 24 hours it is removed and you can open a new one.",
+  "create_stage_select_guest_hint": "Select at least one mutual follow to open the Stage. It is free.",
   "create_stage_open": "Open Stage",
   "stage_open_existing": "Open your Stage",
   "stage_already_open": "You already have an open Stage. Open it instead of creating a new one.",

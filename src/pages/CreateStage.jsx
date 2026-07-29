@@ -136,10 +136,22 @@ export default function CreateStage() {
         navigate(`/stage/${existingId}`, { replace: true });
         return;
       }
+      const rawMsg = String(err?.message || '');
+      // Legacy paid-booking CF may still surface this if an old revision was cached.
+      if (/insufficient.*credit|paid Credits to book/i.test(rawMsg)) {
+        showToast(
+          t(
+            'create_stage_free_note',
+            'Free — no charge. Live for 24 hours, then the Stage and all its media are deleted.'
+          ),
+          'error'
+        );
+        return;
+      }
       const code = String(err?.code || '');
       const msg =
         code.includes('failed-precondition') || code.includes('invalid-argument')
-          ? err.message?.replace(/^Firebase: | \(functions\/.*\)\.?$/g, '').trim() ||
+          ? rawMsg.replace(/^Firebase: | \(functions\/.*\)\.?$/g, '').trim() ||
             t('stage_create_failed', 'Could not create Stage. Try again.')
           : t('stage_create_failed', 'Could not create Stage. Try again.');
       showToast(msg, 'error');
@@ -272,6 +284,17 @@ export default function CreateStage() {
             'You can host only one Stage at a time. After 24 hours it is removed and you can open a new one.'
           )}
         </AppText>
+
+        {!canSubmit && !submitting && !blockedByExisting ? (
+          <AppText as="p" className="create-stage-page__hint" role="status">
+            {selectedCount === 0
+              ? t(
+                  'create_stage_select_guest_hint',
+                  'Select at least one mutual follow to open the Stage. It is free.'
+                )
+              : null}
+          </AppText>
+        ) : null}
 
         <button type="submit" className="create-stage-page__submit" disabled={!canSubmit}>
           {submitting
