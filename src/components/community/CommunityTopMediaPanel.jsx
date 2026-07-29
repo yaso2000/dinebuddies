@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaImage, FaTimes } from 'react-icons/fa';
+import { FaGift, FaImage, FaTimes } from 'react-icons/fa';
 import { AppText } from '../base';
 import CommunityHostBannerComposerTools from './CommunityHostBannerComposerTools';
 import CommunityBannerDraggableTitle from './CommunityBannerDraggableTitle';
@@ -29,7 +29,9 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
     unpinHostMessage,
     hideMessageFromBanner,
     updateHostSpotlightPosition,
+    onSendGiftToHost,
   } = room;
+  const canGiftHost = !isHost && typeof onSendGiftToHost === 'function';
 
   const spotlightViews = useMemo(
     () =>
@@ -277,6 +279,18 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
             syncAtMs={banner.youtubeSyncAt}
             visible={memberYtReady}
           />
+        ) : null}
+        {canGiftHost ? (
+          <button
+            type="button"
+            className="community-main-chat__banner-gift-btn"
+            aria-label={t('stage_send_gift', 'Send a gift')}
+            title={t('stage_send_gift_to_host', 'Send a gift to the host')}
+            onClick={() => onSendGiftToHost()}
+          >
+            <FaGift size={16} aria-hidden />
+            <AppText as="span">{t('stage_gift_short', 'Gift')}</AppText>
+          </button>
         ) : null}
       </div>
     </section>

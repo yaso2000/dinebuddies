@@ -205,6 +205,37 @@
     border-color: rgba(254, 202, 202, 0.55);
 }
 
+.community-main-chat__banner-gift-btn {
+    position: absolute;
+    bottom: 0.55rem;
+    inset-inline-end: 0.55rem;
+    z-index: 16;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: rgba(255, 255, 255, 0.95);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.community-main-chat__banner-gift-btn:hover {
+    background: color-mix(in srgb, var(--brand-primary, #7c3aed) 75%, rgba(15, 23, 42, 0.9));
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.community-main-chat__attach-btn--gift {
+    color: var(--brand-primary, #7c3aed);
+}
+
 .community-main-chat__banner-wrap--youtube-host .community-main-chat__banner-youtube--host {
     z-index: 2;
 }

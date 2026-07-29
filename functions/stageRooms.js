@@ -218,6 +218,9 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                 asTrimmedString(host.display_name || host.displayName || host.name) ||
                 'Stage';
 
+            const visibilityRaw = asTrimmedString(data?.visibility).toLowerCase();
+            const visibility = visibilityRaw === 'public' ? 'public' : 'private';
+
             const rawInvitees = Array.isArray(data?.inviteeIds) ? data.inviteeIds : [];
             const inviteeCandidates = [
                 ...new Set(
@@ -227,13 +230,7 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                 ),
             ].slice(0, MAX_INVITEES);
 
-            if (inviteeCandidates.length === 0) {
-                throw new functions.https.HttpsError(
-                    'invalid-argument',
-                    'Select at least one mutual follow to invite.'
-                );
-            }
-
+            // Invitees are optional — Stage can open with host only.
             const hostFollowing = Array.isArray(host.following) ? host.following : [];
             const validInvitees = [];
             for (const inviteeId of inviteeCandidates) {
@@ -248,13 +245,6 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                 const blocked = Array.isArray(u.blockedUserIds) ? u.blockedUserIds : [];
                 if (blocked.includes(hostId)) continue;
                 validInvitees.push(inviteeId);
-            }
-
-            if (validInvitees.length === 0) {
-                throw new functions.https.HttpsError(
-                    'failed-precondition',
-                    'No valid mutual follows remained in the selection.'
-                );
             }
 
             const memberIds = [hostId, ...validInvitees];
@@ -272,6 +262,8 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                 hostId,
                 title,
                 status: 'active',
+                /** public = anyone may join; private = host followers only (plus invited). */
+                visibility,
                 memberIds,
                 invitedIds: validInvitees,
                 communityMembers: memberIds,
@@ -328,12 +320,14 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
             functions.logger.info('createStageRoom', {
                 stageId,
                 hostId,
+                visibility,
                 invitees: validInvitees.length,
             });
 
             return {
                 success: true,
                 stageId,
+                visibility,
                 memberCount: memberIds.length,
                 invitedCount: validInvitees.length,
                 expiresAt: expiresAt.toDate().toISOString(),
@@ -353,7 +347,7 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
         }
         // Legacy alias: end_stage → soft close (room stays until expiresAt)
         if (action === 'end_stage') action = 'close_stage';
-        if (!['leave', 'remove_member', 'close_stage', 'reopen_stage'].includes(action)) {
+        if (!['join', 'leave', 'remove_member', 'close_stage', 'reopen_stage'].includes(action)) {
             throw new functions.https.HttpsError('invalid-argument', 'Invalid action.');
         }
 
@@ -371,12 +365,89 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
         const stage = stageSnap.data() || {};
         const hostId = String(stage.hostId || '');
         const memberIds = Array.isArray(stage.memberIds) ? stage.memberIds : [];
+        const invitedIds = Array.isArray(stage.invitedIds) ? stage.invitedIds : [];
+        const blockedIds = Array.isArray(stage.communityBlockedUserIds)
+            ? stage.communityBlockedUserIds
+            : [];
+        const visibility = String(stage.visibility || 'private').toLowerCase() === 'public'
+            ? 'public'
+            : 'private';
 
         if (isExpired(stage)) {
             throw new functions.https.HttpsError(
                 'failed-precondition',
                 'This Stage has expired and can no longer be changed.'
             );
+        }
+
+        if (action === 'join') {
+            if (uid === hostId) {
+                return { success: true, alreadyMember: true, isHost: true };
+            }
+            if (memberIds.includes(uid)) {
+                return { success: true, alreadyMember: true };
+            }
+            if (blockedIds.includes(uid)) {
+                throw new functions.https.HttpsError(
+                    'permission-denied',
+                    'You cannot join this Stage.'
+                );
+            }
+
+            const userSnap = await db.collection('users').doc(uid).get();
+            if (!userSnap.exists) {
+                throw new functions.https.HttpsError('not-found', 'User not found.');
+            }
+            const user = userSnap.data() || {};
+            if (isBusinessUserDoc(user)) {
+                throw new functions.https.HttpsError(
+                    'failed-precondition',
+                    'Business accounts cannot join Stage rooms.'
+                );
+            }
+            const role = String(user.role || '').toLowerCase();
+            if (role === 'guest' || user.isGuest === true) {
+                throw new functions.https.HttpsError(
+                    'failed-precondition',
+                    'Guest accounts cannot join Stage rooms.'
+                );
+            }
+
+            const following = Array.isArray(user.following) ? user.following : [];
+            const followsHost = Boolean(hostId && following.includes(hostId));
+            const wasInvited = invitedIds.includes(uid);
+            const canJoin =
+                visibility === 'public' || followsHost || wasInvited;
+
+            if (!canJoin) {
+                throw new functions.https.HttpsError(
+                    'permission-denied',
+                    visibility === 'private'
+                        ? 'This Stage is for followers of the host only.'
+                        : 'You cannot join this Stage.'
+                );
+            }
+
+            if (String(stage.status || 'active') !== 'active') {
+                throw new functions.https.HttpsError(
+                    'failed-precondition',
+                    'This Stage is closed right now.'
+                );
+            }
+
+            await stageRef.update({
+                memberIds: admin.firestore.FieldValue.arrayUnion(uid),
+                communityMembers: admin.firestore.FieldValue.arrayUnion(uid),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            await db.collection('users').doc(uid).set(
+                {
+                    joinedStages: admin.firestore.FieldValue.arrayUnion(stageId),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                },
+                { merge: true }
+            );
+            return { success: true, joined: true, visibility };
         }
 
         if (action === 'leave') {

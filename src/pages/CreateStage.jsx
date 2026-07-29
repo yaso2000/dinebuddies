@@ -23,6 +23,7 @@ export default function CreateStage() {
   const { currentUser, userProfile, cannotCreateInvitations } = useAuth();
   const { stages, loading: stagesLoading } = useJoinedStages();
   const [title, setTitle] = useState('');
+  const [visibility, setVisibility] = useState('public');
   const [mutuals, setMutuals] = useState([]);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [loadingMutuals, setLoadingMutuals] = useState(true);
@@ -102,8 +103,7 @@ export default function CreateStage() {
   }, []);
 
   const blockedByExisting = Boolean(existingHostedStage);
-  const canSubmit =
-    selectedCount > 0 && !submitting && !cannotCreateInvitations && !blockedByExisting;
+  const canSubmit = !submitting && !cannotCreateInvitations && !blockedByExisting;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -114,6 +114,7 @@ export default function CreateStage() {
       const createStageRoom = httpsCallable(functions, 'createStageRoom');
       const result = await createStageRoom({
         title: title.trim(),
+        visibility,
         inviteeIds: [...selectedIds],
       });
       const stageId = result?.data?.stageId;
@@ -164,7 +165,7 @@ export default function CreateStage() {
     () =>
       t(
         'create_stage_subtitle',
-        'Pick mutual follows to invite. A new Stage room opens for this event.'
+        'Open alone or invite mutual follows. Choose public for everyone, or private for your followers only.'
       ),
     [t]
   );
@@ -218,10 +219,44 @@ export default function CreateStage() {
           />
         </label>
 
+        <div className="create-stage-page__field" role="group" aria-label={t('create_stage_visibility', 'Visibility')}>
+          <AppText as="span" className="create-stage-page__label">
+            {t('create_stage_visibility', 'Visibility')}
+          </AppText>
+          <div className="create-stage-page__visibility">
+            <button
+              type="button"
+              className={`create-stage-page__visibility-btn${visibility === 'public' ? ' is-selected' : ''}`}
+              aria-pressed={visibility === 'public'}
+              onClick={() => setVisibility('public')}
+            >
+              <AppText as="span" className="create-stage-page__visibility-title">
+                {t('create_stage_visibility_public', 'Public')}
+              </AppText>
+              <AppText as="span" className="create-stage-page__visibility-hint">
+                {t('create_stage_visibility_public_hint', 'Anyone can join')}
+              </AppText>
+            </button>
+            <button
+              type="button"
+              className={`create-stage-page__visibility-btn${visibility === 'private' ? ' is-selected' : ''}`}
+              aria-pressed={visibility === 'private'}
+              onClick={() => setVisibility('private')}
+            >
+              <AppText as="span" className="create-stage-page__visibility-title">
+                {t('create_stage_visibility_private', 'Private')}
+              </AppText>
+              <AppText as="span" className="create-stage-page__visibility-hint">
+                {t('create_stage_visibility_private_hint', 'Followers only')}
+              </AppText>
+            </button>
+          </div>
+        </div>
+
         <div className="create-stage-page__field">
           <div className="create-stage-page__label-row">
             <AppText as="span" className="create-stage-page__label">
-              {t('create_stage_guests', 'Guests (mutual follows)')}
+              {t('create_stage_guests_optional', 'Invite guests (optional)')}
             </AppText>
             <AppText as="span" className="create-stage-page__count">
               {selectedCount}/{MAX_INVITEES}
@@ -235,8 +270,8 @@ export default function CreateStage() {
           ) : mutuals.length === 0 ? (
             <AppText as="p" className="create-stage-page__hint">
               {t(
-                'create_stage_no_mutuals',
-                'You need at least one mutual follow to open a Stage.'
+                'create_stage_no_mutuals_optional',
+                'No mutual follows yet. You can still open the Stage alone and share a join link.'
               )}
             </AppText>
           ) : (
@@ -284,17 +319,6 @@ export default function CreateStage() {
             'You can host only one Stage at a time. After 24 hours it is removed and you can open a new one.'
           )}
         </AppText>
-
-        {!canSubmit && !submitting && !blockedByExisting ? (
-          <AppText as="p" className="create-stage-page__hint" role="status">
-            {selectedCount === 0
-              ? t(
-                  'create_stage_select_guest_hint',
-                  'Select at least one mutual follow to open the Stage. It is free.'
-                )
-              : null}
-          </AppText>
-        ) : null}
 
         <button type="submit" className="create-stage-page__submit" disabled={!canSubmit}>
           {submitting

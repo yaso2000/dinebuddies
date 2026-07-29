@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaImage, FaPaperPlane, FaSmile, FaTimes } from 'react-icons/fa';
+import { FaGift, FaImage, FaPaperPlane, FaSmile, FaTimes } from 'react-icons/fa';
 import { AppText, AppTextInput } from '../base';
 import EmojiPicker from '../EmojiPicker';
 import { getAppBidiFieldProps, getAppTextDirection, prepareBidiDisplayText } from '../../utils/bidiText';
@@ -15,6 +15,7 @@ export default function CommunityChatComposer({
   uploadingImage = false,
   pendingReplyTo,
   onCancelReply,
+  onSendGift,
 }) {
   const { t, i18n } = useTranslation();
   const contentDir = getAppTextDirection(i18n.language);
@@ -142,6 +143,20 @@ export default function CommunityChatComposer({
                 }}
               >
                 <FaSmile size={16} aria-hidden />
+              </button>
+            ) : null}
+            {typeof onSendGift === 'function' ? (
+              <button
+                type="button"
+                className="community-main-chat__attach-btn community-main-chat__attach-btn--gift"
+                aria-label={t('stage_send_gift', 'Send a gift')}
+                title={t('stage_send_gift', 'Send a gift')}
+                disabled={composerDisabled}
+                onPointerDown={preventComposerControlBlur}
+                onMouseDown={preventComposerControlBlur}
+                onClick={() => onSendGift()}
+              >
+                <FaGift size={16} aria-hidden />
               </button>
             ) : null}
           </div>

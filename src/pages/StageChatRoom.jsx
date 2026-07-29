@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
@@ -11,6 +11,7 @@ import UserAvatar from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useStageChatRoom } from '../hooks/useStageChatRoom';
+import { useProfileGiftPicker } from '../hooks/useProfileGiftPicker';
 import { useDesktopShell } from '../hooks/useDesktopShell';
 import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
 import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
@@ -29,9 +30,10 @@ import app from '../firebase/config';
 export default function StageChatRoom() {
   const { t } = useTranslation();
   const { stageId } = useParams();
-  const { isBusiness } = useAuth();
+  const { isBusiness, currentUser, userProfile } = useAuth();
   const { showToast } = useToast();
   const room = useStageChatRoom(stageId);
+  const { openGiftPicker, giftModal } = useProfileGiftPicker();
   const canEnterChat = room.isMember || room.isHost;
   const containerRef = useRef(null);
   const isDesktopShell = useDesktopShell();
@@ -39,7 +41,49 @@ export default function StageChatRoom() {
   const useMobileFullscreen = !isDesktopShell;
   const { themeId: chatThemeId, setThemeId: setChatThemeId, themeStyle: chatThemeStyle } = useChatTheme();
   const [leaving, setLeaving] = useState(false);
+  const [joining, setJoining] = useState(false);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
+
+  const stageVisibility =
+    String(room.partner?.visibility || 'private').toLowerCase() === 'public'
+      ? 'public'
+      : 'private';
+  const hostId = room.partner?.hostId || room.partner?.ownerId || null;
+  const followsHost = useMemo(() => {
+    if (!hostId) return false;
+    const following = Array.isArray(userProfile?.following) ? userProfile.following : [];
+    return following.includes(hostId);
+  }, [hostId, userProfile?.following]);
+  const wasInvited = useMemo(() => {
+    const invited = Array.isArray(room.partner?.invitedIds) ? room.partner.invitedIds : [];
+    const uid = currentUser?.uid || userProfile?.id || userProfile?.uid;
+    return Boolean(uid && invited.includes(uid));
+  }, [room.partner?.invitedIds, currentUser?.uid, userProfile?.id, userProfile?.uid]);
+  const canRequestJoin =
+    !canEnterChat &&
+    !room.isBlockedFromCommunity &&
+    !isBusiness &&
+    !room.isStageClosed &&
+    (stageVisibility === 'public' || followsHost || wasInvited);
+
+  const openGiftToHost = useCallback(() => {
+    if (room.isHost || !hostId) return;
+    openGiftPicker({
+      id: hostId,
+      display_name:
+        room.partner?.display_name ||
+        room.partner?.hostDisplayName ||
+        t('stage_chat', 'Stage'),
+    });
+  }, [hostId, openGiftPicker, room.isHost, room.partner, t]);
+
+  const roomWithGifts = useMemo(() => {
+    if (room.isHost || !canEnterChat) return room;
+    return {
+      ...room,
+      onSendGiftToHost: openGiftToHost,
+    };
+  }, [room, canEnterChat, openGiftToHost]);
 
   useEffect(() => {
     if (!useMobileFullscreen) return undefined;
@@ -184,7 +228,22 @@ export default function StageChatRoom() {
     [zoneThemeInlineStyle, guestFrameBackgroundStyle, chatThemeStyle]
   );
 
-  const renderJoinGate = (title, description) => (
+  const handleJoin = async () => {
+    setJoining(true);
+    try {
+      await callMembership('join');
+      showToast(t('stage_joined_toast', 'You joined the Stage.'), 'success');
+    } catch (err) {
+      console.error('[StageChatRoom] join', err);
+      const raw = String(err?.message || '');
+      const msg = raw.replace(/^Firebase: | \(functions\/.*\)\.?$/g, '').trim();
+      showToast(msg || t('stage_join_failed', 'Could not join this Stage.'), 'error');
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const renderJoinGate = (title, description, { showJoin = false } = {}) => (
     <div
       ref={containerRef}
       className={`${shellClass} community-chat-join-gate`}
@@ -207,6 +266,17 @@ export default function StageChatRoom() {
         <AppText as="p" style={{ margin: '0 0 16px', opacity: 0.85, maxWidth: '320px', lineHeight: 1.5 }}>
           {description}
         </AppText>
+      ) : null}
+      {showJoin ? (
+        <button
+          type="button"
+          onClick={() => void handleJoin()}
+          className="community-chat-join-gate__back"
+          disabled={joining}
+          style={{ marginBottom: 10 }}
+        >
+          {joining ? t('joining', 'Joining…') : t('stage_join', 'Join Stage')}
+        </button>
       ) : null}
       <button type="button" onClick={closeChat} className="community-chat-join-gate__back">
         {t('go_back', 'Go back')}
@@ -253,12 +323,25 @@ export default function StageChatRoom() {
         t('stage_chat_business_title', 'Business accounts'),
         t('stage_business_cannot_join', 'Business accounts cannot join Stage rooms.')
       );
+    } else if (room.isStageClosed) {
+      shellContent = renderJoinGate(
+        t('stage_status_closed', 'Closed'),
+        t('stage_join_closed_hint', 'This Stage is closed right now. Try again when the host reopens it.')
+      );
+    } else if (canRequestJoin) {
+      shellContent = renderJoinGate(
+        room.partner?.display_name || t('stage_chat', 'Stage'),
+        stageVisibility === 'public'
+          ? t('stage_join_public_hint', 'This Stage is public. Join to enter the chat.')
+          : t('stage_join_followers_hint', 'This Stage is for followers of the host. Join to enter.'),
+        { showJoin: true }
+      );
     } else {
       shellContent = renderJoinGate(
-        t('stage_chat_invite_only', 'Invite only'),
+        t('stage_chat_followers_only', 'Followers only'),
         t(
-          'stage_chat_invite_only_hint',
-          'You need a Stage invitation from the host to enter this room.'
+          'stage_chat_followers_only_hint',
+          'Follow the host to join this private Stage, or ask them for an invite.'
         )
       );
     }
@@ -392,10 +475,11 @@ export default function StageChatRoom() {
         ) : null}
 
         {isDesktopShell ? (
-          <CommunityFullChatView room={room} />
+          <CommunityFullChatView room={roomWithGifts} />
         ) : (
-          <CommunityChatSwipePager room={room} />
+          <CommunityChatSwipePager room={roomWithGifts} />
         )}
+        {giftModal}
       </div>
     );
   }

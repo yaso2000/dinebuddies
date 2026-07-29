@@ -30,8 +30,10 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
     unpinHostMessage,
     showMessageOnBanner,
     hideMessageFromBanner,
+    onSendGiftToHost,
   } = room;
   const composerBlocked = Boolean(isMutedInChat || isStageClosed);
+  const canSendGift = !isHost && typeof onSendGiftToHost === 'function';
 
   const handleReply = useCallback(
     (message) => {
@@ -137,6 +139,7 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
             uploadingImage={uploadingChatImage}
             pendingReplyTo={isHost ? pendingReplyTo : null}
             onCancelReply={cancelReplyToMessage}
+            onSendGift={canSendGift ? onSendGiftToHost : undefined}
           />
         </div>
       </section>

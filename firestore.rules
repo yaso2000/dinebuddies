@@ -983,11 +983,12 @@ service cloud.firestore {
     // Room create/update primarily via Admin SDK callables.
     // ============================================
     match /stages/{stageId} {
-      // Prefer resource.data for the document being read (avoids extra get() failures).
+      // Members always; any signed-in user may read metadata to show join gate (messages stay member-only).
       allow get: if isAdmin() ||
                     (isSignedIn() &&
                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                     stageMemberFromData(stageId, resource.data));
+                     (stageMemberFromData(stageId, resource.data) ||
+                      resource.data.get('status', 'active') in ['active', 'closed']));
       allow list: if false;
 
       // Clients must not create rooms; membership/lifecycle via callables; host may edit theme/banner.
@@ -998,7 +999,7 @@ service cloud.firestore {
                          request.resource.data.hostId == resource.data.hostId &&
                          request.resource.data.get('ownerId', resource.data.hostId) == resource.data.hostId &&
                          !request.resource.data.diff(resource.data).affectedKeys()
-                           .hasAny(['memberIds', 'invitedIds', 'communityMembers', 'status', 'createdAt', 'kind', 'endedAt'])));
+                           .hasAny(['memberIds', 'invitedIds', 'communityMembers', 'status', 'createdAt', 'kind', 'endedAt', 'visibility', 'expiresAt', 'isFree', 'durationHours', 'hostId', 'ownerId'])));
       allow delete: if isAdmin();
 
       match /messages/{messageId} {
