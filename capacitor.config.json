@@ -3,7 +3,9 @@
   "appName": "DineBuddies",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "url": "https://www.dinebuddies.com",
+    "cleartext": false
   },
   "plugins": {
     "FirebaseAuthentication": {

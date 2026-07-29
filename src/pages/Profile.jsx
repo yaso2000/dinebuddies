@@ -494,6 +494,7 @@ const Profile = () => {
     setAvatarSaving(true);
     setUploadProgress(5);
     try {
+      // File is already JPEG-prepared by ImageUpload.
       const url = await uploadProfilePicture(file, currentUser.uid, (progress) =>
         setUploadProgress(Math.max(5, Number(progress) || 0))
       );

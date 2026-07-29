@@ -54,6 +54,17 @@
     height: 200px;
 }
 
+/* Beat global .image-upload-wrapper.circle { 120px } from index.css */
+.image-upload-container.size-large .image-upload-wrapper.circle {
+    width: 200px;
+    height: 200px;
+}
+
+.image-upload-wrapper.is-busy {
+    pointer-events: none;
+    opacity: 0.72;
+}
+
 /* Preview */
 .image-preview {
     width: 100%;
