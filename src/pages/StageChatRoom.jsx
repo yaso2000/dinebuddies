@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { FaDoorClosed, FaDoorOpen, FaSignOutAlt, FaTimes } from 'react-icons/fa';
 import CommunityChatSwipePager from '../components/community/CommunityChatSwipePager';
@@ -30,11 +30,18 @@ import app from '../firebase/config';
 export default function StageChatRoom() {
   const { t } = useTranslation();
   const { stageId } = useParams();
+  const location = useLocation();
   const { isBusiness, currentUser, userProfile } = useAuth();
   const { showToast } = useToast();
   const room = useStageChatRoom(stageId);
   const { openGiftPicker, giftModal } = useProfileGiftPicker();
-  const canEnterChat = room.isMember || room.isHost;
+  const bootstrapHostId = location.state?.stageHostId || null;
+  const justCreated = Boolean(location.state?.stageJustCreated);
+  const uid = currentUser?.uid || userProfile?.id || null;
+  const isBootstrapHost = Boolean(
+    uid && ((justCreated && stageId) || (bootstrapHostId && uid === bootstrapHostId))
+  );
+  const canEnterChat = room.isMember || room.isHost || isBootstrapHost;
   const containerRef = useRef(null);
   const isDesktopShell = useDesktopShell();
   const { goBack: goBackFromStage } = useAppBackNavigation({ fallback: '/stages' });
@@ -78,12 +85,31 @@ export default function StageChatRoom() {
   }, [hostId, openGiftPicker, room.isHost, room.partner, t]);
 
   const roomWithGifts = useMemo(() => {
-    if (room.isHost || !canEnterChat) return room;
+    const base =
+      room.partner || !isBootstrapHost
+        ? room
+        : {
+            ...room,
+            isHost: true,
+            isMember: true,
+            partner: {
+              id: stageId,
+              hostId: uid,
+              ownerId: uid,
+              display_name: t('stage_chat', 'Stage'),
+              memberIds: uid ? [uid] : [],
+              communityMembers: uid ? [uid] : [],
+              visibility: 'public',
+              status: 'active',
+              communityChatBannerVisible: true,
+            },
+          };
+    if (base.isHost || !canEnterChat) return base;
     return {
-      ...room,
+      ...base,
       onSendGiftToHost: openGiftToHost,
     };
-  }, [room, canEnterChat, openGiftToHost]);
+  }, [room, canEnterChat, openGiftToHost, isBootstrapHost, stageId, uid, t]);
 
   useEffect(() => {
     if (!useMobileFullscreen) return undefined;
@@ -286,9 +312,8 @@ export default function StageChatRoom() {
 
   let shellContent;
 
-  // Do not block the chat shell once membership is known (joinedStages / host).
-  // Waiting on the stage snapshot alone caused an indefinite Loading screen.
-  if (room.loading && !canEnterChat) {
+  // Enter as soon as membership/host is known — do not wait forever on Firestore.
+  if (room.loading && !canEnterChat && !room.loadError) {
     shellContent = (
       <div
         ref={containerRef}
@@ -311,6 +336,14 @@ export default function StageChatRoom() {
         </button>
         {t('inbox_loading', 'Loading…')}
       </div>
+    );
+  } else if (room.loadError && !canEnterChat) {
+    shellContent = renderJoinGate(
+      t('stage_chat_unavailable', 'This Stage is not available'),
+      t(
+        'stage_load_failed_hint',
+        'Could not load this Stage. Check your connection and try again.'
+      )
     );
   } else if (!canEnterChat) {
     if (room.isBlockedFromCommunity) {

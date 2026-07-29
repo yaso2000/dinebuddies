@@ -44,19 +44,6 @@ export default function CreateStage() {
   }, [cannotCreateInvitations, navigate, showToast, t]);
 
   useEffect(() => {
-    if (!stagesLoading && existingHostedStage?.id) {
-      showToast(
-        t(
-          'stage_already_open',
-          'You already have an open Stage. Open it instead of creating a new one.'
-        ),
-        'info'
-      );
-      navigate(`/stage/${existingHostedStage.id}`, { replace: true });
-    }
-  }, [stagesLoading, existingHostedStage, navigate, showToast, t]);
-
-  useEffect(() => {
     if (!uid) {
       setLoadingMutuals(false);
       return undefined;
@@ -122,7 +109,11 @@ export default function CreateStage() {
         throw new Error('missing_stage_id');
       }
       showToast(t('stage_created', 'Stage opened'), 'success');
-      navigate(`/stage/${stageId}`, { replace: true });
+      // Pass host bootstrap so chat does not wait on profile/joinedStages lag.
+      navigate(`/stage/${stageId}`, {
+        replace: true,
+        state: { stageJustCreated: true, stageHostId: uid },
+      });
     } catch (err) {
       console.error('[CreateStage] create', err);
       const existingId = err?.details?.existingStageId || err?.customData?.existingStageId;
@@ -170,17 +161,37 @@ export default function CreateStage() {
     [t]
   );
 
-  if (stagesLoading || existingHostedStage) {
+  // Never block the create form on stages hub loading — that was freezing "Open Stage".
+  if (!stagesLoading && existingHostedStage?.id) {
     return (
       <div className="create-stage-page">
-        <AppText as="p" className="create-stage-page__hint">
-          {t('loading', 'Loading…')}
-        </AppText>
-        {existingHostedStage ? (
-          <Link to={`/stage/${existingHostedStage.id}`} className="create-stage-page__submit">
-            {t('stage_open_existing', 'Open your Stage')}
-          </Link>
-        ) : null}
+        <header className="create-stage-page__header">
+          <AppBackButton className="create-stage-page__back" />
+          <div className="create-stage-page__heading">
+            <AppText as="span" className="create-stage-page__icon" aria-hidden>
+              <FaMicrophone />
+            </AppText>
+            <div>
+              <AppText as="h1" className="create-stage-page__title">
+                {t('create_stage_title', 'Open Stage')}
+              </AppText>
+              <AppText as="p" className="create-stage-page__subtitle">
+                {t(
+                  'stage_already_open',
+                  'You already have an open Stage. Open it instead of creating a new one.'
+                )}
+              </AppText>
+            </div>
+          </div>
+        </header>
+        <Link
+          to={`/stage/${existingHostedStage.id}`}
+          state={{ stageJustCreated: false, stageHostId: uid }}
+          className="create-stage-page__submit"
+          style={{ display: 'inline-flex', justifyContent: 'center', textDecoration: 'none' }}
+        >
+          {t('stage_open_existing', 'Open your Stage')}
+        </Link>
       </div>
     );
   }
@@ -262,6 +273,13 @@ export default function CreateStage() {
               {selectedCount}/{MAX_INVITEES}
             </AppText>
           </div>
+
+          <AppText as="p" className="create-stage-page__hint">
+            {t(
+              'create_stage_guests_later_hint',
+              'Guests are optional. Open the Stage now — you can invite people after it is created.'
+            )}
+          </AppText>
 
           {loadingMutuals ? (
             <AppText as="p" className="create-stage-page__hint">

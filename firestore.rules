@@ -983,12 +983,10 @@ service cloud.firestore {
     // Room create/update primarily via Admin SDK callables.
     // ============================================
     match /stages/{stageId} {
-      // Members always; any signed-in user may read metadata to show join gate (messages stay member-only).
+      // Signed-in users can read stage metadata (join gate / host entry). Messages stay member-only.
       allow get: if isAdmin() ||
                     (isSignedIn() &&
-                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                     (stageMemberFromData(stageId, resource.data) ||
-                      resource.data.get('status', 'active') in ['active', 'closed']));
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)));
       allow list: if false;
 
       // Clients must not create rooms; membership/lifecycle via callables; host may edit theme/banner.

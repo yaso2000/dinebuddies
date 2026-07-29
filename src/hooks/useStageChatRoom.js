@@ -85,6 +85,7 @@ export function useStageChatRoom(stageId) {
     const [isBlockedFromCommunity, setIsBlockedFromCommunity] = useState(false);
     const [isMutedInChat, setIsMutedInChat] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(null);
     const [uploadingBanner, setUploadingBanner] = useState(false);
     const [uploadingChatImage, setUploadingChatImage] = useState(false);
     const [pendingReplyTo, setPendingReplyTo] = useState(null);
@@ -98,7 +99,7 @@ export function useStageChatRoom(stageId) {
     const latestMessageDocsRef = useRef([]);
     const readReceiptTimeoutRef = useRef(null);
 
-    const uid = auth.currentUser?.uid ?? currentUser?.uid;
+    const uid = currentUser?.uid || auth.currentUser?.uid || userProfile?.id || null;
     const hostId = partner?.hostId || partner?.ownerId || null;
     const isHost = Boolean(hostId && uid && uid === hostId);
     const functions = getFunctions(app, 'us-central1');
@@ -186,6 +187,7 @@ export function useStageChatRoom(stageId) {
     useEffect(() => {
         if (!partnerId || !uid) {
             setLoading(false);
+            setLoadError(null);
             setPartner(null);
             return undefined;
         }
@@ -243,6 +245,7 @@ export function useStageChatRoom(stageId) {
         };
 
         setLoading(true);
+        setLoadError(null);
         // Membership from profile can unlock the shell before the stage snapshot resolves.
         if (isJoinedStage) {
             setLoading(false);
@@ -252,8 +255,9 @@ export function useStageChatRoom(stageId) {
             if (!cancelled) {
                 console.warn('[useStageChatRoom] stage snapshot timed out');
                 setLoading(false);
+                setLoadError((prev) => prev || 'timeout');
             }
-        }, 6000);
+        }, 2500);
 
         const stageRef = doc(db, 'stages', partnerId);
 
@@ -289,10 +293,12 @@ export function useStageChatRoom(stageId) {
                 stageData = null;
                 setPartner(null);
                 setLoading(false);
+                setLoadError('not-found');
                 return;
             }
             stageData = snap.data() || {};
             const stageHostId = stageData.hostId || stageData.ownerId;
+            setLoadError(null);
             publish();
             setLoading(false);
             attachHostListener(stageHostId);
@@ -300,14 +306,23 @@ export function useStageChatRoom(stageId) {
 
         void (async () => {
             try {
-                await auth.authStateReady();
+                await Promise.race([
+                    auth.authStateReady(),
+                    new Promise((resolve) => window.setTimeout(resolve, 1500)),
+                ]);
                 if (cancelled) return;
-                const snap = await getDoc(stageRef);
+                const snap = await Promise.race([
+                    getDoc(stageRef),
+                    new Promise((_, reject) =>
+                        window.setTimeout(() => reject(new Error('stage_get_timeout')), 4000)
+                    ),
+                ]);
                 applyStageSnap(snap);
             } catch (err) {
                 if (cancelled) return;
                 console.error('[useStageChatRoom] stage getDoc', err);
                 setLoading(false);
+                setLoadError(err?.code || err?.message || 'load-failed');
             }
             if (cancelled) return;
             unsubStage = onSnapshot(
@@ -321,6 +336,7 @@ export function useStageChatRoom(stageId) {
                     }
                     console.error('[useStageChatRoom] stage snapshot', err);
                     setLoading(false);
+                    setLoadError(err?.code || err?.message || 'snapshot-failed');
                 }
             );
         })();
@@ -1260,6 +1276,7 @@ export function useStageChatRoom(stageId) {
 
     return {
         loading,
+        loadError,
         isMember,
         isBlockedFromCommunity,
         isHost,

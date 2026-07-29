@@ -175,7 +175,12 @@ export function useJoinedStages() {
             const rows = await Promise.all(
                 joinedStages.map(async (stageId) => {
                     try {
-                        const stageSnap = await getDoc(doc(db, 'stages', stageId));
+                        const stageSnap = await Promise.race([
+                            getDoc(doc(db, 'stages', stageId)),
+                            new Promise((_, reject) =>
+                                setTimeout(() => reject(new Error('stage_list_timeout')), 5000)
+                            ),
+                        ]);
                         if (!stageSnap.exists()) return null;
                         const stageData = stageSnap.data() || {};
                         if (isStageExpired(stageData, now)) return null;
@@ -183,8 +188,17 @@ export function useJoinedStages() {
                         const hostId = stageData.hostId || stageData.ownerId;
                         let hostData = null;
                         if (hostId) {
-                            const hostSnap = await getDoc(doc(db, 'users', hostId));
-                            if (hostSnap.exists()) hostData = hostSnap.data();
+                            try {
+                                const hostSnap = await Promise.race([
+                                    getDoc(doc(db, 'users', hostId)),
+                                    new Promise((_, reject) =>
+                                        setTimeout(() => reject(new Error('host_timeout')), 3000)
+                                    ),
+                                ]);
+                                if (hostSnap.exists()) hostData = hostSnap.data();
+                            } catch {
+                                hostData = null;
+                            }
                         }
 
                         return buildStageCard(
