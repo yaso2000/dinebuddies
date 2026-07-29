@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="DineBuddies PTY LTD — the Australian company behind the DineBuddies social dining app. Corporate profile and contact." />
+  <meta name="description" content="DineBuddies PTY LTD — Australian company behind the DineBuddies social dining app. Corporate profile and contact in Bundaberg, Queensland." />
   <meta name="theme-color" content="#E86A2D" />
   <title>DineBuddies Corporate | DineBuddies PTY LTD</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -38,236 +38,540 @@
             sans: ['"DM Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
             display: ['Fraunces', 'Georgia', 'serif'],
           },
-          boxShadow: {
-            soft: '0 1px 2px rgba(26, 23, 21, 0.04), 0 8px 24px rgba(26, 23, 21, 0.06)',
-          },
         },
       },
     };
   </script>
-  <style type="text/tailwindcss">
-    @layer base {
-      html {
-        scroll-behavior: smooth;
+  <style>
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+      color: #2A2623;
+      background: #FAFAF8;
+      -webkit-font-smoothing: antialiased;
+    }
+    :focus-visible {
+      outline: 2px solid #E86A2D;
+      outline-offset: 2px;
+    }
+
+    .company-hero {
+      position: relative;
+      min-height: min(92vh, 720px);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      color: #fff;
+      overflow: hidden;
+      isolation: isolate;
+    }
+    .company-hero__media {
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+    }
+    .company-hero__media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 42%;
+      transform: scale(1.04);
+      animation: hero-drift 18s ease-in-out infinite alternate;
+    }
+    .company-hero__shade {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background:
+        linear-gradient(180deg, rgba(26, 23, 21, 0.28) 0%, rgba(26, 23, 21, 0.18) 38%, rgba(26, 23, 21, 0.78) 100%),
+        linear-gradient(90deg, rgba(26, 23, 21, 0.45) 0%, rgba(26, 23, 21, 0.08) 55%, transparent 100%);
+    }
+    .company-hero__content {
+      width: 100%;
+      max-width: 64rem;
+      margin: 0 auto;
+      padding: 7.5rem 1.25rem 3.25rem;
+      animation: hero-rise 0.9s ease-out both;
+    }
+    @media (min-width: 640px) {
+      .company-hero__content { padding: 8.5rem 1.5rem 4rem; }
+    }
+
+    .company-nav {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      background: linear-gradient(180deg, rgba(26, 23, 21, 0.55), transparent);
+    }
+    .company-nav__inner {
+      max-width: 64rem;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+    }
+    @media (min-width: 640px) {
+      .company-nav__inner { padding: 1.15rem 1.5rem; }
+    }
+    .company-nav a { color: #fff; text-decoration: none; }
+    .company-nav__brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.7rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .company-nav__mark {
+      width: 2.35rem;
+      height: 2.35rem;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.28);
+      display: grid;
+      place-items: center;
+    }
+    .company-nav__mark img {
+      width: 1.55rem;
+      height: 1.55rem;
+      object-fit: contain;
+    }
+    .company-nav__links {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .company-nav__ghost {
+      padding: 0.55rem 0.9rem;
+      border-radius: 0.7rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.92);
+    }
+    .company-nav__ghost:hover { background: rgba(255,255,255,0.12); }
+    .company-nav__cta {
+      padding: 0.55rem 1rem;
+      border-radius: 0.7rem;
+      font-size: 0.9rem;
+      font-weight: 700;
+      background: #E86A2D;
+      color: #fff !important;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .company-nav__cta:hover { background: #D4551A; }
+    .company-nav__cta:active { transform: translateY(1px); }
+
+    .company-hero__brand {
+      font-family: Fraunces, Georgia, serif;
+      font-size: clamp(2.6rem, 7vw, 4.4rem);
+      line-height: 1.05;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin: 0;
+      text-shadow: 0 2px 24px rgba(0,0,0,0.28);
+    }
+    .company-hero__line {
+      margin: 1rem 0 0;
+      max-width: 28rem;
+      font-size: clamp(1.05rem, 2.4vw, 1.3rem);
+      line-height: 1.5;
+      color: rgba(255,255,255,0.92);
+    }
+    .company-hero__actions {
+      margin-top: 1.6rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .btn-primary,
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 2.85rem;
+      padding: 0.7rem 1.2rem;
+      border-radius: 0.85rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-decoration: none;
+      transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+    }
+    .btn-primary {
+      background: #E86A2D;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #D4551A; }
+    .btn-secondary {
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.35);
+      backdrop-filter: blur(8px);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.2); }
+
+    .section {
+      max-width: 64rem;
+      margin: 0 auto;
+      padding: 4rem 1.25rem;
+    }
+    @media (min-width: 640px) {
+      .section { padding: 5rem 1.5rem; }
+    }
+    .section h2 {
+      font-family: Fraunces, Georgia, serif;
+      font-size: clamp(1.75rem, 3.5vw, 2.25rem);
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      color: #1A1715;
+      margin: 0;
+    }
+    .section__lead {
+      margin: 1rem 0 0;
+      max-width: 40rem;
+      font-size: 1.08rem;
+      line-height: 1.7;
+      color: #3F3A36;
+    }
+
+    .profile-band {
+      background:
+        radial-gradient(ellipse 80% 60% at 100% 0%, rgba(232,106,45,0.08), transparent 55%),
+        #fff;
+      border-bottom: 1px solid #E7E5E0;
+    }
+    .facts {
+      margin-top: 2rem;
+      display: grid;
+      gap: 1.25rem 2.5rem;
+    }
+    @media (min-width: 640px) {
+      .facts { grid-template-columns: 1fr 1fr; }
+    }
+    .facts dt {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #3F3A36;
+      opacity: 0.72;
+    }
+    .facts dd {
+      margin: 0.35rem 0 0;
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #1A1715;
+    }
+
+    .contact-band {
+      background:
+        linear-gradient(180deg, #FAFAF8 0%, #F3F2EF 100%);
+      border-bottom: 1px solid #E7E5E0;
+    }
+    .contact-grid {
+      margin-top: 2.25rem;
+      display: grid;
+      gap: 2.5rem;
+    }
+    @media (min-width: 1024px) {
+      .contact-grid {
+        grid-template-columns: 1.35fr 0.9fr;
+        gap: 3.5rem;
+        align-items: start;
       }
-      body {
-        @apply bg-mist-50 text-ink-800 antialiased;
+    }
+    .field { margin-bottom: 1.1rem; }
+    .field label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #2A2623;
+    }
+    .field input,
+    .field textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #E7E5E0;
+      background: #fff;
+      border-radius: 0.85rem;
+      padding: 0.85rem 1rem;
+      font: inherit;
+      color: #1A1715;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .field input:hover,
+    .field textarea:hover { border-color: #d6d3cd; }
+    .field input:focus,
+    .field textarea:focus {
+      outline: none;
+      border-color: #E86A2D;
+      box-shadow: 0 0 0 3px rgba(232,106,45,0.18);
+    }
+    .form-note {
+      margin: 0 0 1rem;
+      font-size: 0.9rem;
+      color: #3F3A36;
+    }
+    .form-note a { color: #D4551A; font-weight: 600; }
+    .submit-btn {
+      border: 0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 2.9rem;
+      padding: 0.75rem 1.35rem;
+      border-radius: 0.85rem;
+      background: #E86A2D;
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      transition: background 0.2s ease;
+    }
+    .submit-btn:hover { background: #D4551A; }
+
+    .direct-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 1.35rem;
+    }
+    .direct-list li {
+      padding-bottom: 1.35rem;
+      border-bottom: 1px solid #E7E5E0;
+    }
+    .direct-list li:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+    .direct-list .label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #3F3A36;
+      opacity: 0.7;
+      margin: 0 0 0.4rem;
+    }
+    .direct-list a,
+    .direct-list address {
+      color: #1A1715;
+      font-size: 1.05rem;
+      font-weight: 600;
+      line-height: 1.55;
+      text-decoration: none;
+      font-style: normal;
+    }
+    .direct-list a:hover { color: #D4551A; }
+
+    .site-footer {
+      background: #1A1715;
+      color: rgba(255,255,255,0.78);
+    }
+    .site-footer__inner {
+      max-width: 64rem;
+      margin: 0 auto;
+      padding: 1.75rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    @media (min-width: 640px) {
+      .site-footer__inner {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.75rem 1.5rem;
       }
-      :focus-visible {
-        @apply outline-2 outline-offset-2 outline-brand-500;
-      }
+    }
+    .site-footer p { margin: 0; font-size: 0.9rem; }
+    .site-footer nav { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+    .site-footer a {
+      color: rgba(255,255,255,0.88);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .site-footer a:hover { color: #FFCDB0; }
+
+    @keyframes hero-drift {
+      from { transform: scale(1.04) translate3d(0, 0, 0); }
+      to { transform: scale(1.08) translate3d(-1.2%, -0.8%, 0); }
+    }
+    @keyframes hero-rise {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .company-hero__media img,
+      .company-hero__content { animation: none; }
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .sr-only:focus,
+    .focus\:not-sr-only:focus {
+      position: static;
+      width: auto;
+      height: auto;
+      margin: 0;
+      overflow: visible;
+      clip: auto;
+      white-space: normal;
     }
   </style>
 </head>
-<body class="min-h-screen flex flex-col font-sans">
+<body>
   <a
     href="#main"
-    class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink-900 focus:shadow-soft"
+    class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink-900"
   >
     Skip to main content
   </a>
 
-  <!-- Navigation -->
-  <header class="sticky top-0 z-40 border-b border-mist-200/80 bg-white/90 backdrop-blur-md">
-    <nav class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6" aria-label="Primary">
-      <a href="/company/" class="group flex min-w-0 items-center gap-2.5" aria-label="DineBuddies Corporate home">
-        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white shadow-sm transition group-hover:bg-brand-600" aria-hidden="true">DB</span>
-        <span class="truncate text-sm font-semibold tracking-tight text-ink-900 sm:text-base">
-          DineBuddies <span class="font-medium text-ink-700">Corporate</span>
-        </span>
-      </a>
-      <div class="flex shrink-0 items-center gap-1 sm:gap-3">
-        <a
-          href="#contact"
-          class="rounded-lg px-3 py-2 text-sm font-medium text-ink-700 transition hover:bg-mist-100 hover:text-ink-900"
-        >
-          Contact Us
+  <header class="company-hero" aria-labelledby="hero-heading">
+    <div class="company-hero__media" aria-hidden="true">
+      <img
+        src="/company/hero.jpg"
+        alt=""
+        width="1920"
+        height="1080"
+        fetchpriority="high"
+      />
+    </div>
+    <div class="company-hero__shade" aria-hidden="true"></div>
+
+    <nav class="company-nav" aria-label="Primary">
+      <div class="company-nav__inner">
+        <a href="/company/" class="company-nav__brand" aria-label="DineBuddies Corporate home">
+          <span class="company-nav__mark">
+            <img src="/db-logo-white.svg" alt="" width="24" height="24" />
+          </span>
+          <span>DineBuddies</span>
         </a>
-        <a
-          href="https://www.dinebuddies.com/"
-          class="inline-flex items-center rounded-lg bg-brand-500 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 active:bg-brand-700"
-        >
-          Back to App
-        </a>
+        <div class="company-nav__links">
+          <a href="#contact" class="company-nav__ghost">Contact</a>
+          <a href="https://www.dinebuddies.com/" class="company-nav__cta">Open App</a>
+        </div>
       </div>
     </nav>
+
+    <div class="company-hero__content">
+      <h1 id="hero-heading" class="company-hero__brand">DineBuddies</h1>
+      <p class="company-hero__line">The company behind shared meals and real connections.</p>
+      <div class="company-hero__actions">
+        <a href="#contact" class="btn-primary">Contact Us</a>
+        <a href="#profile" class="btn-secondary">Corporate Profile</a>
+      </div>
+    </div>
   </header>
 
-  <main id="main" class="flex-1">
-    <!-- Hero -->
-    <section class="relative overflow-hidden border-b border-mist-200 bg-white" aria-labelledby="hero-heading">
-      <div class="pointer-events-none absolute inset-0" aria-hidden="true">
-        <div class="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand-100/70 blur-3xl"></div>
-        <div class="absolute -bottom-32 -left-16 h-80 w-80 rounded-full bg-mist-100 blur-3xl"></div>
-      </div>
-      <div class="relative mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-24 lg:py-28">
-        <p class="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-brand-600">Corporate</p>
-        <h1 id="hero-heading" class="font-display max-w-3xl text-3xl font-semibold leading-tight tracking-tight text-ink-900 sm:text-4xl lg:text-[2.75rem] lg:leading-[1.15]">
-          DineBuddies PTY LTD
-        </h1>
-        <p class="mt-4 max-w-2xl text-lg leading-relaxed text-ink-700 sm:text-xl">
-          The company behind the DineBuddies app.
+  <main id="main">
+    <section id="profile" class="profile-band scroll-mt-8" aria-labelledby="profile-heading">
+      <div class="section">
+        <h2 id="profile-heading">Corporate Profile</h2>
+        <p class="section__lead">
+          DineBuddies PTY LTD is a registered Australian company dedicated to connecting people through social dining. We build technology that helps people discover shared meals, meaningful company, and local places worth gathering around.
         </p>
+        <dl class="facts">
+          <div>
+            <dt>Company</dt>
+            <dd>DineBuddies PTY LTD</dd>
+          </div>
+          <div>
+            <dt>Jurisdiction</dt>
+            <dd>Australia</dd>
+          </div>
+          <div>
+            <dt>Registered office</dt>
+            <dd>46 Stewart Street, Bundaberg North QLD</dd>
+          </div>
+          <!-- Add ACN later when ready -->
+        </dl>
       </div>
     </section>
 
-    <!-- Corporate Profile -->
-    <section class="border-b border-mist-200 bg-mist-50" aria-labelledby="profile-heading">
-      <div class="mx-auto max-w-5xl px-4 py-14 sm:px-6 sm:py-20">
-        <div class="max-w-3xl">
-          <h2 id="profile-heading" class="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
-            Corporate Profile
-          </h2>
-          <p class="mt-5 text-base leading-relaxed text-ink-700 sm:text-lg">
-            DineBuddies PTY LTD is a registered Australian company dedicated to connecting people through innovative social dining experiences. We build technology that helps people discover shared meals, meaningful company, and local places worth gathering around.
-          </p>
-          <dl class="mt-8 grid gap-3 sm:grid-cols-2">
-            <div class="rounded-xl border border-mist-200 bg-white px-5 py-4 shadow-soft">
-              <dt class="text-xs font-semibold uppercase tracking-wider text-ink-700">Company</dt>
-              <dd class="mt-1 text-sm font-medium text-ink-900 sm:text-base">DineBuddies PTY LTD</dd>
-            </div>
-            <div class="rounded-xl border border-mist-200 bg-white px-5 py-4 shadow-soft">
-              <dt class="text-xs font-semibold uppercase tracking-wider text-ink-700">Jurisdiction</dt>
-              <dd class="mt-1 text-sm font-medium text-ink-900 sm:text-base">Australia</dd>
-            </div>
-            <!-- Add ACN later: uncomment and fill in
-            <div class="rounded-xl border border-mist-200 bg-white px-5 py-4 shadow-soft sm:col-span-2">
-              <dt class="text-xs font-semibold uppercase tracking-wider text-ink-700">ACN</dt>
-              <dd class="mt-1 font-mono text-sm text-ink-900 sm:text-base">YOUR ACN HERE</dd>
-            </div>
-            -->
-          </dl>
-        </div>
-      </div>
-    </section>
+    <section id="contact" class="contact-band scroll-mt-8" aria-labelledby="contact-heading">
+      <div class="section">
+        <h2 id="contact-heading">Contact Us</h2>
+        <p class="section__lead">
+          Reach the company by phone, email, or the form below. We read every message and aim to respond promptly.
+        </p>
 
-    <!-- Contact Us -->
-    <section id="contact" class="scroll-mt-20 bg-white" aria-labelledby="contact-heading">
-      <div class="mx-auto max-w-5xl px-4 py-14 sm:px-6 sm:py-20">
-        <div class="max-w-3xl">
-          <h2 id="contact-heading" class="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
-            Contact Us
-          </h2>
-          <p class="mt-3 text-base leading-relaxed text-ink-700 sm:text-lg">
-            Reach the company. We read every message and aim to respond promptly.
-          </p>
-        </div>
-
-        <div class="mt-10 grid gap-10 lg:grid-cols-5 lg:gap-14">
-          <!-- Contact form -->
-          <div class="lg:col-span-3">
-            <form
-              id="contact-form"
-              class="space-y-5"
-              novalidate
-              aria-describedby="form-note"
-            >
-              <div>
-                <label for="name" class="mb-1.5 block text-sm font-medium text-ink-800">Name</label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  autocomplete="name"
-                  required
-                  class="w-full rounded-xl border border-mist-200 bg-mist-50 px-4 py-3 text-ink-900 placeholder:text-ink-700/40 transition hover:border-mist-200 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                  placeholder="Your full name"
-                />
+        <div class="contact-grid">
+          <div>
+            <form id="contact-form" novalidate aria-describedby="form-note">
+              <div class="field">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" autocomplete="name" required placeholder="Your full name" />
               </div>
-              <div>
-                <label for="email" class="mb-1.5 block text-sm font-medium text-ink-800">Email</label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  autocomplete="email"
-                  required
-                  class="w-full rounded-xl border border-mist-200 bg-mist-50 px-4 py-3 text-ink-900 placeholder:text-ink-700/40 transition hover:border-mist-200 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                  placeholder="you@example.com"
-                />
+              <div class="field">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" autocomplete="email" required placeholder="you@example.com" />
               </div>
-              <div>
-                <label for="subject" class="mb-1.5 block text-sm font-medium text-ink-800">Subject</label>
-                <input
-                  type="text"
-                  id="subject"
-                  name="subject"
-                  required
-                  class="w-full rounded-xl border border-mist-200 bg-mist-50 px-4 py-3 text-ink-900 placeholder:text-ink-700/40 transition hover:border-mist-200 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                  placeholder="How can we help?"
-                />
+              <div class="field">
+                <label for="subject">Subject</label>
+                <input type="text" id="subject" name="subject" required placeholder="How can we help?" />
               </div>
-              <div>
-                <label for="message" class="mb-1.5 block text-sm font-medium text-ink-800">Message</label>
-                <textarea
-                  id="message"
-                  name="message"
-                  rows="5"
-                  required
-                  class="w-full resize-y rounded-xl border border-mist-200 bg-mist-50 px-4 py-3 text-ink-900 placeholder:text-ink-700/40 transition hover:border-mist-200 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                  placeholder="Write your message…"
-                ></textarea>
+              <div class="field">
+                <label for="message">Message</label>
+                <textarea id="message" name="message" rows="5" required placeholder="Write your message…"></textarea>
               </div>
-              <p id="form-note" class="text-sm text-ink-700/80">
+              <p id="form-note" class="form-note">
                 Submitting opens your email client addressed to
-                <a href="mailto:hello@dinebuddies.com" class="font-medium text-brand-600 underline-offset-2 transition hover:text-brand-700 hover:underline">hello@dinebuddies.com</a>.
+                <a href="mailto:hello@dinebuddies.com">hello@dinebuddies.com</a>.
               </p>
-              <button
-                type="submit"
-                class="inline-flex w-full items-center justify-center rounded-xl bg-brand-500 px-6 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 active:bg-brand-700 sm:w-auto"
-              >
-                Send Message
-              </button>
+              <button type="submit" class="submit-btn">Send Message</button>
               <p id="form-status" class="sr-only" role="status" aria-live="polite"></p>
             </form>
           </div>
 
-          <!-- Direct contact details -->
-          <aside class="lg:col-span-2" aria-labelledby="direct-contact-heading">
-            <div class="rounded-2xl border border-mist-200 bg-mist-50 p-6 sm:p-7">
-              <h3 id="direct-contact-heading" class="text-sm font-semibold uppercase tracking-wider text-ink-700">
-                Direct contact
-              </h3>
-              <ul class="mt-5 space-y-5">
-                <li>
-                  <p class="text-xs font-semibold uppercase tracking-wider text-ink-700/70">Email</p>
-                  <a
-                    href="mailto:hello@dinebuddies.com"
-                    class="mt-1 inline-block text-base font-medium text-brand-600 transition hover:text-brand-700 hover:underline"
-                  >
-                    hello@dinebuddies.com
-                  </a>
-                </li>
-                <li>
-                  <p class="text-xs font-semibold uppercase tracking-wider text-ink-700/70">Location</p>
-                  <p class="mt-1 text-base leading-relaxed text-ink-800">
-                    Australia
-                  </p>
-                  <!-- Add registered office later:
-                  <address class="mt-1 not-italic text-base leading-relaxed text-ink-800">
-                    Street Address<br />
-                    Suburb STATE Postcode<br />
-                    Australia
-                  </address>
-                  -->
-                </li>
-              </ul>
-            </div>
+          <aside aria-labelledby="direct-contact-heading">
+            <h3 id="direct-contact-heading" class="sr-only">Direct contact</h3>
+            <ul class="direct-list">
+              <li>
+                <p class="label">Phone</p>
+                <a href="tel:+61476799444">0476 799 444</a>
+              </li>
+              <li>
+                <p class="label">Email</p>
+                <a href="mailto:hello@dinebuddies.com">hello@dinebuddies.com</a>
+              </li>
+              <li>
+                <p class="label">Address</p>
+                <address>
+                  46 Stewart Street<br />
+                  Bundaberg North QLD<br />
+                  Australia
+                </address>
+              </li>
+            </ul>
           </aside>
         </div>
       </div>
     </section>
   </main>
 
-  <!-- Footer -->
-  <footer class="border-t border-mist-200 bg-mist-100">
-    <div class="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-      <p class="text-sm text-ink-700">
-        Copyright © 2026 DineBuddies PTY LTD
-      </p>
-      <nav class="flex flex-wrap gap-x-5 gap-y-2" aria-label="Legal">
-        <a href="/privacy" class="text-sm font-medium text-ink-700 transition hover:text-brand-600">Privacy Policy</a>
-        <a href="/terms" class="text-sm font-medium text-ink-700 transition hover:text-brand-600">Terms of Service</a>
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>Copyright © 2026 DineBuddies PTY LTD</p>
+      <nav aria-label="Legal">
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms">Terms of Service</a>
       </nav>
     </div>
   </footer>
@@ -280,7 +584,6 @@
 
       form.addEventListener('submit', function (event) {
         event.preventDefault();
-
         if (!form.checkValidity()) {
           form.reportValidity();
           return;
@@ -290,12 +593,7 @@
         var email = form.email.value.trim();
         var subject = form.subject.value.trim();
         var message = form.message.value.trim();
-
-        var body =
-          'Name: ' + name + '\n' +
-          'Email: ' + email + '\n\n' +
-          message;
-
+        var body = 'Name: ' + name + '\nEmail: ' + email + '\n\n' + message;
         var mailto =
           'mailto:hello@dinebuddies.com' +
           '?subject=' + encodeURIComponent(subject) +
@@ -305,7 +603,6 @@
           statusEl.textContent = 'Opening your email client…';
           statusEl.classList.remove('sr-only');
         }
-
         window.location.href = mailto;
       });
     })();
