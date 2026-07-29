@@ -83,14 +83,16 @@ export function isImageModerationUnavailable(error) {
 export async function uploadImageWithModeration(file, userId, purpose, opts = {}) {
     const { onProgress } = opts;
     if (!userId) throw new Error('User ID required');
+    // Map 1:1 DM + legacy "chat" onto chat_public so Vision always runs
+    // (same Storage dest: chat_images/). Works with current and older CF deploys.
     const normalized =
-        purpose === 'chat'
+        purpose === 'chat' ||
+        purpose === ImageUploadZone.PRIVATE_DM ||
+        purpose === 'social_dm'
             ? ImageUploadZone.PUBLIC_CHAT
             : purpose === 'invitation'
               ? ImageUploadZone.INVITATION
-              : purpose === 'social_dm'
-                ? ImageUploadZone.PRIVATE_DM
-                : purpose;
+              : purpose;
     if (!MODERATION_PURPOSES.has(normalized)) {
         throw new Error(`Invalid moderation purpose: ${purpose}`);
     }
