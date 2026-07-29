@@ -260,7 +260,13 @@ export default function CreateStage() {
           )}
         </div>
 
-        <AppText as="p" className="create-stage-page__pricing-note">
+        <AppText as="p" className="create-stage-page__free-note">
+          {t(
+            'create_stage_free_note',
+            'Free — no charge. Live for 24 hours, then the Stage and all its media are deleted.'
+          )}
+        </AppText>
+        <AppText as="p" className="create-stage-page__free-note create-stage-page__free-note--secondary">
           {t(
             'create_stage_one_at_a_time',
             'You can host only one Stage at a time. After 24 hours it is removed and you can open a new one.'

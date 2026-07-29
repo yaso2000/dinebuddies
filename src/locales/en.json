@@ -2477,7 +2477,7 @@
   "create_stage_guests": "Guests (mutual follows)",
   "create_stage_no_mutuals": "You need at least one mutual follow to open a Stage.",
   "create_stage_no_mutuals_optional": "No mutual follows yet. You can still open the Stage alone and share a join link.",
-  "create_stage_free_note": "Free for now — Stage pricing coming later.",
+  "create_stage_free_note": "Free — no charge. Live for 24 hours, then the Stage and all its media are deleted.",
   "create_stage_one_at_a_time": "You can host only one Stage at a time. After 24 hours it is removed and you can open a new one.",
   "create_stage_open": "Open Stage",
   "stage_open_existing": "Open your Stage",

@@ -157,6 +157,19 @@
   justify-content: center;
 }
 
+.create-stage-page__free-note {
+  margin: 0.75rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--text-secondary, #64748b);
+}
+
+.create-stage-page__free-note--secondary {
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  opacity: 0.9;
+}
+
 .create-stage-page__pricing-note {
   margin: 0;
   font-size: 0.8rem;

@@ -112,7 +112,7 @@ export function useInviteCreateNavigation({
       }
 
       if (kind === 'stage') {
-        // Free for now — pricing / credits to be added later.
+        // Always free — fixed 24h TTL, then hard-deleted (no day pricing / credits).
         navigate('/create-stage', { state });
         onAfterNavigate?.();
       }

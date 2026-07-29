@@ -1,12 +1,14 @@
 /**
  * Consumer Stage rooms — event chat for mutual follows (not business communities).
- * Lifecycle: active ↔ closed within 24h; hard delete after expiresAt.
+ * Always free (no credits / day pricing). Fixed 24h TTL then hard-delete
+ * Firestore + Storage media + invite notifications.
  */
 const functions = require('firebase-functions');
 const { isBusinessUserDoc } = require('./creditsCore');
 
 const MAX_INVITEES = 40;
 const TITLE_MAX = 80;
+/** Hard cap — Stages are free and always expire after 24 hours. */
 const STAGE_TTL_MS = 24 * 60 * 60 * 1000;
 
 function asTrimmedString(v) {
@@ -54,36 +56,85 @@ async function deleteQueryInBatches(db, queryRef, batchSize = 200) {
     }
 }
 
+function collectStorageUrls(value, out = new Set()) {
+    if (!value) return out;
+    if (typeof value === 'string') {
+        if (
+            value.includes('firebasestorage.googleapis.com') ||
+            value.startsWith('gs://') ||
+            value.includes('storage.googleapis.com')
+        ) {
+            out.add(value);
+        }
+        return out;
+    }
+    if (Array.isArray(value)) {
+        value.forEach((v) => collectStorageUrls(v, out));
+        return out;
+    }
+    if (typeof value === 'object') {
+        Object.values(value).forEach((v) => collectStorageUrls(v, out));
+    }
+    return out;
+}
+
 async function tryDeleteStorageUrl(admin, url) {
-    if (typeof url !== 'string' || !url.includes('firebasestorage.googleapis.com')) return;
+    if (typeof url !== 'string') return;
     try {
-        const match = url.match(/\/o\/([^?]+)/);
-        if (!match) return;
-        const path = decodeURIComponent(match[1]);
+        let path = null;
+        if (url.startsWith('gs://')) {
+            path = url.replace(/^gs:\/\/[^/]+\//, '');
+        } else {
+            const match = url.match(/\/o\/([^?]+)/) || url.match(/storage\.googleapis\.com\/[^/]+\/(.+)$/);
+            if (match) path = decodeURIComponent(match[1]);
+        }
+        if (!path) return;
         await admin.storage().bucket().file(path).delete({ ignoreNotFound: true });
     } catch (err) {
         functions.logger.warn('stage media delete skipped', { url, message: err.message });
     }
 }
 
+async function deleteStoragePrefix(admin, prefix) {
+    if (!prefix) return;
+    try {
+        const bucket = admin.storage().bucket();
+        const [files] = await bucket.getFiles({ prefix });
+        await Promise.all(
+            files.map((file) =>
+                file.delete({ ignoreNotFound: true }).catch((err) => {
+                    functions.logger.warn('stage prefix delete skipped', {
+                        path: file.name,
+                        message: err.message,
+                    });
+                })
+            )
+        );
+    } catch (err) {
+        functions.logger.warn('stage prefix list failed', { prefix, message: err.message });
+    }
+}
+
 async function purgeStageRoom(db, admin, stageId, stageData) {
     const messagesRef = db.collection('stages').doc(stageId).collection('messages');
     const messagesSnap = await messagesRef.get();
+    const mediaUrls = collectStorageUrls(stageData);
     for (const msg of messagesSnap.docs) {
-        const data = msg.data() || {};
-        await tryDeleteStorageUrl(admin, data.imageUrl || data.image_url);
-        await tryDeleteStorageUrl(admin, data.fileUrl || data.file_url);
-        await tryDeleteStorageUrl(admin, data.audioUrl || data.audio_url);
+        collectStorageUrls(msg.data() || {}, mediaUrls);
     }
-    await deleteQueryInBatches(db, messagesRef);
+    for (const url of mediaUrls) {
+        await tryDeleteStorageUrl(admin, url);
+    }
+    // Any files written under stage-scoped prefixes
+    await deleteStoragePrefix(admin, `stages/${stageId}/`);
+    await deleteStoragePrefix(admin, `stage_media/${stageId}/`);
 
-    const bannerUrl =
-        stageData.communityChatBannerUrl ||
-        stageData.banner_url ||
-        stageData.bannerUrl ||
-        null;
-    await tryDeleteStorageUrl(admin, bannerUrl);
-    await tryDeleteStorageUrl(admin, stageData.communityChatGuestFrameBgUrl);
+    await deleteQueryInBatches(db, messagesRef);
+    // Invite / stage notifications
+    await deleteQueryInBatches(
+        db,
+        db.collection('notifications').where('stageId', '==', stageId)
+    );
 
     const memberIds = Array.isArray(stageData.memberIds)
         ? stageData.memberIds
@@ -213,6 +264,7 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                 asTrimmedString(host.display_name || host.displayName || host.name) || 'Host';
             const hostAvatar =
                 host.avatar || host.photo_url || host.photoURL || host.profilePicture || null;
+            // Free room — no credits charged; duration is always exactly 24h (not extendable by reopen).
             const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + STAGE_TTL_MS);
 
             await stageRef.set({
@@ -228,6 +280,8 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                 communityChatZoneTheme: 'stage',
                 communityChatBannerVisible: true,
                 ownerId: hostId,
+                isFree: true,
+                durationHours: 24,
                 expiresAt,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
