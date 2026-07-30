@@ -17,6 +17,7 @@ function syncBusinessNavHint(profile, uid) {
 import { sendPasswordResetViaResend } from '../services/passwordResetEmailService';
 import { sendVerificationEmailResend } from '../services/verificationEmailService';
 import { isEmailRegisteredAsBusiness } from '../utils/authEmailConflict';
+import { needsUserProfileBootstrap } from '../utils/userProfileBootstrap';
 import { adminSecurityService } from '../services/adminSecurityService';
 import {
     auth,
@@ -202,19 +203,19 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     // Mirror Firebase Auth email verification onto users/{uid} so Cloud Functions can gate public_profiles.
+    // CRITICAL: use updateDoc only — setDoc({merge:true}) creates a stub users/{uid} with just these
+    // flags. Google/Facebook sign-in then sees exists()===true and skips createUserProfile, leaving
+    // accounts without role, display name, or welcome credits.
     useEffect(() => {
         if (!currentUser || isGuest) return;
         (async () => {
             try {
-                await setDoc(
-                    doc(db, 'users', currentUser.uid),
-                    {
-                        emailVerified: currentUser.emailVerified === true,
-                        authEmail: currentUser.email || null,
-                    },
-                    { merge: true }
-                );
+                await updateDoc(doc(db, 'users', currentUser.uid), {
+                    emailVerified: currentUser.emailVerified === true,
+                    authEmail: currentUser.email || null,
+                });
             } catch (e) {
+                // Missing doc (new user before createUserProfile) is expected; ignore.
                 console.warn('Auth email flags sync skipped:', e?.message || e);
             }
         })();
@@ -413,7 +414,7 @@ export const AuthProvider = ({ children }) => {
         try {
             const result = await signInWithEmailAndPassword(auth, email, password);
             const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-            if (!userDoc.exists()) {
+            if (!userDoc.exists() || needsUserProfileBootstrap(userDoc.data())) {
                 await createUserProfile(result.user.uid, {
                     display_name: result.user.displayName || '',
                     email: result.user.email,
@@ -494,10 +495,11 @@ export const AuthProvider = ({ children }) => {
             const result = await signInWithPopup(auth, provider);
             const userDoc = await getDoc(doc(db, 'users', result.user.uid));
             let isNewUser = false;
+            const needsBootstrap = !userDoc.exists() || needsUserProfileBootstrap(userDoc.data());
 
-            if (!userDoc.exists()) {
+            if (needsBootstrap) {
                 isNewUser = true;
-                console.log('Google Auth: New user detected, creating profile for:', result.user.uid);
+                console.log('Google Auth: New/incomplete user, creating profile for:', result.user.uid);
                 await createUserProfile(result.user.uid, {
                     display_name: result.user.displayName,
                     email: result.user.email,
@@ -576,8 +578,9 @@ export const AuthProvider = ({ children }) => {
             // Step 3: Create or update Firestore profile
             const userDoc = await getDoc(doc(db, 'users', result.user.uid));
             let isNewUser = false;
+            const needsBootstrap = !userDoc.exists() || needsUserProfileBootstrap(userDoc.data());
 
-            if (!userDoc.exists()) {
+            if (needsBootstrap) {
                 isNewUser = true;
                 await createUserProfile(result.user.uid, {
                     display_name: result.user.displayName,
