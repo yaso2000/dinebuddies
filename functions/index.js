@@ -9,6 +9,7 @@ admin.initializeApp();
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
 const { runSuggestInvitationMessages } = require('./suggestInvitationMessages');
+const { aggregateReviewRatings } = require('./reviewRatingAggregate');
 const functions = require('firebase-functions');
 const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
 const db = admin.firestore();
@@ -466,28 +467,21 @@ exports.updateBusinessRatingOnReview = functions.firestore
                 db.collection('reviews').where('profileId', '==', businessId).get()
             ]);
 
-            // Merge, deduplicate by doc ID
-            const seen = new Set();
-            let total = 0;
-            let count = 0;
+            // Merge, dedupe, and ignore out-of-range ratings (prevents ranking forgery).
+            const reviews = [];
             for (const snap of [byPartner, byProfile]) {
-                for (const doc of snap.docs) {
-                    if (!seen.has(doc.id)) {
-                        seen.add(doc.id);
-                        total += doc.data().rating || 0;
-                        count++;
-                    }
+                for (const reviewDoc of snap.docs) {
+                    reviews.push({ id: reviewDoc.id, rating: reviewDoc.data().rating });
                 }
             }
-
-            const averageRating = count > 0 ? Math.round((total / count) * 10) / 10 : 0;
+            const { averageRating, reviewCount } = aggregateReviewRatings(reviews);
 
             await db.collection('public_profiles').doc(businessId).set(
-                { averageRating, reviewCount: count, ratingUpdatedAt: admin.firestore.FieldValue.serverTimestamp() },
+                { averageRating, reviewCount, ratingUpdatedAt: admin.firestore.FieldValue.serverTimestamp() },
                 { merge: true }
             );
 
-            functions.logger.info(`updateBusinessRatingOnReview: ${businessId} avg=${averageRating} count=${count}`);
+            functions.logger.info(`updateBusinessRatingOnReview: ${businessId} avg=${averageRating} count=${reviewCount}`);
         } catch (err) {
             functions.logger.error('updateBusinessRatingOnReview error:', err);
         }

@@ -80,8 +80,13 @@ export async function loadRankedEliteBusinesses(opts = {}) {
         const allReviews = [...sp.docs, ...sf.docs, ...sr.docs].map(d => d.data());
         chunk.forEach(id => {
             const reviews = allReviews.filter(r => r.partnerId === id || r.profileId === id || r.restaurantId === id);
-            const count = reviews.length;
-            const total = reviews.reduce((s, r) => s + (r.rating || 0), 0);
+            // Ignore out-of-range ratings so forged values cannot dominate rankingScore.
+            const valid = reviews.filter((r) => {
+                const n = Number(r.rating);
+                return Number.isFinite(n) && n >= 1 && n <= 5;
+            });
+            const count = valid.length;
+            const total = valid.reduce((s, r) => s + Number(r.rating), 0);
             if (!statsById[id]) statsById[id] = { profileViews: 0, profileLikes: 0, profileShares: 0, memberCount: 0, totalInvitations: 0, rating: 0, reviewCount: 0, subscriptionTier: 'free' };
             statsById[id].rating = count > 0 ? total / count : 0;
             statsById[id].reviewCount = count;
