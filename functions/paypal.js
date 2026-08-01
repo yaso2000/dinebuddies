@@ -208,10 +208,12 @@ async function savePayPalCheckoutOrder(orderId, payload) {
 }
 
 /**
- * Resolve credits metadata from PayPal custom_id, reference_id, or server-stored checkout doc.
+ * Resolve credits metadata from PayPal custom_id or server-stored checkout doc.
+ * Never trust reference_id alone — that would let any signed-in caller capture another
+ * user's paid order and grant the credits to themselves.
  */
 async function resolveCreditsOrderMeta(orderId, orderData, authUid) {
-    const { customId, referenceId } = extractPayPalCapture(orderData);
+    const { customId } = extractPayPalCapture(orderData);
     const parsed = parsePayPalCustomId(customId);
     if (
         parsed.userId &&
@@ -220,15 +222,17 @@ async function resolveCreditsOrderMeta(orderId, orderData, authUid) {
         CREDIT_PACKAGES[parsed.packageId] &&
         parsed.credits > 0
     ) {
-        return parsed;
+        // Prefer server catalog credits over client-influenced custom_id credit counts.
+        return {
+            userId: parsed.userId,
+            packageId: parsed.packageId,
+            credits: CREDIT_PACKAGES[parsed.packageId].credits,
+        };
     }
 
-    if (referenceId && CREDIT_PACKAGES[referenceId]) {
-        return {
-            userId: authUid,
-            packageId: referenceId,
-            credits: CREDIT_PACKAGES[referenceId].credits,
-        };
+    // custom_id present but belongs to someone else → hard deny (do not fall through).
+    if (parsed.userId && parsed.userId !== authUid) {
+        return { userId: '', packageId: '', credits: 0, kind: '', planId: '' };
     }
 
     const pending = await loadPayPalCheckoutOrder(orderId);
@@ -241,11 +245,11 @@ async function resolveCreditsOrderMeta(orderId, orderData, authUid) {
         return {
             userId: authUid,
             packageId: String(pending.packageId).trim(),
-            credits: Math.floor(Number(pending.credits) || CREDIT_PACKAGES[pending.packageId].credits),
+            credits: CREDIT_PACKAGES[pending.packageId].credits,
         };
     }
 
-    return parsed;
+    return { userId: '', packageId: '', credits: 0, kind: '', planId: '' };
 }
 
 async function fetchPayPalOrder(orderId) {

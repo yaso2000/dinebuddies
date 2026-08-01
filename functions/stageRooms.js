@@ -4,6 +4,7 @@
  */
 const functions = require('firebase-functions');
 const { isBusinessUserDoc } = require('./creditsCore');
+const { isSafeStageMediaPath, extractStorageObjectPath } = require('./stageMediaSafety');
 
 const MAX_INVITEES = 40;
 const TITLE_MAX = 80;
@@ -54,12 +55,15 @@ async function deleteQueryInBatches(db, queryRef, batchSize = 200) {
     }
 }
 
-async function tryDeleteStorageUrl(admin, url) {
-    if (typeof url !== 'string' || !url.includes('firebasestorage.googleapis.com')) return;
+async function tryDeleteStorageUrl(admin, url, memberUidSet) {
+    const path = extractStorageObjectPath(url);
+    if (!path || !isSafeStageMediaPath(path, memberUidSet)) {
+        if (path) {
+            functions.logger.warn('stage media delete blocked (unsafe path)', { path });
+        }
+        return;
+    }
     try {
-        const match = url.match(/\/o\/([^?]+)/);
-        if (!match) return;
-        const path = decodeURIComponent(match[1]);
         await admin.storage().bucket().file(path).delete({ ignoreNotFound: true });
     } catch (err) {
         functions.logger.warn('stage media delete skipped', { url, message: err.message });
@@ -67,13 +71,25 @@ async function tryDeleteStorageUrl(admin, url) {
 }
 
 async function purgeStageRoom(db, admin, stageId, stageData) {
+    const memberIds = Array.isArray(stageData.memberIds)
+        ? stageData.memberIds
+        : Array.isArray(stageData.communityMembers)
+          ? stageData.communityMembers
+          : [];
+    const hostId = stageData.hostId || stageData.ownerId;
+    const memberUidSet = new Set([hostId, ...memberIds].filter(Boolean).map(String));
+
     const messagesRef = db.collection('stages').doc(stageId).collection('messages');
     const messagesSnap = await messagesRef.get();
     for (const msg of messagesSnap.docs) {
         const data = msg.data() || {};
-        await tryDeleteStorageUrl(admin, data.imageUrl || data.image_url);
-        await tryDeleteStorageUrl(admin, data.fileUrl || data.file_url);
-        await tryDeleteStorageUrl(admin, data.audioUrl || data.audio_url);
+        await tryDeleteStorageUrl(admin, data.imageUrl || data.image_url, memberUidSet);
+        await tryDeleteStorageUrl(admin, data.fileUrl || data.file_url, memberUidSet);
+        await tryDeleteStorageUrl(admin, data.audioUrl || data.audio_url, memberUidSet);
+        // Image messages store the download URL in `text` (see useStageChatRoom.sendImageMessage).
+        if (data.type === 'image') {
+            await tryDeleteStorageUrl(admin, data.text, memberUidSet);
+        }
     }
     await deleteQueryInBatches(db, messagesRef);
 
@@ -82,16 +98,10 @@ async function purgeStageRoom(db, admin, stageId, stageData) {
         stageData.banner_url ||
         stageData.bannerUrl ||
         null;
-    await tryDeleteStorageUrl(admin, bannerUrl);
-    await tryDeleteStorageUrl(admin, stageData.communityChatGuestFrameBgUrl);
+    await tryDeleteStorageUrl(admin, bannerUrl, memberUidSet);
+    await tryDeleteStorageUrl(admin, stageData.communityChatGuestFrameBgUrl, memberUidSet);
 
-    const memberIds = Array.isArray(stageData.memberIds)
-        ? stageData.memberIds
-        : Array.isArray(stageData.communityMembers)
-          ? stageData.communityMembers
-          : [];
-    const hostId = stageData.hostId || stageData.ownerId;
-    const allUids = [...new Set([hostId, ...memberIds].filter(Boolean))];
+    const allUids = [...memberUidSet];
 
     const batch = db.batch();
     for (const uid of allUids) {
@@ -447,4 +457,7 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
         });
 }
 
-module.exports = { registerStageRooms, STAGE_TTL_MS };
+module.exports = {
+    registerStageRooms,
+    STAGE_TTL_MS,
+};

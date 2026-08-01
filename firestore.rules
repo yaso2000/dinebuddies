@@ -111,16 +111,16 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/stages/$(stageId)).data;
     }
 
+    // Membership must be server-authored on the stage doc (createStageRoom / setStageMembership).
+    // Do NOT trust the caller's self-writable joinedStages list — that would let any signed-in
+    // user grant themselves read/write access to a private Stage chat.
     function stageMemberFromData(stageId, stage) {
       let members = stage.get('memberIds', []);
       let communityMembers = stage.get('communityMembers', []);
       let blocked = stage.get('communityBlockedUserIds', []);
-      let me = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      let joined = me.get('joinedStages', []);
       return (request.auth.uid == stage.get('hostId', '') ||
              request.auth.uid in members ||
-             request.auth.uid in communityMembers ||
-             stageId in joined) &&
+             request.auth.uid in communityMembers) &&
              !(request.auth.uid in blocked);
     }
 
@@ -339,7 +339,8 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.auth.uid == userId &&
                        userCreateHasNoServerAffiliateFields() &&
                        userCreateReferredByOk() &&
-                       userCreateRoleOkForClient();
+                       userCreateRoleOkForClient() &&
+                       !request.resource.data.keys().hasAny(['joinedStages']);
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
@@ -365,9 +366,11 @@ service cloud.firestore {
                        ownerAffiliateWriteGuards() &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['following']) &&
                        request.resource.data.following is list;
+      // joinedStages is written only by trusted Cloud Functions (createStageRoom /
+      // setStageMembership / purgeExpiredStages). Client self-writes would bypass Stage ACLs.
       allow update: if isOwner(userId) && ownerAffiliateWriteGuards() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
+                         .hasAny(['role', 'accountType', 'joinedStages']);
       // Admin panel (admin + moderator/support/staff): credits, moderation, etc.
       allow update: if isAdminOrPanelStaff();
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
@@ -991,6 +994,7 @@ service cloud.firestore {
       allow list: if false;
 
       // Clients must not create rooms; membership/lifecycle via callables; host may edit theme/banner.
+      // expiresAt / status / membership are server-owned so clients cannot force early purge or reopen.
       allow create: if false;
       allow update: if isSignedIn() &&
                        (isAdmin() ||
@@ -998,7 +1002,7 @@ service cloud.firestore {
                          request.resource.data.hostId == resource.data.hostId &&
                          request.resource.data.get('ownerId', resource.data.hostId) == resource.data.hostId &&
                          !request.resource.data.diff(resource.data).affectedKeys()
-                           .hasAny(['memberIds', 'invitedIds', 'communityMembers', 'status', 'createdAt', 'kind', 'endedAt'])));
+                           .hasAny(['memberIds', 'invitedIds', 'communityMembers', 'status', 'createdAt', 'kind', 'endedAt', 'expiresAt', 'hostId', 'ownerId'])));
       allow delete: if isAdmin();
 
       match /messages/{messageId} {
