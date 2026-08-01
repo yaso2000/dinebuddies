@@ -641,11 +641,14 @@ export const AuthProvider = ({ children }) => {
         try {
             let grantedCredits = 0;
             let showWelcomeNotification = false;
+            let shouldClaimWelcomeGift = false;
 
-            // Generate a unique identifier (email or phone)
-            const uniqueId = userData.email?.toLowerCase() || auth.currentUser?.phoneNumber || null;
+            // claimId must match Auth token email/phone exactly (see firestore.rules).
+            // Prefer auth.currentUser so the doc id aligns with request.auth.token.*.
+            const uniqueId = auth.currentUser?.email || auth.currentUser?.phoneNumber || null;
 
-            // welcome_gifts_claimed must be allowed in firestore.rules; if missing/denied, skip and still create users/{uid}.
+            // Check eligibility first; claim the gift only AFTER users/{uid} is written so a
+            // failed profile create cannot burn the one-time claim and strand the user at 0 credits.
             if (uniqueId) {
                 try {
                     const giftRef = doc(db, 'welcome_gifts_claimed', uniqueId);
@@ -654,20 +657,13 @@ export const AuthProvider = ({ children }) => {
                     if (!giftSnap.exists()) {
                         grantedCredits = 5;
                         showWelcomeNotification = true;
-                        try {
-                            await setDoc(giftRef, {
-                                claimedAt: serverTimestamp(),
-                                userId: userId,
-                                authProvider: userData.authProvider || 'unknown'
-                            });
-                        } catch (giftWriteErr) {
-                            console.warn('welcome_gifts_claimed write skipped:', giftWriteErr?.message || giftWriteErr);
-                        }
+                        shouldClaimWelcomeGift = true;
                     }
                 } catch (giftReadErr) {
                     console.warn('welcome gift eligibility check skipped:', giftReadErr?.message || giftReadErr);
                     grantedCredits = 5;
                     showWelcomeNotification = true;
+                    shouldClaimWelcomeGift = true;
                 }
             } else {
                 // Fallback if no unique identity can be verified (rare in Firebase Auth)
@@ -683,7 +679,7 @@ export const AuthProvider = ({ children }) => {
             const baseProfile = {
                 uid: userId,
                 display_name: finalDisplayName,
-                email: userData.email || '',
+                email: userData.email || auth.currentUser?.email || '',
                 photo_url: userData.photo_url || userData.photoURL || defaultAvatar,
                 reputation: 100,
                 purchasedPrivateCredits: grantedCredits,
@@ -701,6 +697,18 @@ export const AuthProvider = ({ children }) => {
             }
 
             await setDoc(doc(db, 'users', userId), baseProfile, { merge: true });
+
+            if (shouldClaimWelcomeGift && uniqueId) {
+                try {
+                    await setDoc(doc(db, 'welcome_gifts_claimed', uniqueId), {
+                        claimedAt: serverTimestamp(),
+                        userId: userId,
+                        authProvider: userData.authProvider || 'unknown'
+                    });
+                } catch (giftWriteErr) {
+                    console.warn('welcome_gifts_claimed write skipped:', giftWriteErr?.message || giftWriteErr);
+                }
+            }
 
             if (showWelcomeNotification) {
                 try {
