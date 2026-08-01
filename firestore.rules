@@ -185,12 +185,21 @@ service cloud.firestore {
     }
 
     // ============================================
-    // WELCOME GIFT CLAIMS (one doc per email key — client createUserProfile)
+    // WELCOME GIFT CLAIMS (one doc per email/phone — client createUserProfile)
+    // claimId must equal the caller's Auth email or phone so attackers cannot
+    // pre-create victims' claim docs and deny them welcome private credits.
     // ============================================
     match /welcome_gifts_claimed/{claimId} {
-      allow get: if isSignedIn();
+      allow get: if isSignedIn() && (
+        (request.auth.token.email != null && claimId == request.auth.token.email) ||
+        (request.auth.token.phone_number != null && claimId == request.auth.token.phone_number)
+      );
       allow create: if isSignedIn() &&
-                       request.resource.data.userId == request.auth.uid;
+                       request.resource.data.userId == request.auth.uid &&
+                       (
+                         (request.auth.token.email != null && claimId == request.auth.token.email) ||
+                         (request.auth.token.phone_number != null && claimId == request.auth.token.phone_number)
+                       );
       allow update, delete: if false;
     }
 
