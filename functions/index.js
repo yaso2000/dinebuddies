@@ -9,6 +9,8 @@ admin.initializeApp();
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
 const { runSuggestInvitationMessages } = require('./suggestInvitationMessages');
+const { spendCreditsInTransaction } = require('./creditsCore');
+const { isDatingInvitationDoc, resolvePrivateInvitationCharge } = require('./privateInvitationBilling');
 const functions = require('firebase-functions');
 const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
 const db = admin.firestore();
@@ -663,32 +665,20 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
             let chargedSource = null;
             /** @type {Record<string, unknown> | null} */
             let userCreditPatch = null;
+            /** @type {number | null} */
+            let dineCost = null;
 
             if (!isBypassUser) {
-                const tier = user.subscriptionTier || 'free';
-                const quota = MONTHLY_PRIVATE_QUOTAS[tier] || 0;
-                const now = new Date();
-                const currentMonth = `${now.getFullYear()}-${now.getMonth() + 1}`;
-                let usedThisMonth = Number(user.usedPrivateCreditsThisMonth) || 0;
-                const lastResetMonth = user.lastPrivateResetMonth || '';
-                if (quota > 0 && lastResetMonth !== currentMonth) {
-                    usedThisMonth = 0;
+                const charge = resolvePrivateInvitationCharge(user, inv, MONTHLY_PRIVATE_QUOTAS);
+                if (!charge.source) {
+                    throw new functions.https.HttpsError(
+                        'failed-precondition',
+                        charge.error || 'No private invitation credits remaining.'
+                    );
                 }
-                const purchasedCredits = Math.max(0, Number(user.purchasedPrivateCredits) || 0);
-                if (quota > 0 && usedThisMonth < quota) {
-                    chargedSource = 'monthly';
-                    userCreditPatch = {
-                        usedPrivateCreditsThisMonth: usedThisMonth + 1,
-                        lastPrivateResetMonth: currentMonth
-                    };
-                } else if (purchasedCredits > 0) {
-                    chargedSource = 'purchased';
-                    userCreditPatch = {
-                        purchasedPrivateCredits: purchasedCredits - 1
-                    };
-                } else {
-                    throw new functions.https.HttpsError('failed-precondition', 'No private invitation credits remaining.');
-                }
+                chargedSource = charge.source;
+                userCreditPatch = charge.userCreditPatch;
+                dineCost = charge.dineCost;
             }
 
             tx.update(invitationRef, {
@@ -700,6 +690,17 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
 
             if (userCreditPatch) {
                 tx.update(userRef, userCreditPatch);
+            } else if (chargedSource === 'dine_credits' && dineCost) {
+                spendCreditsInTransaction(tx, userRef, user, {
+                    uid,
+                    accountRole: 'user',
+                    amount: dineCost,
+                    type: 'spend',
+                    reason: isDatingInvitationDoc(inv)
+                        ? 'publish:dating_invitation'
+                        : 'publish:private_invitation',
+                    relatedId: invitationId,
+                });
             }
 
             return { alreadyPublished: false, chargedSource };
