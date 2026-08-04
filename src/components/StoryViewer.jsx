@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import { doc, updateDoc, arrayUnion, arrayRemove, onSnapshot } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, collection, addDoc, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
@@ -44,6 +44,8 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
 
     // Input Text State
     const [replyText, setReplyText] = useState('');
+    // Text replies live in a private subcollection — never on the public story doc.
+    const [privateReplies, setPrivateReplies] = useState([]);
 
     const STORY_DURATION = 10000;
 
@@ -65,6 +67,31 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     const currentStory = realTimeStory || initialStory;
     const activeStoryOwnerId = String(currentUserStories?.userId || '');
     const isOwnStory = Boolean(currentUser?.uid) && activeStoryOwnerId === String(currentUser.uid);
+
+    // Private text replies: owner reads all; viewer reads only their own.
+    useEffect(() => {
+        if (!currentStory?.id || !currentUser?.uid) {
+            setPrivateReplies([]);
+            return;
+        }
+        const repliesCol = collection(db, 'stories', currentStory.id, 'private_replies');
+        const repliesQuery = isOwnStory
+            ? query(repliesCol)
+            : query(repliesCol, where('userId', '==', currentUser.uid));
+        const unsubscribe = onSnapshot(
+            repliesQuery,
+            (snap) => {
+                const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                rows.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                setPrivateReplies(rows);
+            },
+            (err) => {
+                console.error('Error loading private story replies:', err);
+                setPrivateReplies([]);
+            }
+        );
+        return () => unsubscribe();
+    }, [currentStory?.id, currentUser?.uid, isOwnStory]);
 
     // Effect 2a: Mark story as viewed — only fires once per story change
     useEffect(() => {
@@ -97,6 +124,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
         setProgress(0);
         setRealTimeStory(null);
         setVisibleReactions([]);
+        setPrivateReplies([]);
         setShowCommentsPanel(false);
         setShowEmojiTray(false);
         // Clear any pending reaction timers
@@ -342,19 +370,32 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                 await sendMessage(convoId, { text: textToSend, type: 'text' });
             }
 
-            // 2. Save as a reaction on the story — only when VIEWER (not owner)
-            if (!isOwnStory) {
-                const reaction = {
-                    id: `${currentUser.uid}_${Date.now()}`,
+            // 2. Persist viewer reply — only when VIEWER (not owner)
+            // Text replies are private (subcollection). Emoji/like-style reactions stay on the
+            // public story doc (non-sensitive). Never put private text on publicly readable stories.
+            if (!isOwnStory && currentUser?.uid && currentStory?.id) {
+                const replyMeta = {
                     userId: currentUser.uid,
                     userName: userProfile?.name || userProfile?.displayName || currentUser.displayName || 'User',
                     userPhoto: userProfile?.photo || currentUser.photoURL || '',
                     content: textToSend,
-                    type: content ? 'emoji' : 'text',
                     createdAt: Date.now()
                 };
-                const storyRef = doc(db, 'stories', currentStory.id);
-                await updateDoc(storyRef, { reactions: arrayUnion(reaction) });
+                if (content) {
+                    const storyRef = doc(db, 'stories', currentStory.id);
+                    await updateDoc(storyRef, {
+                        reactions: arrayUnion({
+                            id: `${currentUser.uid}_${Date.now()}`,
+                            ...replyMeta,
+                            type: 'emoji'
+                        })
+                    });
+                } else {
+                    await addDoc(collection(db, 'stories', currentStory.id, 'private_replies'), {
+                        ...replyMeta,
+                        type: 'text'
+                    });
+                }
             }
 
             setReplyText('');
@@ -389,24 +430,35 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
 
     const hasLiked = currentStory.likes?.includes(currentUser?.uid);
     const likesCount = currentStory.likes?.length || 0;
-    const textReactions = (currentStory.reactions || []).filter((r) => r.type === 'text' && String(r.content || '').trim());
-    const privateThread = isOwnStory
-        ? textReactions
-        : textReactions.filter((r) => r.userId === currentUser?.uid);
+    // Prefer private_replies subcollection. Fall back to legacy text entries still present on
+    // publicly readable reactions only for the story owner (they already own that content).
+    const legacyTextReactions = (currentStory.reactions || []).filter(
+        (r) => r.type === 'text' && String(r.content || '').trim()
+    );
+    const privateThread = privateReplies.length > 0
+        ? privateReplies
+        : (isOwnStory ? legacyTextReactions : []);
     const commentsCount = privateThread.length;
 
     // --- Prepare interactions overview for Owner ---
     let uniqueInteractors = [];
-    if (isOwnStory && currentStory?.reactions) {
+    if (isOwnStory) {
         const uniqueUsersMap = new Map();
-        // Iterate in reverse to ensure the most recent reaction from a user is kept
-        for (let i = currentStory.reactions.length - 1; i >= 0; i--) {
-            const r = currentStory.reactions[i];
-            if (!uniqueUsersMap.has(r.userId)) {
+        // Newest private replies first, then public reactions (emoji/likes)
+        for (let i = privateReplies.length - 1; i >= 0; i--) {
+            const r = privateReplies[i];
+            if (r?.userId && !uniqueUsersMap.has(r.userId)) {
                 uniqueUsersMap.set(r.userId, r);
             }
         }
-        uniqueInteractors = Array.from(uniqueUsersMap.values()).reverse(); // Display in chronological order of first interaction
+        const reactions = currentStory?.reactions || [];
+        for (let i = reactions.length - 1; i >= 0; i--) {
+            const r = reactions[i];
+            if (r?.userId && !uniqueUsersMap.has(r.userId)) {
+                uniqueUsersMap.set(r.userId, r);
+            }
+        }
+        uniqueInteractors = Array.from(uniqueUsersMap.values()).reverse();
     }
 
     return ReactDOM.createPortal(

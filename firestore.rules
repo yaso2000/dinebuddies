@@ -480,6 +480,38 @@ service cloud.firestore {
       allow update: if isSignedIn() &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['reactions', 'likes', 'views']);
+
+      // Private story replies (text). Must NOT live on the publicly readable story doc.
+      // Only the reply author, the story owner, or an admin may read these.
+      function isStoryOwner() {
+        let s = get(/databases/$(database)/documents/stories/$(storyId)).data;
+        return s.get('userId', '') == request.auth.uid ||
+               s.get('authorId', '') == request.auth.uid ||
+               s.get('partnerId', '') == request.auth.uid ||
+               (s.keys().hasAny(['author']) && s.author is map && s.author.get('id', '') == request.auth.uid);
+      }
+
+      match /private_replies/{replyId} {
+        allow create: if isSignedIn() &&
+                         request.resource.data.userId == request.auth.uid &&
+                         request.resource.data.keys().hasAll(['userId', 'content', 'type', 'createdAt']) &&
+                         request.resource.data.type == 'text' &&
+                         request.resource.data.content is string &&
+                         request.resource.data.content.size() > 0 &&
+                         request.resource.data.content.size() <= 2000;
+
+        allow read: if isSignedIn() && (
+          resource.data.userId == request.auth.uid ||
+          isStoryOwner() ||
+          isAdmin()
+        );
+
+        allow update, delete: if isSignedIn() && (
+          resource.data.userId == request.auth.uid ||
+          isStoryOwner() ||
+          isAdmin()
+        );
+      }
     }
 
     match /likes/{likeId} {
