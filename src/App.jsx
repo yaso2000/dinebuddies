@@ -1,258 +1,375 @@
-import React, { Suspense, lazy, useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React, { Suspense, lazy, useEffect } from 'react';
+import {
+    BrowserRouter as Router,
+    Routes,
+    Route,
+    Navigate,
+    Outlet,
+    useNavigate,
+    useParams,
+    useLocation,
+} from 'react-router-dom';
 import Layout from './components/Layout';
-import Home from './pages/Home';
+import AccountThemeBridge from './components/AccountThemeBridge';
 
-// User Pages
-import CreateInvitation from './pages/CreateInvitation';
-import CreatePrivateInvitation from './pages/CreatePrivateInvitation';
-import CreatePost from './pages/CreatePost';
-import PricingPage from './pages/PricingPage';
-import AuthPage from './pages/AuthPage';
-import QuickLogin from './pages/QuickLogin';
+// Core Pages (Eagerly loaded for critical paths)
+import LoginHub from './pages/auth/LoginHub';
 import CompleteProfile from './pages/CompleteProfile';
-import Settings from './pages/Settings';
+import HomeRouter from './components/HomeRouter';
+import ReferralJoinPage from './pages/ReferralJoinPage';
+import AffiliateDashboard from './pages/affiliate/AffiliateDashboard';
+import AffiliatePortal from './pages/affiliate/AffiliatePortal';
+import AffiliateForceSignOut from './pages/affiliate/AffiliateForceSignOut';
+import AffiliateRouteLayout from './components/affiliate/AffiliateRouteLayout';
+import AffiliateSignupPage from './pages/affiliate/AffiliateSignupPage';
+import AffiliateLoginPage from './pages/affiliate/AffiliateLoginPage';
+import AffiliateSettingsPage from './pages/affiliate/AffiliateSettingsPage';
+import NotFound from './pages/NotFound';
+import AuthActionHandler from './pages/AuthActionHandler';
+import VerifyEmail from './pages/VerifyEmail';
+import InviteReceivedPage from './pages/InviteReceivedPage';
+import DiscoveryPage from './pages/DiscoveryPage';
+import DiscoveryInboxPage from './pages/DiscoveryInboxPage';
+import UsersDirectory from './pages/UsersDirectory';
 
-import EmailSettings from './pages/EmailSettings';
-import PasswordSettings from './pages/PasswordSettings';
-import NotificationsSettings from './pages/NotificationsSettings';
-import LanguageSettings from './pages/LanguageSettings';
-import PrivacySettings from './pages/PrivacySettings';
-import SubscriptionSettings from './pages/SubscriptionSettings';
-import PaymentSettings from './pages/PaymentSettings';
-import BillingSettings from './pages/BillingSettings';
-import PaymentSuccess from './pages/PaymentSuccess';
-import BusinessSignup from './pages/BusinessSignup';
+// Lazy Pages (Loaded on demand to improve startup speed)
+const PostsFeed = lazy(() => import('./pages/PostsFeed'));
+const Profile = lazy(() => import('./pages/Profile'));
+const PostDetails = lazy(() => import('./pages/PostDetails'));
+const UserProfile = lazy(() => import('./pages/UserProfile'));
+const BusinessesDirectory = lazy(() => import('./pages/BusinessesDirectory'));
+const BusinessRankings = lazy(() => import('./pages/BusinessRankings'));
+const RestaurantDetails = lazy(() => import('./pages/RestaurantDetails'));
+const Settings = lazy(() => import('./pages/Settings'));
+const AdminShell = lazy(() => import('./admin/shell/AdminShell'));
+const AdminUsersPage = lazy(() => import('./admin/pages/UsersPage'));
+const AdminCreditsPage = lazy(() => import('./admin/pages/CreditsPage'));
+const AdminInvitationsPage = lazy(() => import('./admin/pages/InvitationsPage'));
+const AdminPostsPage = lazy(() => import('./admin/pages/PostsPage'));
+const AdminBusinessesPage = lazy(() => import('./admin/pages/BusinessesPage'));
+const AdminSmartSenderPage = lazy(() => import('./admin/pages/SmartSenderPage'));
+const AdminReportsPage = lazy(() => import('./admin/pages/ReportsPage'));
+const AdminGooglePlacesImportPage = lazy(() => import('./admin/pages/GooglePlacesImportPage'));
+const AdminDemoUsersPage = lazy(() => import('./admin/pages/DemoUsersPage'));
+const InvitationDetails = lazy(() => import('./pages/InvitationDetails'));
+const InvitationPreview = lazy(() => import('./pages/InvitationPreview'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const ChatList = lazy(() => import('./pages/ChatList'));
+const Chat = lazy(() => import('./pages/Chat'));
+const CommunityChatRoom = lazy(() => import('./pages/CommunityChatRoom'));
+const CommunityChatCastPage = lazy(() => import('./pages/CommunityChatCastPage'));
+const StageChatRoom = lazy(() => import('./pages/StageChatRoom'));
+const CreateStage = lazy(() => import('./pages/CreateStage'));
+const StagesHub = lazy(() => import('./pages/StagesHub'));
+const PricingPage = lazy(() => import('./pages/PricingPage'));
+const HomeInvitations = lazy(() => import('./pages/Home'));
 
-import BusinessDashboard from './pages/BusinessDashboard';
-import PostsFeed from './pages/PostsFeed';
-import BusinessLimitsManager from './pages/AdminDashboard';
-import LegalPrivacy from './pages/PrivacyPolicy';
-import LegalTerms from './pages/TermsOfService';
-import CommunityGuidelines from './pages/CommunityGuidelines';
-import AccountDeletionRequest from './pages/AccountDeletionRequest';
-import PrivateInvitationOverlay from './components/Invitation/PrivateInvitationOverlay';
+const BusinessProfile = lazy(() => import('./pages/BusinessProfile'));
+const BusinessSignup = lazy(() => import('./components/BusinessSignup'));
+const BusinessOnboarding = lazy(() => import('./pages/BusinessOnboarding'));
+const BusinessDashboard = lazy(() => import('./pages/BusinessDashboard'));
+// Eager — lazy chunks here caused ChunkLoadError on mobile after deploy → feed redirect.
+import SocialInvitationDetails from './pages/SocialInvitationDetails';
+import SocialInvitationPreview from './pages/SocialInvitationPreview';
+import PublicSocialInvitationJoin from './pages/PublicSocialInvitationJoin';
+const InvitationChatRoom = lazy(() => import('./pages/InvitationChatRoom'));
+const FollowersList = lazy(() => import('./pages/FollowersList'));
+const CreateInvitation = lazy(() => import('./pages/CreateInvitation'));
+const CreateInvitationManualHub = lazy(() => import('./pages/CreateInvitationManualHub'));
+import CreateSocialInvitation from './pages/CreateSocialInvitation';
+import CreatePrivateInvitation from './pages/CreatePrivateInvitation';
+const BusinessCreatePostGate = lazy(() => import('./components/BusinessCreatePostGate'));
+const CreateFeaturedPost = lazy(() => import('./pages/business/CreateFeaturedPost'));
+const CreateStory = lazy(() => import('./pages/CreateStory'));
+const AiDesignStudio = lazy(() => import('./pages/AiDesignStudio'));
+const AiTextStudio = lazy(() => import('./pages/AiTextStudio'));
+const EmailSettings = lazy(() => import('./pages/EmailSettings'));
+const PasswordSettings = lazy(() => import('./pages/PasswordSettings'));
+const NotificationsSettings = lazy(() => import('./pages/NotificationsSettings'));
+const LanguageSettings = lazy(() => import('./pages/LanguageSettings'));
+const PrivacySettings = lazy(() => import('./pages/PrivacySettings'));
+const BlockedUsersSettings = lazy(() => import('./pages/BlockedUsersSettings'));
+const SubscriptionSettings = lazy(() => import('./pages/SubscriptionSettings'));
+const CreditsWallet = lazy(() => import('./pages/CreditsWallet'));
+const PaymentSettings = lazy(() => import('./pages/PaymentSettings'));
+const BillingSettings = lazy(() => import('./pages/BillingSettings'));
+const HelpSupport = lazy(() => import('./pages/HelpSupport'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+const CommunityGuidelines = lazy(() => import('./pages/CommunityGuidelines'));
+const AccountDeletionRequest = lazy(() => import('./pages/AccountDeletionRequest'));
+const MyCommunity = lazy(() => import('./pages/MyCommunity'));
+const BusinessCommunityInbox = lazy(() => import('./pages/BusinessCommunityInbox'));
+const BusinessHostedArchive = lazy(() => import('./pages/BusinessHostedArchive'));
+const BusinessDashboardAnalytics = lazy(() => import('./pages/BusinessDashboardAnalytics'));
+const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
 
-// Admin Pages
-import AdminRoute from './components/AdminRoute';
-
-import BusinessBlockedRoute from './components/BusinessBlockedRoute';
-import GuestBlockedRoute from './components/GuestBlockedRoute';
 
 // Contexts
 import { ToastProvider } from './context/ToastContext';
-import { InvitationProvider } from './context/InvitationContext';
+import GlobalImageUploadIndicator from './components/GlobalImageUploadIndicator';
+import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
+import { ExternalLinkGuardProvider } from './context/ExternalLinkGuardContext';
+import { InvitationProvider } from './context/InvitationContext';
+import { MatchCelebrationProvider } from './context/MatchCelebrationContext';
+import { SocialPingCelebrationProvider } from './context/SocialPingCelebrationContext';
 import { StripeProvider } from './context/StripeContext';
 import { ChatProvider } from './context/ChatContext';
 import { NotificationProvider } from './context/NotificationContext';
-import { ThemeProvider } from './context/ThemeContext';
-import { Navigate } from 'react-router-dom';
+// Guards & Utils
+import GuestBlockedRoute from './components/GuestBlockedRoute';
+import AuthRoutingGate from './components/AuthRoutingGate';
+import AccountShellGate from './components/AccountShellGate';
+import AdminRoute from './components/AdminRoute';
+import AppRouteLoading from './components/AppRouteLoading';
+import { registerLoginRouter, unregisterLoginRouter } from './utils/goToLogin';
 
-import StaffBlockedRoute from './components/StaffBlockedRoute';
-import ProfileGuard from './components/ProfileGuard';
-import OfflineNotice from './components/OfflineNotice';
-import AuthBlockedRoute from './components/AuthBlockedRoute';
-import { usePresence } from './hooks/usePresence';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from './firebase/config';
-import { useParams, useNavigate } from 'react-router-dom';
+/** Layout owns route-level Suspense so the 3-column shell never unmounts during lazy loads. */
+function RouteSuspenseLayout() {
+    return <Outlet />;
+}
 
-const BusinessProDashboard = lazy(() => import('./pages/BusinessProDashboard'));
-const SocialCreator = lazy(() => import('./features/social-creator/index.jsx'));
-const CreateStory = lazy(() => import('./pages/CreateStory'));
-const InvitationDetails = lazy(() => import('./pages/InvitationDetails'));
-const InvitationPreview = lazy(() => import('./pages/InvitationPreview'));
-const InvitationChatRoom = lazy(() => import('./pages/InvitationChatRoom'));
-const PrivateInvitationPreview = lazy(() => import('./pages/PrivateInvitationPreview'));
-const PrivateInvitationDetails = lazy(() => import('./pages/PrivateInvitationDetails'));
-const Profile = lazy(() => import('./pages/Profile'));
-const UserProfile = lazy(() => import('./pages/UserProfile'));
-const Notifications = lazy(() => import('./pages/Notifications'));
-const FriendsFeed = lazy(() => import('./pages/FriendsFeed'));
-const BusinessesDirectory = lazy(() => import('./pages/BusinessesDirectory'));
-const RestaurantDetails = lazy(() => import('./pages/RestaurantDetails'));
-const FollowersList = lazy(() => import('./pages/FollowersList'));
-const ChatList = lazy(() => import('./pages/ChatList'));
-const Chat = lazy(() => import('./pages/Chat'));
-const BusinessProfile = lazy(() => import('./pages/BusinessProfile'));
-const PremiumOfferPage = lazy(() => import('./pages/PremiumOfferPage'));
-const MyCommunities = lazy(() => import('./pages/MyCommunities'));
-const MyCommunity = lazy(() => import('./pages/MyCommunity'));
-const CommunityChatRoom = lazy(() => import('./pages/CommunityChatRoom'));
-const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
-const AdminHome = lazy(() => import('./pages/admin/AdminHome'));
-const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
-const Plans = lazy(() => import('./pages/admin/Plans'));
-const SubscriptionManagement = lazy(() => import('./pages/admin/SubscriptionManagement'));
-const BusinessManagement = lazy(() => import('./pages/admin/BusinessManagement'));
-const InvitationManagement = lazy(() => import('./pages/admin/InvitationManagement'));
-const ReportsAnalytics = lazy(() => import('./pages/admin/ReportsAnalytics'));
-const MigrationTools = lazy(() => import('./pages/admin/MigrationTools'));
-const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
-const CodeBackups = lazy(() => import('./pages/admin/CodeBackups'));
-const AdminChatCommunity = lazy(() => import('./pages/admin/AdminChatCommunity'));
-const AdminNotifications = lazy(() => import('./pages/admin/AdminNotifications'));
-const AdminSystemTools = lazy(() => import('./pages/admin/AdminSystemTools'));
-const AdminAuditLog = lazy(() => import('./pages/admin/AdminAuditLog'));
+/** /business/:businessId/invitations → community hub for that partner */
+function RedirectBusinessInvitationsToCommunity() {
+    const { businessId } = useParams();
+    return <Navigate to={`/community/${businessId}`} replace />;
+}
 
-const RedirectPartnerToBusiness = () => {
-    const { partnerId } = useParams();
-    return <Navigate to={`/business/${partnerId || ''}`} replace />;
-};
-
-// Smart profile router: by role only. role business → BusinessProfile, else UserProfile.
-const SmartProfileRoute = () => {
+/** Legacy comment/profile links used `/user/:id` — canonical route is `/profile/:userId`. */
+function LegacyUserProfileRedirect() {
     const { userId } = useParams();
+    return <Navigate to={`/profile/${userId}`} replace />;
+}
+
+/** Canonical business registration is `/signup/business`; legacy paths keep `?ref=` etc. */
+function LegacyBusinessSignupRedirect() {
+    const { search, hash } = useLocation();
+    return <Navigate to={{ pathname: '/signup/business', search, hash }} replace />;
+}
+
+function LoginRouterBridge() {
     const navigate = useNavigate();
-    const [profileRole, setProfileRole] = useState(null);
-    const [loading, setLoading] = useState(true);
-
     useEffect(() => {
-        if (!userId) { setLoading(false); return; }
-        getDoc(doc(db, 'users', userId))
-            .then(snap => {
-                if (snap.exists()) {
-                    const d = snap.data();
-                    setProfileRole(d.role || 'user');
-                } else {
-                    setProfileRole('user');
-                }
-            })
-            .catch(() => setProfileRole('user'))
-            .finally(() => setLoading(false));
-    }, [userId]);
-
-    useEffect(() => {
-        if (profileRole === null) return;
-        if (profileRole === 'business') {
-            navigate(`/business/${userId}`, { replace: true });
-        }
-    }, [profileRole, userId, navigate]);
-
-    if (loading || profileRole === 'business') {
-        return (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
-                <div style={{ width: 40, height: 40, border: '4px solid var(--border-color)', borderTop: '4px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-            </div>
-        );
-    }
-
-    return <UserProfile />;
-};
-
-// Activates presence tracking for the logged-in user globally
-const PresenceManager = () => { usePresence(); return null; };
+        registerLoginRouter(navigate);
+        return () => unregisterLoginRouter();
+    }, [navigate]);
+    return null;
+}
 
 function App() {
     return (
         <ThemeProvider>
             <ToastProvider>
-                <AuthProvider>
-                    <InvitationProvider>
-                    <NotificationProvider>
-                        <ChatProvider>
-                            <StripeProvider>
-                                <Router>
-                                    <PresenceManager />
-                                    <OfflineNotice />
-                                    <PrivateInvitationOverlay />
-                                    <Suspense fallback={
-                                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
-                                            <div style={{ width: 38, height: 38, border: '4px solid var(--border-color)', borderTop: '4px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                                        </div>
-                                    }>
+                <GlobalImageUploadIndicator />
+                <Router>
+                    <LoginRouterBridge />
+                    <AuthProvider>
+                        <ExternalLinkGuardProvider>
+                        <AccountThemeBridge />
+                        <InvitationProvider>
+                            <MatchCelebrationProvider>
+                            <SocialPingCelebrationProvider>
+                            <NotificationProvider>
+                                <ChatProvider>
+                                    <StripeProvider>
                                         <Routes>
-                                        {/* Auth Routes */}
-                                        <Route path="/login" element={<AuthBlockedRoute><QuickLogin /></AuthBlockedRoute>} />
-                                        <Route path="/auth" element={<AuthBlockedRoute><AuthPage /></AuthBlockedRoute>} />
-                                        <Route path="/business/signup" element={<AuthBlockedRoute><BusinessSignup /></AuthBlockedRoute>} />
-                                        <Route path="/complete-profile" element={<CompleteProfile />} />
-                                        <Route path="/business-pro" element={<BusinessProDashboard />} />
-                                        {/* ── Social Creator ── isolated feature */}
-                                        <Route path="/social-creator" element={<SocialCreator />} />
+                                            {/* Auth routes outside of nested Layout wrappers for maximum reliability */}
+                                            <Route path="/login" element={<LoginHub />} />
+                                            <Route path="/join" element={<ReferralJoinPage />} />
+                                            <Route element={<AffiliateRouteLayout />}>
+                                                <Route path="/affiliate/use-laptop" element={<Navigate to="/affiliate/dashboard" replace />} />
+                                                <Route path="/affiliate/sign-out" element={<AffiliateForceSignOut />} />
+                                                <Route path="/affiliate/signup" element={<AffiliateSignupPage />} />
+                                                <Route path="/affiliate/login" element={<AffiliateLoginPage />} />
+                                                <Route path="/affiliate/settings" element={<AffiliateSettingsPage />} />
+                                                <Route path="/affiliate/dashboard" element={<AffiliateDashboard />} />
+                                                <Route path="/affiliate" element={<AffiliatePortal />} />
+                                            </Route>
+                                            <Route path="/business/login" element={<Navigate to="/login?tab=business" replace />} />
+                                            <Route
+                                                path="/signup/business"
+                                                element={
+                                                    <Suspense fallback={<AppRouteLoading variant="route" fullViewport />}>
+                                                        <BusinessSignup />
+                                                    </Suspense>
+                                                }
+                                            />
+                                            <Route path="/business/signup" element={<LegacyBusinessSignupRedirect />} />
+                                            <Route path="/business-signup" element={<LegacyBusinessSignupRedirect />} />
+                                            <Route path="/auth/action" element={<AuthActionHandler />} />
+                                            <Route path="/__/auth/action" element={<AuthActionHandler />} />
 
-                                        {/* User Routes with Layout */}
-                                        <Route element={<Layout />}>
-                                            <Route path="/" element={<PostsFeed />} />
-                                            <Route path="/invitations" element={<Home />} />
-                                            <Route path="/create" element={<GuestBlockedRoute><StaffBlockedRoute><BusinessBlockedRoute><ProfileGuard><CreateInvitation /></ProfileGuard></BusinessBlockedRoute></StaffBlockedRoute></GuestBlockedRoute>} />
-                                            <Route path="/create-private" element={<GuestBlockedRoute><StaffBlockedRoute><BusinessBlockedRoute><ProfileGuard><CreatePrivateInvitation /></ProfileGuard></BusinessBlockedRoute></StaffBlockedRoute></GuestBlockedRoute>} />
-                                            <Route path="/create-post" element={<GuestBlockedRoute><StaffBlockedRoute><ProfileGuard><CreatePost /></ProfileGuard></StaffBlockedRoute></GuestBlockedRoute>} />
-                                            <Route path="/create-story" element={<GuestBlockedRoute><StaffBlockedRoute><ProfileGuard><CreateStory /></ProfileGuard></StaffBlockedRoute></GuestBlockedRoute>} />
-                                            <Route path="/invitation/preview/:id" element={<InvitationPreview />} />
-                                            <Route path="/invitation/private/preview/:id" element={<PrivateInvitationPreview />} />
-                                            <Route path="/invitation/private/:id" element={<PrivateInvitationDetails />} />
-                                            <Route path="/invitation/:id" element={<InvitationDetails />} />
-                                            <Route path="/invitation/:id/chat" element={<InvitationChatRoom />} />
-                                            <Route path="/restaurants" element={<BusinessesDirectory />} />
-                                            <Route path="/restaurant/:id" element={<RestaurantDetails />} />
-                                            <Route path="/friends" element={<GuestBlockedRoute><FriendsFeed /></GuestBlockedRoute>} />
-                                            <Route path="/followers" element={<GuestBlockedRoute><FollowersList /></GuestBlockedRoute>} />
-                                            <Route path="/messages" element={<GuestBlockedRoute><ChatList /></GuestBlockedRoute>} />
-                                            <Route path="/chat/:userId" element={<GuestBlockedRoute><Chat /></GuestBlockedRoute>} />
-                                            <Route path="/profile" element={<GuestBlockedRoute><Profile /></GuestBlockedRoute>} />
-                                            <Route path="/profile/:userId" element={<SmartProfileRoute />} />
-                                            <Route path="/notifications" element={<GuestBlockedRoute><Notifications /></GuestBlockedRoute>} />
-                                            <Route path="/pricing" element={<PricingPage />} />
-                                            <Route path="/business/pricing" element={<PricingPage />} />
-                                            <Route path="/payment-success" element={<PaymentSuccess />} />
-                                            <Route path="/settings" element={<GuestBlockedRoute><Settings /></GuestBlockedRoute>} />
-                                            <Route path="/settings/email" element={<GuestBlockedRoute><EmailSettings /></GuestBlockedRoute>} />
-                                            <Route path="/settings/password" element={<GuestBlockedRoute><PasswordSettings /></GuestBlockedRoute>} />
-                                            <Route path="/settings/notifications" element={<GuestBlockedRoute><NotificationsSettings /></GuestBlockedRoute>} />
-                                            <Route path="/settings/language" element={<GuestBlockedRoute><LanguageSettings /></GuestBlockedRoute>} />
-                                            <Route path="/settings/privacy" element={<GuestBlockedRoute><PrivacySettings /></GuestBlockedRoute>} />
-                                            <Route path="/settings/subscription" element={<GuestBlockedRoute><SubscriptionSettings /></GuestBlockedRoute>} />
-                                            <Route path="/settings/payment" element={<GuestBlockedRoute><PaymentSettings /></GuestBlockedRoute>} />
-                                            <Route path="/settings/billing" element={<GuestBlockedRoute><BillingSettings /></GuestBlockedRoute>} />
-                                            <Route path="/business-dashboard" element={<BusinessDashboard />} />
-                                            <Route path="/partners" element={<Navigate to="/restaurants" replace />} />
-                                            <Route path="/business/:businessId" element={<BusinessProfile />} />
-                                            <Route path="/partner/:partnerId" element={<RedirectPartnerToBusiness />} />
-                                            <Route path="/offer/new" element={<GuestBlockedRoute><PremiumOfferPage /></GuestBlockedRoute>} />
-                                            <Route path="/offer/edit/:id" element={<GuestBlockedRoute><PremiumOfferPage /></GuestBlockedRoute>} />
-                                            <Route path="/communities" element={<GuestBlockedRoute><MyCommunities /></GuestBlockedRoute>} />
-                                            <Route path="/my-community" element={<GuestBlockedRoute><MyCommunity /></GuestBlockedRoute>} />
-                                            <Route path="/community/:partnerId" element={<GuestBlockedRoute><CommunityChatRoom /></GuestBlockedRoute>} />
-                                            <Route path="/posts-feed" element={<PostsFeed />} />
-                                            <Route path="/admin-panel" element={<Navigate to="/admin" replace />} />
-                                        </Route>
+                                            <Route element={<AuthRoutingGate />}>
+                                            <Route path="/verify-email" element={<GuestBlockedRoute><VerifyEmail /></GuestBlockedRoute>} />
+                                            <Route path="/complete-profile" element={<CompleteProfile />} />
 
-                                        {/* Admin Routes */}
-                                        <Route path="/admin/*" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-                                            <Route path="dashboard" element={<AdminHome />} />
-                                            <Route path="users" element={<UserManagement />} />
-                                            <Route path="invitations" element={<InvitationManagement />} />
-                                            <Route path="chat-community" element={<AdminChatCommunity />} />
-                                            <Route path="businesses" element={<BusinessManagement />} />
-                                            <Route path="partners" element={<Navigate to="/admin/businesses" replace />} />
-                                            <Route path="reports" element={<ReportsAnalytics />} />
-                                            <Route path="notifications" element={<AdminNotifications />} />
-                                            <Route path="subscriptions" element={<SubscriptionManagement />} />
-                                            <Route path="plans" element={<Plans />} />
-                                            <Route path="system-tools" element={<AdminSystemTools />} />
-                                            <Route path="audit-log" element={<AdminAuditLog />} />
-                                            <Route path="business-limits" element={<BusinessLimitsManager />} />
-                                            <Route path="migration" element={<MigrationTools />} />
-                                            <Route path="settings" element={<AdminSettings />} />
-                                            <Route path="backups" element={<CodeBackups />} />
-                                            <Route index element={<Navigate to="/admin/dashboard" replace />} />
-                                        </Route>
+                                            <Route path="/business-pro" element={<Navigate to="/business-dashboard" replace />} />
+                                            <Route path="/business-pro/*" element={<Navigate to="/business-dashboard" replace />} />
 
-                                        {/* Public Legal Pages */}
-                                        <Route path="/privacy" element={<LegalPrivacy />} />
-                                        <Route path="/terms" element={<LegalTerms />} />
-                                        <Route path="/guidelines" element={<CommunityGuidelines />} />
-                                        <Route path="/account-deletion" element={<AccountDeletionRequest />} />
+                                            <Route path="/" element={<HomeRouter />} />
+
+                                            <Route
+                                                path="/invite/received"
+                                                element={
+                                                    <GuestBlockedRoute>
+                                                        <InviteReceivedPage />
+                                                    </GuestBlockedRoute>
+                                                }
+                                            />
+
+                                            <Route
+                                                path="/search/inbox"
+                                                element={
+                                                    <GuestBlockedRoute>
+                                                        <DiscoveryInboxPage />
+                                                    </GuestBlockedRoute>
+                                                }
+                                            />
+                                            <Route path="/discovery" element={<Navigate to="/search" replace />} />
+                                            <Route path="/discovery/inbox" element={<Navigate to="/search/inbox" replace />} />
+
+                                            <Route element={<RouteSuspenseLayout />}>
+                                                <Route element={<AccountShellGate />}>
+                                                <Route element={<Layout />}>
+                                                    {/* More specific paths first */}
+                                                    <Route path="/post/featured/:featuredId" element={<PostDetails />} />
+                                                    <Route path="/post/:postId" element={<PostDetails />} />
+
+                                                    <Route path="/invite/p/:token" element={<PublicSocialInvitationJoin />} />
+                                                    <Route path="/invitation/social/preview/:id" element={<SocialInvitationPreview />} />
+                                                    <Route path="/invitation/private/preview/:id" element={<SocialInvitationPreview />} />
+                                                    <Route path="/invitation/social/:id" element={<SocialInvitationDetails />} />
+                                                    <Route path="/invitation/social/:id/chat" element={<GuestBlockedRoute><InvitationChatRoom /></GuestBlockedRoute>} />
+                                                    <Route
+                                                        path="/invitation/private/:id/chat"
+                                                        element={<GuestBlockedRoute><InvitationChatRoom /></GuestBlockedRoute>}
+                                                    />
+                                                    <Route path="/invitation/private/:id" element={<SocialInvitationDetails />} />
+                                                    <Route path="/invitation/:id/chat" element={<GuestBlockedRoute><InvitationChatRoom /></GuestBlockedRoute>} />
+                                                    <Route path="/invitation/preview/:id" element={<InvitationPreview />} />
+                                                    <Route path="/invitation/:id" element={<InvitationDetails />} />
+
+                                                    <Route path="/business/onboarding" element={<GuestBlockedRoute><BusinessOnboarding /></GuestBlockedRoute>} />
+                                                    <Route path="/business/pricing" element={<Navigate to="/settings/subscription" replace />} />
+                                                    <Route path="/business/:businessId/invitations" element={<RedirectBusinessInvitationsToCommunity />} />
+                                                    <Route path="/business/:businessId" element={<BusinessProfile />} />
+
+                                                    <Route path="/business-dashboard" element={<GuestBlockedRoute><BusinessDashboard /></GuestBlockedRoute>} />
+
+                                                    <Route
+                                                        path="/search"
+                                                        element={
+                                                            <GuestBlockedRoute>
+                                                                <DiscoveryPage />
+                                                            </GuestBlockedRoute>
+                                                        }
+                                                    />
+                                                    <Route path="/search/list" element={<UsersDirectory />} />
+                                                    <Route path="/restaurants" element={<BusinessesDirectory />} />
+                                                    <Route path="/rankings" element={<BusinessRankings />} />
+                                                    <Route path="/restaurant/:id" element={<RestaurantDetails />} />
+
+                                                    <Route path="/notifications" element={<GuestBlockedRoute><Notifications /></GuestBlockedRoute>} />
+                                                    <Route path="/messages" element={<GuestBlockedRoute><ChatList /></GuestBlockedRoute>} />
+                                                    <Route path="/chat/:userId" element={<GuestBlockedRoute><Chat /></GuestBlockedRoute>} />
+
+                                                    <Route path="/profile" element={<GuestBlockedRoute><Profile /></GuestBlockedRoute>} />
+                                                    <Route path="/profile/:userId" element={<UserProfile />} />
+                                                    <Route path="/user/:userId" element={<LegacyUserProfileRedirect />} />
+
+                                                    <Route path="/followers/:userId" element={<GuestBlockedRoute><FollowersList /></GuestBlockedRoute>} />
+                                                    <Route path="/followers" element={<GuestBlockedRoute><FollowersList /></GuestBlockedRoute>} />
+
+                                                    <Route path="/create/manual" element={<GuestBlockedRoute><CreateInvitationManualHub /></GuestBlockedRoute>} />
+                                                    <Route
+                                                        path="/create/ai"
+                                                        element={
+                                                            <GuestBlockedRoute>
+                                                                <Navigate to="/ai-design-studio" replace />
+                                                            </GuestBlockedRoute>
+                                                        }
+                                                    />
+                                                    <Route path="/ai-design-studio" element={<GuestBlockedRoute><AiDesignStudio /></GuestBlockedRoute>} />
+                                                    <Route path="/ai-text-studio" element={<GuestBlockedRoute><AiTextStudio /></GuestBlockedRoute>} />
+                                                    <Route path="/create" element={<GuestBlockedRoute><CreateInvitation /></GuestBlockedRoute>} />
+                                                    <Route path="/create-social" element={<GuestBlockedRoute><CreateSocialInvitation /></GuestBlockedRoute>} />
+                                                    <Route path="/create-private" element={<GuestBlockedRoute><CreatePrivateInvitation /></GuestBlockedRoute>} />
+                                                    <Route path="/create-stage" element={<GuestBlockedRoute><CreateStage /></GuestBlockedRoute>} />
+                                                    <Route path="/stages" element={<GuestBlockedRoute><StagesHub /></GuestBlockedRoute>} />
+                                                    <Route path="/create-post" element={<GuestBlockedRoute><BusinessCreatePostGate /></GuestBlockedRoute>} />
+                                                    <Route path="/create-featured-post" element={<GuestBlockedRoute><CreateFeaturedPost /></GuestBlockedRoute>} />
+                                                    <Route path="/create-story" element={<GuestBlockedRoute><CreateStory /></GuestBlockedRoute>} />
+
+                                                    <Route path="/settings/email" element={<GuestBlockedRoute><EmailSettings /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/password" element={<GuestBlockedRoute><PasswordSettings /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/notifications" element={<GuestBlockedRoute><NotificationsSettings /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/language" element={<GuestBlockedRoute><LanguageSettings /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/privacy" element={<GuestBlockedRoute><PrivacySettings /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/blocked-users" element={<GuestBlockedRoute><BlockedUsersSettings /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/subscription" element={<GuestBlockedRoute><SubscriptionSettings /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/credits" element={<GuestBlockedRoute><CreditsWallet /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/payment" element={<GuestBlockedRoute><PaymentSettings /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/billing" element={<GuestBlockedRoute><BillingSettings /></GuestBlockedRoute>} />
+                                                    <Route path="/settings" element={<GuestBlockedRoute><Settings /></GuestBlockedRoute>} />
+
+                                                    <Route path="/support" element={<HelpSupport />} />
+                                                    <Route path="/privacy" element={<PrivacyPolicy />} />
+                                                    <Route path="/terms" element={<TermsOfService />} />
+                                                    <Route path="/guidelines" element={<CommunityGuidelines />} />
+                                                    <Route path="/account-deletion" element={<AccountDeletionRequest />} />
+
+                                                    <Route path="/plans" element={<Navigate to="/pricing" replace />} />
+                                                    <Route path="/my-community" element={<GuestBlockedRoute><MyCommunity /></GuestBlockedRoute>} />
+                                                    <Route path="/my-community/inbox" element={<GuestBlockedRoute><BusinessCommunityInbox /></GuestBlockedRoute>} />
+                                                    <Route path="/my-community/archive" element={<GuestBlockedRoute><BusinessHostedArchive /></GuestBlockedRoute>} />
+                                                    <Route path="/my-community/analytics" element={<GuestBlockedRoute><BusinessDashboardAnalytics /></GuestBlockedRoute>} />
+                                                    <Route path="/ai-marketing-studio/saved-posts" element={<GuestBlockedRoute><Navigate to="/business-dashboard" replace /></GuestBlockedRoute>} />
+                                                    <Route path="/ai-marketing-studio" element={<GuestBlockedRoute><Navigate to="/business-dashboard" replace /></GuestBlockedRoute>} />
+
+                                                    <Route path="/payment-success" element={<GuestBlockedRoute><PaymentSuccess /></GuestBlockedRoute>} />
+
+                                                    <Route path="/pricing" element={<PricingPage />} />
+                                                    <Route
+                                                        path="/communities"
+                                                        element={<Navigate to="/messages?tab=communities" replace />}
+                                                    />
+                                                    <Route path="/community/:partnerId/cast" element={<CommunityChatCastPage />} />
+                                                    <Route path="/community/:partnerId" element={<GuestBlockedRoute><CommunityChatRoom /></GuestBlockedRoute>} />
+                                                    <Route path="/stage/:stageId" element={<GuestBlockedRoute><StageChatRoom /></GuestBlockedRoute>} />
+                                                    <Route path="/posts-feed" element={<PostsFeed />} />
+                                                    <Route path="/invitations" element={<HomeInvitations />} />
+
+                                                    <Route path="/admin/*" element={<AdminRoute><AdminShell /></AdminRoute>}>
+                                                        <Route path="google-places" element={<AdminGooglePlacesImportPage />} />
+                                                        <Route path="demo-users" element={<AdminDemoUsersPage />} />
+                                                        <Route path="users" element={<AdminUsersPage />} />
+                                                        <Route path="businesses" element={<AdminBusinessesPage />} />
+                                                        <Route path="posts" element={<AdminPostsPage />} />
+                                                        <Route path="credits" element={<AdminCreditsPage />} />
+                                                        <Route path="messaging" element={<AdminSmartSenderPage />} />
+                                                        <Route path="invitations" element={<AdminInvitationsPage />} />
+                                                        <Route path="reports" element={<AdminReportsPage />} />
+                                                        <Route path="dashboard" element={<Navigate to="/admin/users" replace />} />
+                                                        <Route path="*" element={<Navigate to="/admin/users" replace />} />
+                                                        <Route index element={<Navigate to="/admin/users" replace />} />
+                                                    </Route>
+                                                </Route>
+                                                </Route>
+                                            </Route>
+                                            </Route>
+
+                                            <Route path="*" element={<NotFound />} />
                                         </Routes>
-                                    </Suspense>
-                                </Router>
-                            </StripeProvider>
-                        </ChatProvider>
-                    </NotificationProvider>
-                    </InvitationProvider>
-                </AuthProvider>
+                                    </StripeProvider>
+                                </ChatProvider>
+                            </NotificationProvider>
+                            </SocialPingCelebrationProvider>
+                            </MatchCelebrationProvider>
+                        </InvitationProvider>
+                        </ExternalLinkGuardProvider>
+                    </AuthProvider>
+                </Router>
             </ToastProvider>
         </ThemeProvider>
     );

@@ -1,21 +1,59 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, RecaptchaVerifier } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getDatabase } from 'firebase/database';
+import { getMessaging, isSupported } from 'firebase/messaging';
 
-// Firebase configuration from environment variables
-// Create .env from .env.example and add your Firebase credentials
-// NEVER commit .env or hardcode credentials
+const firebaseProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'dinebuddies';
+const FIREBASE_DEFAULT_AUTH_DOMAIN = `${firebaseProjectId}.firebaseapp.com`;
+
+/**
+ * Same-origin authDomain on www avoids Google redirect
+ * "missing initial state" under browser storage partitioning.
+ * Vercel proxies /__/auth/* → dinebuddies.firebaseapp.com.
+ */
+function resolveFirebaseAuthDomain() {
+    if (typeof window !== 'undefined') {
+        const host = String(window.location.hostname || '').toLowerCase();
+        if (host === 'www.dinebuddies.com') {
+            return 'www.dinebuddies.com';
+        }
+    }
+
+    const fromEnv = String(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '')
+        .trim()
+        .replace(/^https?:\/\//, '')
+        .replace(/\/$/, '');
+
+    if (fromEnv === 'www.dinebuddies.com' || fromEnv === 'dinebuddies.com') {
+        return 'www.dinebuddies.com';
+    }
+
+    if (fromEnv && !fromEnv.includes('your-')) {
+        return fromEnv;
+    }
+
+    return FIREBASE_DEFAULT_AUTH_DOMAIN;
+}
+
+const firebaseAuthDomain = resolveFirebaseAuthDomain();
+
+export { firebaseAuthDomain };
+
+export function getFirebaseOAuthHandlerUrl() {
+    return `https://${firebaseAuthDomain}/__/auth/handler`;
+}
+
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    authDomain: firebaseAuthDomain,
+    projectId: firebaseProjectId,
     storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Validate required config in development to catch missing .env early
 if (import.meta.env.DEV) {
     const missing = Object.entries(firebaseConfig)
         .filter(([, v]) => !v || v === 'your-api-key-here' || v === 'your-project-id.firebaseapp.com')
@@ -23,21 +61,37 @@ if (import.meta.env.DEV) {
     if (missing.length > 0) {
         console.error(
             'Firebase config missing. Copy .env.example to .env and add your credentials.\n' +
-            'Missing or placeholder: ' + missing.join(', ')
+                'Missing or placeholder: ' +
+                missing.join(', ')
         );
     }
 }
 
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase services
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+export const db = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+});
+
 export const storage = getStorage(app);
 
-// Make RecaptchaVerifier available globally for phone auth
+export const rtdb = getDatabase(app);
+
+export let messaging = null;
+
 if (typeof window !== 'undefined') {
-    window.RecaptchaVerifier = RecaptchaVerifier;
+    isSupported()
+        .then((ok) => {
+            if (!ok) return;
+            try {
+                messaging = getMessaging(app);
+            } catch (e) {
+                console.warn('[Firebase] getMessaging failed:', e?.message || e);
+            }
+        })
+        .catch(() => {});
 }
 
 export default app;

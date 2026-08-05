@@ -1,0 +1,46 @@
+/* ==========================================================================
+   APP BiDi PRIMITIVES — AppText / AppTextInput
+   Logical direction + isolation for mixed Arabic/Latin UI copy.
+   ========================================================================== */
+
+.app-text,
+.app-text-input {
+    direction: auto;
+    unicode-bidi: isolate;
+    text-align: start;
+}
+
+/* Numeric / code fields stay LTR even inside RTL shell (see rtl-locale.css). */
+.app-text-input[type='date'],
+.app-text-input[type='time'],
+.app-text-input[type='datetime-local'],
+.app-text-input[type='tel'],
+.app-text-input[inputmode='numeric'],
+.app-text-input[inputmode='decimal'],
+.app-text-input.ltr-isolate,
+.app-text-input.numeric-ltr {
+    direction: ltr;
+    text-align: left;
+}
+
+/* Fallback: motion / legacy tags not yet on AppText (e.g. motion.span). */
+p:not(.app-text),
+span:not(.app-text),
+h1:not(.app-text),
+h2:not(.app-text),
+h3:not(.app-text),
+h4:not(.app-text),
+h5:not(.app-text),
+h6:not(.app-text),
+label:not(.app-text) {
+    direction: auto;
+    unicode-bidi: isolate;
+    text-align: start;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='hidden']):not([type='button']):not([type='submit']):not([type='reset']):not([type='range']):not([type='color']):not(.app-text-input),
+textarea:not(.app-text-input) {
+    direction: auto;
+    unicode-bidi: isolate;
+    text-align: start;
+}

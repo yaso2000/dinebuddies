@@ -88,7 +88,7 @@ export const cancelInvitation = async (invitationId, reason, customReason, curre
                         type: 'booking_cancelled',
                         title: 'Booking Cancelled',
                         message: `A booking for "${title}" at your venue has been cancelled. Reason: ${reasonMessage}`,
-                        actionUrl: `/user/${currentUser.id}`,
+                        actionUrl: `/profile/${currentUser.id}`,
                         invitationId,
                         metadata: { cancellationReason: reasonMessage }
                     });

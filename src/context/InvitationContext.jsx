@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { db } from '../firebase/config';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import app, { auth, db } from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+
+const FUNCTIONS_REGION = 'us-central1';
 import {
     collection,
     query,
@@ -9,12 +11,12 @@ import {
     updateDoc,
     doc,
     serverTimestamp,
+    Timestamp,
     getDocs,
     getDoc,
     where,
     orderBy,
     limit,
-    startAfter,
     arrayUnion,
     arrayRemove,
     increment,
@@ -25,27 +27,71 @@ import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { v4 as uuidv4 } from 'uuid';
 import notificationSound from '../utils/notificationSound';
+import { computeArchiveAfterFirestoreTimestamp } from '../utils/invitationExpiry';
+import {
+    buildPrivateInvitationResponseChatMessage,
+    buildPrivateInvitationResponseNotificationTitle,
+    normalizeUserGender,
+    isArabicLocale,
+} from '../utils/privateInvitationResponseMessages';
+import i18n from '../i18n';
+import { getInvitationLatLng } from '../utils/invitationCoords';
 import { followUser, unfollowUser } from '../utils/followHelpers';
-import { convertFromUSD, getCurrencyByCountry } from '../utils/currencyConverter';
-import { BASE_SUBSCRIPTION_PLANS, BASE_CREDIT_PACKS } from '../config/planDefaults';
-import { getSafeAvatar } from '../utils/avatarUtils';
-import { fetchIpLocation } from '../utils/locationUtils';
+import { showFollowCooldownWarning } from '../utils/connectionActionCooldown';
+import {
+    isConnectionComplete,
+    resolveConnectionKind,
+} from '../utils/connectConnection';
+import { notifyConnectConnectionComplete } from '../utils/notificationHelpers';
+import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import { DEFAULT_BUSINESS_COVER } from '../utils/businessCoverImage';
+import { fetchIpLocation, detectUserLocationContext, detectLiveUserGps } from '../utils/locationUtils';
 import { deleteInvitationAndStorage } from '../utils/storageCleanup';
+import { maybeAwardBusinessHostingPoints } from '../services/businessLikeService';
+import { filterInviteesWhoAcceptAuthor, asUidArray } from '../utils/userSocialLists';
+import { filterInviteesFollowedBySender } from '../utils/privateInviteAvailability';
+import {
+    getTotalDineCredits,
+    SOCIAL_INVITATION_PUBLISH_CREDITS,
+    PRIVATE_INVITATION_PUBLISH_CREDITS,
+} from '../utils/privateInvitationCredits';
+import {
+    assertCreatorCanCreateInvitations,
+    assertPublicInvitationGeofenceRule,
+    INVITATION_ERROR_CODES,
+    LOCATION_NOT_DETERMINED_ERROR_MESSAGE,
+    invitationErrorI18nKey,
+} from '../utils/invitationRules';
+import { cannotCreateInvitations, isBusinessUser } from '../utils/accountRole';
+import { getCallableErrorReason } from '../utils/callableErrorDetails';
+import { resolveInviteCategory, isPrivateHostedInvitation } from '../utils/inviteCategory';
+import { getHostedInvitationDetailsPath } from '../utils/hostedInvitationRoutes';
+
+/** Read live following[] from Firestore — avoids stale cache / stuck optimistic state. */
+async function readLiveFollowing(viewerUid, profileFallback = []) {
+    const fallback = asUidArray(profileFallback);
+    if (!viewerUid) return fallback;
+    try {
+        const snap = await getDoc(doc(db, 'users', viewerUid));
+        if (snap.exists()) return asUidArray(snap.data()?.following);
+    } catch (err) {
+        console.warn('[toggleFollow] readLiveFollowing', err?.message || err);
+    }
+    return fallback;
+}
+
+function canTargetAcceptFollows(targetData) {
+    if (!targetData || typeof targetData !== 'object') return false;
+    const role = String(targetData.role || 'user').toLowerCase();
+    if (role === 'business' || role === 'partner' || targetData.isBusiness === true) return false;
+    return targetData.privacySettings?.allowFollowing !== false;
+}
 
 const InvitationContext = createContext(null);
 
 export const useInvitations = () => useContext(InvitationContext);
 
-// ── Monthly private invitation quota per subscription tier ─────────────
-// Derived directly from planDefaults.js plan configuration.
-// Key = subscriptionTier value stored in Firestore users/{id}.subscriptionTier
-// ───────────────────────────────────────────────────────────
-const MONTHLY_PRIVATE_QUOTAS = {
-    pro: 4,   // Pro plan     —  4 private invitations per month
-    premium: 10,  // Premium plan — 10 private invitations per month
-    vip: 10,  // legacy tier alias for premium
-};
-const INVITATIONS_PAGE_SIZE = 20;
+const INITIAL_INVITATIONS_LIMIT = 50;
 
 const INVITATION_ERROR_MESSAGES = {
     requestToJoin: 'Failed to send request. Try again.',
@@ -54,122 +100,223 @@ const INVITATION_ERROR_MESSAGES = {
     rejectUser: 'Failed to reject. Try again.',
     cancelRequest: 'Failed to cancel request. Try again.',
     addInvitation: 'Failed to create invitation. Try again.',
-    addPrivateInvitation: 'Failed to create invitation. Try again.'
+    addHostedInvitation: 'Failed to create invitation. Try again.'
 };
 
 export const InvitationProvider = ({ children }) => {
     const { currentUser, userProfile: firebaseProfile, updateUserProfile, isGuest } = useAuth();
-    const { showToast } = useToast();
+    const { showToast, showPersistentWarning } = useToast();
     const [invitations, setInvitations] = useState([]);
-    const [loadedMoreInvitations, setLoadedMoreInvitations] = useState([]);
-    const [hasMoreInvitations, setHasMoreInvitations] = useState(true);
-    const [loadingMoreInvitations, setLoadingMoreInvitations] = useState(false);
-    const lastInvitationDocRef = useRef(null);
     const [privateInvitations, setPrivateInvitations] = useState([]);
     const [restaurants, setRestaurants] = useState([]);
     const [loadingInvitations, setLoadingInvitations] = useState(true);
     const [detectedCountry, setDetectedCountry] = useState(null);
-    const functions = getFunctions();
+    /** Optimistic following[] until Firestore snapshot catches up (toggleFollow must not pre-write). */
+    const [optimisticFollowing, setOptimisticFollowing] = useState(null);
+    /** Optimistic joinedCommunities[] until Firestore snapshot catches up after join/leave. */
+    const [optimisticJoinedCommunities, setOptimisticJoinedCommunities] = useState(null);
+    const functions = getFunctions(app, FUNCTIONS_REGION);
     const publishPrivateInvitationDraftCallable = httpsCallable(functions, 'publishPrivateInvitationDraft');
+    const getPrivateInvitationSharePreviewCallable = httpsCallable(
+        functions,
+        'getPrivateInvitationSharePreview'
+    );
+    const claimPrivateInvitationShareCallable = httpsCallable(functions, 'claimPrivateInvitationShare');
+    const ensurePrivateInvitationShareTokenCallable = httpsCallable(
+        functions,
+        'ensurePrivateInvitationShareToken'
+    );
+    const publishPublicInvitationCallable = httpsCallable(functions, 'publishPublicInvitation');
     const setCommunityMembershipCallable = httpsCallable(functions, 'setCommunityMembership');
     const listCommunityMembersCallable = httpsCallable(functions, 'listCommunityMembers');
     const createBusinessNotificationCallable = httpsCallable(functions, 'createPartnerNotification');
     const createNotificationCallable = httpsCallable(functions, 'createNotification');
     const createReportCallable = httpsCallable(functions, 'createReport');
 
-    // --- 1. Sync Public Invitations (first page only; use Load More for more) ---
+    /**
+     * Firestore `users/{uid}` often lags Firebase Auth. Draft create must not fail with
+     * "Please sign in" while the profile snapshot is still loading.
+     */
+    const getInvitationCreatorProfile = useCallback(() => {
+        if (firebaseProfile) return firebaseProfile;
+        const uid = currentUser?.uid || currentUser?.id;
+        if (!uid || uid === 'guest' || isGuest) return null;
+        return {
+            role: currentUser.role || 'user',
+            isBusiness: currentUser.isBusiness === true,
+            isGuest: false,
+            isVirtual: false,
+            display_name: currentUser.displayName || currentUser.display_name,
+            displayName: currentUser.displayName || currentUser.display_name,
+        };
+    }, [firebaseProfile, currentUser, isGuest]);
+
+    const patchPublicInvitation = useCallback((invId, patchFn) => {
+        if (!invId) return;
+        setInvitations((prev) =>
+            prev.map((inv) => {
+                if (inv.id !== invId) return inv;
+                const next = typeof patchFn === 'function' ? patchFn(inv) : { ...inv, ...patchFn };
+                return next;
+            })
+        );
+    }, []);
+
+    const upsertPublicInvitation = useCallback((invitation) => {
+        if (!invitation?.id) return;
+        setInvitations((prev) => {
+            const idx = prev.findIndex((inv) => inv.id === invitation.id);
+            if (idx === -1) return [invitation, ...prev];
+            const next = [...prev];
+            next[idx] = { ...next[idx], ...invitation };
+            return next;
+        });
+    }, []);
+
+    // --- 1. Live public invitations (latest N by createdAt) ---
     useEffect(() => {
+        let cancelled = false;
+        const timeout = setTimeout(() => {
+            if (!cancelled) setLoadingInvitations(false);
+        }, 15000);
+
         const q = query(
             collection(db, 'invitations'),
             orderBy('createdAt', 'desc'),
-            limit(INVITATIONS_PAGE_SIZE)
+            limit(INITIAL_INVITATIONS_LIMIT)
         );
-        const timeout = setTimeout(() => {
-            setLoadingInvitations(false);
-        }, 15000);
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const staticInvites = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            const lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
-            lastInvitationDocRef.current = lastDoc;
-            setInvitations(staticInvites);
-            setLoadingInvitations(false);
-            if (snapshot.docs.length < INVITATIONS_PAGE_SIZE) setHasMoreInvitations(false);
-        }, (error) => {
-            console.error("Error syncing invitations:", error);
-            setLoadingInvitations(false);
-        });
+
+        const unsub = onSnapshot(
+            q,
+            (snapshot) => {
+                if (cancelled) return;
+                const list = snapshot.docs
+                    .map((d) => ({ id: d.id, ...d.data() }))
+                    .filter((inv) => inv.adminBlocked !== true);
+                setInvitations(list);
+                setLoadingInvitations(false);
+            },
+            (error) => {
+                if (cancelled) return;
+                console.error('Error loading invitations:', error);
+                setLoadingInvitations(false);
+            }
+        );
+
         return () => {
+            cancelled = true;
             clearTimeout(timeout);
-            unsubscribe();
+            unsub();
         };
     }, []);
 
     // --- 1b. Sync Private Invitations (separate collection) ---
     useEffect(() => {
-        if (!currentUser?.id || currentUser.id === 'guest') return;
-        const userId = currentUser.id;
+        const userId = currentUser?.uid || currentUser?.id;
+        if (!userId || userId === 'guest') return;
 
-        // Query 1: invitations where user is the host
-        const qHost = query(
-            collection(db, 'private_invitations'),
-            where('authorId', '==', userId),
-            orderBy('createdAt', 'desc')
-        );
+        let cancelled = false;
+        let unsubHost = () => {};
+        let unsubInvited = () => {};
 
-        // Query 2: invitations where user is invited
-        const qInvited = query(
-            collection(db, 'private_invitations'),
-            where('invitedFriends', 'array-contains', userId),
-            orderBy('createdAt', 'desc')
-        );
+        // Wait for Auth so Firestore rules see request.auth.uid (avoids permission-denied races).
+        // Omit orderBy here so queries use only auto single-field indexes (composite indexes are
+        // easy to forget to deploy — that produced two console errors for many dev/prod setups).
+        auth.authStateReady().then(() => {
+            if (cancelled) return;
 
-        const mergeResults = (hostDocs, invitedDocs) => {
-            const seen = new Set();
-            const merged = [];
-            [...hostDocs, ...invitedDocs].forEach(doc => {
-                if (!seen.has(doc.id)) {
-                    seen.add(doc.id);
-                    merged.push(doc);
+            const sessionUid = auth.currentUser?.uid || userId;
+            if (!sessionUid) return;
+
+            const qHost = query(collection(db, 'social_invitations'), where('authorId', '==', sessionUid));
+            const qInvitee = query(
+                collection(db, 'social_invitations'),
+                where('invitedFriends', 'array-contains', sessionUid)
+            );
+
+            const mergeResults = (hostDocs, invitedDocs) => {
+                const seen = new Set();
+                const merged = [];
+                [...hostDocs, ...invitedDocs].forEach((d) => {
+                    if (!seen.has(d.id)) {
+                        seen.add(d.id);
+                        merged.push(d);
+                    }
+                });
+                merged.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                setPrivateInvitations(merged);
+            };
+
+            let hostDocs = [];
+            let invitedDocs = [];
+
+            unsubHost = onSnapshot(
+                qHost,
+                (snap) => {
+                    hostDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                    mergeResults(hostDocs, invitedDocs);
+                },
+                (error) => {
+                    console.error('Error syncing hosted private invitations:', error);
                 }
-            });
-            // Sort by createdAt desc
-            merged.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-            setPrivateInvitations(merged);
-        };
+            );
 
-        let hostDocs = [];
-        let invitedDocs = [];
+            const unsubInvitee = onSnapshot(
+                qInvitee,
+                (snap) => {
+                    invitedDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                    mergeResults(hostDocs, invitedDocs);
+                },
+                (error) => {
+                    console.error('Error syncing invited private invitations:', error);
+                }
+            );
 
-        const unsubHost = onSnapshot(qHost, (snap) => {
-            hostDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            mergeResults(hostDocs, invitedDocs);
-        }, (error) => {
-            console.error("Error syncing hosted private invitations:", error);
-        });
-
-        const unsubInvited = onSnapshot(qInvited, (snap) => {
-            invitedDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            mergeResults(hostDocs, invitedDocs);
-        }, (error) => {
-            console.error("Error syncing invited private invitations:", error);
+            unsubInvited = unsubInvitee;
         });
 
         return () => {
+            cancelled = true;
             unsubHost();
             unsubInvited();
         };
-    }, [currentUser?.id]);
+    }, [currentUser?.uid]);
 
     // --- 2. Sync Businesses (directory - visible to everyone including guests) ---
+    // Enrich with ratings so directory cards show same rating as profile/dashboard
+    const fetchRatingsForBusinessIds = async (ids) => {
+        if (!ids.length) return {};
+        const reviewsRef = collection(db, 'reviews');
+        const BATCH = 10;
+        const byDocId = new Map();
+        for (let i = 0; i < ids.length; i += BATCH) {
+            const chunk = ids.slice(i, i + BATCH);
+            const [sp, sf, sr] = await Promise.all([
+                getDocs(query(reviewsRef, where('partnerId', 'in', chunk), limit(100))),
+                getDocs(query(reviewsRef, where('profileId', 'in', chunk), limit(100))),
+                getDocs(query(reviewsRef, where('restaurantId', 'in', chunk), limit(100)))
+            ]);
+            [sp.docs, sf.docs, sr.docs].flat().forEach(d => byDocId.set(d.id, d.data()));
+        }
+        const byBusinessId = {};
+        ids.forEach(id => {
+            const reviews = [...byDocId.values()].filter(
+                r => r.partnerId === id || r.profileId === id || r.restaurantId === id
+            );
+            const count = reviews.length;
+            const total = reviews.reduce((s, r) => s + (r.rating || 0), 0);
+            byBusinessId[id] = { averageRating: count > 0 ? total / count : 0, reviewCount: count };
+        });
+        return byBusinessId;
+    };
+
     useEffect(() => {
         const q = query(
             collection(db, 'public_profiles'),
             where('profileType', '==', 'business'),
             where('businessPublic.isPublished', '==', true),
-            limit(20)
+            orderBy('updatedAt', 'desc'),
+            limit(200)
         );
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const businessList = [];
@@ -178,28 +325,88 @@ export const InvitationProvider = ({ children }) => {
                 const data = doc.data();
                 const info = data.businessPublic || {};
                 const brandKit = info.brandKit || data.businessInfo?.brandKit || {};
+                // Never Number(null) → 0 (Null Island). Prefer nested coordinates/location shapes.
+                const coords = getInvitationLatLng({
+                    lat: info.lat,
+                    lng: info.lng,
+                    coordinates: info.coordinates,
+                    location: info.location,
+                });
 
+                const city = String(info.city || '').trim();
                 businessList.push({
                     id: doc.id,
                     uid: doc.id,
                     ownerId: doc.id,
                     name: data.displayName || 'Business',
                     type: info.businessType || 'Restaurant',
-                    image: info.coverImage || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80',
+                    isVirtual: data.isVirtual === true,
+                    createdBy: data.createdBy || null,
+                    sourceCollection: data.sourceCollection || null,
+                    _sourceCollection: data.sourceCollection || null,
+                    coverImageStoragePath: info.coverImageStoragePath || data.coverImageStoragePath || null,
+                    businessInfo: {
+                        coverImage: info.coverImage || null,
+                        coverImageStoragePath: info.coverImageStoragePath || null,
+                        city,
+                        // Keep address for profile deep-links only — cards must not display it.
+                        address: info.address || '',
+                        country: info.country || '',
+                        countryCode: info.countryCode || '',
+                        lat: coords?.lat ?? info.lat ?? null,
+                        lng: coords?.lng ?? info.lng ?? null,
+                        hours: info.hours || null,
+                        openingHours: info.openingHours || null,
+                        workingHours: info.workingHours || null,
+                    },
+                    image:
+                        pickSafeDisplayImageUrl(
+                            info.coverImage,
+                            data.avatarUrl,
+                        ) || DEFAULT_BUSINESS_COVER,
                     avatar: data.avatarUrl || '',
-                    location: info.city || info.address || 'Sydney',
                     description: info.description || '',
-                    phone: '',
+                    phone: info.phone || '',
                     rating: 5.0,
                     reviews: [],
-                    lat: info.lat,
-                    lng: info.lng,
+                    ...info,
+                    city,
+                    // Card location label = city only (never street address).
+                    location: city,
+                    hours: info.hours || null,
+                    openingHours: info.openingHours || null,
+                    workingHours: info.workingHours || null,
+                    // Ignore stale Google openNow when a weekly schedule exists.
+                    openNow: info.hours ? null : (typeof info.openNow === 'boolean' ? info.openNow : null),
+                    lat: coords?.lat ?? null,
+                    lng: coords?.lng ?? null,
+                    countryCode: info.countryCode || info.country || null,
                     brandKit,
                     theme: info.theme || brandKit.theme || undefined,
-                    ...info
                 });
             });
-            setRestaurants(businessList);
+
+            // Preserve existing ratings when snapshot updates (so we don't flash 0.0)
+            setRestaurants(prev => {
+                const prevById = new Map((prev || []).map(b => [b.id, b]));
+                return businessList.map(b => ({
+                    ...b,
+                    averageRating: typeof prevById.get(b.id)?.averageRating === 'number' ? prevById.get(b.id).averageRating : 0,
+                    reviewCount: typeof prevById.get(b.id)?.reviewCount === 'number' ? prevById.get(b.id).reviewCount : 0
+                }));
+            });
+
+            const ids = businessList.map(b => b.id);
+            fetchRatingsForBusinessIds(ids).then((ratingsById) => {
+                setRestaurants(prev => (prev || []).map(b => {
+                    const r = ratingsById[b.id];
+                    return {
+                        ...b,
+                        averageRating: typeof r?.averageRating === 'number' ? r.averageRating : 0,
+                        reviewCount: typeof r?.reviewCount === 'number' ? r.reviewCount : 0
+                    };
+                }));
+            }).catch(() => { });
         }, (error) => {
             console.error("Error fetching businesses:", error);
         });
@@ -223,7 +430,6 @@ export const InvitationProvider = ({ children }) => {
                     // Map country code to full name for the converter
                     const countryName = data.country || 'United States';
                     setDetectedCountry(countryName);
-                    console.log('🌍 Country detected via IP:', countryName);
                 }
             } catch (error) {
                 console.error('❌ IP Location Error:', error);
@@ -285,162 +491,6 @@ export const InvitationProvider = ({ children }) => {
         return () => unsubscribe();
     }, [firebaseProfile?.role]);
 
-    const [dbPlans, setDbPlans] = useState([]);
-    const [dbCreditPacks, setDbCreditPacks] = useState([]);
-
-    // Sync subscription plans from Firestore
-    useEffect(() => {
-        const q = query(collection(db, 'subscriptionPlans'), where('active', '==', true));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const plansData = snapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    ...data,
-                    stripePriceId: data.stripe?.priceId || data.stripePriceId,
-                    features: data.features?.map(f => typeof f === 'object' ? f.text : (f.text || f)) || []
-                };
-            });
-            console.log('📦 Dynamic plans synced:', plansData.length);
-            setDbPlans(plansData);
-        }, (error) => {
-            console.error("Error syncing dynamic plans:", error);
-        });
-        return () => unsubscribe();
-    }, []);
-
-    // Sync credit packs from Firestore
-    useEffect(() => {
-        const q = query(collection(db, 'creditPacks'), where('active', '==', true));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const packsData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            console.log('💎 Dynamic credit packs synced:', packsData.length);
-            setDbCreditPacks(packsData);
-        }, (error) => {
-            console.error("Error syncing credit packs:", error);
-        });
-        return () => unsubscribe();
-    }, []);
-
-    const baseSubscriptionPlans = BASE_SUBSCRIPTION_PLANS;
-    const baseCreditPacks = BASE_CREDIT_PACKS;
-
-    // Helper to detect Arabic text
-    const hasArabic = (text) => /[\u0600-\u06FF]/.test(text);
-
-    const allPlans = React.useMemo(() => {
-        // Start with a map of base plans for quick lookup
-        const mergedMap = {};
-
-        // 1. Add all hardcoded base plans first
-        baseSubscriptionPlans.forEach(plan => {
-            const key = plan.stripePriceId || plan.id;
-            mergedMap[key] = { ...plan };
-        });
-
-        // 2. Merge/Add all Firestore plans
-        dbPlans.forEach(dbPlan => {
-            // IGNORE any plan that has Arabic in the name - this is the "mess" removal
-            if (hasArabic(dbPlan.name || '') || hasArabic(dbPlan.title || '')) {
-                console.log('🚫 Filtered out Arabic plan from DB:', dbPlan.name);
-                return;
-            }
-
-            const key = dbPlan.stripePriceId || dbPlan.id;
-
-            if (mergedMap[key]) {
-                // EXTREMELY IMPORTANT: We keep the HARDCODED English name/description/features
-                // because Firestore might still contain old Arabic versions until the user syncs.
-                // We only take the price, active state, and Stripe ID from Firestore.
-                mergedMap[key] = {
-                    ...mergedMap[key],
-                    ...dbPlan,
-                    // FORCE English fields from local config for existing plans
-                    name: mergedMap[key].name,
-                    description: mergedMap[key].description,
-                    features: mergedMap[key].features,
-                    title: mergedMap[key].title || mergedMap[key].name,
-                    // Keep standard Stripe sync fields
-                    price: dbPlan.price !== undefined ? dbPlan.price : mergedMap[key].price,
-                    currency: dbPlan.currency || mergedMap[key].currency,
-                    id: dbPlan.id
-                };
-            } else {
-                // New plan created in Admin UI - should already be English
-                // But we check for duplicates: if it's a "Free" plan and we already have one of that type, skip it
-                const isDuplicateFree = dbPlan.price === 0 && Object.values(mergedMap).some(p => p.price === 0 && p.type === dbPlan.type);
-
-                if (!isDuplicateFree) {
-                    mergedMap[dbPlan.id] = { ...dbPlan };
-                }
-            }
-        });
-
-        // Convert back to array
-        return Object.values(mergedMap);
-    }, [dbPlans, baseSubscriptionPlans]);
-
-    const allCreditPacks = React.useMemo(() => {
-        const mergedMap = {};
-
-        // 1. Add base packs
-        baseCreditPacks.forEach(pack => {
-            mergedMap[pack.stripePriceId || pack.id] = { ...pack };
-        });
-
-        // 2. Add/Merge Firestore packs
-        dbCreditPacks.forEach(dbPack => {
-            // Ignore Arabic packs
-            if (hasArabic(dbPack.name || '')) return;
-
-            const key = dbPack.stripePriceId || dbPack.id;
-            if (mergedMap[key]) {
-                mergedMap[key] = {
-                    ...mergedMap[key],
-                    ...dbPack,
-                    // Force English name from local config
-                    name: mergedMap[key].name
-                };
-            } else {
-                mergedMap[dbPack.id] = { ...dbPack };
-            }
-        });
-
-        return Object.values(mergedMap);
-    }, [dbCreditPacks, baseCreditPacks, hasArabic]);
-
-    const countryToUse = firebaseProfile?.country || detectedCountry || 'Australia';
-
-    const subscriptionPlans = React.useMemo(() => {
-        return allPlans.map(plan => {
-            if (plan.price === 0) return plan;
-            const converted = convertFromUSD(plan.price, countryToUse);
-            const originalConverted = plan.originalPrice ? convertFromUSD(plan.originalPrice, countryToUse) : null;
-            return {
-                ...plan,
-                price: converted.price,
-                currency: converted.code,
-                currencySymbol: converted.symbol,
-                originalPrice: originalConverted ? originalConverted.price : null
-            };
-        });
-    }, [allPlans, countryToUse]);
-
-    const creditPacks = React.useMemo(() => {
-        return allCreditPacks.map(pack => {
-            const converted = convertFromUSD(pack.price, countryToUse);
-            return {
-                ...pack,
-                price: converted.price,
-                currency: converted.code,
-                currencySymbol: converted.symbol
-            };
-        });
-    }, [allCreditPacks, countryToUse]);
-
     // --- Methods ---
 
     const banUser = async (userId) => {
@@ -470,11 +520,6 @@ export const InvitationProvider = ({ children }) => {
         }
     };
 
-    const updatePlan = (planId, newData) => {
-        // This is local-only for now, in a real app it would update Firestore
-        setDbPlans(prev => prev.map(p => p.id === planId ? { ...p, ...newData } : p));
-    };
-
     const sendSystemMessage = async (userId, message) => {
         try {
             await addDoc(collection(db, 'system_messages'), {
@@ -493,66 +538,215 @@ export const InvitationProvider = ({ children }) => {
         setNotifications(prev => [{ id: uuidv4(), title, message, time: 'Now', read: false, type }, ...prev]);
     };
 
-    const addInvitation = async (newInvite) => {
-        if (isGuest) return false;
-        if (currentUser.role === 'business') {
-            showToast('Business accounts cannot create or publish invitations.', 'error');
-            return false;
+    const showInvitationRuleToast = (code, fallbackMessage) => {
+        const key = invitationErrorI18nKey(code);
+        showToast(i18n.t(key, fallbackMessage), 'error');
+    };
+
+    const resolveVenueCoordsForPublicInvite = async (newInvite) => {
+        let coords = getInvitationLatLng(newInvite);
+        let countryCode = newInvite?.countryCode ?? newInvite?.country ?? null;
+
+        if (newInvite?.restaurantId) {
+            const cached = restaurants.find((r) => r.id === newInvite.restaurantId);
+            if (cached) {
+                if (!coords) coords = getInvitationLatLng(cached);
+                if ((cached.countryCode || cached.country) && !countryCode) {
+                    countryCode = cached.countryCode || cached.country;
+                }
+            }
+            if (!coords) {
+                try {
+                    const snap = await getDoc(doc(db, 'public_profiles', newInvite.restaurantId));
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        const info = data?.businessPublic || {};
+                        coords = getInvitationLatLng({
+                            lat: info.lat,
+                            lng: info.lng,
+                            coordinates: info.coordinates,
+                            location: info.location,
+                        });
+                        if ((info.countryCode || info.country || data?.countryCode) && !countryCode) {
+                            countryCode = info.countryCode || info.country || data.countryCode;
+                        }
+                    }
+                } catch {
+                    /* fall through */
+                }
+            }
         }
+
+        return {
+            lat: coords?.lat ?? null,
+            lng: coords?.lng ?? null,
+            countryCode,
+        };
+    };
+
+    const resolveCreatorGeoForInviteDraft = async () => {
         try {
-            if (!newInvite.title) return false;
+            const live = await detectLiveUserGps();
+            if (!live.success) {
+                return {
+                    userCity: '',
+                    userLat: null,
+                    userLng: null,
+                    userCountryCode: '',
+                    gpsOk: false,
+                    gpsError: live.code || 'unavailable',
+                };
+            }
+
+            return {
+                userCity: live.city || '',
+                userLat: live.latitude,
+                userLng: live.longitude,
+                userCountryCode: live.countryCode || '',
+                gpsOk: true,
+                gpsError: null,
+            };
+        } catch {
+            return {
+                userCity: '',
+                userLat: null,
+                userLng: null,
+                userCountryCode: '',
+                gpsOk: false,
+                gpsError: 'unavailable',
+            };
+        }
+    };
+
+    const addInvitation = async (newInvite) => {
+        if (isGuest) {
+            return { ok: false, code: INVITATION_ERROR_CODES.GUEST_NOT_ALLOWED, message: 'Guest not allowed' };
+        }
+
+        const creatorBlock = assertCreatorCanCreateInvitations(getInvitationCreatorProfile());
+        if (creatorBlock) {
+            showInvitationRuleToast(creatorBlock.code, creatorBlock.message);
+            return creatorBlock;
+        }
+
+        try {
+            if (!newInvite.title) {
+                return { ok: false, code: INVITATION_ERROR_CODES.MISSING_TITLE, message: 'Missing title' };
+            }
+
+            const venueGeo = await resolveVenueCoordsForPublicInvite(newInvite);
+            const creatorGeo = await resolveCreatorGeoForInviteDraft();
+            if (!creatorGeo.gpsOk) {
+                const locBlock = {
+                    ok: false,
+                    code: INVITATION_ERROR_CODES.LOCATION_NOT_DETERMINED,
+                    message: 'Your location could not be determined. Enable GPS/location access to create a public invitation.',
+                };
+                showInvitationRuleToast(locBlock.code, locBlock.message);
+                return locBlock;
+            }
+            const geofenceBlock = assertPublicInvitationGeofenceRule({
+                creatorCoords: { lat: creatorGeo.userLat, lng: creatorGeo.userLng },
+                venueCoords: { lat: venueGeo.lat, lng: venueGeo.lng },
+                creatorCountryCode: creatorGeo.userCountryCode,
+                venueCountryCode: venueGeo.countryCode,
+            });
+            if (geofenceBlock) {
+                showInvitationRuleToast(geofenceBlock.code, geofenceBlock.message);
+                return geofenceBlock;
+            }
+
+            const isBusinessAccount = cannotCreateInvitations(firebaseProfile);
+            const inviteCoords =
+                getInvitationLatLng({ lat: venueGeo.lat, lng: venueGeo.lng }) ||
+                getInvitationLatLng(newInvite);
             const inviteData = {
                 ...newInvite,
+                inviteCategory: 'public',
+                userCity: creatorGeo.userCity || null,
+                userLat: creatorGeo.userLat ?? null,
+                userLng: creatorGeo.userLng ?? null,
+                userCountryCode: creatorGeo.userCountryCode || newInvite.userCountryCode || null,
+                countryCode: venueGeo.countryCode || newInvite.countryCode || null,
+                restaurantCity: newInvite.restaurantCity || newInvite.city || null,
                 hostId: currentUser.id,
                 author: {
                     id: currentUser.id,
                     name: currentUser.name || 'User',
                     avatar: getSafeAvatar(currentUser),
-                    isBusiness: currentUser.role === 'business'
+                    isBusiness: isBusinessAccount
                 },
-                requests: [], joined: [], chat: [], meetingStatus: 'planning',
+                requests: [], joined: [], chat: [],                 meetingStatus: 'planning',
                 date: newInvite.date || new Date().toISOString(),
                 time: newInvite.time || '20:30',
-                lat: newInvite.lat || (-33.8688 + (Math.random() - 0.5) * 0.1),
-                lng: newInvite.lng || (151.2093 + (Math.random() - 0.5) * 0.1),
+                archiveAfterAt: computeArchiveAfterFirestoreTimestamp(
+                    newInvite.date || new Date().toISOString(),
+                    newInvite.time || '20:30',
+                    Timestamp
+                ),
                 privacy: newInvite.privacy || 'public',
                 createdAt: serverTimestamp()
             };
+            if (inviteCoords) {
+                inviteData.lat = inviteCoords.lat;
+                inviteData.lng = inviteCoords.lng;
+            } else {
+                delete inviteData.lat;
+                delete inviteData.lng;
+            }
 
             const docRef = await addDoc(collection(db, 'invitations'), inviteData);
-            addNotification('Published!', 'Your invitation is now available to everyone.', 'success');
+            
+            // Only notify if it's not a draft
+            if (inviteData.status !== 'draft') {
+                addNotification('Published!', 'Your invitation is now available to everyone.', 'success');
 
-            if (newInvite.restaurantId) {
-                const restaurant = restaurants.find(r => r.id === newInvite.restaurantId);
-                if (restaurant) {
-                    addBusinessNotification(restaurant.id, {
-                        type: 'new_booking',
-                        title: '🎉 New Booking!',
-                        message: `${currentUser.name} booked a table for ${inviteData.guestsNeeded} people at ${restaurant.name}`,
-                        invitationId: docRef.id,
-                        date: inviteData.date,
-                        time: inviteData.time,
-                        guestsNeeded: inviteData.guestsNeeded
-                    });
+                if (newInvite.restaurantId) {
+                    const restaurant = restaurants.find(r => r.id === newInvite.restaurantId);
+                    if (restaurant) {
+                        addBusinessNotification(restaurant.id, {
+                            type: 'new_booking',
+                            title: '🎉 New Booking!',
+                            message: `${currentUser.name} booked a table for ${inviteData.guestsNeeded} people at ${restaurant.name}`,
+                            invitationId: docRef.id,
+                            date: inviteData.date,
+                            time: inviteData.time,
+                            guestsNeeded: inviteData.guestsNeeded
+                        });
+                    }
                 }
             }
-            return docRef.id;
+            
+            return { ok: true, id: docRef.id };
         } catch (err) {
             console.error("Error adding invitation:", err);
             showToast(INVITATION_ERROR_MESSAGES.addInvitation, 'error');
-            return false;
+            return { ok: false, code: INVITATION_ERROR_CODES.FIRESTORE_ERROR, message: INVITATION_ERROR_MESSAGES.addInvitation };
         }
     };
 
     // --- Private Invitation: separate collection ---
-    const addPrivateInvitation = async (newInvite) => {
-        if (isGuest) return false;
-        if (currentUser.role === 'business') {
-            showToast('Business accounts cannot create or publish invitations.', 'error');
-            return false;
+    const addHostedInvitation = async (newInvite) => {
+        if (isGuest) {
+            return { ok: false, code: INVITATION_ERROR_CODES.GUEST_NOT_ALLOWED, message: 'Guest not allowed' };
         }
+
+        const creatorBlock = assertCreatorCanCreateInvitations(getInvitationCreatorProfile());
+        if (creatorBlock) {
+            showInvitationRuleToast(creatorBlock.code, creatorBlock.message);
+            return creatorBlock;
+        }
+
         try {
-            if (!newInvite.title) return false;
+            if (!newInvite.title) {
+                return { ok: false, code: INVITATION_ERROR_CODES.MISSING_TITLE, message: 'Missing title' };
+            }
+
+            // Firebase Auth User uses `uid` (not `id`). Never omit authorId or publish will reject the host.
+            const creatorUid = currentUser.uid || currentUser.id;
+            if (!creatorUid || creatorUid === 'guest') {
+                return { ok: false, code: INVITATION_ERROR_CODES.GUEST_NOT_ALLOWED, message: 'Not signed in' };
+            }
 
             // Remove undefined values — Firestore rejects them (e.g. lat/lng when no location selected)
             const sanitize = (obj) => {
@@ -563,23 +757,64 @@ export const InvitationProvider = ({ children }) => {
                 return clean;
             };
 
-            const inviteData = sanitize({
+            const creatorProfile = getInvitationCreatorProfile();
+            const displayName =
+                currentUser.displayName ||
+                creatorProfile?.display_name ||
+                creatorProfile?.displayName ||
+                'User';
+
+            let inviteData = sanitize({
                 ...newInvite,
-                authorId: currentUser.id,
+                inviteCategory: resolveInviteCategory(newInvite),
+                authorId: creatorUid,
                 author: {
-                    id: currentUser.id,
-                    name: currentUser.name || 'User',
+                    id: creatorUid,
+                    name: displayName,
                     avatar: getSafeAvatar(currentUser)
                 },
-                privacy: 'private',
+                privacy: 'social',
                 createdAt: serverTimestamp()
             });
-            const docRef = await addDoc(collection(db, 'private_invitations'), inviteData);
-            return docRef.id;
+            const requestedInvitees = Array.isArray(inviteData.invitedFriends) ? inviteData.invitedFriends : [];
+            let inviteeIds = requestedInvitees;
+            if (inviteeIds.length && isPrivateHostedInvitation(newInvite)) {
+                const following = firebaseProfile?.following ?? currentUser?.following ?? [];
+                const { allowed: followed, skipped: notFollowed } = filterInviteesFollowedBySender(
+                    following,
+                    inviteeIds
+                );
+                if (notFollowed.length) {
+                    showToast(
+                        i18n.t(
+                            'private_invite_follow_required',
+                            'Follow members first to send them a private invite.'
+                        ),
+                        'info'
+                    );
+                }
+                inviteeIds = followed;
+            }
+            if (inviteeIds.length) {
+                const { allowed, skipped } = await filterInviteesWhoAcceptAuthor(creatorUid, inviteeIds);
+                inviteData = { ...inviteData, invitedFriends: allowed };
+                if (skipped.length) {
+                    showToast('Some people could not be invited (they blocked or muted you).', 'info');
+                }
+                if (allowed.length === 0) {
+                    showToast(
+                        'No guests could be invited (blocked, muted, or unavailable). Choose someone else.',
+                        'error'
+                    );
+                    return { ok: false, code: INVITATION_ERROR_CODES.FIRESTORE_ERROR, message: 'No invitees' };
+                }
+            }
+            const docRef = await addDoc(collection(db, 'social_invitations'), inviteData);
+            return { ok: true, id: docRef.id };
         } catch (err) {
             console.error("Error adding private invitation:", err);
-            showToast(INVITATION_ERROR_MESSAGES.addPrivateInvitation, 'error');
-            return false;
+            showToast(INVITATION_ERROR_MESSAGES.addHostedInvitation, 'error');
+            return { ok: false, code: INVITATION_ERROR_CODES.FIRESTORE_ERROR, message: INVITATION_ERROR_MESSAGES.addHostedInvitation };
         }
     };
 
@@ -620,6 +855,12 @@ export const InvitationProvider = ({ children }) => {
 
     const requestToJoin = async (invId) => {
         if (isGuest) return false;
+        if (currentUser?.role === 'business' || currentUser?.isBusiness) {
+            showToast('Business accounts cannot join invitations.', 'error');
+            return false;
+        }
+        const uid = currentUser?.uid || currentUser?.id;
+        if (!uid || uid === 'guest') return false;
         try {
             const invRef = doc(db, 'invitations', invId);
             const invDoc = await getDoc(invRef);
@@ -629,21 +870,34 @@ export const InvitationProvider = ({ children }) => {
             const hostId = invData.author?.id;
 
             await updateDoc(invRef, {
-                requests: arrayUnion(currentUser.id)
+                requests: arrayUnion(uid)
             });
 
-            if (hostId && hostId !== currentUser.id) {
+            patchPublicInvitation(invId, (inv) => {
+                const prevRequests = Array.isArray(inv.requests) ? inv.requests : [];
+                return {
+                    ...inv,
+                    requests: prevRequests.includes(uid) ? prevRequests : [...prevRequests, uid],
+                };
+            });
+
+            if (hostId && hostId !== uid) {
+                const requesterName =
+                    currentUser.name ||
+                    currentUser.displayName ||
+                    currentUser.display_name ||
+                    'Someone';
                 await addUserNotification({
                     userId: hostId,
                     type: 'join_request',
                     title: '🙋 New Join Request',
-                    message: `${currentUser.name} wants to join your invitation "${invData.title}"`,
+                    message: `${requesterName} wants to join your invitation "${invData.title}"`,
                     invitationId: invId,
                     actionUrl: `/invitation/${invId}?section=join-requests`,
                 });
 
                 notificationSound.showJoinRequestNotification(
-                    currentUser.name,
+                    requesterName,
                     invData.title,
                     () => { window.location.href = `/invitation/${invId}`; }
                 );
@@ -657,11 +911,17 @@ export const InvitationProvider = ({ children }) => {
     };
 
     const cancelRequest = async (invId) => {
+        const uid = currentUser?.uid || currentUser?.id;
+        if (!uid || uid === 'guest') return false;
         try {
             const invRef = doc(db, 'invitations', invId);
             await updateDoc(invRef, {
-                requests: arrayRemove(currentUser.id)
+                requests: arrayRemove(uid)
             });
+            patchPublicInvitation(invId, (inv) => ({
+                ...inv,
+                requests: (Array.isArray(inv.requests) ? inv.requests : []).filter((id) => id !== uid),
+            }));
             return true;
         } catch (err) {
             console.error("Error canceling request:", err);
@@ -681,6 +941,35 @@ export const InvitationProvider = ({ children }) => {
                 requests: arrayRemove(userId),
                 joined: arrayUnion(userId)
             });
+
+            patchPublicInvitation(invId, (inv) => {
+                const prevRequests = Array.isArray(inv.requests) ? inv.requests : [];
+                const prevJoined = Array.isArray(inv.joined) ? inv.joined : [];
+                return {
+                    ...inv,
+                    requests: prevRequests.filter((id) => id !== userId),
+                    joined: prevJoined.includes(userId) ? prevJoined : [...prevJoined, userId],
+                };
+            });
+
+            // System chat broadcast for user joining
+            try {
+                const userDoc = await getDoc(doc(db, 'users', userId));
+                const userData = userDoc.exists() ? userDoc.data() : {};
+                const userName = userData.display_name || userData.displayName || userData.name || 'A guest';
+                const collectionName = invData.privacy === 'social' ? 'social_invitations' : 'invitations';
+                
+                await addDoc(collection(db, collectionName, invId, 'messages'), {
+                    text: `🎉 ${userName} has been approved to join the invitation!`,
+                    senderId: 'system',
+                    senderName: 'System',
+                    isSystemMessage: true,
+                    createdAt: serverTimestamp(),
+                    type: 'status_update'
+                });
+            } catch (chatErr) {
+                console.error("Failed to send approval chat message:", chatErr);
+            }
 
             const newJoinedCount = (invData.joined?.length || 0) + 1;
             const isFull = newJoinedCount >= invData.guestsNeeded;
@@ -719,6 +1008,10 @@ export const InvitationProvider = ({ children }) => {
         try {
             const invRef = doc(db, 'invitations', invId);
             await updateDoc(invRef, { requests: arrayRemove(userId) });
+            patchPublicInvitation(invId, (inv) => ({
+                ...inv,
+                requests: (Array.isArray(inv.requests) ? inv.requests : []).filter((id) => id !== userId),
+            }));
             return true;
         } catch (err) {
             console.error("Error rejecting user:", err);
@@ -727,63 +1020,413 @@ export const InvitationProvider = ({ children }) => {
         }
     };
 
-    // ── Private Invitation Quota System ──────────────────────────────────────
-    // Quotas are derived from subscriptionTier — no extra Firestore fields needed.
-    // Priority: plan monthly quota → purchased credits → deny
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Private / social drafts: Dine Credits from purchase wallet (`paidCredits`); admins bypass. ──
 
-    const canCreatePrivateInvitation = () => {
+    const canCreateSocialInvitation = (kind = 'social') => {
         if (!currentUser || isGuest) return { canCreate: false, reason: 'guest' };
-        if (currentUser.role === 'admin') return { canCreate: true, quota: 'unlimited' };
 
-        const tier = firebaseProfile?.subscriptionTier || 'free';
-        const monthlyQuota = MONTHLY_PRIVATE_QUOTAS[tier] || 0;
-
-        // 1. Check plan monthly quota
-        if (monthlyQuota > 0) {
-            const usedThisMonth = firebaseProfile?.usedPrivateCreditsThisMonth || 0;
-            const remaining = monthlyQuota - usedThisMonth;
-            if (remaining > 0) return { canCreate: true, quota: remaining, period: 'month', source: 'plan' };
+        if (cannotCreateInvitations(getInvitationCreatorProfile())) {
+            return { canCreate: false, reason: 'business' };
         }
 
-        // 2. Check purchased credits (available to all tiers)
-        const purchasedCredits = firebaseProfile?.purchasedPrivateCredits || 0;
-        if (purchasedCredits > 0) {
-            return { canCreate: true, quota: purchasedCredits, source: 'purchased' };
+        const creatorProfile = getInvitationCreatorProfile();
+        const adminLike =
+            creatorProfile &&
+            ['admin', 'moderator', 'support', 'staff'].includes(String(creatorProfile.role || ''));
+        if (adminLike) return { canCreate: true, quota: 'unlimited' };
+
+        const billingKind = kind === 'private' || kind === 'dating' ? 'private' : 'social';
+        const cost =
+            billingKind === 'private' ? PRIVATE_INVITATION_PUBLISH_CREDITS : SOCIAL_INVITATION_PUBLISH_CREDITS;
+
+        // Critical: while `users/{uid}` is still loading, `getTotalDineCredits(null)` is 0 — the app
+        // was treating everyone as broke and sending them to /settings/credits (toast + payment packs UI).
+        if (!firebaseProfile) {
+            return {
+                canCreate: true,
+                quota: 'pending',
+                cost,
+                balance: null,
+                profileLoading: true,
+                source: 'dine_credits'
+            };
         }
 
-        return { canCreate: false, reason: 'no_credits' };
+        const balance = getTotalDineCredits(firebaseProfile);
+        if (balance >= cost) {
+            return { canCreate: true, quota: balance, cost, source: 'dine_credits' };
+        }
+        return { canCreate: false, reason: 'no_credits', cost, balance };
     };
 
+    const getPrivateInvitationSharePreview = useCallback(async (token) => {
+        if (!token) return null;
+        try {
+            const result = await getPrivateInvitationSharePreviewCallable({ token });
+            return result?.data || null;
+        } catch (error) {
+            console.error('getPrivateInvitationSharePreview:', error);
+            throw error;
+        }
+    }, []);
+
+    const claimPrivateInvitationShare = useCallback(
+        async (token) => {
+            const uid = currentUser?.uid || currentUser?.id;
+            if (!token || !currentUser || uid === 'guest') return null;
+            try {
+                const result = await claimPrivateInvitationShareCallable({ token });
+                return result?.data?.invitationId || null;
+            } catch (error) {
+                console.error('claimPrivateInvitationShare:', error);
+                throw error;
+            }
+        },
+        [currentUser?.uid, currentUser?.id]
+    );
+
+    const ensurePrivateInvitationShareToken = useCallback(
+        async (invitationId) => {
+            const uid = currentUser?.uid || currentUser?.id;
+            if (!invitationId || !currentUser || uid === 'guest') return null;
+            try {
+                const result = await ensurePrivateInvitationShareTokenCallable({ invitationId });
+                return result?.data?.shareToken || null;
+            } catch (error) {
+                console.error('ensurePrivateInvitationShareToken:', error);
+                throw error;
+            }
+        },
+        [currentUser?.uid, currentUser?.id]
+    );
+
     const publishPrivateInvitationDraft = async (invitationId) => {
-        if (!invitationId || !currentUser || currentUser.id === 'guest') {
-            return { success: false, alreadyPublished: false };
+        const uid = currentUser?.uid || currentUser?.id;
+        if (!invitationId || !currentUser || uid === 'guest') {
+            return { success: false, alreadyPublished: false, shareToken: null, notificationsSent: 0 };
         }
         try {
             const result = await publishPrivateInvitationDraftCallable({ invitationId });
+            const notificationsSent = Math.max(0, Number(result?.data?.notificationsSent) || 0);
             return {
                 success: true,
-                alreadyPublished: result?.data?.alreadyPublished === true
+                alreadyPublished: result?.data?.alreadyPublished === true,
+                shareToken: result?.data?.shareToken || null,
+                notificationsSent,
+                notifyError: result?.data?.notifyError || null,
             };
         } catch (error) {
-            const message = error?.message || 'Failed to publish private invitation.';
+            const reason = getCallableErrorReason(error);
+            if (reason === INVITATION_ERROR_CODES.BUSINESS_CANNOT_CREATE) {
+                showInvitationRuleToast(reason, error?.message);
+            } else {
+                showToast(error?.message || 'Failed to publish private invitation.', 'error');
+            }
             console.error('Error publishing private invitation draft:', error);
-            showToast(message, 'error');
+            return {
+                success: false,
+                alreadyPublished: false,
+                shareToken: null,
+                notificationsSent: 0,
+                code: reason || null,
+            };
+        }
+    };
+
+    const publishPublicInvitationDraft = async (invitationId) => {
+        const uid = currentUser?.uid || currentUser?.id;
+        if (!invitationId || !currentUser || uid === 'guest') {
             return { success: false, alreadyPublished: false };
+        }
+
+        const refreshLocal = async () => {
+            try {
+                const snap = await getDoc(doc(db, 'invitations', invitationId));
+                if (snap.exists()) {
+                    upsertPublicInvitation({ id: snap.id, ...snap.data() });
+                }
+            } catch (refreshErr) {
+                console.warn('Published but failed to refresh local invitation list:', refreshErr);
+            }
+        };
+
+        /** Keep draft geo aligned with live GPS so publish CF / client fallback use the same facts. */
+        const syncDraftGeoBeforePublish = async () => {
+            const snap = await getDoc(doc(db, 'invitations', invitationId));
+            if (!snap.exists()) {
+                return { ok: false, code: 'not-found' };
+            }
+            const inv = { id: snap.id, ...snap.data() };
+            const live = await detectLiveUserGps();
+            if (!live.success) {
+                return {
+                    ok: false,
+                    code: INVITATION_ERROR_CODES.LOCATION_NOT_DETERMINED,
+                    message: LOCATION_NOT_DETERMINED_ERROR_MESSAGE,
+                };
+            }
+
+            let venueLat = inv.lat ?? null;
+            let venueLng = inv.lng ?? null;
+            let venueCountryCode = inv.countryCode ?? null;
+            if (inv.restaurantId) {
+                const venueGeo = await resolveVenueCoordsForPublicInvite(inv);
+                if (venueGeo.lat != null && venueLat == null) venueLat = venueGeo.lat;
+                if (venueGeo.lng != null && venueLng == null) venueLng = venueGeo.lng;
+                if (venueGeo.countryCode && !venueCountryCode) venueCountryCode = venueGeo.countryCode;
+            }
+
+            const geofenceBlock = assertPublicInvitationGeofenceRule({
+                creatorCoords: { lat: live.latitude, lng: live.longitude },
+                venueCoords: { lat: venueLat, lng: venueLng },
+                creatorCountryCode: live.countryCode,
+                venueCountryCode,
+            });
+            if (geofenceBlock) {
+                return { ok: false, ...geofenceBlock };
+            }
+
+            const patch = {
+                userCity: live.city || inv.userCity || null,
+                userLat: live.latitude,
+                userLng: live.longitude,
+                userCountryCode: live.countryCode || inv.userCountryCode || null,
+                countryCode: venueCountryCode || inv.countryCode || null,
+                templateType: 'classic',
+            };
+            if (venueLat != null && venueLng != null) {
+                patch.lat = venueLat;
+                patch.lng = venueLng;
+            }
+
+            await updateDoc(doc(db, 'invitations', invitationId), patch);
+            return {
+                ok: true,
+                inv: { ...inv, ...patch },
+                live,
+                venueLat,
+                venueLng,
+                venueCountryCode,
+            };
+        };
+
+        const publishViaClient = async (synced) => {
+            const inv = synced.inv;
+            await updateDoc(doc(db, 'invitations', invitationId), {
+                status: 'active',
+                publishedAt: serverTimestamp(),
+                archiveAfterAt: computeArchiveAfterFirestoreTimestamp(inv.date, inv.time || '20:30', Timestamp),
+                userCity: synced.live.city || inv.userCity || null,
+                userLat: synced.live.latitude,
+                userLng: synced.live.longitude,
+                userCountryCode: synced.live.countryCode || inv.userCountryCode || null,
+                restaurantCity: inv.restaurantCity || inv.city || null,
+                lat: synced.venueLat ?? inv.lat ?? null,
+                lng: synced.venueLng ?? inv.lng ?? null,
+                countryCode: synced.venueCountryCode || inv.countryCode || null,
+                inviteCategory: 'public',
+                templateType: 'classic',
+            });
+            await refreshLocal();
+            return { success: true, alreadyPublished: false };
+        };
+
+        try {
+            const synced = await syncDraftGeoBeforePublish();
+            if (!synced.ok) {
+                showInvitationRuleToast(synced.code, synced.message);
+                return { success: false, alreadyPublished: false, code: synced.code || null };
+            }
+
+            try {
+                const result = await publishPublicInvitationCallable({ invitationId });
+                await refreshLocal();
+                return {
+                    success: true,
+                    alreadyPublished: result?.data?.alreadyPublished === true,
+                };
+            } catch (cfError) {
+                const reason = getCallableErrorReason(cfError);
+                // Older deployed CF may still use stale profile country — client already validated.
+                if (
+                    reason === INVITATION_ERROR_CODES.PUBLIC_MUST_BE_LOCAL ||
+                    reason === INVITATION_ERROR_CODES.LOCATION_NOT_DETERMINED
+                ) {
+                    console.warn(
+                        '[publishPublicInvitationDraft] CF geofence rejected; publishing via host update after client validation',
+                        reason
+                    );
+                    return publishViaClient(synced);
+                }
+                throw cfError;
+            }
+        } catch (error) {
+            const reason = getCallableErrorReason(error);
+            if (
+                reason === INVITATION_ERROR_CODES.BUSINESS_CANNOT_CREATE ||
+                reason === INVITATION_ERROR_CODES.PUBLIC_MUST_BE_LOCAL ||
+                reason === INVITATION_ERROR_CODES.LOCATION_NOT_DETERMINED
+            ) {
+                showInvitationRuleToast(reason, error?.message);
+            } else {
+                showToast(error?.message || i18n.t('failed_publish_invitation', 'Failed to publish invitation'), 'error');
+            }
+            console.error('Error publishing public invitation draft:', error);
+            return { success: false, alreadyPublished: false, code: reason || null };
         }
     };
 
     const respondToPrivateInvitation = async (invId, status) => {
-        if (!currentUser || currentUser.id === 'guest') return false;
+        const me = auth.currentUser?.uid || currentUser?.uid || currentUser?.id;
+        if (!currentUser || me === 'guest') return false;
+        if (currentUser?.role === 'business' || currentUser?.isBusiness) {
+            showToast('Business accounts cannot respond to invitations.', 'error');
+            return false;
+        }
         try {
-            const invRef = doc(db, 'private_invitations', invId);
+            const invRef = doc(db, 'social_invitations', invId);
             const invDoc = await getDoc(invRef);
             if (!invDoc.exists()) return false;
 
             const invData = invDoc.data();
             const hostId = invData.authorId || invData.author?.id;
+            const responderName =
+                firebaseProfile?.display_name ||
+                firebaseProfile?.displayName ||
+                currentUser.displayName ||
+                currentUser.name ||
+                'Guest';
+            const locale = i18n.language || 'en';
+            const isDating = invData.type === 'Private' || String(invData.occasionType || '').toLowerCase() === 'dating';
+            const responderGender = normalizeUserGender(firebaseProfile || currentUser);
 
-            await updateDoc(invRef, { [`rsvps.${currentUser.id}`]: status });
+            let hostGender = 'neutral';
+            if (hostId) {
+                try {
+                    const hostSnap = await getDoc(doc(db, 'users', hostId));
+                    if (hostSnap.exists()) {
+                        hostGender = normalizeUserGender(hostSnap.data());
+                    }
+                } catch {
+                    /* optional host profile */
+                }
+            }
+
+            const chatText = buildPrivateInvitationResponseChatMessage({
+                status,
+                responderGender,
+                hostGender,
+                invitationTitle: invData.title,
+                isDating,
+                locale,
+            });
+            const notifyTitle = buildPrivateInvitationResponseNotificationTitle({
+                status,
+                isDating,
+                locale,
+            });
+
+            const postResponseChatMessage = async () => {
+                await addDoc(collection(db, 'social_invitations', invId, 'messages'), {
+                    text: chatText,
+                    senderId: me,
+                    senderName: responderName,
+                    senderAvatar: getSafeAvatar(firebaseProfile || currentUser),
+                    createdAt: serverTimestamp(),
+                    type: 'text',
+                    isRsvpResponse: true,
+                    rsvpStatus: status,
+                });
+            };
+
+            // Decline: chat while still invited (rules), then persist RSVP
+            if (status === 'declined') {
+                try {
+                    await postResponseChatMessage();
+                } catch (chatErr) {
+                    console.error('Failed to send decline chat message:', chatErr);
+                }
+            }
+
+            await updateDoc(invRef, {
+                [`rsvps.${me}`]: status,
+                updatedAt: serverTimestamp(),
+            });
+
+            setPrivateInvitations((prev) =>
+                prev.map((inv) =>
+                    inv.id === invId
+                        ? { ...inv, rsvps: { ...(inv.rsvps || {}), [me]: status } }
+                        : inv
+                )
+            );
+
+            if (status === 'accepted') {
+                try {
+                    await postResponseChatMessage();
+                } catch (chatErr) {
+                    console.error('Failed to send accept chat message:', chatErr);
+                }
+
+                if (hostId && hostId !== me) {
+                    try {
+                        const inviteeFollowing =
+                            optimisticFollowing ?? firebaseProfile?.following ?? currentUser?.following ?? [];
+                        if (!inviteeFollowing.includes(hostId)) {
+                            const hostSnap = await getDoc(doc(db, 'users', hostId));
+                            if (hostSnap.exists()) {
+                                const hostData = hostSnap.data() || {};
+                                if (hostData.role !== 'business') {
+                                    const followResult = await followUser(me, hostId, {
+                                        id: me,
+                                        name: responderName,
+                                        avatar: getSafeAvatar(firebaseProfile || currentUser),
+                                    }, { skipDailyLimit: true });
+                                    if (followResult.success) {
+                                        const nextFollowing = [...inviteeFollowing, hostId];
+                                        setOptimisticFollowing(nextFollowing);
+                                        const hostFollowsInvitee = (hostData.following || []).includes(me);
+                                        if (hostFollowsInvitee) {
+                                            const viewerProfile = { id: me, ...firebaseProfile, ...currentUser };
+                                            const targetProfile = { id: hostId, ...hostData };
+                                            const connectionComplete = await isConnectionComplete(
+                                                me,
+                                                hostId,
+                                                viewerProfile,
+                                                targetProfile,
+                                                nextFollowing,
+                                                hostData.following || []
+                                            );
+                                            if (connectionComplete) {
+                                                const connectionKind = resolveConnectionKind(
+                                                    viewerProfile,
+                                                    targetProfile
+                                                );
+                                                notifyConnectConnectionComplete(hostId, {
+                                                    id: me,
+                                                    name: responderName,
+                                                    avatar: getSafeAvatar(firebaseProfile || currentUser),
+                                                }, connectionKind);
+                                                notifyConnectConnectionComplete(me, {
+                                                    id: hostId,
+                                                    name:
+                                                        hostData.display_name ||
+                                                        hostData.displayName ||
+                                                        hostData.name ||
+                                                        'Someone',
+                                                    avatar: getSafeAvatar(hostData),
+                                                }, connectionKind);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch (followErr) {
+                        console.warn('[respondToPrivateInvitation] invite accept follow-back failed', followErr);
+                    }
+                }
+            }
 
             if (status === 'declined') {
                 const updatedDoc = await getDoc(invRef);
@@ -796,31 +1439,37 @@ export const InvitationProvider = ({ children }) => {
                     await addUserNotification({
                         userId: hostId,
                         type: 'system_announcement',
-                        title: '⚠️ Invitation Cancelled',
-                        message: `All invitees declined your private invitation "${data.title}"`,
+                        title: isArabicLocale(locale) ? '⚠️ تم إلغاء الدعوة' : '⚠️ Invitation Cancelled',
+                        message: isArabicLocale(locale)
+                            ? `اعتذر جميع المدعوين عن دعوتك «${invData.title || 'الدعوة'}»`
+                            : `All invitees declined your private invitation "${invData.title}"`,
                         invitationId: invId,
                         style: 'warning',
                     });
-                    setTimeout(async () => { await deleteInvitationAndStorage(invId, 'private_invitations'); }, 5000);
+                    setTimeout(async () => { await deleteInvitationAndStorage(invId, 'social_invitations'); }, 5000);
                     addNotification('Cancelled', 'Invitation rejected by all invitees.', 'warning');
                     return true;
                 }
             }
 
-            if (hostId && hostId !== currentUser.id) {
+            if (hostId && hostId !== me) {
                 await addUserNotification({
                     userId: hostId,
-                    type: 'private_invitation_response',
-                    title: status === 'accepted' ? '✅ Invitation Accepted' : '❌ Invitation Declined',
-                    message: `${currentUser.name} has ${status === 'accepted' ? 'accepted' : 'declined'} your private invitation "${invData.title}"`,
+                    type: 'social_invitation_response',
+                    title: notifyTitle,
+                    message: chatText,
                     invitationId: invId,
-                    actionUrl: `/invitation/private/${invId}`,
+                    actionUrl: getHostedInvitationDetailsPath({ id: invId, ...invData }),
                     status: status,
+                    fromUserId: me,
+                    fromUserName: responderName,
                 });
             }
             addNotification(
                 status === 'accepted' ? 'Accepted!' : 'Declined',
-                status === 'accepted' ? 'You have accepted the invitation successfully.' : 'Your response has been sent to the host.',
+                status === 'accepted'
+                    ? (isArabicLocale(locale) ? 'تم إرسال رسالة قبولك إلى المحادثة.' : 'Your acceptance message was sent to the chat.')
+                    : (isArabicLocale(locale) ? 'تم إرسال رسالة اعتذارك بلطف.' : 'Your polite decline was sent.'),
                 'success'
             );
             return true;
@@ -860,6 +1509,10 @@ export const InvitationProvider = ({ children }) => {
             }
 
             await setDoc(invitationRef, updateData, { merge: true });
+
+            if (status === 'completed') {
+                maybeAwardBusinessHostingPoints(id, 'invitations').catch(() => { });
+            }
         } catch (error) { console.error('Error updating meeting status:', error); }
     };
 
@@ -879,37 +1532,208 @@ export const InvitationProvider = ({ children }) => {
         setInvitations(prev => prev.map(inv => inv.id === invId ? { ...inv, pendingChangeApproval: (inv.pendingChangeApproval || []).filter(id => id !== currentUser.id) } : inv));
     };
 
+    const effectiveFollowing =
+        optimisticFollowing !== null
+            ? asUidArray(optimisticFollowing)
+            : asUidArray(firebaseProfile?.following);
+
+    const effectiveJoinedCommunities =
+        optimisticJoinedCommunities ??
+        firebaseProfile?.joinedCommunities ??
+        currentUser?.joinedCommunities ??
+        [];
+
+    useEffect(() => {
+        if (optimisticFollowing === null) return;
+        const serverFollowing = asUidArray(firebaseProfile?.following);
+        const opt = asUidArray(optimisticFollowing);
+        const sameLength = opt.length === serverFollowing.length;
+        const sameMembers =
+            sameLength && opt.every((id) => serverFollowing.includes(id));
+        if (sameMembers) {
+            setOptimisticFollowing(null);
+            return;
+        }
+        // Recover from stale optimistic built before profile snapshot loaded (subset of server).
+        const optimisticIsStrictSubset =
+            opt.length > 0 &&
+            opt.length < serverFollowing.length &&
+            opt.every((id) => serverFollowing.includes(id));
+        if (optimisticIsStrictSubset) {
+            setOptimisticFollowing(null);
+        }
+    }, [firebaseProfile?.following, optimisticFollowing]);
+
+    useEffect(() => {
+        if (optimisticJoinedCommunities === null) return;
+        const serverJoined = firebaseProfile?.joinedCommunities ?? currentUser?.joinedCommunities ?? [];
+        const sameLength = optimisticJoinedCommunities.length === serverJoined.length;
+        const sameMembers =
+            sameLength && optimisticJoinedCommunities.every((id) => serverJoined.includes(id));
+        if (sameMembers) {
+            setOptimisticJoinedCommunities(null);
+        }
+    }, [firebaseProfile?.joinedCommunities, currentUser?.joinedCommunities, optimisticJoinedCommunities]);
+
+    const patchJoinedCommunitiesOptimistic = useCallback((partnerId, shouldBeJoined) => {
+        if (!partnerId) return;
+        setOptimisticJoinedCommunities((prev) => {
+            const base = prev ?? firebaseProfile?.joinedCommunities ?? currentUser?.joinedCommunities ?? [];
+            const has = base.includes(partnerId);
+            if (shouldBeJoined && !has) return [...base, partnerId];
+            if (!shouldBeJoined && has) return base.filter((id) => id !== partnerId);
+            return base;
+        });
+    }, [firebaseProfile?.joinedCommunities, currentUser?.joinedCommunities]);
+
     const toggleFollow = async (userId) => {
-        if (isGuest || !userId || userId === currentUser.id) return;
-        const isCurrentlyFollowing = (currentUser.following || []).includes(userId);
+        const viewerUid = currentUser?.uid || currentUser?.id;
+        if (!userId || !viewerUid || userId === viewerUid) return { ok: false };
+
+        if (isGuest || !auth.currentUser) {
+            showToast(i18n.t('sign_in_required', 'Please sign in first.'), 'info');
+            return { ok: false, reason: 'auth' };
+        }
+
+        if (isBusinessUser(firebaseProfile)) {
+            showToast('Business accounts cannot follow other accounts.', 'error');
+            return { ok: false };
+        }
+
+        const liveFollowing = await readLiveFollowing(viewerUid, firebaseProfile?.following);
+        const isCurrentlyFollowing = liveFollowing.includes(userId);
+
+        const nextFollowing = isCurrentlyFollowing
+            ? liveFollowing.filter((id) => id !== userId)
+            : [...liveFollowing, userId];
+        setOptimisticFollowing(nextFollowing);
+
         try {
-            const targetUserDoc = await getDoc(doc(db, 'users', userId));
-            if (!targetUserDoc.exists()) return;
-            const targetRole = targetUserDoc.data()?.role || 'user';
-            if (targetRole === 'business') return; // no one follows business accounts
-            // Business accounts cannot follow regular (user) accounts
-            if (currentUser.role === 'business' && targetRole === 'user') {
-                showToast('Business accounts cannot follow regular users.', 'error');
-                return;
-            }
-
-            const currentUserRef = doc(db, 'users', currentUser.id);
-
             if (isCurrentlyFollowing) {
-                // Atomic remove — no race condition
-                await updateDoc(currentUserRef, { following: arrayRemove(userId) });
-                await unfollowUser(currentUser.id, userId);
-            } else {
-                // Atomic add — no race condition
-                await updateDoc(currentUserRef, { following: arrayUnion(userId) });
-                await followUser(currentUser.id, userId, {
-                    id: currentUser.id,
-                    name: currentUser.name,
-                    avatar: getSafeAvatar(currentUser)
-                });
+                const result = await unfollowUser(viewerUid, userId);
+                if (!result.success) {
+                    setOptimisticFollowing(null);
+                    showToast(
+                        i18n.t('discovery_follow_failed', 'Could not follow. Try again.'),
+                        'error'
+                    );
+                    return { ok: false };
+                }
+                return { ok: true };
             }
+
+            const targetUserDoc = await getDoc(doc(db, 'users', userId));
+            if (!targetUserDoc.exists()) {
+                setOptimisticFollowing(null);
+                showToast(
+                    i18n.t('follow_target_not_found', 'This account cannot be followed right now.'),
+                    'error'
+                );
+                return { ok: false };
+            }
+            const targetData = targetUserDoc.data() || {};
+            if (!canTargetAcceptFollows(targetData)) {
+                setOptimisticFollowing(null);
+                if ((targetData.role || 'user') === 'business') {
+                    showToast(
+                        i18n.t('follow_business_not_allowed', 'Business accounts cannot be followed.'),
+                        'info'
+                    );
+                } else {
+                    showToast(
+                        i18n.t('follow_not_allowed_privacy', 'This member is not accepting new followers.'),
+                        'info'
+                    );
+                }
+                return { ok: false, reason: 'privacy' };
+            }
+
+            const targetAlreadyFollowsViewer = (targetData.following || []).includes(viewerUid);
+
+            const result = await followUser(
+                viewerUid,
+                userId,
+                {
+                    id: viewerUid,
+                    name: firebaseProfile?.display_name || currentUser.displayName,
+                    avatar: getSafeAvatar({ ...currentUser, ...firebaseProfile })
+                },
+                { skipAlreadyCheck: true }
+            );
+            if (!result.success) {
+                setOptimisticFollowing(null);
+                if (result.reason === 'cooldown' || result.message === 'cooldown') {
+                    showFollowCooldownWarning(
+                        showPersistentWarning,
+                        i18n,
+                        result.cancelledAtMs,
+                        result.retryAtMs
+                    );
+                    return { ok: false, reason: 'cooldown', ...result };
+                }
+                if (result.reason === 'privacy' || result.reason === 'target_business') {
+                    showToast(
+                        i18n.t('follow_not_allowed_privacy', 'This member is not accepting new followers.'),
+                        'info'
+                    );
+                    return { ok: false, reason: result.reason };
+                }
+                if (result.reason === 'viewer_not_found') {
+                    showToast(
+                        i18n.t('follow_viewer_profile_missing', 'Complete your profile before following others.'),
+                        'error'
+                    );
+                    return { ok: false, reason: result.reason };
+                }
+                showToast(
+                    i18n.t('discovery_follow_failed', 'Could not follow. Try again.'),
+                    'error'
+                );
+                return { ok: false, reason: result.reason || result.message };
+            }
+
+            const viewerProfile = { id: viewerUid, ...firebaseProfile, ...currentUser };
+            const targetProfile = { id: userId, ...targetData };
+            const connectionComplete = await isConnectionComplete(
+                viewerUid,
+                userId,
+                viewerProfile,
+                targetProfile,
+                nextFollowing,
+                targetData.following || []
+            );
+
+            let connectionKind = null;
+            if (connectionComplete) {
+                connectionKind = resolveConnectionKind(viewerProfile, targetProfile);
+                const viewerPayload = {
+                    id: viewerUid,
+                    name: firebaseProfile?.display_name || currentUser.displayName || 'Someone',
+                    avatar: getSafeAvatar({ ...currentUser, ...firebaseProfile }),
+                };
+                const targetPayload = {
+                    id: userId,
+                    name: targetData.display_name || targetData.displayName || targetData.name || 'Someone',
+                    avatar: getSafeAvatar(targetData),
+                };
+                notifyConnectConnectionComplete(userId, viewerPayload, connectionKind);
+                notifyConnectConnectionComplete(viewerUid, targetPayload, connectionKind);
+            }
+
+            return {
+                ok: true,
+                mutualFollow: targetAlreadyFollowsViewer,
+                connectionComplete,
+                connectionKind,
+            };
         } catch (error) {
+            setOptimisticFollowing(null);
             console.error('Error in toggleFollow:', error);
+            showToast(
+                i18n.t('discovery_follow_failed', 'Could not follow. Try again.'),
+                'error'
+            );
+            return { ok: false };
         }
     };
 
@@ -960,6 +1784,8 @@ export const InvitationProvider = ({ children }) => {
                 const photo = data.avatar || data.photoURL || data.photo_url;
                 updates.photo_url = photo;
                 updates.photoURL = photo;
+                updates.avatar = photo;
+                updates.avatarUrl = photo;
             }
 
             if (updateUserProfile) {
@@ -991,38 +1817,57 @@ export const InvitationProvider = ({ children }) => {
 
     const joinCommunity = async (partnerId) => {
         if (!partnerId || !currentUser) return false;
+        const userId = currentUser.uid || currentUser.id;
+        if (!userId) return false;
+        if (effectiveJoinedCommunities.includes(partnerId)) return true;
+
+        // Do NOT optimistic-patch before the callable: community chat listeners would
+        // start while Firestore rules still deny reads (permission-denied, no messages).
         try {
-            const userId = currentUser.uid || currentUser.id;
-            if (!userId) return false;
             await setCommunityMembershipCallable({ partnerId, action: 'join' });
-            await addUserNotification({
+            patchJoinedCommunitiesOptimistic(partnerId, true);
+            void addUserNotification({
                 userId: partnerId,
                 type: 'new_community_member',
                 title: '🎉 New Community Member!',
                 message: `${currentUser.name || currentUser.displayName || 'Someone'} has joined your community.`,
-                senderName: currentUser.name || currentUser.displayName || 'Someone',
-                senderAvatar: getSafeAvatar(currentUser),
+                actionUrl: '/business-dashboard',
             });
             addNotification('🎉 Success!', 'You have joined the community successfully.', 'success');
             return true;
-        } catch (error) { console.error('Error joining community:', error); return false; }
+        } catch (error) {
+            console.error('Error joining community:', error);
+            const msg = String(error?.message || '');
+            if (msg.includes('blocked') || error?.code === 'functions/permission-denied') {
+                addNotification('🚫', 'You are blocked from joining this community.', 'error');
+            }
+            return false;
+        }
     };
 
     const leaveCommunity = async (partnerId) => {
         if (!partnerId || !currentUser) return false;
+        const userId = currentUser.uid || currentUser.id;
+        if (!userId) return false;
+        if (!effectiveJoinedCommunities.includes(partnerId)) return true;
+
+        patchJoinedCommunitiesOptimistic(partnerId, false);
         try {
-            const userId = currentUser.uid || currentUser.id;
-            if (!userId) return false;
             await setCommunityMembershipCallable({ partnerId, action: 'leave' });
             addNotification('👋 Left', 'You have left the community.', 'info');
             return true;
-        } catch (error) { console.error('Error leaving community:', error); return false; }
+        } catch (error) {
+            patchJoinedCommunitiesOptimistic(partnerId, true);
+            console.error('Error leaving community:', error);
+            return false;
+        }
     };
 
     const toggleCommunity = async (partnerId) => {
-        if (!partnerId || !currentUser) return;
-        const isJoined = (firebaseProfile?.joinedCommunities || []).includes(partnerId);
-        if (isJoined) await leaveCommunity(partnerId); else await joinCommunity(partnerId);
+        if (!partnerId || !currentUser) return false;
+        const isJoined = effectiveJoinedCommunities.includes(partnerId);
+        if (isJoined) return await leaveCommunity(partnerId);
+        return await joinCommunity(partnerId);
     };
 
     const getCommunityMembers = async (partnerId, options = {}) => {
@@ -1037,11 +1882,12 @@ export const InvitationProvider = ({ children }) => {
             const data = result?.data || {};
             return {
                 memberCount: Number(data.memberCount || 0),
-                members: Array.isArray(data.members) ? data.members : []
+                members: Array.isArray(data.members) ? data.members : [],
+                blockedMembers: Array.isArray(data.blockedMembers) ? data.blockedMembers : []
             };
         } catch (error) {
             console.error('Error loading community members:', error);
-            return { memberCount: 0, members: [] };
+            return { memberCount: 0, members: [], blockedMembers: [] };
         }
     };
 
@@ -1067,10 +1913,10 @@ export const InvitationProvider = ({ children }) => {
         } catch (error) { console.error("Error submitting report:", error); return null; }
     };
 
-    const deleteInvitation = async (invId, isPrivate = false) => {
+    const deleteInvitation = async (invId, isHosted = false) => {
         if (!invId || !currentUser) return false;
         try {
-            const collName = isPrivate ? 'private_invitations' : 'invitations';
+            const collName = isHosted ? 'social_invitations' : 'invitations';
             // Let Firestore rules enforce authorization; do not trust client-side admin fields.
             try {
                 const primaryDeleted = await deleteInvitationAndStorage(invId, collName);
@@ -1079,58 +1925,53 @@ export const InvitationProvider = ({ children }) => {
                 console.warn(`Primary delete failed for ${collName}/${invId}:`, error?.message || error);
             }
 
-            const altColl = isPrivate ? 'invitations' : 'private_invitations';
+            const altColl = isPrivate ? 'invitations' : 'social_invitations';
             const fallbackDeleted = await deleteInvitationAndStorage(invId, altColl);
             return !!fallbackDeleted;
         } catch (error) { console.error('Error deleting invitation:', error); return false; }
     };
 
-    const loadMoreInvitations = async () => {
-        if (loadingMoreInvitations || !hasMoreInvitations || !lastInvitationDocRef.current) return;
-        setLoadingMoreInvitations(true);
-        try {
-            const q = query(
-                collection(db, 'invitations'),
-                orderBy('createdAt', 'desc'),
-                startAfter(lastInvitationDocRef.current),
-                limit(INVITATIONS_PAGE_SIZE)
-            );
-            const snap = await getDocs(q);
-            const next = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            const lastDoc = snap.docs[snap.docs.length - 1] || null;
-            lastInvitationDocRef.current = lastDoc;
-            setLoadedMoreInvitations(prev => [...prev, ...next]);
-            setHasMoreInvitations(snap.docs.length === INVITATIONS_PAGE_SIZE);
-        } catch (error) {
-            console.error('Error loading more invitations:', error);
-        } finally {
-            setLoadingMoreInvitations(false);
-        }
-    };
+    const invitationsFiltered = React.useMemo(() => {
+        const blocked = new Set(asUidArray(firebaseProfile?.blockedUserIds));
+        if (blocked.size === 0) return invitations;
+        return invitations.filter((inv) => {
+            if (inv.adminBlocked === true) return false;
+            const aid = inv.author?.id;
+            if (!aid) return true;
+            return !blocked.has(aid);
+        });
+    }, [invitations, firebaseProfile?.blockedUserIds]);
 
-    const invitationsMerged = React.useMemo(() => {
-        const firstIds = new Set(invitations.map(i => i.id));
-        const extra = loadedMoreInvitations.filter(i => !firstIds.has(i.id));
-        return [...invitations, ...extra];
-    }, [invitations, loadedMoreInvitations]);
+    const privateInvitationsFiltered = React.useMemo(() => {
+        const blocked = new Set(asUidArray(firebaseProfile?.blockedUserIds));
+        const muted = new Set(asUidArray(firebaseProfile?.mutedUserIds));
+        if (blocked.size === 0 && muted.size === 0) return privateInvitations;
+        return privateInvitations.filter((inv) => {
+            const aid = inv.authorId || inv.author?.id;
+            if (!aid) return true;
+            if (blocked.has(aid)) return false;
+            if (muted.has(aid)) return false;
+            return true;
+        });
+    }, [privateInvitations, firebaseProfile?.blockedUserIds, firebaseProfile?.mutedUserIds]);
 
-    const extendedCurrentUser = React.useMemo(() => {
+    const extendedCurrentUser = useMemo(() => {
         if (!currentUser) return null;
-        return { ...currentUser, ...firebaseProfile };
-    }, [currentUser, firebaseProfile]);
+        return { ...currentUser, ...firebaseProfile, following: effectiveFollowing, joinedCommunities: effectiveJoinedCommunities };
+    }, [currentUser, firebaseProfile, effectiveFollowing, effectiveJoinedCommunities]);
 
     return (
         <InvitationContext.Provider value={{
-            invitations: invitationsMerged, privateInvitations, restaurants, currentUser: extendedCurrentUser, loadingInvitations,
-            loadMoreInvitations, hasMoreInvitations, loadingMoreInvitations,
-            addInvitation, addPrivateInvitation, requestToJoin, cancelRequest,
-            approveUser, rejectUser, respondToPrivateInvitation, canCreatePrivateInvitation, publishPrivateInvitationDraft,
+            invitations: invitationsFiltered, privateInvitations: privateInvitationsFiltered, restaurants, currentUser: extendedCurrentUser, loadingInvitations,
+            addInvitation, addHostedInvitation, requestToJoin, cancelRequest,
+            approveUser, rejectUser, respondToPrivateInvitation, canCreateSocialInvitation, publishPrivateInvitationDraft, publishPublicInvitationDraft,
+            getPrivateInvitationSharePreview, claimPrivateInvitationShare, ensurePrivateInvitationShareToken,
             sendChatMessage, updateMeetingStatus,
             updateInvitationTime, approveNewTime, rejectNewTime,
             notifications, updateProfile, updateRestaurant, markAllAsRead, addNotification, deleteInvitation,
             toggleFollow, getFollowingInvitations, submitRating, submitRestaurantRating, joinCommunity, leaveCommunity, toggleCommunity,
             canEditRestaurant, getCommunityMembers,
-            allUsers, reports, subscriptionPlans, creditPacks, banUser, resolveReport, updatePlan, sendSystemMessage, addReport, submitReport
+            allUsers, reports, banUser, resolveReport, sendSystemMessage, addReport, submitReport
         }}>
             {children}
         </InvitationContext.Provider>

@@ -1,0 +1,96 @@
+.community-chat-banner-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    margin-inline-start: 0.5rem;
+    padding: 0.25rem 0.35rem 0.25rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--cchat-zone-header-border, var(--border-color));
+    background: color-mix(in srgb, var(--cchat-zone-header-bg, var(--bg-card)) 88%, var(--primary) 12%);
+    cursor: pointer;
+    user-select: none;
+}
+
+.community-chat-banner-toggle__icon {
+    color: var(--primary, #e86e2e);
+    flex-shrink: 0;
+}
+
+.community-chat-banner-toggle__label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--cchat-zone-header-text-muted, var(--text-muted));
+    white-space: nowrap;
+}
+
+@media (max-width: 380px) {
+    .community-chat-banner-toggle__label {
+        display: none;
+    }
+}
+
+.community-chat-banner-toggle__switch {
+    flex-shrink: 0;
+    margin: 0;
+}
+
+.community-chat-banner-toggle:has(input:disabled) {
+    opacity: 0.55;
+    cursor: wait;
+}
+
+.community-chat-banner-toggle .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.community-chat-banner-toggle .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.community-chat-banner-toggle .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: var(--bg-hover);
+    transition: 0.3s;
+    border-radius: 34px;
+    border: 1px solid var(--border-color);
+}
+
+.community-chat-banner-toggle .toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.community-chat-banner-toggle .toggle-switch input:checked + .toggle-slider {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.community-chat-banner-toggle .toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+}
+
+.community-chat-root--no-banner .community-guest-chat--expanded,
+.community-chat-root--no-banner .community-guest-chat--center {
+    min-height: 0;
+}
+
+.community-chat-root--no-banner .community-full-chat,
+.community-chat-root--no-banner .community-center-stage {
+    background: var(--cchat-surface);
+}

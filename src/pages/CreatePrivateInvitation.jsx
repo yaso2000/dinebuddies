@@ -1,725 +1,1993 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { flushSync } from 'react-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
-    FaCalendarAlt, FaMapMarkerAlt, FaTimes, FaCheckCircle,
-    FaClock, FaUserFriends, FaLock, FaChevronLeft, FaSearch,
-    FaMoneyBillWave, FaEdit, FaHeart, FaUsers, FaBriefcase, FaSmile,
-    FaBirthdayCake, FaMoon, FaUtensils, FaCoffee, FaGamepad
-} from 'react-icons/fa';
+  FaCalendarAlt, FaTimes, FaCheckCircle,
+  FaLock, FaChevronLeft,
+  FaCamera, FaUpload, FaImage, FaMagic } from
+'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import MediaSelector from '../components/Invitations/MediaSelector';
-import LocationAutocomplete from '../components/LocationAutocomplete';
-import { processInvitationMedia } from '../services/mediaService';
-import { getMutualFollowers } from '../utils/followHelpers';
+import InvitationVenueLocationSection from '../components/InvitationVenueLocationSection';
+import { commitInvitationAiCover, resolveAiGeneratedCoverPreview, verifyPublicStorageImageUrl } from '../services/mediaService';
+import { isServerPersistedAiCoverUrl } from '../utils/aiGeneratedMediaUrl';
+import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { db } from '../firebase/config';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { fetchIpLocation } from '../utils/locationUtils';
-import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
-import './PrivateInvitation.css';
+import { doc, getDoc } from 'firebase/firestore';
+import { detectUserLocationContext } from '../utils/locationUtils';
+import './SocialInvitation.css';
+import { resolveVenueCountryIso } from '../utils/countryIso';
+import { getAppBidiFieldProps } from '../utils/bidiText';
+import { buildPrivateInvitationAiUserPrompt } from '../utils/aiPromptLocale';
+import { getTotalDineCredits, PRIVATE_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
+import SocialInvitationCardPreview from '../components/Invitations/socialCard/SocialInvitationCardPreview';
+import {
+  INVITATION_CARD_MESSAGE_MAX,
+  INVITATION_CARD_TITLE_MAX } from
+'../constants/invitationCardLimits';
+import PrivateCardPreviewStage from '../components/Invitations/privateCard/PrivateCardPreviewStage';
+import PrivateCoverCameraPanel from '../components/Invitations/privateCard/PrivateCoverCameraPanel';
+import {
+  DEFAULT_PRIVATE_TEXT_BACKDROP_TONE,
+  getDatingCardTextBackdropFromInvitation } from
+'../components/Invitations/socialCard/socialCardTextBackdrop';
+import { DEFAULT_FRAME_COLOR_ID } from '../components/Invitations/socialCard/socialCardFrameColors';
+import { DEFAULT_FONT_ID } from '../components/Invitations/socialCard/socialCardFonts';
+import {
+  DEFAULT_CARD_COPY_OFFSET_Y,
+  DEFAULT_CARD_COPY_WIDTH_PCT,
+  DEFAULT_CARD_COPY_FONT_SCALE } from
+'../components/Invitations/socialCard/socialCardCopyLayout';
+import {
+  getPrivateCardBackgroundOptions,
+  getDatingHeroCoverFromMediaData,
+  parseDatingCoverTemplateIdFromUrl,
+  getDefaultPrivateCardBackgroundId,
+  isPrivateBackgroundIdForCategory,
+  createPrivateCategoryCoverSlice,
+  getFirstPrivateBackgroundFileUrl } from
+'../components/Invitations/privateCard/privateCardBackgrounds';
+import {
+  PERSONAL_INVITE_CATEGORIES,
+  DEFAULT_PERSONAL_INVITE_CATEGORY,
+  normalizePersonalInviteCategory } from
+'../constants/personalInviteCategories';
+import SocialInvitationCoverRightRail from '../components/Invitations/socialCard/SocialInvitationCoverRightRail';
+import SocialInvitationAiCoverPanel from '../components/Invitations/socialCard/SocialInvitationAiCoverPanel';
+import {
+  isPrivateCardGradientBackgroundId } from
+'../components/Invitations/socialCard/socialCardGradientBackgrounds';
+import {
+  createPrivateCoverStashId,
+  isCoverStashKindAtLimit,
+  isSamePrivateCoverMedia,
+  PRIVATE_COVER_STASH_MAX_IMAGES,
+  PRIVATE_COVER_STASH_MAX_VIDEOS,
+  PRIVATE_COVER_STASH_MAX_AI_IMAGES,
+  revokeAllPrivateCoverStash,
+  revokePrivateCoverMedia,
+  revokePrivateCoverStashEntry } from
+'../utils/privateCoverMediaStash';
+import AIFloatingLauncher from '../components/AIFloatingLauncher';
+import { applyInvitationAiFields } from '../utils/aiContentFieldMapper';
+import { parseAiStudioImageFromState } from '../utils/aiStudioImagePayload';
+import { validatePrivateAiContext, createPrivateAiContextFromForm } from '../utils/privateAiRequestPayload';
+import { useEditorSessionAutosave } from '../hooks/useEditorSessionAutosave';
+import {
+  privateInvitationEditorDraftKey,
+  isPrivateInvitationEditorDraftEmpty,
+  hasPrivateInvitationEditorWork,
+  serializeEditorMedia,
+  restoreEditorMedia,
+  serializeCoverMediaStash,
+  restoreCoverMediaStash,
+  syncSerializeEditorMedia } from
+'../utils/editorSessionDraft';
+import { persistPrivateInvitationEditorDraft } from '../utils/persistPrivateInvitationEditorDraft';
+import { ensureHostedInvitationDraftReady } from '../utils/fetchHostedInvitationDraft';
+import SocialInvitationEditorFooter from '../components/Invitations/socialCard/SocialInvitationEditorFooter';
+import SocialInvitationInviteePanel from '../components/Invitations/socialCard/SocialInvitationInviteePanel';
+import InvitationEditorLeaveDialog from '../components/Invitations/socialCard/InvitationEditorLeaveDialog';
+import {
+  getPrivateInviteeDisplayName,
+  isUserAvailableForPrivateInvite,
+  senderFollowsInvitee } from
+'../utils/privateInviteAvailability';
+import '../components/Invitations/socialCard/SocialInvitationEditorFooter.css';
+import { scheduleScrollPageToTop } from '../utils/scrollPageToTop';
+import { resolveCardStructureFromBackgroundId } from '../utils/cardStructure';
+import { AppText, AppTextInput } from "../components/base";
+import LookingForChips from '../components/profile/LookingForChips';
+import { normalizeLookingFor } from '../constants/personalInviteCategories';
+import { resolveHostInvitationNavigationState } from '../utils/hostInvitationFromBusiness';
+
+function resolvePrivateInvitationAuthorUid(authUser, invitationContextUser) {
+  return authUser?.uid || invitationContextUser?.uid || invitationContextUser?.id || null;
+}
+
+/** Firestore rejects `undefined` field values. */
+function sanitizeFirestoreDraft(obj) {
+  const clean = {};
+  Object.entries(obj).forEach(([k, v]) => {
+    if (v !== undefined) clean[k] = v;
+  });
+  return clean;
+}
 
 const CreatePrivateInvitation = () => {
-    const { t, i18n } = useTranslation();
-    const navigate = useNavigate();
-    const location = useLocation();
-    const { addPrivateInvitation, currentUser, canCreatePrivateInvitation } = useInvitations();
-    const { showToast } = useToast();
-    const { currentUser: authUser, userProfile } = useAuth();
+  const { t, i18n } = useTranslation();
+  const bidiFieldProps = useMemo(() => getAppBidiFieldProps(i18n.language), [i18n.language]);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const { addHostedInvitation, currentUser, canCreateSocialInvitation, restaurants } = useInvitations();
+  const { showToast } = useToast();
+  const { currentUser: authUser, userProfile } = useAuth();
 
-    const quotaInfo = canCreatePrivateInvitation();
+  const quotaInfo = canCreateSocialInvitation('private');
 
-    // UI State
-    const [mediaData, setMediaData] = useState(null);
-    const [uploadProgress, setUploadProgress] = useState(0);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [mutualFriends, setMutualFriends] = useState([]);
-    const [friendSearchQuery, setFriendSearchQuery] = useState('');
-    const [friendsLoading, setFriendsLoading] = useState(false);
-    const [suggestedImages, setSuggestedImages] = useState([]); // Venue images from Google
-    const [suggestedImagesLoading, setSuggestedImagesLoading] = useState(false);
-    const [existingDraftId, setExistingDraftId] = useState(null);
+  const hostNavState = useMemo(
+    () =>
+      resolveHostInvitationNavigationState({
+        locationState: location.state,
+        businessId: searchParams.get('businessId'),
+        restaurants,
+      }),
+    [location.state, restaurants, searchParams]
+  );
+  const restaurantData = hostNavState?.restaurantData || location.state?.selectedRestaurant;
+  const editInvitation = location.state?.editInvitation;
+  const preselectedInvitee = location.state?.preselectedInvitee;
 
-    const restaurantData = location.state?.restaurantData || location.state?.selectedRestaurant;
-    const editInvitation = location.state?.editInvitation;
+  const [privateInviteeProfile, setDatingInviteeProfile] = useState(null);
 
-    const [formData, setFormData] = useState({
-        title: restaurantData ? `${t('dinner_at')} ${restaurantData.name}` : '',
-        restaurantId: restaurantData?.id || null,
-        restaurantName: restaurantData?.name || '',
-        city: restaurantData?.city || '',
-        date: '',
-        time: '',
-        location: restaurantData?.address || restaurantData?.location || '',
-        paymentType: 'Split',
-        description: '',
-        privacy: 'private',
-        invitedFriends: [],
-        country: restaurantData?.country || '',
-        lat: restaurantData?.lat || restaurantData?.coordinates?.lat,
-        lng: restaurantData?.lng || restaurantData?.coordinates?.lng,
-        userLat: null,
-        userLng: null,
-        occasionType: editInvitation?.occasionType || 'social',
-    });
-
-    // Populate data when editing
-    useEffect(() => {
-        if (editInvitation) {
-            console.log('📝 Editing existing invitation:', editInvitation);
-            setExistingDraftId(editInvitation.id);
-            setFormData({
-                title: editInvitation.title || '',
-                restaurantId: editInvitation.restaurantId || null,
-                restaurantName: editInvitation.restaurantName || '',
-                city: editInvitation.city || '',
-                date: editInvitation.date || '',
-                time: editInvitation.time || '',
-                location: editInvitation.location || '',
-                paymentType: editInvitation.paymentType || 'Split',
-                description: editInvitation.description || '',
-                privacy: 'private',
-                invitedFriends: editInvitation.invitedFriends || [],
-                country: editInvitation.country || '',
-                lat: editInvitation.lat || null,
-                lng: editInvitation.lng || null,
-                userLat: editInvitation.userLat || null,
-                userLng: editInvitation.userLng || null,
-                occasionType: editInvitation.occasionType || 'social'
-            });
-
-            if (editInvitation.customImage || editInvitation.image) {
-                setMediaData({
-                    type: 'image',
-                    url: editInvitation.customImage || editInvitation.image,
-                    isCustom: !!editInvitation.customImage
-                });
-            }
-        }
-    }, [editInvitation]);
-
-    // Redirect guests
-    useEffect(() => {
-        if (userProfile?.isGuest || userProfile?.role === 'guest' || currentUser?.id === 'guest') {
-            navigate('/login');
-        }
-    }, [userProfile, currentUser, navigate]);
-
-    // Fetch Mutual Followers for Selection
-    useEffect(() => {
-        const fetchFriends = async () => {
-            const userId = authUser?.uid || currentUser?.id;
-            if (!userId || userId === 'guest') return;
-
-            setFriendsLoading(true);
-            try {
-                let followingIds = userProfile?.following || [];
-                if (followingIds.length === 0) {
-                    const userDoc = await getDoc(doc(db, 'users', userId));
-                    followingIds = userDoc.data()?.following || [];
-                }
-                const friends = await getMutualFollowers(userId, followingIds);
-                setMutualFriends(friends);
-            } catch (error) {
-                console.error('Error fetching friends:', error);
-            } finally {
-                setFriendsLoading(false);
-            }
-        };
-        fetchFriends();
-    }, [authUser, currentUser, userProfile]);
-
-    // Real-time location detection: GPS first → profile fallback → IP last resort
-    useEffect(() => {
-        if (restaurantData) return;
-
-        const detectLocation = async () => {
-            // STEP 1: Live GPS → real city
-            if (navigator.geolocation) {
-                try {
-                    const pos = await new Promise((resolve, reject) =>
-                        navigator.geolocation.getCurrentPosition(resolve, reject, {
-                            timeout: 6000,
-                            maximumAge: 0
-                        })
-                    );
-                    const { latitude, longitude } = pos.coords;
-                    const res = await fetch(
-                        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-                    );
-                    if (res.ok) {
-                        const d = await res.json();
-                        const city = d.city || d.locality || d.principalSubdivision || '';
-                        if (city) {
-                            setFormData(prev => ({
-                                ...prev,
-                                city,
-                                country: d.countryCode || prev.country,
-                                userLat: latitude,
-                                userLng: longitude
-                            }));
-                            return;
-                        }
-                    }
-                } catch { /* GPS denied or failed */ }
-            }
-
-            // STEP 2: Profile city fallback
-            if (userProfile?.city) {
-                setFormData(prev => ({
-                    ...prev,
-                    city: userProfile.city,
-                    country: userProfile.countryCode || prev.country || '',
-                    userLat: userProfile.coordinates?.lat || prev.userLat,
-                    userLng: userProfile.coordinates?.lng || prev.userLng,
-                }));
-                return;
-            }
-
-            // STEP 3: IP last resort
-            const data = await fetchIpLocation();
-            if (data.success) {
-                setFormData(prev => ({
-                    ...prev,
-                    city: data.city,
-                    country: data.country_code,
-                    userLat: data.latitude,
-                    userLng: data.longitude
-                }));
-            }
-        };
-
-        detectLocation();
-    }, [restaurantData]);
-
-    const handleLocationSelect = (placeData) => {
-        setFormData(prev => ({
-            ...prev,
-            location: placeData.name,
-            lat: placeData.lat,
-            lng: placeData.lng,
-            title: placeData.name ? `${t('invitation_at')} ${placeData.name}` : prev.title
-        }));
-
-        if (placeData.photos && placeData.photos.length > 0) {
-            setSuggestedImages(placeData.photos);
-        }
-    };
-
-    const filteredFriends = mutualFriends.filter(friend =>
-        friend.display_name?.toLowerCase().includes(friendSearchQuery.toLowerCase())
+  const [mediaData, setMediaData] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [existingDraftId, setExistingDraftId] = useState(null);
+  const existingDraftIdRef = useRef(existingDraftId);
+  existingDraftIdRef.current = existingDraftId;
+  const [cardFontId, setCardFontId] = useState(DEFAULT_FONT_ID);
+  const [cardFrameColorId, setCardFrameColorId] = useState(DEFAULT_FRAME_COLOR_ID);
+  /** `#rrggbb` or null — one color for frame border + all text; null uses `cardFrameColorId` preset. */
+  const [privateCardThemeColor, setDatingCardThemeColor] = useState(null);
+  const [cardCopyOffsetY, setCardCopyOffsetY] = useState(DEFAULT_CARD_COPY_OFFSET_Y);
+  const [cardCopyWidthPct, setCardCopyWidthPct] = useState(DEFAULT_CARD_COPY_WIDTH_PCT);
+  const [cardCopyFontScale, setCardCopyFontScale] = useState(DEFAULT_CARD_COPY_FONT_SCALE);
+  const [cardBackgroundId, setCardBackgroundId] = useState(() => {
+    if (editInvitation?.cardBackgroundId) {
+      const cat = normalizePersonalInviteCategory(editInvitation.personalInviteCategory);
+      if (isPrivateBackgroundIdForCategory(editInvitation.cardBackgroundId, cat)) {
+        return editInvitation.cardBackgroundId;
+      }
+    }
+    return getDefaultPrivateCardBackgroundId(
+      editInvitation?.personalInviteCategory || DEFAULT_PERSONAL_INVITE_CATEGORY
     );
+  });
+  const [cardGradientId, setCardGradientId] = useState(
+    () =>
+    editInvitation?.cardGradientId &&
+    isPrivateCardGradientBackgroundId(editInvitation.cardGradientId) &&
+    editInvitation.cardGradientId ||
+    null
+  );
+  const [datingCoverTab, setDatingCoverTab] = useState(() => editInvitation ? 'camera' : 'template');
+  /** Bumps when user selects the Camera cover tab (or taps it again) to open the recorder. */
+  const [cameraOpenNonce, setCameraOpenNonce] = useState(0);
+  const pendingCameraStreamRef = useRef(null);
+  const [aiCoverSheetOpen, setAiCoverSheetOpen] = useState(false);
+  const [aiCoverCommittingId, setAiCoverCommittingId] = useState(null);
+  /** Dating card: show personal message + profile on the preview (default on). */
+  const [privateCardShowHostAndMessage, setDatingCardShowHostAndMessage] = useState(true);
+  const [privateCardTextBackdropTone, setDatingCardTextBackdropTone] = useState(
+    DEFAULT_PRIVATE_TEXT_BACKDROP_TONE
+  );
+  /** Temp upload/video drafts shown as thumbnails until publish. */
+  const [coverMediaStash, setCoverMediaStash] = useState([]);
 
-    // Max guests based on occasion type
-    const getMaxGuests = (occasionType) => {
-        if (!occasionType) return 30;
-        const lower = occasionType.toLowerCase();
-        if (lower === 'dating') return 1;
-        return 30;
+  const [formData, setFormData] = useState({
+    title: restaurantData ? `${t('dinner_at')} ${restaurantData.name}` : '',
+    restaurantId: restaurantData?.id || null,
+    restaurantName: restaurantData?.name || '',
+    city: restaurantData?.city || '',
+    date: '',
+    time: '',
+    location: restaurantData?.address || restaurantData?.location || '',
+    description: '',
+    privacy: 'social',
+    invitedFriends: [],
+    country: restaurantData?.country || '',
+    lat: restaurantData?.lat || restaurantData?.coordinates?.lat,
+    lng: restaurantData?.lng || restaurantData?.coordinates?.lng,
+    userLat: null,
+    userLng: null,
+    occasionType: 'Private',
+    personalInviteCategory: DEFAULT_PERSONAL_INVITE_CATEGORY,
+    venueType: restaurantData?.businessType || 'Restaurant'
+  });
+
+  /** Persist cover media per tab when switching Camera / Upload / Template */
+  const datingCoverDraftsRef = useRef({ template: null, upload: null, camera: null, ai: null });
+  /** Isolated cover editor state per personal invite category (dating / friendship / social). */
+  const coverByCategoryRef = useRef(null);
+  const mediaDataRef = useRef(null);
+  const datingCoverTabRef = useRef(editInvitation ? 'camera' : 'template');
+  const coverUploadInputRef = useRef(null);
+  const datingAiFieldsRef = useRef(null);
+  const [datingAiFieldsPulse, setDatingAiFieldsPulse] = useState(false);
+  const formDataRef = useRef(null);
+  const coverMediaStashRef = useRef([]);
+  const cardBackgroundIdRef = useRef(cardBackgroundId);
+
+  useEffect(() => {
+    mediaDataRef.current = mediaData;
+  }, [mediaData]);
+  useEffect(() => {
+    datingCoverTabRef.current = datingCoverTab;
+  }, [datingCoverTab]);
+  useEffect(() => {
+    coverMediaStashRef.current = coverMediaStash;
+  }, [coverMediaStash]);
+
+  const aiStudioAppliedRef = useRef(false);
+  useEffect(() => {
+    const studio = parseAiStudioImageFromState(location.state?.aiStudioImage);
+    if (!studio || aiStudioAppliedRef.current) return;
+    aiStudioAppliedRef.current = true;
+    const media = {
+      source: 'ai_generated',
+      type: 'image',
+      url: studio.publishedUrl,
+      preview: studio.publishedUrl,
+      publishedUrl: studio.publishedUrl
     };
+    const entry = { id: createPrivateCoverStashId(), kind: 'ai', media };
+    setCoverMediaStash([entry]);
+    setMediaData(media);
+    setDatingCoverTab('ai');
+    datingCoverDraftsRef.current.ai = media;
+  }, [location.state?.aiStudioImage]);
 
-    const maxGuests = getMaxGuests(formData.occasionType);
-    const isAtLimit = (formData.invitedFriends || []).length >= maxGuests;
+  /** Profile → create-dating: pre-select invitee (must accept private invites + sender follows). */
+  useEffect(() => {
+    if (editInvitation || !preselectedInvitee?.id) return;
+    if (!isUserAvailableForPrivateInvite(preselectedInvitee)) {
+      showToast(
+        t('private_invitee_not_available', {
+          defaultValue: 'This member is not available for private invites.'
+        }),
+        'warning'
+      );
+      return;
+    }
+    const following = userProfile?.following ?? currentUser?.following ?? [];
+    if (!senderFollowsInvitee(following, preselectedInvitee.id)) {
+      showToast(
+        t(
+          'private_invite_follow_required',
+          'Follow this member first to send a private invite.'
+        ),
+        'warning'
+      );
+      return;
+    }
+    setFormData((prev) => {
+      if (prev.invitedFriends?.includes(preselectedInvitee.id)) return prev;
+      return { ...prev, invitedFriends: [preselectedInvitee.id] };
+    });
+  }, [editInvitation, preselectedInvitee, showToast, t, userProfile?.following, currentUser?.following]);
 
-    // Auto-trim invited friends when occasion type changes (e.g. switching to Dating)
-    useEffect(() => {
-        const limit = getMaxGuests(formData.occasionType);
-        if ((formData.invitedFriends || []).length > limit) {
-            setFormData(prev => ({
-                ...prev,
-                invitedFriends: prev.invitedFriends.slice(0, limit)
-            }));
-        }
-    }, [formData.occasionType]);
-
-    const toggleFriendSelection = (friendId) => {
-        setFormData(prev => {
-            const current = prev.invitedFriends || [];
-            if (current.includes(friendId)) {
-                // Always allow deselection
-                return { ...prev, invitedFriends: current.filter(id => id !== friendId) };
-            } else {
-                // Block adding if at limit
-                if (current.length >= getMaxGuests(prev.occasionType)) return prev;
-                return { ...prev, invitedFriends: [...current, friendId] };
-            }
-        });
-    };
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handlePreview = async (e) => {
-        e.preventDefault();
-
-        if (!formData.title.trim() || !formData.date || !formData.time || !formData.location.trim()) {
-            showToast(t('please_fill_required_fields') || 'Please fill in all required fields', 'error');
-            return;
-        }
-
-        if (formData.invitedFriends.length === 0) {
-            showToast(t('please_invite_at_least_one_guest') || 'Please invite at least one guest for a private invitation', 'error');
-            return;
-        }
-
-        setIsSubmitting(true);
-        try {
-            let mediaFields = {};
-            if (mediaData) {
-                try {
-                    const userId = currentUser?.id || authUser?.uid;
-                    mediaFields = await processInvitationMedia(mediaData, userId);
-                } catch (mediaError) {
-                    console.error('❌ Media processing failed:', mediaError);
-                    showToast(t('media_upload_failed') || 'Failed to upload media. Try again.', 'error');
-                    return;
-                }
-            }
-
-            // Initialize RSVPs as 'pending' for all invited friends
-            const initialRsvps = {};
-            formData.invitedFriends.forEach(friendId => {
-                initialRsvps[friendId] = 'pending';
-            });
-
-            const draftData = {
-                ...formData,
-                ...mediaFields,
-                rsvps: initialRsvps,
-                type: 'Private',
-                status: 'draft',
-                createdAt: serverTimestamp()
-            };
-
-            if (existingDraftId) {
-                // UPDATE EXISTING
-                const draftRef = doc(db, 'private_invitations', existingDraftId);
-                await updateDoc(draftRef, {
-                    ...draftData,
-                    updatedAt: serverTimestamp()
-                });
-                navigate(`/invitation/private/preview/${existingDraftId}`);
-            } else {
-                // CREATE NEW
-                console.log('🔏 Creating private invitation draft...');
-                const draftId = await addPrivateInvitation(draftData);
-                console.log('📋 Draft result:', draftId);
-                if (draftId) {
-                    navigate(`/invitation/private/preview/${draftId}`);
-                }
-            }
-        } catch (error) {
-            console.error('Error creating private draft:', error);
-            showToast(t('failed_create_invitation'), 'error');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    // Restore Google Images when editing (wait for Maps script before using)
-    useEffect(() => {
-        if (!formData.location || suggestedImages?.length > 0 || formData.restaurantId) return;
-
-        let cancelled = false;
-        const searchQuery = formData.location + (formData.city ? ` ${formData.city}` : '');
-        setSuggestedImagesLoading(true);
-
-        loadGoogleMapsScript()
-            .then(() => {
-                if (cancelled || typeof window === 'undefined' || !window.google?.maps?.places) {
-                    if (!cancelled) setSuggestedImagesLoading(false);
-                    return;
-                }
-
-                try {
-                    const service = new window.google.maps.places.PlacesService(document.createElement('div'));
-                    service.findPlaceFromQuery({ query: searchQuery, fields: ['place_id'] }, (results, status) => {
-                        if (cancelled) return;
-                        if (status === window.google.maps.places.PlacesServiceStatus.OK && results?.[0]) {
-                            service.getDetails({ placeId: results[0].place_id, fields: ['photos'] }, (details, dStatus) => {
-                                if (cancelled) return;
-                                setSuggestedImagesLoading(false);
-                                if (dStatus === window.google.maps.places.PlacesServiceStatus.OK && details?.photos) {
-                                    const urls = details.photos.slice(0, 5).map(p => p.getUrl({ maxWidth: 800 }));
-                                    setSuggestedImages(urls);
-                                }
-                            });
-                        } else {
-                            setSuggestedImagesLoading(false);
-                        }
-                    });
-                } catch (err) {
-                    if (!cancelled) {
-                        console.error('❌ Photo restore error:', err);
-                        setSuggestedImagesLoading(false);
-                    }
-                }
-            })
-            .catch(() => setSuggestedImagesLoading(false));
-
-        return () => {
-            cancelled = true;
-            setSuggestedImagesLoading(false);
-        };
-    }, [formData.location]);
-
-    if (!quotaInfo.canCreate && !editInvitation) {
-        const isDesktop = window.innerWidth >= 1024;
-        return (
-            <div className="private-create-wrapper private-theme" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: '20px' }}>
-                <div className="ui-card ui-card--lg" style={{ maxWidth: '400px', width: '100%', textAlign: 'center', padding: '30px' }}>
-                    <div style={{ fontSize: '3.5rem', marginBottom: '20px' }}>🔐</div>
-                    <h2 className="ui-prompt__title" style={{ fontSize: '1.6rem', color: 'var(--luxury-gold)', marginBottom: '12px' }}>
-                        {t('insufficient_credits')}
-                    </h2>
-                    <p className="ui-prompt__desc" style={{ marginBottom: '25px' }}>
-                        {t('insufficient_credits_desc')}
-                    </p>
-                    <button
-                        onClick={() => navigate(isDesktop ? '/pricing' : '/pricing')}
-                        className="ui-btn ui-btn--primary"
-                        style={{ width: '100%', marginBottom: '12px' }}
-                    >
-                        {t('upgrade_now')}
-                    </button>
-                    <button
-                        onClick={() => navigate(-1)}
-                        className="ui-btn ui-btn--ghost"
-                        style={{ width: '100%' }}
-                    >
-                        {t('go_back')}
-                    </button>
-                </div>
-            </div>
-        );
+  /** Load selected invitee profile for AI personalization. */
+  useEffect(() => {
+    const inviteeId = formData.invitedFriends?.[0];
+    if (!inviteeId) {
+      setDatingInviteeProfile(null);
+      return undefined;
     }
 
-    // Quota display helpers
-    const quota = quotaInfo.quota;
-    const isUnlimited = quota === 'unlimited' || quota === '∞' || quota === -1;
-    const usedThisWeek = userProfile?.usedPrivateCreditsThisWeek || 0;
-    const weeklyLimit = userProfile?.weeklyPrivateQuota || 0;
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'users', inviteeId));
+        if (cancelled) return;
+        if (snap.exists()) {
+          const data = snap.data();
+          if (!isUserAvailableForPrivateInvite(data)) {
+            setDatingInviteeProfile(null);
+            setFormData((prev) =>
+            prev.invitedFriends?.[0] === inviteeId ?
+            { ...prev, invitedFriends: [] } :
+            prev
+            );
+            showToast(
+              t('private_invitee_not_available', {
+                defaultValue: 'This member is not available for private invites.'
+              }),
+              'warning'
+            );
+            return;
+          }
+          setDatingInviteeProfile({
+            id: inviteeId,
+            display_name: getPrivateInviteeDisplayName(data),
+            ...data
+          });
+        } else if (preselectedInvitee?.id === inviteeId) {
+          setDatingInviteeProfile({
+            id: inviteeId,
+            display_name: getPrivateInviteeDisplayName(preselectedInvitee),
+            ...preselectedInvitee
+          });
+        } else {
+          setDatingInviteeProfile({ id: inviteeId, display_name: t('user', 'User') });
+        }
+      } catch {
+        if (!cancelled) {
+          setDatingInviteeProfile({ id: inviteeId, display_name: t('user', 'User') });
+        }
+      }
+    })();
 
-    return (
-        <div className="private-create-wrapper private-theme">
-            <div className="private-header-premium">
-                <button onClick={() => navigate(-1)} className="private-back-btn">
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.invitedFriends, preselectedInvitee, showToast, t]);
+
+  formDataRef.current = formData;
+  cardBackgroundIdRef.current = cardBackgroundId;
+
+  useEffect(() => scheduleScrollPageToTop(), []);
+
+  useEffect(() => {
+    return () => {
+      const bucket = coverByCategoryRef.current;
+      if (bucket) {
+        Object.values(bucket).forEach((slice) => revokeAllPrivateCoverStash(slice.stash || []));
+      }
+      revokeAllPrivateCoverStash(coverMediaStashRef.current);
+    };
+  }, []);
+
+  const datingHeroCover = useMemo(() => getDatingHeroCoverFromMediaData(mediaData), [mediaData]);
+
+  /** Template art as hero — same path as sent invites / notifications (not internal bg resolver). */
+  const privatePreviewHeroCover = useMemo(() => {
+    if (datingHeroCover?.src) return datingHeroCover;
+    if (cardGradientId) return null;
+    if (!cardBackgroundId) return null;
+    if (!isPrivateBackgroundIdForCategory(cardBackgroundId, formData.personalInviteCategory)) {
+      return null;
+    }
+    const url = getFirstPrivateBackgroundFileUrl(
+      cardBackgroundId,
+      formData.personalInviteCategory
+    );
+    if (!url || String(url).startsWith('data:')) return null;
+    return { src: url, mediaType: 'image', poster: null };
+  }, [
+    datingHeroCover,
+    cardGradientId,
+    cardBackgroundId,
+    formData.personalInviteCategory,
+  ]);
+
+  const heroCoverPending = useMemo(() => {
+    if (!mediaData) return false;
+    // mediaData may be a pending AI image entry (pending:true) or an ai_generated preview without publishedUrl
+    return Boolean(mediaData?.pending || mediaData?.source === 'ai_generated' && !mediaData?.publishedUrl);
+  }, [mediaData]);
+
+  const editorPhotoBackgroundActive = useMemo(() => {
+    if (privatePreviewHeroCover?.src) return true;
+    return isPrivateBackgroundIdForCategory(cardBackgroundId, formData.personalInviteCategory);
+  }, [privatePreviewHeroCover?.src, cardBackgroundId, formData.personalInviteCategory]);
+
+  const ensureCoverByCategoryRef = useCallback(() => {
+    if (!coverByCategoryRef.current) {
+      coverByCategoryRef.current = {
+        dating: createPrivateCategoryCoverSlice('dating'),
+        friendship: createPrivateCategoryCoverSlice('friendship'),
+        social: createPrivateCategoryCoverSlice('social'),
+      };
+    }
+    return coverByCategoryRef.current;
+  }, []);
+
+  const snapshotCoverStateToCategory = useCallback(
+    (categoryId) => {
+      const bucket = ensureCoverByCategoryRef();
+      const cat = normalizePersonalInviteCategory(categoryId);
+      bucket[cat] = {
+        cardBackgroundId,
+        cardGradientId,
+        coverTab: datingCoverTab,
+        mediaData,
+        drafts: { ...datingCoverDraftsRef.current },
+        stash: coverMediaStash,
+      };
+    },
+    [
+      cardBackgroundId,
+      cardGradientId,
+      datingCoverTab,
+      mediaData,
+      coverMediaStash,
+      ensureCoverByCategoryRef,
+    ]
+  );
+
+  const applyCoverStateFromCategory = useCallback(
+    (categoryId) => {
+      const bucket = ensureCoverByCategoryRef();
+      const cat = normalizePersonalInviteCategory(categoryId);
+      let slice = bucket[cat];
+      if (!slice) {
+        slice = createPrivateCategoryCoverSlice(cat);
+        bucket[cat] = slice;
+      }
+      const bgId =
+        slice.cardBackgroundId && isPrivateBackgroundIdForCategory(slice.cardBackgroundId, cat)
+          ? slice.cardBackgroundId
+          : getDefaultPrivateCardBackgroundId(cat);
+      setCardBackgroundId(bgId);
+      setCardGradientId(slice.cardGradientId ?? null);
+      const tab = slice.coverTab ?? 'template';
+      setDatingCoverTab(tab);
+      datingCoverTabRef.current = tab;
+      datingCoverDraftsRef.current = {
+        template: null,
+        upload: null,
+        camera: null,
+        ai: null,
+        ...(slice.drafts || {}),
+      };
+      setMediaData(slice.mediaData ?? null);
+      setCoverMediaStash(slice.stash ?? []);
+    },
+    [ensureCoverByCategoryRef]
+  );
+
+  const handlePersonalInviteCategoryChange = useCallback(
+    (nextCategoryId) => {
+      const prevCat = formData.personalInviteCategory;
+      const nextCat = normalizePersonalInviteCategory(nextCategoryId);
+      if (prevCat === nextCat) return;
+      snapshotCoverStateToCategory(prevCat);
+      applyCoverStateFromCategory(nextCat);
+      setFormData((prev) => ({ ...prev, personalInviteCategory: nextCat }));
+    },
+    [formData.personalInviteCategory, snapshotCoverStateToCategory, applyCoverStateFromCategory]
+  );
+
+  // Populate when editing
+  useEffect(() => {
+    if (editInvitation) {
+      const editCategory = normalizePersonalInviteCategory(editInvitation.personalInviteCategory);
+      let initialCoverTab = 'template';
+      let initialCoverBgId = getDefaultPrivateCardBackgroundId(editCategory);
+      let initialCoverGradient =
+        editInvitation.cardGradientId &&
+        isPrivateCardGradientBackgroundId(editInvitation.cardGradientId)
+          ? editInvitation.cardGradientId
+          : null;
+      let initialCoverMedia = null;
+      let initialCoverDrafts = { template: null, upload: null, camera: null, ai: null };
+      let initialCoverStash = [];
+
+      setExistingDraftId(editInvitation.id);
+      setFormData({
+        title: editInvitation.title || '',
+        restaurantId: editInvitation.restaurantId || null,
+        restaurantName: editInvitation.restaurantName || '',
+        city: editInvitation.city || '',
+        date: editInvitation.date || '',
+        time: editInvitation.time || '',
+        location: editInvitation.location || '',
+        description: editInvitation.description || '',
+        privacy: 'social',
+        invitedFriends: editInvitation.invitedFriends || [],
+        country: editInvitation.country || '',
+        lat: editInvitation.lat || null,
+        lng: editInvitation.lng || null,
+        userLat: editInvitation.userLat || null,
+        userLng: editInvitation.userLng || null,
+        occasionType: 'Private',
+        personalInviteCategory: normalizePersonalInviteCategory(
+          editInvitation.personalInviteCategory
+        ),
+        venueType: editInvitation.venueType || 'Restaurant'
+      });
+      setDatingCardShowHostAndMessage(editInvitation.privateCardShowHostAndMessage !== false);
+      const backdrop = getDatingCardTextBackdropFromInvitation(editInvitation);
+      setDatingCardTextBackdropTone(backdrop.tone);
+
+      const videoUrl = editInvitation.customVideo;
+      const imgUrl = editInvitation.customImage || editInvitation.image;
+      if (videoUrl) {
+        const m = {
+          source: 'custom_video',
+          type: 'video',
+          preview: videoUrl,
+          file: null,
+          videoThumbnail: editInvitation.videoThumbnail
+        };
+        const videoEntry = { id: createPrivateCoverStashId(), kind: 'camera', media: m };
+        initialCoverStash = [videoEntry];
+        initialCoverTab = 'camera';
+        initialCoverMedia = m;
+        initialCoverDrafts = { template: null, upload: null, camera: m, ai: null };
+        setCoverMediaStash(initialCoverStash);
+        setDatingCoverTab(initialCoverTab);
+        setMediaData(initialCoverMedia);
+        datingCoverDraftsRef.current = initialCoverDrafts;
+      } else if (imgUrl) {
+        const templateId =
+        parseDatingCoverTemplateIdFromUrl(imgUrl) || editInvitation.cardBackgroundId;
+        if (templateId && isPrivateBackgroundIdForCategory(templateId, editCategory)) {
+          initialCoverBgId = templateId;
+          initialCoverTab = 'template';
+          initialCoverMedia = null;
+          initialCoverDrafts = { template: null, upload: null, camera: null, ai: null };
+          setCardBackgroundId(initialCoverBgId);
+          setDatingCoverTab(initialCoverTab);
+          setMediaData(null);
+          datingCoverDraftsRef.current = initialCoverDrafts;
+        } else {
+          const m = {
+            source: 'custom_image',
+            type: 'image',
+            preview: imgUrl,
+            url: imgUrl,
+            file: null
+          };
+          const imageEntry = { id: createPrivateCoverStashId(), kind: 'upload', media: m };
+          initialCoverStash = [imageEntry];
+          initialCoverTab = 'upload';
+          initialCoverMedia = m;
+          initialCoverDrafts = { template: null, upload: m, camera: null, ai: null };
+          setCoverMediaStash(initialCoverStash);
+          setDatingCoverTab(initialCoverTab);
+          setMediaData(initialCoverMedia);
+          datingCoverDraftsRef.current = initialCoverDrafts;
+        }
+      } else if (initialCoverGradient) {
+        initialCoverBgId = null;
+        initialCoverTab = 'template';
+        initialCoverMedia = null;
+        initialCoverDrafts = { template: null, upload: null, camera: null, ai: null };
+        setCardGradientId(initialCoverGradient);
+        setCardBackgroundId(null);
+        setDatingCoverTab(initialCoverTab);
+        setMediaData(null);
+        datingCoverDraftsRef.current = initialCoverDrafts;
+      } else if (
+      editInvitation.cardBackgroundId &&
+      isPrivateBackgroundIdForCategory(editInvitation.cardBackgroundId, editCategory))
+      {
+        initialCoverBgId = editInvitation.cardBackgroundId;
+        initialCoverTab = 'template';
+        initialCoverMedia = null;
+        initialCoverDrafts = { template: null, upload: null, camera: null, ai: null };
+        setCardBackgroundId(initialCoverBgId);
+        setDatingCoverTab(initialCoverTab);
+        setMediaData(null);
+        datingCoverDraftsRef.current = initialCoverDrafts;
+      } else {
+        initialCoverTab = 'template';
+        datingCoverDraftsRef.current = initialCoverDrafts;
+        setDatingCoverTab(initialCoverTab);
+      }
+
+      coverByCategoryRef.current = {
+        dating: createPrivateCategoryCoverSlice('dating'),
+        friendship: createPrivateCategoryCoverSlice('friendship'),
+        social: createPrivateCategoryCoverSlice('social'),
+      };
+      coverByCategoryRef.current[editCategory] = createPrivateCategoryCoverSlice(editCategory, {
+        cardBackgroundId: initialCoverBgId,
+        cardGradientId: initialCoverGradient,
+        coverTab: initialCoverTab,
+        mediaData: initialCoverMedia,
+        drafts: initialCoverDrafts,
+        stash: initialCoverStash,
+      });
+
+      setCardFontId(editInvitation.cardFontId || DEFAULT_FONT_ID);
+      setCardFrameColorId(editInvitation.cardFrameColorId || DEFAULT_FRAME_COLOR_ID);
+      const rawTheme =
+      typeof editInvitation.privateCardThemeColor === 'string' && editInvitation.privateCardThemeColor.trim() ||
+      typeof editInvitation.datingCardTextColor === 'string' && editInvitation.datingCardTextColor.trim() ||
+      '';
+      setDatingCardThemeColor(/^#[0-9A-Fa-f]{6}$/.test(rawTheme) ? rawTheme : null);
+      setCardCopyOffsetY(editInvitation.cardCopyOffsetY ?? DEFAULT_CARD_COPY_OFFSET_Y);
+      setCardCopyWidthPct(editInvitation.cardCopyWidthPct ?? DEFAULT_CARD_COPY_WIDTH_PCT);
+      setCardCopyFontScale(editInvitation.cardCopyFontScale ?? DEFAULT_CARD_COPY_FONT_SCALE);
+    }
+  }, [editInvitation]);
+
+  useEffect(() => {
+    if (userProfile?.isGuest || userProfile?.role === 'guest' || currentUser?.id === 'guest') {
+      goToLogin({ returnPath: getCurrentReturnPath() || '/create-private' });
+    }
+  }, [userProfile, currentUser]);
+
+  // Prefill / re-apply venue when arriving from partners directory (or late restaurants load).
+  useEffect(() => {
+    if (!restaurantData?.id) return;
+    setFormData((prev) => {
+      if (prev.restaurantId === restaurantData.id && prev.restaurantName) return prev;
+      return {
+        ...prev,
+        title: prev.title?.trim() ? prev.title : `${t('dinner_at')} ${restaurantData.name}`,
+        restaurantId: restaurantData.id,
+        restaurantName: restaurantData.name || '',
+        city: restaurantData.city || prev.city,
+        location: restaurantData.address || restaurantData.location || prev.location,
+        lat: restaurantData.lat ?? restaurantData.coordinates?.lat ?? prev.lat,
+        lng: restaurantData.lng ?? restaurantData.coordinates?.lng ?? prev.lng,
+        country: restaurantData.country || prev.country,
+        venueType: restaurantData.type || restaurantData.businessType || prev.venueType,
+      };
+    });
+  }, [restaurantData, t]);
+
+  // Unified location discovery for all users/pages.
+  useEffect(() => {
+    if (restaurantData) return;
+
+    const detectLocation = async () => {
+      const detected = await detectUserLocationContext(userProfile);
+      if (!detected.success) return;
+      setFormData((prev) => ({
+        ...prev,
+        city: detected.city || prev.city,
+        country: detected.country || prev.country || '',
+        countryCode: detected.countryCode || prev.countryCode || '',
+        userLat: detected.latitude ?? prev.userLat,
+        userLng: detected.longitude ?? prev.userLng
+      }));
+    };
+
+    detectLocation();
+  }, [restaurantData, userProfile]);
+
+  const handleLocationSelect = (placeData) => {
+    const isDbVenue = !!(placeData.restaurantId || placeData.isDineBuddiesVenue);
+    setFormData((prev) => ({
+      ...prev,
+      location: placeData.fullAddress || placeData.name || prev.location,
+      lat: placeData.lat ?? prev.lat,
+      lng: placeData.lng ?? prev.lng,
+      restaurantId: isDbVenue ? placeData.restaurantId || null : null,
+      restaurantName: isDbVenue ? placeData.restaurantName || placeData.name || prev.restaurantName : '',
+      placeId: placeData.placeId || prev.placeId || null,
+      city: placeData.city || prev.city,
+      country: placeData.country || prev.country,
+      countryCode: placeData.countryCode || prev.countryCode,
+      ...(isDbVenue ? { isDineBuddiesVenue: true } : {}),
+      venueType:
+      placeData.businessType ||
+      placeData.venueType ||
+      prev.venueType ||
+      'Restaurant',
+      title: placeData.name ? `${t('invitation_at')} ${placeData.name}` : prev.title,
+      ...(placeData.matchedFromGoogle ? { venueMatchedFromGoogle: true } : {})
+    }));
+  };
+
+  const privateAiContext = useMemo(
+    () =>
+    createPrivateAiContextFromForm(
+      formData,
+      getPrivateInviteeDisplayName(privateInviteeProfile),
+      cardBackgroundId
+    ),
+    [formData, privateInviteeProfile, cardBackgroundId]
+  );
+
+  /** Always reads latest form state (safe inside floating portal). */
+  const getPrivateAiContext = useCallback(() => {
+    const fd = formDataRef.current || formData;
+    const inviteeId = fd?.invitedFriends?.[0];
+    const inviteeName =
+    inviteeId && privateInviteeProfile?.id === inviteeId ?
+    getPrivateInviteeDisplayName(privateInviteeProfile) :
+    '';
+    return createPrivateAiContextFromForm(
+      fd,
+      inviteeName,
+      cardBackgroundIdRef.current || cardBackgroundId
+    );
+  }, [formData, privateInviteeProfile, cardBackgroundId]);
+
+  const datingAiReady = useMemo(
+    () => validatePrivateAiContext(privateAiContext).ok,
+    [privateAiContext]
+  );
+
+  const datingAiDisabledHint = useMemo(() => {
+    if (datingAiReady) return undefined;
+    return t('private_ai_schedule_venue_required', {
+      defaultValue: 'Set the date, time, and location first — then AI can draft your message.'
+    });
+  }, [datingAiReady, t]);
+
+  const revokeBlobPreview = (prev) => {
+    if (!prev) return;
+    const stillInStash = coverMediaStashRef.current.some((e) => isSamePrivateCoverMedia(e.media, prev));
+    if (!stillInStash) {
+      revokePrivateCoverMedia(prev);
+    }
+  };
+
+  const setCoverMedia = (next) => {
+    setMediaData((prev) => {
+      let resolved;
+      if (next === null) {
+        revokeBlobPreview(prev);
+        resolved = null;
+      } else if (typeof next === 'function') {
+        resolved = next(prev);
+        if (
+        prev?.preview &&
+        String(prev.preview).startsWith('blob:') &&
+        resolved?.preview !== prev.preview)
+        {
+          revokeBlobPreview(prev);
+        }
+      } else {
+        if (
+        prev?.preview &&
+        String(prev.preview).startsWith('blob:') &&
+        prev.preview !== next?.preview)
+        {
+          revokeBlobPreview(prev);
+        }
+        resolved = next;
+      }
+      datingCoverDraftsRef.current[datingCoverTabRef.current] = resolved;
+      return resolved;
+    });
+  };
+
+  const handleDatingCoverTab = (tab) => {
+    if (tab === datingCoverTab) return;
+    datingCoverDraftsRef.current[datingCoverTab] = mediaDataRef.current;
+
+    setDatingCoverTab(tab);
+    const restored = datingCoverDraftsRef.current[tab];
+    setMediaData(restored ?? null);
+
+    if (tab === 'template') {
+      setCardGradientId(null);
+      setCardBackgroundId((prev) =>
+      prev && isPrivateBackgroundIdForCategory(prev, formData.personalInviteCategory) ?
+      prev :
+      getDefaultPrivateCardBackgroundId(formData.personalInviteCategory)
+      );
+    } else if (tab === 'ai' || tab === 'upload' || tab === 'camera') {
+      setCardGradientId(null);
+    }
+  };
+
+  const handleDatingCardBackgroundChange = (id) => {
+    setCardBackgroundId(id);
+    setCardGradientId(null);
+  };
+
+  const toastCoverStashLimit = (kind) => {
+    if (kind === 'upload') {
+      showToast(
+        t('social_cover_stash_max_images', {
+          defaultValue: `You can add up to ${PRIVATE_COVER_STASH_MAX_IMAGES} photos. Remove one from the thumbnails to add another.`,
+          max: PRIVATE_COVER_STASH_MAX_IMAGES
+        }),
+        'error'
+      );
+    } else if (kind === 'ai') {
+      showToast(
+        t('social_cover_stash_max_ai', {
+          defaultValue: `You can keep up to ${PRIVATE_COVER_STASH_MAX_AI_IMAGES} AI covers. Remove one from the thumbnails to generate another.`,
+          max: PRIVATE_COVER_STASH_MAX_AI_IMAGES
+        }),
+        'error'
+      );
+    } else {
+      showToast(
+        t('social_cover_stash_max_videos', {
+          defaultValue: `You can add up to ${PRIVATE_COVER_STASH_MAX_VIDEOS} videos. Remove one from the thumbnails to record another.`,
+          max: PRIVATE_COVER_STASH_MAX_VIDEOS
+        }),
+        'error'
+      );
+    }
+  };
+
+  const commitAiCoverMedia = async (media, stashId = null) => {
+    if (media?.publishedUrl) return media;
+    if (stashId) setAiCoverCommittingId(stashId);
+    try {
+      const userId = currentUser?.id || authUser?.uid;
+      if (!userId) {
+        throw new Error('not_signed_in');
+      }
+      const publishedUrl = await commitInvitationAiCover(media, userId);
+      if (media.preview && String(media.preview).startsWith('blob:')) {
+        const ready = await verifyPublicStorageImageUrl(publishedUrl, { attempts: 4, delayMs: 400 });
+        if (ready) {
+          revokePrivateCoverMedia({ preview: media.preview });
+          return {
+            ...media,
+            source: 'ai_generated',
+            url: publishedUrl,
+            preview: publishedUrl,
+            publishedUrl
+          };
+        }
+        return {
+          ...media,
+          source: 'ai_generated',
+          url: publishedUrl,
+          publishedUrl
+        };
+      }
+      return {
+        ...media,
+        source: 'ai_generated',
+        url: publishedUrl,
+        preview: publishedUrl,
+        publishedUrl
+      };
+    } finally {
+      if (stashId) setAiCoverCommittingId(null);
+    }
+  };
+
+  const updateAiStashMedia = (stashId, media) => {
+    setCoverMediaStash((prev) =>
+    prev.map((entry) => entry.id === stashId ? { ...entry, media } : entry)
+    );
+  };
+
+  const handleAiCoverImageGenerated = useCallback(
+    async (url) => {
+      if (!url) return;
+      if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'ai')) {
+        toastCoverStashLimit('ai');
+        return;
+      }
+
+      datingCoverDraftsRef.current[datingCoverTab] = mediaDataRef.current;
+
+      let media;
+      try {
+        const resolved = await resolveAiGeneratedCoverPreview(url);
+        media = {
+          source: 'ai_generated',
+          type: 'image',
+          url: resolved.remoteUrl,
+          preview: resolved.displayUrl,
+          ...(isServerPersistedAiCoverUrl(resolved.remoteUrl) ?
+          { publishedUrl: resolved.remoteUrl } :
+          {})
+        };
+      } catch (err) {
+        console.error('AI cover preview resolve failed:', err);
+        showToast(
+          t('social_cover_ai_preview_failed', {
+            defaultValue:
+            'The cover was generated but the preview could not load. Try again in a moment.'
+          }),
+          'error'
+        );
+        return;
+      }
+
+      const entry = stashCoverMedia('ai', media);
+      if (!entry) return;
+
+      setDatingCoverTab('ai');
+      setMediaData(media);
+      datingCoverDraftsRef.current.ai = media;
+
+      try {
+        const committed = await commitAiCoverMedia(media, entry.id);
+        updateAiStashMedia(entry.id, committed);
+        if (isSamePrivateCoverMedia(mediaDataRef.current, media)) {
+          setMediaData(committed);
+          datingCoverDraftsRef.current.ai = committed;
+        }
+        showToast(
+          t('magic_cover_applied_toast', { defaultValue: 'AI cover applied to this invitation.' }),
+          'success'
+        );
+      } catch (err) {
+        console.error('AI cover commit failed:', err);
+        showToast(
+          err?.message === 'not_signed_in' ?
+          t('please_sign_in', { defaultValue: 'Please sign in to continue.' }) :
+          t('media_upload_failed', { defaultValue: 'Failed to upload media.' }),
+          'error'
+        );
+      }
+    },
+    [showToast, t]
+  );
+
+  const handleDatingCoverAiTabClick = () => {
+    if (datingCoverTab === 'ai') {
+      if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'ai')) {
+        toastCoverStashLimit('ai');
+        return;
+      }
+      setAiCoverSheetOpen(true);
+    } else {
+      handleDatingCoverTab('ai');
+      setAiCoverSheetOpen(true);
+    }
+  };
+
+  const handleDatingCoverUploadTabClick = () => {
+    if (datingCoverTab === 'upload') {
+      if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'upload')) {
+        toastCoverStashLimit('upload');
+        return;
+      }
+      triggerDatingCoverUpload();
+    } else {
+      handleDatingCoverTab('upload');
+    }
+  };
+
+  const handleDatingCoverCameraTabClick = async () => {
+    if (datingCoverTab !== 'camera') {
+      handleDatingCoverTab('camera');
+    }
+    if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'camera')) {
+      toastCoverStashLimit('camera');
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      showToast(
+        t('camera_error_generic', 'Could not open the camera. Check permissions and try again.'),
+        'error'
+      );
+      return;
+    }
+
+    try {
+      if (pendingCameraStreamRef.current) {
+        pendingCameraStreamRef.current.getTracks().forEach((track) => track.stop());
+        pendingCameraStreamRef.current = null;
+      }
+      pendingCameraStreamRef.current = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: true
+      });
+      setCameraOpenNonce((n) => n + 1);
+    } catch (err) {
+      pendingCameraStreamRef.current = null;
+      console.error('[CreatePrivateInvitation] camera permission', err);
+      const denied =
+        err?.name === 'NotAllowedError' ||
+        err?.name === 'PermissionDeniedError' ||
+        String(err?.message || '').toLowerCase().includes('permission');
+      showToast(
+        denied ?
+          t(
+            'camera_error_permission',
+            'Camera access was blocked. Allow camera in browser settings, then try again.'
+          ) :
+          t('camera_error_generic', 'Could not open the camera. Check permissions and try again.'),
+        'error'
+      );
+    }
+  };
+
+  const stashCoverMedia = (kind, media) => {
+    if (isCoverStashKindAtLimit(coverMediaStashRef.current, kind)) {
+      toastCoverStashLimit(kind);
+      return null;
+    }
+    const entry = { id: createPrivateCoverStashId(), kind, media };
+    setCoverMediaStash((prev) => [...prev, entry]);
+    return entry;
+  };
+
+  const handleCameraCoverMedia = (media) => {
+    datingCoverDraftsRef.current[datingCoverTab] = mediaDataRef.current;
+    if (!stashCoverMedia('camera', media)) {
+      revokePrivateCoverMedia(media);
+      return;
+    }
+    setDatingCoverTab('camera');
+    setMediaData(media);
+    datingCoverDraftsRef.current.camera = media;
+  };
+
+  const handleDatingCoverUploadPick = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file?.type?.startsWith('image/')) {
+      if (file) {
+        showToast(t('image_only_upload', { defaultValue: 'Please choose an image file.' }), 'error');
+      }
+      return;
+    }
+    datingCoverDraftsRef.current[datingCoverTab] = mediaDataRef.current;
+    const preview = URL.createObjectURL(file);
+    const media = {
+      source: 'custom_image',
+      type: 'image',
+      file,
+      preview
+    };
+    if (!stashCoverMedia('upload', media)) {
+      revokePrivateCoverMedia(media);
+      return;
+    }
+    setDatingCoverTab('upload');
+    setMediaData(media);
+    datingCoverDraftsRef.current.upload = media;
+  };
+
+  const handleSelectCoverStashItem = async (id) => {
+    const entry = coverMediaStashRef.current.find((e) => e.id === id);
+    if (!entry) return;
+    datingCoverDraftsRef.current[datingCoverTab] = mediaDataRef.current;
+
+    let media = entry.media;
+    if (entry.kind === 'ai' && !media.publishedUrl) {
+      try {
+        media = await commitAiCoverMedia(media, id);
+        updateAiStashMedia(id, media);
+      } catch (err) {
+        console.error('AI cover commit failed:', err);
+        showToast(
+          err?.message === 'not_signed_in' ?
+          t('please_sign_in', { defaultValue: 'Please sign in to continue.' }) :
+          t('media_upload_failed', { defaultValue: 'Failed to upload media.' }),
+          'error'
+        );
+        return;
+      }
+    }
+
+    setDatingCoverTab(entry.kind);
+    setMediaData(media);
+    datingCoverDraftsRef.current[entry.kind] = media;
+  };
+
+  const handleRemoveCoverStashItem = (id) => {
+    setCoverMediaStash((prev) => {
+      const entry = prev.find((e) => e.id === id);
+      if (!entry) return prev;
+      revokePrivateCoverStashEntry(entry);
+      const next = prev.filter((e) => e.id !== id);
+      if (isSamePrivateCoverMedia(entry.media, mediaDataRef.current)) {
+        const sameKind = next.filter((e) => e.kind === entry.kind);
+        const replacement = sameKind.length ? sameKind[sameKind.length - 1].media : null;
+        setMediaData(replacement);
+        datingCoverDraftsRef.current[entry.kind] = replacement;
+      }
+      return next;
+    });
+  };
+
+  const clearCoverMediaStashAfterPublish = () => {
+    revokeAllPrivateCoverStash(coverMediaStashRef.current);
+    setCoverMediaStash([]);
+    revokePrivateCoverMedia(mediaDataRef.current);
+  };
+
+  const triggerDatingCoverUpload = () => {
+    coverUploadInputRef.current?.click();
+  };
+
+  const buildDatingInvitationAiPrompt = useCallback(
+    () => buildPrivateInvitationAiUserPrompt(formData, privateInviteeProfile),
+    [formData, privateInviteeProfile]
+  );
+
+  const handleDatingInvitationAiContent = useCallback((data) => {
+    const applied = applyInvitationAiFields(data, {
+      titleMax: INVITATION_CARD_TITLE_MAX,
+      descriptionMax: INVITATION_CARD_MESSAGE_MAX,
+      cardStructure: resolveCardStructureFromBackgroundId(cardBackgroundId)
+    });
+
+    if (!applied.hasContent) {
+      console.warn('[CreatePrivateInvitation] AI response had no mappable title/description', data);
+      showToast(
+        t('private_ai_fields_empty'),
+        'error'
+      );
+      return false;
+    }
+
+    flushSync(() => {
+      setFormData((prev) => ({
+        ...prev,
+        title: applied.hasTitle ? applied.title : prev.title,
+        description: applied.hasDescription ? applied.description : prev.description
+      }));
+    });
+
+    setDatingAiFieldsPulse(true);
+    window.setTimeout(() => setDatingAiFieldsPulse(false), 1600);
+
+    requestAnimationFrame(() => {
+      datingAiFieldsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    if (!applied.hasDescription) {
+      showToast(
+        t('private_ai_description_missing'),
+        'info'
+      );
+    }
+
+    return true;
+  }, [showToast, t, cardBackgroundId]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handlePrivateInviteesChange = useCallback((nextIds) => {
+    setFormData((prev) => ({ ...prev, invitedFriends: nextIds }));
+  }, []);
+
+  const editorUid = resolvePrivateInvitationAuthorUid(authUser, currentUser);
+  const editorDraftKey = editorUid ?
+  privateInvitationEditorDraftKey(editorUid, 'dating', editInvitation?.id) :
+  null;
+
+  const pickCoverMediaUrl = useCallback((m) => m?.publishedUrl || m?.url, []);
+
+  const buildSessionDraftPayload = useCallback(async () => {
+    const media = await serializeEditorMedia(mediaDataRef.current, pickCoverMediaUrl);
+    const coverMediaStashSerialized = await serializeCoverMediaStash(
+      coverMediaStashRef.current,
+      (m) => serializeEditorMedia(m, pickCoverMediaUrl)
+    );
+    return {
+      formData: formDataRef.current,
+      existingDraftId,
+      cardFontId,
+      cardFrameColorId,
+      privateCardThemeColor,
+      cardCopyOffsetY,
+      cardCopyWidthPct,
+      cardCopyFontScale,
+      cardBackgroundId,
+      cardGradientId,
+      datingCoverTab,
+      privateCardShowHostAndMessage,
+      privateCardTextBackdropTone,
+      media,
+      coverMediaStash: coverMediaStashSerialized
+    };
+  }, [
+  existingDraftId,
+  cardFontId,
+  cardFrameColorId,
+  privateCardThemeColor,
+  cardCopyOffsetY,
+  cardCopyWidthPct,
+  cardCopyFontScale,
+  cardBackgroundId,
+  cardGradientId,
+  datingCoverTab,
+  privateCardShowHostAndMessage,
+  privateCardTextBackdropTone,
+  pickCoverMediaUrl]
+  );
+
+  const buildSyncDraftPayload = useCallback(() => {
+    const coverMediaStashSerialized = (coverMediaStashRef.current || []).
+    map((entry) => {
+      const media = syncSerializeEditorMedia(entry?.media);
+      if (!media || !entry?.id) return null;
+      return { id: entry.id, kind: entry.kind || 'upload', media };
+    }).
+    filter(Boolean);
+    return {
+      formData: formDataRef.current,
+      existingDraftId,
+      cardFontId,
+      cardFrameColorId,
+      privateCardThemeColor,
+      cardCopyOffsetY,
+      cardCopyWidthPct,
+      cardCopyFontScale,
+      cardBackgroundId,
+      cardGradientId,
+      datingCoverTab,
+      privateCardShowHostAndMessage,
+      privateCardTextBackdropTone,
+      media: syncSerializeEditorMedia(mediaDataRef.current),
+      coverMediaStash: coverMediaStashSerialized
+    };
+  }, [
+  existingDraftId,
+  cardFontId,
+  cardFrameColorId,
+  privateCardThemeColor,
+  cardCopyOffsetY,
+  cardCopyWidthPct,
+  cardCopyFontScale,
+  cardBackgroundId,
+  cardGradientId,
+  datingCoverTab,
+  privateCardShowHostAndMessage,
+  privateCardTextBackdropTone]
+  );
+
+  const applySessionDraftPayload = useCallback(async (draft) => {
+    if (draft.existingDraftId) setExistingDraftId(draft.existingDraftId);
+    if (draft.formData && typeof draft.formData === 'object') {
+      setFormData((prev) => ({ ...prev, ...draft.formData }));
+    }
+    if (draft.cardFontId) setCardFontId(draft.cardFontId);
+    if (draft.cardFrameColorId) setCardFrameColorId(draft.cardFrameColorId);
+    if (draft.privateCardThemeColor !== undefined) setDatingCardThemeColor(draft.privateCardThemeColor);
+    if (draft.cardCopyOffsetY !== undefined) setCardCopyOffsetY(draft.cardCopyOffsetY);
+    if (draft.cardCopyWidthPct !== undefined) setCardCopyWidthPct(draft.cardCopyWidthPct);
+    if (draft.cardCopyFontScale !== undefined) setCardCopyFontScale(draft.cardCopyFontScale);
+    if (draft.cardBackgroundId) setCardBackgroundId(draft.cardBackgroundId);
+    if (draft.cardGradientId !== undefined) setCardGradientId(draft.cardGradientId);
+    if (draft.datingCoverTab) {
+      setDatingCoverTab(draft.datingCoverTab === 'gradient' ? 'template' : draft.datingCoverTab);
+    }
+    if (typeof draft.privateCardShowHostAndMessage === 'boolean') {
+      setDatingCardShowHostAndMessage(draft.privateCardShowHostAndMessage);
+    }
+    if (draft.privateCardTextBackdropTone) {
+      setDatingCardTextBackdropTone(draft.privateCardTextBackdropTone);
+    }
+    const restoredMedia = await restoreEditorMedia(draft.media);
+    if (restoredMedia) {
+      setMediaData(restoredMedia);
+      datingCoverDraftsRef.current[datingCoverTabRef.current] = restoredMedia;
+    }
+    const restoredStash = await restoreCoverMediaStash(draft.coverMediaStash, restoreEditorMedia);
+    if (restoredStash.length) {
+      setCoverMediaStash(restoredStash);
+      if (!restoredMedia) {
+        const last = restoredStash[restoredStash.length - 1];
+        setMediaData(last.media);
+        if (last.kind) {
+          setDatingCoverTab(
+            last.kind === 'camera' ? 'camera' : last.kind === 'ai' ? 'ai' : 'upload'
+          );
+          datingCoverDraftsRef.current[last.kind] = last.media;
+        }
+      }
+    }
+  }, []);
+
+  const { clearDraft: clearSessionDraft, flushSave: flushSessionDraft } = useEditorSessionAutosave({
+    enabled: Boolean(editorUid),
+    storageKey: editorDraftKey,
+    ready: Boolean(editorUid),
+    skipRestore:
+      Boolean(editInvitation) ||
+      Boolean(location.state?.aiStudioImage) ||
+      Boolean(restaurantData),
+    buildPayload: buildSessionDraftPayload,
+    buildSyncPayload: buildSyncDraftPayload,
+    applyPayload: applySessionDraftPayload,
+    isEmpty: isPrivateInvitationEditorDraftEmpty,
+    onRestored: () =>
+    showToast(
+      t('social_editor_draft_restored', {
+        defaultValue: 'Your unsaved invitation was restored.'
+      }),
+      'info'
+    ),
+    deps: [
+    formData,
+    mediaData,
+    cardFontId,
+    cardFrameColorId,
+    privateCardThemeColor,
+    cardCopyOffsetY,
+    cardCopyWidthPct,
+    cardCopyFontScale,
+    cardBackgroundId,
+    cardGradientId,
+    datingCoverTab,
+    privateCardShowHostAndMessage,
+    privateCardTextBackdropTone,
+    existingDraftId,
+    coverMediaStash]
+
+  });
+
+  const getActiveMediaForPersist = useCallback(async () => {
+    let activeMedia = mediaDataRef.current;
+    if (activeMedia?.source === 'ai_generated' && !activeMedia.publishedUrl) {
+      showToast(
+        t('social_cover_ai_uploading', {
+          defaultValue: 'Saving your AI cover to storage…'
+        }),
+        'info',
+        null,
+        4000
+      );
+      const stashEntry = coverMediaStashRef.current.find((e) =>
+      isSamePrivateCoverMedia(e.media, activeMedia)
+      );
+      activeMedia = await commitAiCoverMedia(activeMedia, stashEntry?.id ?? null);
+      if (stashEntry) updateAiStashMedia(stashEntry.id, activeMedia);
+      setMediaData(activeMedia);
+      datingCoverDraftsRef.current.ai = activeMedia;
+    }
+    return activeMedia;
+  }, [showToast, t]);
+
+  const persistEditorDraft = useCallback(async () => {
+    const authorUid = resolvePrivateInvitationAuthorUid(authUser, currentUser);
+    if (!authorUid) {
+      showToast(t('please_sign_in', { defaultValue: 'Please sign in to continue.' }), 'error');
+      return { ok: false };
+    }
+    try {
+      return await persistPrivateInvitationEditorDraft({
+        type: 'Private',
+        formData: formDataRef.current || formData,
+        getActiveMedia: getActiveMediaForPersist,
+        authorUid,
+        cardFrameColorId,
+        cardFontId,
+        cardCopyOffsetY,
+        cardCopyWidthPct,
+        cardCopyFontScale,
+        cardBackgroundId,
+        cardGradientId,
+        existingDraftId: existingDraftIdRef.current,
+        addHostedInvitation,
+        privateCardThemeColor,
+        privateCardShowHostAndMessage,
+        privateCardTextBackdropTone,
+        sanitizeDraft: sanitizeFirestoreDraft
+      });
+    } catch (mediaError) {
+      console.error('❌ Draft save failed:', mediaError);
+      notifyImageUploadError(showToast, mediaError, t, 'media_upload_failed');
+      return { ok: false };
+    }
+  }, [
+  authUser,
+  currentUser,
+  cardFrameColorId,
+  cardFontId,
+  cardCopyOffsetY,
+  cardCopyWidthPct,
+  cardCopyFontScale,
+  cardBackgroundId,
+  cardGradientId,
+  existingDraftId,
+  addHostedInvitation,
+  privateCardThemeColor,
+  privateCardShowHostAndMessage,
+  privateCardTextBackdropTone,
+  getActiveMediaForPersist,
+  formData,
+  showToast,
+  t]
+  );
+
+  const validateEditorRequiredFields = useCallback(() => {
+    const fd = formDataRef.current || formData;
+    if (!fd.title?.trim() || !fd.date || !fd.time || !fd.location?.trim()) {
+      showToast(t('please_fill_required_fields') || 'Please fill in all required fields', 'error');
+      return false;
+    }
+    return true;
+  }, [formData, showToast, t]);
+
+  const [showCloseDialog, setShowCloseDialog] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+
+  const hasEditorWork = useMemo(
+    () =>
+    hasPrivateInvitationEditorWork({
+      existingDraftId,
+      formData,
+      mediaData,
+      coverMediaStash,
+      cardBackgroundId,
+      cardGradientId
+    }),
+    [existingDraftId, formData, mediaData, coverMediaStash, cardBackgroundId, cardGradientId]
+  );
+
+  const handleCloseRequest = useCallback(() => {
+    if (!hasEditorWork) {
+      void flushSessionDraft().then(() => navigate(-1));
+      return;
+    }
+    setShowCloseDialog(true);
+  }, [flushSessionDraft, hasEditorWork, navigate]);
+
+  const handleCloseSave = useCallback(async () => {
+    const payload = await buildSessionDraftPayload();
+    if (isPrivateInvitationEditorDraftEmpty(payload)) {
+      setShowCloseDialog(false);
+      await flushSessionDraft();
+      navigate(-1);
+      return;
+    }
+    setIsClosing(true);
+    try {
+      const result = await persistEditorDraft();
+      if (!result.ok) {
+        if (result.code === 'create_failed') {
+          showToast(t('failed_create_invitation'), 'error');
+        }
+        return;
+      }
+      clearSessionDraft();
+      setShowCloseDialog(false);
+      showToast(
+        t('social_invitation_draft_saved', {
+          defaultValue: 'Invitation saved. You can continue editing or open preview.'
+        }),
+        'success'
+      );
+      navigate(-1);
+    } finally {
+      setIsClosing(false);
+    }
+  }, [
+  buildSessionDraftPayload,
+  clearSessionDraft,
+  navigate,
+  persistEditorDraft,
+  showToast,
+  t,
+  flushSessionDraft]
+  );
+
+  const handleCloseDiscard = useCallback(() => {
+    setShowCloseDialog(false);
+    clearSessionDraft();
+    navigate(-1);
+  }, [clearSessionDraft, navigate]);
+
+  const handleBack = useCallback(() => {
+    handleCloseRequest();
+  }, [handleCloseRequest]);
+
+  const handleSaveDraft = useCallback(async () => {
+    const payload = await buildSessionDraftPayload();
+    if (isPrivateInvitationEditorDraftEmpty(payload)) {
+      showToast(
+        t('social_editor_nothing_to_save', {
+          defaultValue: 'Add invitation details before saving.'
+        }),
+        'info'
+      );
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const result = await persistEditorDraft();
+      if (!result.ok) {
+        if (result.code === 'create_failed') {
+          showToast(t('failed_create_invitation'), 'error');
+        }
+        return;
+      }
+      existingDraftIdRef.current = result.draftId;
+      setExistingDraftId(result.draftId);
+      clearSessionDraft();
+      showToast(
+        t('social_invitation_draft_saved', {
+          defaultValue: 'Invitation saved. You can continue editing or open preview.'
+        }),
+        'success'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [buildSessionDraftPayload, clearSessionDraft, persistEditorDraft, showToast, t]);
+
+  const handlePreview = useCallback(async () => {
+    if (!validateEditorRequiredFields()) return;
+
+    const quota = canCreateSocialInvitation('private');
+    if (!editInvitation && !quota.profileLoading && !quota.canCreate) {
+      showToast(
+        t(
+          'dine_credits_dating_insufficient',
+          `Publishing costs ${PRIVATE_INVITATION_PUBLISH_CREDITS} Dine Credits. Open Settings → Dine Credits to top up.`
+        ),
+        'error'
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const result = await persistEditorDraft();
+      if (!result.ok) {
+        if (result.code === 'create_failed') {
+          showToast(t('failed_create_invitation'), 'error');
+        } else if (result.code === 'not_signed_in') {
+          showToast(t('please_sign_in', { defaultValue: 'Please sign in to continue.' }), 'error');
+        } else {
+          showToast(t('failed_create_invitation'), 'error');
+        }
+        return;
+      }
+      if (!result.draftId) {
+        showToast(t('failed_create_invitation'), 'error');
+        return;
+      }
+
+      const verified = await ensureHostedInvitationDraftReady(result.draftId);
+      if (!verified.ok) {
+        console.warn('Preview draft not readable yet:', verified.code, result.draftId);
+        showToast(
+          verified.code === 'permission'
+            ? t('social_draft_permission_denied', {
+                defaultValue: 'Could not open the draft. Sign in again and retry.'
+              })
+            : t('social_preview_open_retry', {
+                defaultValue: 'Could not open preview yet. Please try again in a moment.'
+              }),
+          'error'
+        );
+        return;
+      }
+
+      existingDraftIdRef.current = result.draftId;
+      setExistingDraftId(result.draftId);
+      navigate(`/invitation/private/preview/${result.draftId}`, {
+        replace: true,
+        state: {
+          previewInvitation: { id: result.draftId, ...verified.data },
+        },
+      });
+    } catch (error) {
+      console.error('Error creating dating draft:', error);
+      showToast(t('failed_create_invitation'), 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [
+  validateEditorRequiredFields,
+  canCreateSocialInvitation,
+  editInvitation,
+  persistEditorDraft,
+  navigate,
+  showToast,
+  t]
+  );
+
+  const quota = quotaInfo.quota;
+  const isUnlimited = quota === 'unlimited' || quota === '∞' || quota === -1;
+  const profilePending = Boolean(quotaInfo.profileLoading) || quota === 'pending';
+  const dineBalance = getTotalDineCredits(userProfile);
+  const publishCost = PRIVATE_INVITATION_PUBLISH_CREDITS;
+  const lowCredits = !isUnlimited && !profilePending && dineBalance < publishCost;
+
+  const datingCoverTabLabel = useMemo(() => {
+    const labels = {
+      camera: t('social_cover_tab_camera_record', { defaultValue: 'Record video' }),
+      upload: t('social_cover_tab_upload_device', { defaultValue: 'Upload from device' }),
+      template: t('private_cover_tab_template', { defaultValue: 'Template' }),
+      ai: t('social_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' })
+    };
+    return labels[datingCoverTab] || '';
+  }, [datingCoverTab, t]);
+
+  return (
+    <div className="private-create-wrapper private-theme private-invite-page">
+            <div className="private-header-premium private-invite-header">
+                <button type="button" onClick={handleBack} className="private-back-btn">
                     <FaChevronLeft />
                 </button>
-                <div className="private-header-badge">
-                    {t('private_invitation_badge', 'Private & Exclusive Invitation')}
+                <div className="private-header-badge private-invite-header__badge">
+                    {t('personal_invite_badge', 'Personal invite')}
                 </div>
-                <h2 className="private-header-title">
-                    <FaLock />
-                    {t('create_private_invitation', 'Create Private Invitation')}
-                </h2>
-                <p className="private-header-desc">
-                    {t('private_invitation_desc', 'This invitation will not be visible to the public. Only people you invite can see and join.')}
-                </p>
+                <AppText as="h2" className="private-header-title private-invite-header__title">
+                    {t('personal_invite_title', 'Personal invite')}
+                </AppText>
+                <AppText as="p" className="private-header-desc">
+                    {t(
+            'personal_invite_subtitle',
+            'Invite one person for a spontaneous meetup — pick the category that fits.'
+          )}
+                </AppText>
 
-                {/* Quota Banner */}
-                <div style={{
-                    margin: '12px 0 0',
-                    padding: '10px 16px',
-                    borderRadius: '12px',
-                    background: isUnlimited
-                        ? 'rgba(72,187,120,0.1)'
-                        : quota <= 1
-                            ? 'rgba(239,68,68,0.1)'
-                            : 'rgba(139,92,246,0.1)',
-                    border: `1px solid ${isUnlimited ? 'rgba(72,187,120,0.3)' : quota <= 1 ? 'rgba(239,68,68,0.3)' : 'rgba(139,92,246,0.3)'}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    fontSize: '0.875rem',
-                    color: isUnlimited ? '#4ade80' : quota <= 1 ? '#f87171' : '#a78bfa',
-                    fontWeight: 600
-                }}>
-                    <span>{isUnlimited ? '∞' : `${quota}`}</span>
-                    <span style={{ opacity: 0.8, fontWeight: 400 }}>
-                        {isUnlimited
-                            ? 'Unlimited private invitations'
-                            : `private invitation${quota !== 1 ? 's' : ''} remaining this ${quotaInfo.period || 'month'}`}
-                    </span>
-                    {!isUnlimited && (userProfile?.weeklyPrivateQuota > 0 || userProfile?.monthlyPrivateQuota > 0) && (
-                        <span style={{ marginLeft: 'auto', opacity: 0.5, fontSize: '0.75rem' }}>
-                            {quotaInfo.period === 'month'
-                                ? `${userProfile?.usedPrivateCreditsThisMonth || 0}/${userProfile?.monthlyPrivateQuota} used this month`
-                                : `${userProfile?.usedPrivateCreditsThisWeek || 0}/${userProfile?.weeklyPrivateQuota} used this week`}
-                        </span>
-                    )}
-                </div>
+                {!quotaInfo.profileLoading &&
+        <div
+          className={`private-invite-header__credits${
+          lowCredits ? ' private-invite-header__credits--low' : ''}${
+          isUnlimited ? ' private-invite-header__credits--unlimited' : ''}`}>
+
+                        <AppText as="span">{isUnlimited ? '∞' : `${dineBalance}`}</AppText>
+                        <AppText as="span" className="private-invite-header__credits-text">
+                            {isUnlimited ?
+            t('unlimited_date_invitations', 'Unlimited private invites') :
+            t(
+              'dine_credits_dating_banner',
+              '{{balance}} Dine Credits — publishing uses {{cost}} credits.',
+              { balance: dineBalance, cost: publishCost }
+            )}
+                        </AppText>
+                    </div>
+        }
             </div>
 
             <div className="private-form-container" style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
-                <form onSubmit={handlePreview} className="elegant-form">
-                    {/* Basic Info */}
+                <form onSubmit={(e) => e.preventDefault()} className="elegant-form">
+
+                    <SocialInvitationInviteePanel
+            mode="dating"
+            step="create"
+            invitationId={existingDraftId}
+            invitedFriendIds={formData.invitedFriends || []}
+            onInvitedFriendsChange={handlePrivateInviteesChange}
+            className="mb-3" />
+
+                    {privateInviteeProfile?.id && normalizeLookingFor(privateInviteeProfile.lookingFor).length > 0 ?
+            <div className="private-invitee-recipient-preview mb-3">
+                        <AppText as="p" className="private-invitee-recipient-preview__label">
+                            {t('profile_looking_for_title', 'Looking for')}
+                        </AppText>
+                        <LookingForChips
+                ids={privateInviteeProfile.lookingFor}
+                className="private-invitee-recipient-preview__chips"
+                chipClassName="private-invitee-recipient-preview__chip" />
+                    </div> :
+            null}
+
                     <div className="form-group mb-4">
-                        <label className="elegant-label">{t('invitation_title')}</label>
+                        <label className="elegant-label">
+                            {t('personal_invite_category_label', 'Purpose of invitation')}
+                        </label>
+                        <div className="personal-invite-categories" role="group" aria-label={t('personal_invite_category_label', 'Purpose of invitation')}>
+                            {PERSONAL_INVITE_CATEGORIES.map((cat) => {
+                const selected = formData.personalInviteCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    className={`private-occasion-chip personal-invite-purpose-chip${selected ? ' private-occasion-chip--selected' : ''}`}
+                    aria-pressed={selected}
+                    onClick={() => handlePersonalInviteCategoryChange(cat.id)}>
+
+                                        <AppText as="span" className="private-occasion-chip__icon" aria-hidden>
+                                            {cat.icon}
+                                        </AppText>
+                                        <AppText as="span" className="private-occasion-chip__label personal-invite-purpose-chip__label">
+                                            {t(cat.labelKey, cat.defaultLabel)}
+                                        </AppText>
+                                    </button>);
+
+              })}
+                        </div>
+                    </div>
+
+                    {/* Date & time — one compact row */}
+                    <div className="form-group mb-3 private-datetime-inline">
+                        <label className="elegant-label private-datetime-inline__label">
+                            <FaCalendarAlt aria-hidden /> {t('date_and_time', 'Date & time')}
+                        </label>
+                        <div className="private-datetime-inline__row">
+                            <input
+                type="date"
+                name="date"
+                value={formData.date}
+                onChange={handleChange}
+                className="elegant-input private-datetime-inline__input"
+                min={new Date().toISOString().split('T')[0]}
+                required
+                aria-label={t('date')} />
+
+                            <input
+                type="time"
+                name="time"
+                value={formData.time}
+                onChange={handleChange}
+                className="elegant-input private-datetime-inline__input"
+                required
+                aria-label={t('time')} />
+
+                        </div>
+                    </div>
+
+                    <InvitationVenueLocationSection
+              value={formData.location}
+              onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
+              onSelect={handleLocationSelect}
+              city={formData.city}
+              countryCode={resolveVenueCountryIso(formData, userProfile)}
+              userLat={formData.userLat ?? userProfile?.coordinates?.lat}
+              userLng={formData.userLng ?? userProfile?.coordinates?.lng}
+              className="elegant-input"
+            />
+
+                    <div className="mb-4">
+                        <AIFloatingLauncher
+              postType="invitation"
+              subType="date"
+              onTextSuccess={handleDatingInvitationAiContent}
+              buildContextPrompt={buildDatingInvitationAiPrompt}
+              privateAiContext={privateAiContext}
+              getPrivateAiContext={getPrivateAiContext}
+              disabled={isSubmitting}
+              disabledHint={!datingAiReady ? datingAiDisabledHint : undefined} />
+
+                    </div>
+
+                    <div
+            ref={datingAiFieldsRef}
+            className={`private-ai-text-fields mb-4${datingAiFieldsPulse ? ' private-ai-text-fields--pulse' : ''}`}>
+
+                        <AppText as="p"
+            className="private-ai-text-fields__hint"
+            style={{
+              fontSize: '0.78rem',
+              color: 'var(--text-muted)',
+              margin: '0 0 12px',
+              lineHeight: 1.45
+            }}>
+
+                            {t('private_ai_text_fields_hint', {
+                defaultValue:
+                'Use AI above to draft the title and message, or write them yourself.'
+              })}
+                        </AppText>
+
+                        <div className="form-group mb-4">
+                            <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                {t('invitation_title')}
+                                <AppText as="span"
+                style={{
+                  fontSize: '0.75rem',
+                  color:
+                  (formData.title?.length || 0) >= INVITATION_CARD_TITLE_MAX ?
+                  '#f87171' :
+                  'var(--text-muted)'
+                }}>
+
+                                    {formData.title?.length || 0}/{INVITATION_CARD_TITLE_MAX}
+                                </AppText>
+                            </label>
+                            <AppTextInput
+                type="text"
+                name="title"
+                value={formData.title}
+                onChange={handleChange}
+                placeholder={t('enter_title')}
+                className="elegant-input"
+                maxLength={INVITATION_CARD_TITLE_MAX}
+                required
+                dir={bidiFieldProps.dir}
+                lang={bidiFieldProps.lang}
+                style={bidiFieldProps.style} />
+
+                        </div>
+
+                        <div className="form-group mb-4">
+                            <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                {t('message_to_friends')}
+                                <AppText as="span"
+                style={{
+                  fontSize: '0.75rem',
+                  color:
+                  (formData.description?.length || 0) >= INVITATION_CARD_MESSAGE_MAX ?
+                  '#f87171' :
+                  'var(--text-muted)'
+                }}>
+
+                                    {formData.description?.length || 0}/{INVITATION_CARD_MESSAGE_MAX}
+                                </AppText>
+                            </label>
+                            <AppTextInput as="textarea"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              placeholder={t('write_something_personal')}
+              className="elegant-textarea"
+              rows="3"
+              maxLength={INVITATION_CARD_MESSAGE_MAX}
+              dir={bidiFieldProps.dir}
+              lang={bidiFieldProps.lang}
+              style={bidiFieldProps.style} />
+
+                        </div>
+                    </div>
+
+                    {/* Card + cover: one preview row; thumbnails only on the right (template / upload / camera) */}
+                    <div className="private-section-card private-section-card--templates mb-4" style={{ borderColor: 'rgba(236,72,153,0.25)' }}>
+                        <AppText as="h3" className="private-section-card__title" style={{ color: '#ec4899' }}>
+                            <AppText as="span" aria-hidden>🃏</AppText>{' '}
+                            {t('social_section_templates_title', { defaultValue: 'Ready card looks' })}
+                        </AppText>
                         <input
-                            type="text"
-                            name="title"
-                            value={formData.title}
-                            onChange={handleChange}
-                            placeholder={t('enter_title')}
-                            className="elegant-input"
-                            required
-                        />
-                    </div>
+              ref={coverUploadInputRef}
+              type="file"
+              accept="image/*"
+              className="private-cover-upload-input"
+              onChange={handleDatingCoverUploadPick}
+              tabIndex={-1}
+              aria-hidden />
 
-                    <div className="form-row mb-4" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                        <div className="form-group">
-                            <label className="elegant-label"><FaCalendarAlt /> {t('date')}</label>
-                            <input
-                                type="date"
-                                name="date"
-                                value={formData.date}
-                                onChange={handleChange}
-                                className="elegant-input"
-                                min={new Date().toISOString().split('T')[0]}
-                                required
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label className="elegant-label"><FaClock /> {t('time')}</label>
-                            <input
-                                type="time"
-                                name="time"
-                                value={formData.time}
-                                onChange={handleChange}
-                                className="elegant-input"
-                                required
-                            />
-                        </div>
-                    </div>
+                        <div className="private-cover-tabs-wrap">
+                            <AppText as="p" className="private-cover-tabs__active-label" aria-live="polite">
+                                {datingCoverTabLabel}
+                            </AppText>
+                            <div
+                role="tablist"
+                aria-label={t('private_cover_tabs_label', { defaultValue: 'Cover source' })}
+                className="private-cover-tabs private-cover-tabs--icons-only">
 
-                    <div className="form-group mb-4">
-                        <label className="elegant-label">{t('form_occasion_label')}</label>
-                        <div className="occasion-options" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-                            {[
-                                { id: 'dating', icon: <FaHeart />, label: 'Dating' },
-                                { id: 'birthday', icon: <FaBirthdayCake />, label: 'Birthday' },
-                                { id: 'social', icon: <FaUsers />, label: 'Social' },
-                                { id: 'work', icon: <FaBriefcase />, label: 'Work' },
-                                { id: 'nightlife', icon: <FaMoon />, label: 'Nightlife' },
-                                { id: 'dining', icon: <FaUtensils />, label: 'Dining' },
-                                { id: 'cafe', icon: <FaCoffee />, label: 'Café' },
-                                { id: 'gaming', icon: <FaGamepad />, label: 'Gaming' }
-                            ].map(occ => (
-                                <div
-                                    key={occ.id}
-                                    onClick={() => setFormData(prev => ({ ...prev, occasionType: occ.label }))}
-                                    style={{
-                                        padding: '15px 10px',
-                                        borderRadius: '16px',
-                                        textAlign: 'center',
-                                        cursor: 'pointer',
-                                        border: '1px solid',
-                                        borderColor: formData.occasionType === occ.label ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
-                                        background: formData.occasionType === occ.label ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.02)',
-                                        color: formData.occasionType === occ.label ? 'var(--primary)' : 'var(--text-muted)',
-                                        transition: 'all 0.3s ease',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        fontSize: '0.65rem',
-                                        fontWeight: '800'
-                                    }}
-                                >
-                                    <span style={{ fontSize: '1.2rem', color: formData.occasionType === occ.label ? 'var(--luxury-gold)' : 'inherit' }}>
-                                        {occ.icon}
-                                    </span>
-                                    {t(`occasion_${occ.id}`)}
+                            <button
+                  type="button"
+                  role="tab"
+                  aria-selected={datingCoverTab === 'camera'}
+                  onClick={handleDatingCoverCameraTabClick}
+                  className={`private-cover-tab${datingCoverTab === 'camera' ? ' private-cover-tab--active' : ''}`}
+                  title={t('social_cover_tab_camera_open', { defaultValue: 'Video' })}
+                  aria-label={t('social_cover_tab_camera_open', { defaultValue: 'Video' })}>
+
+                                <FaCamera aria-hidden />
+                            </button>
+                            <button
+                  type="button"
+                  role="tab"
+                  aria-selected={datingCoverTab === 'upload'}
+                  onClick={handleDatingCoverUploadTabClick}
+                  className={`private-cover-tab${datingCoverTab === 'upload' ? ' private-cover-tab--active' : ''}`}
+                  title={t('social_cover_tab_upload_open', { defaultValue: 'From device' })}
+                  aria-label={t('social_cover_tab_upload_open', { defaultValue: 'From device' })}>
+
+                                <FaUpload aria-hidden />
+                            </button>
+                            <button
+                  type="button"
+                  role="tab"
+                  aria-selected={datingCoverTab === 'template'}
+                  onClick={() => handleDatingCoverTab('template')}
+                  className={`private-cover-tab${datingCoverTab === 'template' ? ' private-cover-tab--active' : ''}`}
+                  title={t('private_cover_tab_template', { defaultValue: 'Template' })}
+                  aria-label={t('private_cover_tab_template', { defaultValue: 'Template' })}>
+
+                                <FaImage aria-hidden />
+                            </button>
+                            <button
+                  type="button"
+                  role="tab"
+                  aria-selected={datingCoverTab === 'ai'}
+                  onClick={handleDatingCoverAiTabClick}
+                  className={`private-cover-tab${datingCoverTab === 'ai' ? ' private-cover-tab--active' : ''}`}
+                  title={t('social_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' })}
+                  aria-label={t('social_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' })}>
+
+                                <FaMagic aria-hidden />
+                            </button>
+                            </div>
+                        </div>
+
+                        <div style={{ display: datingCoverTab === 'camera' ? 'block' : 'none' }}>
+                            <PrivateCoverCameraPanel
+              onMediaSelect={handleCameraCoverMedia}
+              openNonce={cameraOpenNonce}
+              preOpenedStreamRef={pendingCameraStreamRef} />
+                        </div>
+
+                        <SocialInvitationAiCoverPanel
+              open={aiCoverSheetOpen}
+              onClose={() => setAiCoverSheetOpen(false)}
+              subType="date"
+              buildBrief={buildDatingInvitationAiPrompt}
+              onUseImage={handleAiCoverImageGenerated}
+              disabled={isSubmitting} />
+
+                        <div className="form-group mb-0">
+                            <div className="private-card-preview-with-bg">
+                                <div className="private-card-preview-with-bg__preview-wrap">
+                                    <PrivateCardPreviewStage
+                    showHostAndMessage={privateCardShowHostAndMessage}
+                    onShowHostAndMessageChange={setDatingCardShowHostAndMessage}
+                    editorPhotoBackgroundActive={editorPhotoBackgroundActive}
+                    textBackdropTone={privateCardTextBackdropTone}
+                    onTextBackdropToneChange={setDatingCardTextBackdropTone}
+                    copyOffsetY={cardCopyOffsetY}
+                    copyWidthPct={cardCopyWidthPct}
+                    copyFontScale={cardCopyFontScale}
+                    onCopyOffsetYChange={setCardCopyOffsetY}
+                    onCopyWidthPctChange={setCardCopyWidthPct}
+                    onCopyFontScaleChange={setCardCopyFontScale}
+                    fontId={cardFontId}
+                    themeColorHex={privateCardThemeColor}
+                    onFontChange={setCardFontId}
+                    onThemeColorChange={setDatingCardThemeColor}>
+
+                                        <SocialInvitationCardPreview
+                      cardTemplateSet="dating"
+                      className="social-invitation-card-preview--showcase social-invitation-card-preview--showcase-compact social-invitation-card-preview--private-editor-meta"
+                      frameColorId={cardFrameColorId}
+                      cardThemeColor={privateCardThemeColor}
+                      cardFontId={cardFontId}
+                      copyOffsetY={cardCopyOffsetY}
+                      copyWidthPct={cardCopyWidthPct}
+                      copyFontScale={cardCopyFontScale}
+                      occasionType={formData.occasionType}
+                      occasionCategoryId={formData.personalInviteCategory}
+                      cardBackgroundId={cardBackgroundId}
+                      cardGradientId={cardGradientId}
+                      cardStructure={privateAiContext.cardStructure}
+                      heroCoverSrc={privatePreviewHeroCover?.src ?? null}
+                      heroCoverMediaType={privatePreviewHeroCover?.mediaType ?? null}
+                      heroCoverPoster={privatePreviewHeroCover?.poster ?? null}
+                      heroCoverPending={heroCoverPending}
+                      title={formData.title}
+                      description={formData.description}
+                      date={formData.date}
+                      time={formData.time}
+                      location={formData.location}
+                      inviterName={
+                      userProfile?.display_name ||
+                      userProfile?.displayName ||
+                      currentUser?.display_name ||
+                      currentUser?.displayName ||
+                      ''
+                      }
+                      inviterAvatarUrl={getSafeAvatar(userProfile || currentUser || {})}
+                      showHostAndMessage={privateCardShowHostAndMessage}
+                      textBackdropTone={privateCardTextBackdropTone} />
+
+                                    </PrivateCardPreviewStage>
+                                    <SocialInvitationCoverRightRail
+                    templateVariant="dating"
+                    personalInviteCategory={formData.personalInviteCategory}
+                    cardBackgroundId={cardBackgroundId}
+                    onCardBackgroundIdChange={handleDatingCardBackgroundChange}
+                    mode={datingCoverTab}
+                    mediaData={mediaData}
+                    coverStash={coverMediaStash}
+                    onSelectStashItem={handleSelectCoverStashItem}
+                    onRemoveStashItem={handleRemoveCoverStashItem}
+                    committingStashId={aiCoverCommittingId} />
+
                                 </div>
-                            ))}
+                            </div>
                         </div>
                     </div>
 
-                    <div className="form-group mb-4">
-                        <label className="elegant-label"><FaMapMarkerAlt className="label-icon" /> {t('location')}</label>
-                        <LocationAutocomplete
-                            value={formData.location}
-                            onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                            onSelect={handleLocationSelect}
-                            city={formData.city}
-                            countryCode={formData.country}
-                            userLat={formData.userLat}
-                            userLng={formData.userLng}
-                            className="elegant-input"
-                        />
-                    </div>
+                    <SocialInvitationEditorFooter
+            variant="dating"
+            onClose={handleCloseRequest}
+            onSave={handleSaveDraft}
+            onPreview={handlePreview}
+            busy={isSubmitting} />
 
-                    {/* Media Selector */}
-                    <div className="form-group mb-4">
-                        <label className="elegant-label">{t('invitation_media')}</label>
-                        <MediaSelector
-                            restaurant={{
-                                restaurantImage: formData.restaurantImage || formData.image,
-                                name: formData.restaurantName
-                            }}
-                            suggestedImages={suggestedImages}
-                            suggestedImagesLoading={suggestedImagesLoading}
-                            onMediaSelect={(data) => setMediaData(data)}
-                            initialData={mediaData}
-                        />
-                    </div>
-
-                    {/* Payment Type */}
-                    <div className="form-group mb-4">
-                        <label className="elegant-label"><FaMoneyBillWave /> {t('payment_type')}</label>
-                        <div className="payment-options" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                            {['Split', 'Host Pays'].map(type => (
-                                <div
-                                    key={type}
-                                    onClick={() => setFormData(prev => ({ ...prev, paymentType: type }))}
-                                    style={{
-                                        padding: '12px',
-                                        borderRadius: '12px',
-                                        textAlign: 'center',
-                                        cursor: 'pointer',
-                                        border: '1px solid',
-                                        borderColor: formData.paymentType === type ? 'var(--primary)' : 'var(--border-color)',
-                                        background: formData.paymentType === type ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
-                                        color: formData.paymentType === type ? 'var(--primary)' : 'var(--text-main)',
-                                        fontWeight: '700',
-                                        transition: 'all 0.2s'
-                                    }}
-                                >
-                                    {t(type.toLowerCase().replace(' ', '_'))}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Description */}
-                    <div className="form-group mb-4">
-                        <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            {t('message_to_friends')}
-                            <span style={{ fontSize: '0.75rem', color: (formData.description?.length || 0) > 180 ? '#f87171' : 'var(--text-muted)' }}>
-                                {(formData.description?.length || 0)}/200
-                            </span>
-                        </label>
-                        <textarea
-                            name="description"
-                            value={formData.description}
-                            onChange={handleChange}
-                            placeholder={t('write_something_personal')}
-                            className="elegant-textarea"
-                            rows="3"
-                            maxLength="200"
-                        ></textarea>
-                    </div>
-
-                    {/* Friend Selection — Grid Layout */}
-                    <div className="form-group mb-4" style={{ background: 'rgba(255,255,255,0.03)', padding: '15px', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
-                        <label className="elegant-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                            <span><FaUserFriends /> {t('invite_friends')}</span>
-                            <span style={{
-                                color: isAtLimit ? '#f87171' : 'var(--primary)',
-                                fontSize: '0.8rem',
-                                fontWeight: 700
-                            }}>
-                                {formData.invitedFriends.length}/{maxGuests}
-                                {isAtLimit && ' 🔒'}
-                            </span>
-                        </label>
-                        {isAtLimit && (
-                            <div style={{
-                                marginBottom: 10,
-                                padding: '8px 12px',
-                                borderRadius: '10px',
-                                background: maxGuests === 1 ? 'rgba(251,191,36,0.08)' : 'rgba(239,68,68,0.08)',
-                                border: `1px solid ${maxGuests === 1 ? 'rgba(251,191,36,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                                color: maxGuests === 1 ? '#fbbf24' : '#f87171',
-                                fontSize: '0.82rem',
-                                fontWeight: 600
-                            }}>
-                                {maxGuests === 1
-                                    ? '💑 ' + t('dating_one_guest_only', 'Private date — only 1 guest allowed')
-                                    : '⛔ ' + t('max_guests_reached', `Maximum of ${maxGuests} guests reached`)}
-                            </div>
-                        )}
-
-                        {/* Search bar */}
-                        <div style={{ position: 'relative', marginBottom: 12 }}>
-                            <input
-                                type="text"
-                                placeholder={t('search_friends')}
-                                value={friendSearchQuery}
-                                onChange={(e) => setFriendSearchQuery(e.target.value)}
-                                style={{ width: '100%', padding: '10px 36px 10px 14px', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.9rem' }}
-                            />
-                            <FaSearch style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} />
-                        </div>
-
-                        {/* Friend grid */}
-                        {friendsLoading ? (
-                            <div style={{ textAlign: 'center', padding: '20px', opacity: 0.5 }}>{t('loading')}</div>
-                        ) : filteredFriends.length > 0 ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 10, maxHeight: 240, overflowY: 'auto', padding: '4px 2px' }}>
-                                {filteredFriends.map(friend => {
-                                    const isSelected = formData.invitedFriends.includes(friend.id);
-                                    const isDisabled = !isSelected && isAtLimit;
-                                    return (
-                                        <div
-                                            key={friend.id}
-                                            onClick={() => !isDisabled && toggleFriendSelection(friend.id)}
-                                            style={{
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                alignItems: 'center',
-                                                gap: 6,
-                                                padding: '10px 6px',
-                                                borderRadius: 12,
-                                                background: isSelected ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.03)',
-                                                border: `1.5px solid ${isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.07)'}`,
-                                                cursor: isDisabled ? 'not-allowed' : 'pointer',
-                                                opacity: isDisabled ? 0.4 : 1,
-                                                transition: 'all 0.18s',
-                                                position: 'relative'
-                                            }}
-                                        >
-                                            {isSelected && (
-                                                <div style={{ position: 'absolute', top: 4, right: 4, width: 16, height: 16, borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <FaCheckCircle style={{ color: 'white', fontSize: '0.6rem' }} />
-                                                </div>
-                                            )}
-                                            <img
-                                                src={getSafeAvatar(friend)}
-                                                alt={friend.display_name}
-                                                style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: isSelected ? '2px solid var(--primary)' : '2px solid transparent' }}
-                                            />
-                                            <span style={{ fontSize: '0.7rem', fontWeight: 600, color: isSelected ? 'var(--primary)' : 'var(--text-muted)', textAlign: 'center', lineHeight: 1.2, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {friend.display_name?.split(' ')[0]}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div style={{ textAlign: 'center', padding: '20px', fontSize: '0.85rem', opacity: 0.4 }}>
-                                {mutualFriends.length === 0 ? 'Follow people first to invite them' : t('no_friends_found')}
-                            </div>
-                        )}
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="ui-btn ui-btn--primary"
-                        style={{ width: '100%', marginTop: '10px', fontSize: '1.1rem', opacity: isSubmitting ? 0.7 : 1 }}
-                    >
-                        {isSubmitting ? t('processing') : t('preview_invitation')}
-                    </button>
                 </form>
             </div>
-        </div>
-    );
+
+            <InvitationEditorLeaveDialog
+        open={showCloseDialog}
+        saving={isClosing}
+        onSave={handleCloseSave}
+        onDiscard={handleCloseDiscard}
+        onCancel={() => setShowCloseDialog(false)} />
+
+        </div>);
+
 };
 
 export default CreatePrivateInvitation;

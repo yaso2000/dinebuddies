@@ -1,0 +1,2402 @@
+[
+  {
+    "key": "loading",
+    "uses": 27,
+    "en": "Loading...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "close",
+    "uses": 20,
+    "en": "Close",
+    "hiUntranslated": true
+  },
+  {
+    "key": "cancel",
+    "uses": 17,
+    "en": "Cancel",
+    "hiUntranslated": true
+  },
+  {
+    "key": "email",
+    "uses": 13,
+    "en": "Email",
+    "hiUntranslated": true
+  },
+  {
+    "key": "saving",
+    "uses": 12,
+    "en": "Saving...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "back",
+    "uses": 11,
+    "en": "Back",
+    "hiUntranslated": false
+  },
+  {
+    "key": "edit",
+    "uses": 10,
+    "en": "Edit",
+    "hiUntranslated": true
+  },
+  {
+    "key": "image_upload_checking",
+    "uses": 10,
+    "en": "Checking image…",
+    "hiUntranslated": true
+  },
+  {
+    "key": "failed_create_invitation",
+    "uses": 10,
+    "en": "Failed to create invitation",
+    "hiUntranslated": true
+  },
+  {
+    "key": "all",
+    "uses": 9,
+    "en": "All",
+    "hiUntranslated": false
+  },
+  {
+    "key": "user",
+    "uses": 9,
+    "en": "user",
+    "hiUntranslated": true
+  },
+  {
+    "key": "delete",
+    "uses": 9,
+    "en": "Delete",
+    "hiUntranslated": true
+  },
+  {
+    "key": "remove",
+    "uses": 9,
+    "en": "Remove",
+    "hiUntranslated": true
+  },
+  {
+    "key": "members",
+    "uses": 9,
+    "en": "members",
+    "hiUntranslated": true
+  },
+  {
+    "key": "ai_generate_failed",
+    "uses": 8,
+    "en": "AI generation failed. Please try again.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "insufficient_dine_credits_wallet",
+    "uses": 8,
+    "en": "Not enough Dine Credits. Open Settings → Dine Credits to top up.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "uploading",
+    "uses": 8,
+    "en": "Uploading...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "studio_close_title",
+    "uses": 8,
+    "en": "Save your work?",
+    "hiUntranslated": false
+  },
+  {
+    "key": "auth_open_chrome_for_oauth",
+    "uses": 8,
+    "en": "Complete sign-in in Chrome or Safari (opened in a new tab). Embedded preview cannot run Google login.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "last_updated",
+    "uses": 8,
+    "en": "Last Updated",
+    "hiUntranslated": true
+  },
+  {
+    "key": "website",
+    "uses": 8,
+    "en": "Website",
+    "hiUntranslated": true
+  },
+  {
+    "key": "please_sign_in",
+    "uses": 8,
+    "en": "Please sign in",
+    "hiUntranslated": true
+  },
+  {
+    "key": "biz_plan_paid_name",
+    "uses": 8,
+    "en": "Paid Business",
+    "hiUntranslated": false
+  },
+  {
+    "key": "reviews",
+    "uses": 7,
+    "en": "Reviews",
+    "hiUntranslated": true
+  },
+  {
+    "key": "tbd",
+    "uses": 7,
+    "en": "TBD",
+    "hiUntranslated": true
+  },
+  {
+    "key": "admin_failed",
+    "uses": 6,
+    "en": "Failed",
+    "hiUntranslated": false
+  },
+  {
+    "key": "male",
+    "uses": 6,
+    "en": "Male",
+    "hiUntranslated": true
+  },
+  {
+    "key": "female",
+    "uses": 6,
+    "en": "Female",
+    "hiUntranslated": true
+  },
+  {
+    "key": "share",
+    "uses": 6,
+    "en": "Share",
+    "hiUntranslated": true
+  },
+  {
+    "key": "category",
+    "uses": 6,
+    "en": "Category",
+    "hiUntranslated": true
+  },
+  {
+    "key": "venue",
+    "uses": 6,
+    "en": "Venue",
+    "hiUntranslated": true
+  },
+  {
+    "key": "host",
+    "uses": 6,
+    "en": "Host",
+    "hiUntranslated": true
+  },
+  {
+    "key": "nav_home",
+    "uses": 6,
+    "en": "Home",
+    "hiUntranslated": false
+  },
+  {
+    "key": "error_update_settings",
+    "uses": 6,
+    "en": "Failed to update settings. Please try again.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "messages",
+    "uses": 6,
+    "en": "Messages",
+    "hiUntranslated": true
+  },
+  {
+    "key": "private_cover_tab_template",
+    "uses": 6,
+    "en": "Template",
+    "hiUntranslated": false
+  },
+  {
+    "key": "social_cover_tab_ai_generate",
+    "uses": 6,
+    "en": "Generate AI cover",
+    "hiUntranslated": true
+  },
+  {
+    "key": "ai_generate_loading",
+    "uses": 5,
+    "en": "Generating with AI…",
+    "hiUntranslated": false
+  },
+  {
+    "key": "members_count",
+    "uses": 5,
+    "en": "Members",
+    "hiUntranslated": true
+  },
+  {
+    "key": "save",
+    "uses": 5,
+    "en": "Save",
+    "hiUntranslated": true
+  },
+  {
+    "key": "like",
+    "uses": 5,
+    "en": "Like",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invite_create_title",
+    "uses": 5,
+    "en": "Create invitation",
+    "hiUntranslated": true
+  },
+  {
+    "key": "gender_mismatch",
+    "uses": 5,
+    "en": "Gender mismatch",
+    "hiUntranslated": true
+  },
+  {
+    "key": "social_invitation",
+    "uses": 5,
+    "en": "Social Invitation",
+    "hiUntranslated": true
+  },
+  {
+    "key": "login_signup",
+    "uses": 5,
+    "en": "Login / Sign Up",
+    "hiUntranslated": true
+  },
+  {
+    "key": "notifications",
+    "uses": 5,
+    "en": "Notifications",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_dashboard",
+    "uses": 5,
+    "en": "Dashboard",
+    "hiUntranslated": true
+  },
+  {
+    "key": "searching",
+    "uses": 5,
+    "en": "Searching...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "optional",
+    "uses": 5,
+    "en": "Optional",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business",
+    "uses": 5,
+    "en": "Business",
+    "hiUntranslated": true
+  },
+  {
+    "key": "non_binary",
+    "uses": 5,
+    "en": "Non-Binary",
+    "hiUntranslated": true
+  },
+  {
+    "key": "rankings_points",
+    "uses": 5,
+    "en": "pts",
+    "hiUntranslated": true
+  },
+  {
+    "key": "in_my_city",
+    "uses": 5,
+    "en": "In my city",
+    "hiUntranslated": true
+  },
+  {
+    "key": "no_results",
+    "uses": 5,
+    "en": "No results",
+    "hiUntranslated": true
+  },
+  {
+    "key": "dinner_at",
+    "uses": 5,
+    "en": "Dinner at",
+    "hiUntranslated": true
+  },
+  {
+    "key": "media_upload_failed",
+    "uses": 5,
+    "en": "Failed to upload media. Try again.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "following",
+    "uses": 5,
+    "en": "Following",
+    "hiUntranslated": false
+  },
+  {
+    "key": "ai_context_current_title",
+    "uses": 5,
+    "en": "Current title: {{value}}",
+    "hiUntranslated": false
+  },
+  {
+    "key": "ai_context_current_message",
+    "uses": 5,
+    "en": "Current message: {{value}}",
+    "hiUntranslated": false
+  },
+  {
+    "key": "ai_insufficient_credits_default",
+    "uses": 4,
+    "en": "Insufficient balance. You need more credits to complete this action.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "message_to_friends",
+    "uses": 4,
+    "en": "Message to Guests",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_member_notifications",
+    "uses": 4,
+    "en": "Member alerts & offers",
+    "hiUntranslated": true
+  },
+  {
+    "key": "closed",
+    "uses": 4,
+    "en": "CLOSED",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_signup_err_create",
+    "uses": 4,
+    "en": "Failed to create account.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "password",
+    "uses": 4,
+    "en": "Password",
+    "hiUntranslated": true
+  },
+  {
+    "key": "detecting_location",
+    "uses": 4,
+    "en": "Detecting location...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invite_create_public_desc",
+    "uses": 4,
+    "en": "A discoverable invitation others can browse and join.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invite_create_social_title",
+    "uses": 4,
+    "en": "Social Invite",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invite_create_social_desc",
+    "uses": 4,
+    "en": "Invite up to 30 guests — only people you choose can see and join.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invite_create_private_title",
+    "uses": 4,
+    "en": "Personal Invite",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invite_create_private_desc",
+    "uses": 4,
+    "en": "Invite one person for a spontaneous 1-on-1 meetup.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "someone",
+    "uses": 4,
+    "en": "Someone",
+    "hiUntranslated": true
+  },
+  {
+    "key": "update_error",
+    "uses": 4,
+    "en": "Failed to update",
+    "hiUntranslated": true
+  },
+  {
+    "key": "posting",
+    "uses": 4,
+    "en": "Posting...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "only_images_allowed",
+    "uses": 4,
+    "en": "Please select an image file.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "send",
+    "uses": 4,
+    "en": "Send",
+    "hiUntranslated": true
+  },
+  {
+    "key": "date",
+    "uses": 4,
+    "en": "Date",
+    "hiUntranslated": true
+  },
+  {
+    "key": "time",
+    "uses": 4,
+    "en": "Time",
+    "hiUntranslated": true
+  },
+  {
+    "key": "payment_split",
+    "uses": 4,
+    "en": "Split",
+    "hiUntranslated": false
+  },
+  {
+    "key": "later",
+    "uses": 4,
+    "en": "Later",
+    "hiUntranslated": true
+  },
+  {
+    "key": "location",
+    "uses": 4,
+    "en": "Location",
+    "hiUntranslated": true
+  },
+  {
+    "key": "age_range_preference",
+    "uses": 4,
+    "en": "Age Range Preference",
+    "hiUntranslated": false
+  },
+  {
+    "key": "decline",
+    "uses": 4,
+    "en": "Decline",
+    "hiUntranslated": true
+  },
+  {
+    "key": "accept",
+    "uses": 4,
+    "en": "Accept",
+    "hiUntranslated": false
+  },
+  {
+    "key": "social_card_font_label",
+    "uses": 4,
+    "en": "Font",
+    "hiUntranslated": true
+  },
+  {
+    "key": "social_card_export_error",
+    "uses": 4,
+    "en": "Could not create the image. Please try again.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "save_changes",
+    "uses": 4,
+    "en": "Save Changes",
+    "hiUntranslated": true
+  },
+  {
+    "key": "processing",
+    "uses": 4,
+    "en": "Processing...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "see_all",
+    "uses": 4,
+    "en": "See All",
+    "hiUntranslated": true
+  },
+  {
+    "key": "settings",
+    "uses": 4,
+    "en": "Settings",
+    "hiUntranslated": true
+  },
+  {
+    "key": "create_invitation",
+    "uses": 4,
+    "en": "Create Invitation",
+    "hiUntranslated": true
+  },
+  {
+    "key": "description",
+    "uses": 4,
+    "en": "Description",
+    "hiUntranslated": true
+  },
+  {
+    "key": "comments",
+    "uses": 4,
+    "en": "Comments",
+    "hiUntranslated": true
+  },
+  {
+    "key": "user_directory_dating_unavailable",
+    "uses": 4,
+    "en": "Not open to private invites",
+    "hiUntranslated": false
+  },
+  {
+    "key": "yesterday",
+    "uses": 4,
+    "en": "Yesterday",
+    "hiUntranslated": true
+  },
+  {
+    "key": "your_story",
+    "uses": 4,
+    "en": "Your story",
+    "hiUntranslated": true
+  },
+  {
+    "key": "quick_emojis",
+    "uses": 4,
+    "en": "Quick Emojis",
+    "hiUntranslated": true
+  },
+  {
+    "key": "publishing",
+    "uses": 4,
+    "en": "Publishing...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "failed_publish_invitation",
+    "uses": 4,
+    "en": "Failed to publish invitation",
+    "hiUntranslated": true
+  },
+  {
+    "key": "affiliate_auth_submitting",
+    "uses": 4,
+    "en": "Please wait…",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_signup_maps_label",
+    "uses": 4,
+    "en": "City & country (Google Maps)",
+    "hiUntranslated": false
+  },
+  {
+    "key": "studio_save_draft",
+    "uses": 4,
+    "en": "Save draft",
+    "hiUntranslated": true
+  },
+  {
+    "key": "rankings_title",
+    "uses": 4,
+    "en": "Business Rankings",
+    "hiUntranslated": true
+  },
+  {
+    "key": "save_failed",
+    "uses": 4,
+    "en": "Save failed",
+    "hiUntranslated": true
+  },
+  {
+    "key": "save_pending",
+    "uses": 4,
+    "en": "Saving...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "back_to_home",
+    "uses": 4,
+    "en": "Back to Home",
+    "hiUntranslated": false
+  },
+  {
+    "key": "rankings_global",
+    "uses": 4,
+    "en": "Global",
+    "hiUntranslated": true
+  },
+  {
+    "key": "go_back",
+    "uses": 4,
+    "en": "Go Back",
+    "hiUntranslated": true
+  },
+  {
+    "key": "public",
+    "uses": 4,
+    "en": "Public",
+    "hiUntranslated": true
+  },
+  {
+    "key": "social_invitation_draft_saved",
+    "uses": 4,
+    "en": "Invitation saved. You can continue editing or open preview.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "social_cover_tab_camera_open",
+    "uses": 4,
+    "en": "Video",
+    "hiUntranslated": true
+  },
+  {
+    "key": "social_cover_tab_upload_open",
+    "uses": 4,
+    "en": "From device",
+    "hiUntranslated": true
+  },
+  {
+    "key": "followers",
+    "uses": 4,
+    "en": "Followers",
+    "hiUntranslated": false
+  },
+  {
+    "key": "chat",
+    "uses": 4,
+    "en": "Chat",
+    "hiUntranslated": true
+  },
+  {
+    "key": "cancellation_count",
+    "uses": 4,
+    "en": "Total cancellations in the last 90 days: {{count}}",
+    "hiUntranslated": true
+  },
+  {
+    "key": "error_loading_draft",
+    "uses": 4,
+    "en": "Error loading draft",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invitations",
+    "uses": 4,
+    "en": "Invitations",
+    "hiUntranslated": true
+  },
+  {
+    "key": "today",
+    "uses": 3,
+    "en": "Today",
+    "hiUntranslated": true
+  },
+  {
+    "key": "ai_floating_open_btn",
+    "uses": 3,
+    "en": "Generate with AI",
+    "hiUntranslated": false
+  },
+  {
+    "key": "magic_cover_moderation_failed",
+    "uses": 3,
+    "en": "The generated image did not pass moderation. Credits were refunded if the server could not complete the request.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "magic_cover_charged_notice",
+    "uses": 3,
+    "en": "This generation used {{cost}} credits.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invitation_title",
+    "uses": 3,
+    "en": "Invitation Title",
+    "hiUntranslated": true
+  },
+  {
+    "key": "ai_insufficient_credits_title",
+    "uses": 3,
+    "en": "Insufficient credits",
+    "hiUntranslated": false
+  },
+  {
+    "key": "ai_top_up_now",
+    "uses": 3,
+    "en": "Top up credits",
+    "hiUntranslated": false
+  },
+  {
+    "key": "biz_plan_upgrade_cta",
+    "uses": 3,
+    "en": "Upgrade to Paid",
+    "hiUntranslated": false
+  },
+  {
+    "key": "guest",
+    "uses": 3,
+    "en": "Guest",
+    "hiUntranslated": true
+  },
+  {
+    "key": "sending",
+    "uses": 3,
+    "en": "Sending...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "error_password_length",
+    "uses": 3,
+    "en": "Password must be at least 6 characters",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_onboarding_detected_city_label",
+    "uses": 3,
+    "en": "Detected city / area (automatic)",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_onboarding_area_unknown",
+    "uses": 3,
+    "en": "Could not detect city — search still works; pick your business below.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "reply",
+    "uses": 3,
+    "en": "Reply",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invite_create_subtitle",
+    "uses": 3,
+    "en": "Choose the type of invitation you want to create.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invite_create_public_title",
+    "uses": 3,
+    "en": "Public invitation",
+    "hiUntranslated": true
+  },
+  {
+    "key": "auth_reset_failed",
+    "uses": 3,
+    "en": "Could not send reset email. Try again later.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "add",
+    "uses": 3,
+    "en": "Add",
+    "hiUntranslated": false
+  },
+  {
+    "key": "write_review",
+    "uses": 3,
+    "en": "✍️ Write a Review",
+    "hiUntranslated": true
+  },
+  {
+    "key": "no_mic_access",
+    "uses": 3,
+    "en": "Could not access microphone.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "failed_send_voice",
+    "uses": 3,
+    "en": "Failed to send voice message. Try again.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "failed_send_message",
+    "uses": 3,
+    "en": "Failed to send message. Try again.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "completed",
+    "uses": 3,
+    "en": "Completed",
+    "hiUntranslated": true
+  },
+  {
+    "key": "guests",
+    "uses": 3,
+    "en": "Guests",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invitation",
+    "uses": 3,
+    "en": "Invitation",
+    "hiUntranslated": true
+  },
+  {
+    "key": "ai_request_timeout",
+    "uses": 3,
+    "en": "Image generation timed out. Generation may still be running on the server — wait and try again.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "remove_preview",
+    "uses": 3,
+    "en": "Remove",
+    "hiUntranslated": true
+  },
+  {
+    "key": "image_rejected_choose_another",
+    "uses": 3,
+    "en": "Choose another photo",
+    "hiUntranslated": true
+  },
+  {
+    "key": "social_cover_ai_preview_failed",
+    "uses": 3,
+    "en": "The cover was generated but the preview could not load. Try again in a moment.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "ai_design_studio_nav",
+    "uses": 3,
+    "en": "AI Design Studio",
+    "hiUntranslated": false
+  },
+  {
+    "key": "nav_login",
+    "uses": 3,
+    "en": "Login",
+    "hiUntranslated": true
+  },
+  {
+    "key": "profile",
+    "uses": 3,
+    "en": "Profile",
+    "hiUntranslated": true
+  },
+  {
+    "key": "item_name",
+    "uses": 3,
+    "en": "Item Name",
+    "hiUntranslated": true
+  },
+  {
+    "key": "price",
+    "uses": 3,
+    "en": "Price",
+    "hiUntranslated": true
+  },
+  {
+    "key": "image",
+    "uses": 3,
+    "en": "Image",
+    "hiUntranslated": true
+  },
+  {
+    "key": "Leave Community",
+    "uses": 3,
+    "en": "Leave Community",
+    "hiUntranslated": false
+  },
+  {
+    "key": "other",
+    "uses": 3,
+    "en": "Other",
+    "hiUntranslated": true
+  },
+  {
+    "key": "time_m",
+    "uses": 3,
+    "en": "m",
+    "hiUntranslated": true
+  },
+  {
+    "key": "time_h",
+    "uses": 3,
+    "en": "h",
+    "hiUntranslated": true
+  },
+  {
+    "key": "time_d",
+    "uses": 3,
+    "en": "d",
+    "hiUntranslated": true
+  },
+  {
+    "key": "private_invite_social_only_toast",
+    "uses": 3,
+    "en": "This member only accepts social/public invites — private invites are turned off.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "private_send_invite_confirm",
+    "uses": 3,
+    "en": "Send a private invitation to {{name}}?",
+    "hiUntranslated": false
+  },
+  {
+    "key": "join_reason_title",
+    "uses": 3,
+    "en": "Reason for Joining",
+    "hiUntranslated": false
+  },
+  {
+    "key": "private_profile_taste_title",
+    "uses": 3,
+    "en": "Vibe & Interests",
+    "hiUntranslated": false
+  },
+  {
+    "key": "private_meetup_spot_title",
+    "uses": 3,
+    "en": "Ideal meetup spot",
+    "hiUntranslated": false
+  },
+  {
+    "key": "edit_cover",
+    "uses": 3,
+    "en": "Edit Cover",
+    "hiUntranslated": true
+  },
+  {
+    "key": "ios_push_settings_hint",
+    "uses": 3,
+    "en": "On iPhone, add DineBuddies to your Home Screen to enable push. You can still change email and quiet hours below.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "push_permission_denied_ios",
+    "uses": 3,
+    "en": "Notifications are blocked. iPhone Settings → Notifications → DineBuddies → Allow.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "enable_push_title",
+    "uses": 3,
+    "en": "Turn on Notifications",
+    "hiUntranslated": true
+  },
+  {
+    "key": "just_now",
+    "uses": 3,
+    "en": "Just now",
+    "hiUntranslated": true
+  },
+  {
+    "key": "time_ago",
+    "uses": 3,
+    "en": "ago",
+    "hiUntranslated": true
+  },
+  {
+    "key": "affiliate_verify_to_share",
+    "uses": 3,
+    "en": "Verify your email to use your referral link.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_back_home",
+    "uses": 3,
+    "en": "Back to home",
+    "hiUntranslated": false
+  },
+  {
+    "key": "logout",
+    "uses": 3,
+    "en": "Logout",
+    "hiUntranslated": true
+  },
+  {
+    "key": "unblock_user",
+    "uses": 3,
+    "en": "Unblock",
+    "hiUntranslated": true
+  },
+  {
+    "key": "post_not_found",
+    "uses": 3,
+    "en": "Post not found",
+    "hiUntranslated": true
+  },
+  {
+    "key": "post_failed",
+    "uses": 3,
+    "en": "Failed to create post. Try again.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "studio_close_discard",
+    "uses": 3,
+    "en": "Discard",
+    "hiUntranslated": false
+  },
+  {
+    "key": "studio_close_keep_editing",
+    "uses": 3,
+    "en": "Keep editing",
+    "hiUntranslated": false
+  },
+  {
+    "key": "biz_plan_free_name",
+    "uses": 3,
+    "en": "Free Business",
+    "hiUntranslated": false
+  },
+  {
+    "key": "analytics",
+    "uses": 3,
+    "en": "Analytics",
+    "hiUntranslated": false
+  },
+  {
+    "key": "biz_points_multiplier_1",
+    "uses": 3,
+    "en": "1 pt each",
+    "hiUntranslated": false
+  },
+  {
+    "key": "near_me",
+    "uses": 3,
+    "en": "Near me",
+    "hiUntranslated": true
+  },
+  {
+    "key": "in_my_country",
+    "uses": 3,
+    "en": "In my country",
+    "hiUntranslated": true
+  },
+  {
+    "key": "cancel_btn",
+    "uses": 3,
+    "en": "Cancel",
+    "hiUntranslated": false
+  },
+  {
+    "key": "save_btn",
+    "uses": 3,
+    "en": "Save Changes",
+    "hiUntranslated": false
+  },
+  {
+    "key": "community_chat_muted",
+    "uses": 3,
+    "en": "You are muted in this community chat.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "community_guidelines",
+    "uses": 3,
+    "en": "Community Guidelines",
+    "hiUntranslated": true
+  },
+  {
+    "key": "failed_save_draft",
+    "uses": 3,
+    "en": "Could not save draft. Please try again.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invitation_at",
+    "uses": 3,
+    "en": "Invitation at",
+    "hiUntranslated": true
+  },
+  {
+    "key": "venue_selected",
+    "uses": 3,
+    "en": "Venue Selected",
+    "hiUntranslated": false
+  },
+  {
+    "key": "privacy_settings",
+    "uses": 3,
+    "en": "Privacy Settings",
+    "hiUntranslated": true
+  },
+  {
+    "key": "dine_credits",
+    "uses": 3,
+    "en": "Dine Credits",
+    "hiUntranslated": true
+  },
+  {
+    "key": "privacy_policy",
+    "uses": 3,
+    "en": "Privacy Policy",
+    "hiUntranslated": true
+  },
+  {
+    "key": "terms_of_service",
+    "uses": 3,
+    "en": "Terms of Service",
+    "hiUntranslated": true
+  },
+  {
+    "key": "user_directory_feed_view",
+    "uses": 3,
+    "en": "Swipe view",
+    "hiUntranslated": false
+  },
+  {
+    "key": "faq.title",
+    "uses": 3,
+    "en": "Help & Support",
+    "hiUntranslated": true
+  },
+  {
+    "key": "search_invitations_placeholder",
+    "uses": 3,
+    "en": "Search invitations...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "try_different_filters",
+    "uses": 3,
+    "en": "Try adjusting your filters or search terms",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invitation_ended",
+    "uses": 3,
+    "en": "This invitation has ended.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "something_went_wrong",
+    "uses": 3,
+    "en": "Sorry, something went wrong. Please try again",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invitation_not_found",
+    "uses": 3,
+    "en": "Invitation Not Found",
+    "hiUntranslated": true
+  },
+  {
+    "key": "notification_settings",
+    "uses": 3,
+    "en": "Notification Settings",
+    "hiUntranslated": true
+  },
+  {
+    "key": "search_posts",
+    "uses": 3,
+    "en": "Search...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "open_dine_credits_wallet",
+    "uses": 3,
+    "en": "Dine Credits wallet",
+    "hiUntranslated": true
+  },
+  {
+    "key": "nothing_to_show",
+    "uses": 3,
+    "en": "Nothing to show yet",
+    "hiUntranslated": true
+  },
+  {
+    "key": "subscription_billing",
+    "uses": 3,
+    "en": "Subscription & Billing",
+    "hiUntranslated": true
+  },
+  {
+    "key": "ai_context_schedule",
+    "uses": 3,
+    "en": "Schedule: {{date}} {{time}}",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_search_failed",
+    "uses": 2,
+    "en": "Search failed",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_search",
+    "uses": 2,
+    "en": "Search",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_places_login_required",
+    "uses": 2,
+    "en": "Admin sign-in required",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_places_google_fetch_failed",
+    "uses": 2,
+    "en": "Failed to fetch Google data: {{message}}",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_places_rate_limited",
+    "uses": 2,
+    "en": "Rate limit exceeded — wait a moment and try again",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_places_connection_failed",
+    "uses": 2,
+    "en": "Connection failed",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_load_failed",
+    "uses": 2,
+    "en": "Failed to load",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_status_active",
+    "uses": 2,
+    "en": "Active",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_more",
+    "uses": 2,
+    "en": "More",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_sender_failed_count",
+    "uses": 2,
+    "en": "failed {{count}}",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_sender_audience",
+    "uses": 2,
+    "en": "Audience",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_ban_permanent",
+    "uses": 2,
+    "en": "Permanent ban",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_coming_soon",
+    "uses": 2,
+    "en": "Coming soon",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_unfreeze",
+    "uses": 2,
+    "en": "Unfreeze",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_unban",
+    "uses": 2,
+    "en": "Remove ban",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_users_status",
+    "uses": 2,
+    "en": "Status",
+    "hiUntranslated": false
+  },
+  {
+    "key": "admin_users_actions",
+    "uses": 2,
+    "en": "Actions",
+    "hiUntranslated": false
+  },
+  {
+    "key": "payment_type",
+    "uses": 2,
+    "en": "Payment Type",
+    "hiUntranslated": true
+  },
+  {
+    "key": "gender",
+    "uses": 2,
+    "en": "Gender",
+    "hiUntranslated": true
+  },
+  {
+    "key": "affiliate_links_aria",
+    "uses": 2,
+    "en": "Affiliate program",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_program_title",
+    "uses": 2,
+    "en": "Partner program",
+    "hiUntranslated": false
+  },
+  {
+    "key": "private_ai_schedule_venue_required",
+    "uses": 2,
+    "en": "Set the date, time, and location first — then AI can draft your message.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "private_ai_fields_empty",
+    "uses": 2,
+    "en": "Nothing to apply yet — generate a draft with AI first.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "private_ai_description_missing",
+    "uses": 2,
+    "en": "Add a short description or use AI to draft your message first.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "magic_cover_generated_review",
+    "uses": 2,
+    "en": "Cover generated. Review the preview, then apply to your invitation when ready.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "magic_cover_aspect_label",
+    "uses": 2,
+    "en": "Cover shape (same as layout ratios)",
+    "hiUntranslated": true
+  },
+  {
+    "key": "magic_cover_aspect_1_1",
+    "uses": 2,
+    "en": "1:1 square",
+    "hiUntranslated": true
+  },
+  {
+    "key": "magic_cover_aspect_9_16",
+    "uses": 2,
+    "en": "9:16 vertical",
+    "hiUntranslated": true
+  },
+  {
+    "key": "ai_prompt_optional_hint",
+    "uses": 2,
+    "en": "Optional — leave blank to use form details.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "continue_with_facebook",
+    "uses": 2,
+    "en": "Continue with Facebook",
+    "hiUntranslated": true
+  },
+  {
+    "key": "open_notification_settings",
+    "uses": 2,
+    "en": "Your notification preferences",
+    "hiUntranslated": true
+  },
+  {
+    "key": "paid_plan",
+    "uses": 2,
+    "en": "Paid",
+    "hiUntranslated": true
+  },
+  {
+    "key": "download",
+    "uses": 2,
+    "en": "Download",
+    "hiUntranslated": true
+  },
+  {
+    "key": "host_invitation_here",
+    "uses": 2,
+    "en": "Host Invitation Here",
+    "hiUntranslated": true
+  },
+  {
+    "key": "claim_business_failed",
+    "uses": 2,
+    "en": "Could not claim this business",
+    "hiUntranslated": true
+  },
+  {
+    "key": "claim_business_request",
+    "uses": 2,
+    "en": "Claim Business",
+    "hiUntranslated": true
+  },
+  {
+    "key": "suggestion",
+    "uses": 2,
+    "en": "Suggestion",
+    "hiUntranslated": true
+  },
+  {
+    "key": "complaint",
+    "uses": 2,
+    "en": "Complaint",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_phone_send_failed",
+    "uses": 2,
+    "en": "Could not send verification code",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_phone_verified",
+    "uses": 2,
+    "en": "Phone verified",
+    "hiUntranslated": true
+  },
+  {
+    "key": "error_passwords_match",
+    "uses": 2,
+    "en": "New passwords do not match",
+    "hiUntranslated": true
+  },
+  {
+    "key": "auth_email_in_use",
+    "uses": 2,
+    "en": "This email is already registered. Try signing in or use another email.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "creating_profile",
+    "uses": 2,
+    "en": "Creating profile…",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_onboarding_area_detecting",
+    "uses": 2,
+    "en": "Detecting approximate city…",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_signup_google_search_label",
+    "uses": 2,
+    "en": "Find your business on Google Maps",
+    "hiUntranslated": true
+  },
+  {
+    "key": "sign_in",
+    "uses": 2,
+    "en": "Sign In",
+    "hiUntranslated": true
+  },
+  {
+    "key": "enter_custom_reason",
+    "uses": 2,
+    "en": "Please enter your reason for cancellation:",
+    "hiUntranslated": true
+  },
+  {
+    "key": "cancel_invitation",
+    "uses": 2,
+    "en": "Cancel Invitation",
+    "hiUntranslated": true
+  },
+  {
+    "key": "submitting",
+    "uses": 2,
+    "en": "Submitting...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "comment_view_replies",
+    "uses": 2,
+    "en": "View {{count}} replies",
+    "hiUntranslated": true
+  },
+  {
+    "key": "member_notifications_locked",
+    "uses": 2,
+    "en": "Member messaging is included in the paid business plan.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "upgrade_now",
+    "uses": 2,
+    "en": "Upgrade Now",
+    "hiUntranslated": true
+  },
+  {
+    "key": "unmute_member",
+    "uses": 2,
+    "en": "Unmute",
+    "hiUntranslated": false
+  },
+  {
+    "key": "mute_member",
+    "uses": 2,
+    "en": "Mute",
+    "hiUntranslated": false
+  },
+  {
+    "key": "block_member",
+    "uses": 2,
+    "en": "Block",
+    "hiUntranslated": false
+  },
+  {
+    "key": "unblock_member",
+    "uses": 2,
+    "en": "Unblock",
+    "hiUntranslated": false
+  },
+  {
+    "key": "business_onboarding_area_hint",
+    "uses": 2,
+    "en": "Used to bias Google search toward listings near you. When you pick a business below, the city line may update from that listing.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_onboarding_location_section",
+    "uses": 2,
+    "en": "Find your business on Google Maps",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_onboarding_address_autocomplete_hint",
+    "uses": 2,
+    "en": "Search by business name or address. Choosing a Google listing fills the fields below when Google provides them.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_cannot_create_invitation",
+    "uses": 2,
+    "en": "Business accounts cannot create friendship or private invites.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "shared_content_preview",
+    "uses": 2,
+    "en": "Shared content",
+    "hiUntranslated": true
+  },
+  {
+    "key": "no_messages_yet",
+    "uses": 2,
+    "en": "No messages yet",
+    "hiUntranslated": true
+  },
+  {
+    "key": "notif_msg_follow",
+    "uses": 2,
+    "en": "{{name}} started following you",
+    "hiUntranslated": true
+  },
+  {
+    "key": "inbox_title",
+    "uses": 2,
+    "en": "Inbox",
+    "hiUntranslated": false
+  },
+  {
+    "key": "dismiss",
+    "uses": 2,
+    "en": "Dismiss",
+    "hiUntranslated": true
+  },
+  {
+    "key": "drag_to_reorder",
+    "uses": 2,
+    "en": "Drag to reorder",
+    "hiUntranslated": true
+  },
+  {
+    "key": "add_caption",
+    "uses": 2,
+    "en": "Add caption...",
+    "hiUntranslated": false
+  },
+  {
+    "key": "set_as_header",
+    "uses": 2,
+    "en": "Set as header",
+    "hiUntranslated": true
+  },
+  {
+    "key": "edit_caption",
+    "uses": 2,
+    "en": "Edit caption",
+    "hiUntranslated": true
+  },
+  {
+    "key": "move_to_category",
+    "uses": 2,
+    "en": "Move to category",
+    "hiUntranslated": true
+  },
+  {
+    "key": "gallery_max_reached",
+    "uses": 2,
+    "en": "Maximum images reached",
+    "hiUntranslated": true
+  },
+  {
+    "key": "upload_error",
+    "uses": 2,
+    "en": "Failed to upload image",
+    "hiUntranslated": true
+  },
+  {
+    "key": "confirm_delete_image",
+    "uses": 2,
+    "en": "Are you sure you want to delete this image?",
+    "hiUntranslated": true
+  },
+  {
+    "key": "order_updated",
+    "uses": 2,
+    "en": "Order updated",
+    "hiUntranslated": true
+  },
+  {
+    "key": "done",
+    "uses": 2,
+    "en": "Done",
+    "hiUntranslated": true
+  },
+  {
+    "key": "add_images_above",
+    "uses": 2,
+    "en": "Add images using the buttons above",
+    "hiUntranslated": false
+  },
+  {
+    "key": "group_chat",
+    "uses": 2,
+    "en": "Group Chat",
+    "hiUntranslated": true
+  },
+  {
+    "key": "start_conversation_first",
+    "uses": 2,
+    "en": "Be the first to start the conversation",
+    "hiUntranslated": true
+  },
+  {
+    "key": "type_message",
+    "uses": 2,
+    "en": "Type a message...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "login_required",
+    "uses": 2,
+    "en": "Login required",
+    "hiUntranslated": true
+  },
+  {
+    "key": "photo",
+    "uses": 2,
+    "en": "Photo",
+    "hiUntranslated": true
+  },
+  {
+    "key": "emoji",
+    "uses": 2,
+    "en": "Emoji",
+    "hiUntranslated": true
+  },
+  {
+    "key": "failed_to_send",
+    "uses": 2,
+    "en": "Failed to send.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "communities",
+    "uses": 2,
+    "en": "Communities",
+    "hiUntranslated": true
+  },
+  {
+    "key": "updating_progress",
+    "uses": 2,
+    "en": "Updating...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "host_badge",
+    "uses": 2,
+    "en": "HOST",
+    "hiUntranslated": true
+  },
+  {
+    "key": "open",
+    "uses": 2,
+    "en": "OPEN",
+    "hiUntranslated": true
+  },
+  {
+    "key": "location_tbd",
+    "uses": 2,
+    "en": "To be decided",
+    "hiUntranslated": true
+  },
+  {
+    "key": "payment",
+    "uses": 2,
+    "en": "Payment",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_cannot_join",
+    "uses": 2,
+    "en": "Business accounts cannot join invitations",
+    "hiUntranslated": true
+  },
+  {
+    "key": "km_away",
+    "uses": 2,
+    "en": "km away",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invite_unavailable",
+    "uses": 2,
+    "en": "Not Available",
+    "hiUntranslated": true
+  },
+  {
+    "key": "login_to_join",
+    "uses": 2,
+    "en": "Sign in to join",
+    "hiUntranslated": true
+  },
+  {
+    "key": "join_btn",
+    "uses": 2,
+    "en": "Request to Join",
+    "hiUntranslated": false
+  },
+  {
+    "key": "share_to_feed",
+    "uses": 2,
+    "en": "Share to Feed",
+    "hiUntranslated": true
+  },
+  {
+    "key": "confirm_delete",
+    "uses": 2,
+    "en": "Delete this?",
+    "hiUntranslated": true
+  },
+  {
+    "key": "record_video",
+    "uses": 2,
+    "en": "Record",
+    "hiUntranslated": true
+  },
+  {
+    "key": "take_photo",
+    "uses": 2,
+    "en": "Take Photo",
+    "hiUntranslated": true
+  },
+  {
+    "key": "private_card_style_btn",
+    "uses": 2,
+    "en": "Font & card color",
+    "hiUntranslated": false
+  },
+  {
+    "key": "private_card_theme_color_reset",
+    "uses": 2,
+    "en": "Default",
+    "hiUntranslated": false
+  },
+  {
+    "key": "social_card_background_label",
+    "uses": 2,
+    "en": "Card background",
+    "hiUntranslated": true
+  },
+  {
+    "key": "social_card_frame_text_label",
+    "uses": 2,
+    "en": "Frame & text",
+    "hiUntranslated": true
+  },
+  {
+    "key": "social_card_motion_label",
+    "uses": 2,
+    "en": "Text & photo motion",
+    "hiUntranslated": true
+  },
+  {
+    "key": "preview_invitation",
+    "uses": 2,
+    "en": "Preview Invitation",
+    "hiUntranslated": true
+  },
+  {
+    "key": "social_share_image_missing",
+    "uses": 2,
+    "en": "Could not capture the invitation card.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "social_share_preparing",
+    "uses": 2,
+    "en": "Preparing…",
+    "hiUntranslated": false
+  },
+  {
+    "key": "no_friends_found",
+    "uses": 2,
+    "en": "No guests found",
+    "hiUntranslated": true
+  },
+  {
+    "key": "invited_friends",
+    "uses": 2,
+    "en": "Invited Guests",
+    "hiUntranslated": true
+  },
+  {
+    "key": "unhandled_invitations_reminder_private_label",
+    "uses": 2,
+    "en": "Private Invites",
+    "hiUntranslated": false
+  },
+  {
+    "key": "nav_invitations",
+    "uses": 2,
+    "en": "Invitations",
+    "hiUntranslated": true
+  },
+  {
+    "key": "nav_partners",
+    "uses": 2,
+    "en": "Partners",
+    "hiUntranslated": false
+  },
+  {
+    "key": "user_directory_nav",
+    "uses": 2,
+    "en": "Members directory",
+    "hiUntranslated": false
+  },
+  {
+    "key": "business_create_featured_title",
+    "uses": 2,
+    "en": "Featured Post",
+    "hiUntranslated": true
+  },
+  {
+    "key": "copy",
+    "uses": 2,
+    "en": "Copy",
+    "hiUntranslated": true
+  },
+  {
+    "key": "location_search_failed",
+    "uses": 2,
+    "en": "Search failed",
+    "hiUntranslated": true
+  },
+  {
+    "key": "location_no_results",
+    "uses": 2,
+    "en": "No places found. Try another search.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "form_location_placeholder",
+    "uses": 2,
+    "en": "Venue name or address",
+    "hiUntranslated": false
+  },
+  {
+    "key": "search_places_placeholder",
+    "uses": 2,
+    "en": "Search for restaurants, cafes...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "change_image",
+    "uses": 2,
+    "en": "Change Image",
+    "hiUntranslated": true
+  },
+  {
+    "key": "fill_required_fields",
+    "uses": 2,
+    "en": "Please fill in required fields",
+    "hiUntranslated": true
+  },
+  {
+    "key": "Are you sure you want to leave",
+    "uses": 2,
+    "en": "Are you sure you want to leave",
+    "hiUntranslated": false
+  },
+  {
+    "key": "Loading communities...",
+    "uses": 2,
+    "en": "Loading communities...",
+    "hiUntranslated": false
+  },
+  {
+    "key": "No communities found",
+    "uses": 2,
+    "en": "No communities found",
+    "hiUntranslated": false
+  },
+  {
+    "key": "No communities yet",
+    "uses": 2,
+    "en": "No communities yet",
+    "hiUntranslated": false
+  },
+  {
+    "key": "Try a different search",
+    "uses": 2,
+    "en": "Try a different search",
+    "hiUntranslated": false
+  },
+  {
+    "key": "Join communities from partner profiles",
+    "uses": 2,
+    "en": "Join communities from partner profiles",
+    "hiUntranslated": false
+  },
+  {
+    "key": "Explore Partners",
+    "uses": 2,
+    "en": "Explore Partners",
+    "hiUntranslated": false
+  },
+  {
+    "key": "post_delete_success",
+    "uses": 2,
+    "en": "Post deleted.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "post_delete_failed",
+    "uses": 2,
+    "en": "Could not delete post.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "inappropriate_content",
+    "uses": 2,
+    "en": "Inappropriate Content",
+    "hiUntranslated": true
+  },
+  {
+    "key": "profile_action_report",
+    "uses": 2,
+    "en": "Report",
+    "hiUntranslated": true
+  },
+  {
+    "key": "mute_user",
+    "uses": 2,
+    "en": "Mute",
+    "hiUntranslated": true
+  },
+  {
+    "key": "your_business",
+    "uses": 2,
+    "en": "Your Business",
+    "hiUntranslated": true
+  },
+  {
+    "key": "Just now",
+    "uses": 2,
+    "en": "Just now",
+    "hiUntranslated": false
+  },
+  {
+    "key": "freeze",
+    "uses": 2,
+    "en": "Freeze",
+    "hiUntranslated": true
+  },
+  {
+    "key": "republish",
+    "uses": 2,
+    "en": "Re-Publish",
+    "hiUntranslated": true
+  },
+  {
+    "key": "private_send_invite_badge_title",
+    "uses": 2,
+    "en": "Send a private invite to {{name}}",
+    "hiUntranslated": false
+  },
+  {
+    "key": "pick_emoji",
+    "uses": 2,
+    "en": "Pick emoji",
+    "hiUntranslated": false
+  },
+  {
+    "key": "file_too_large_5mb",
+    "uses": 2,
+    "en": "File too large. Max 5 MB",
+    "hiUntranslated": true
+  },
+  {
+    "key": "profile_gallery_set_cover",
+    "uses": 2,
+    "en": "Use as discovery cover",
+    "hiUntranslated": false
+  },
+  {
+    "key": "complete_profile",
+    "uses": 2,
+    "en": "Complete Your Profile",
+    "hiUntranslated": true
+  },
+  {
+    "key": "complete_profile_desc",
+    "uses": 2,
+    "en": "Please provide a few details to get the best experience.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "required_fields_note",
+    "uses": 2,
+    "en": "Fields marked with * are required.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "warning_permanent_demographics_short",
+    "uses": 2,
+    "en": "Gender and age category cannot be changed after saving.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "display_name",
+    "uses": 2,
+    "en": "Display Name / Nickname",
+    "hiUntranslated": true
+  },
+  {
+    "key": "enter_name",
+    "uses": 2,
+    "en": "Enter your name",
+    "hiUntranslated": true
+  },
+  {
+    "key": "select_gender",
+    "uses": 2,
+    "en": "Select Gender",
+    "hiUntranslated": true
+  },
+  {
+    "key": "select_age_category",
+    "uses": 2,
+    "en": "Select Age Category",
+    "hiUntranslated": true
+  },
+  {
+    "key": "save_and_continue",
+    "uses": 2,
+    "en": "Save & Continue",
+    "hiUntranslated": true
+  },
+  {
+    "key": "no_venues_found",
+    "uses": 2,
+    "en": "No registered venues found",
+    "hiUntranslated": true
+  },
+  {
+    "key": "days_ago",
+    "uses": 2,
+    "en": "{{count}} days ago",
+    "hiUntranslated": true
+  },
+  {
+    "key": "weeks_ago",
+    "uses": 2,
+    "en": "{{count}} weeks ago",
+    "hiUntranslated": true
+  },
+  {
+    "key": "push_config_error",
+    "uses": 2,
+    "en": "Push is not configured on this build. Contact support.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "ios_push_title",
+    "uses": 2,
+    "en": "Install to Get Notifications",
+    "hiUntranslated": true
+  },
+  {
+    "key": "enable_push_desc",
+    "uses": 2,
+    "en": "Get instant updates for new messages, invitations, and bookings.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "enabling",
+    "uses": 2,
+    "en": "Enabling…",
+    "hiUntranslated": true
+  },
+  {
+    "key": "share_experience",
+    "uses": 2,
+    "en": "Share your experience...",
+    "hiUntranslated": true
+  },
+  {
+    "key": "submit_review",
+    "uses": 2,
+    "en": "Submit Review",
+    "hiUntranslated": true
+  },
+  {
+    "key": "link_copied_clipboard",
+    "uses": 2,
+    "en": "Link copied to clipboard!",
+    "hiUntranslated": true
+  },
+  {
+    "key": "share_failed",
+    "uses": 2,
+    "en": "Share failed",
+    "hiUntranslated": true
+  },
+  {
+    "key": "image_rejected_policy",
+    "uses": 2,
+    "en": "This image was rejected and was not sent. Please choose a different, appropriate photo.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "story_comments",
+    "uses": 2,
+    "en": "Comments",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_publish_verify_email_first",
+    "uses": 2,
+    "en": "Verify your email before publishing to the Partners page.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_publish_success",
+    "uses": 2,
+    "en": "Your business is now visible on the Partners page.",
+    "hiUntranslated": true
+  },
+  {
+    "key": "business_publish_error",
+    "uses": 2,
+    "en": "Failed to publish profile: ",
+    "hiUntranslated": true
+  },
+  {
+    "key": "user_directory_gift_coming_soon",
+    "uses": 2,
+    "en": "Gifts are coming soon — we will add them in a future update.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "user_directory_like",
+    "uses": 2,
+    "en": "Like profile",
+    "hiUntranslated": false
+  },
+  {
+    "key": "user_directory_icebreaker",
+    "uses": 2,
+    "en": "Ice breaker",
+    "hiUntranslated": false
+  },
+  {
+    "key": "user_directory_send_dating_invite",
+    "uses": 2,
+    "en": "Private invite",
+    "hiUntranslated": false
+  },
+  {
+    "key": "user_directory_send_gift",
+    "uses": 2,
+    "en": "Gift",
+    "hiUntranslated": false
+  },
+  {
+    "key": "dinbuddies_venues",
+    "uses": 2,
+    "en": "DineBuddies Venues",
+    "hiUntranslated": true
+  },
+  {
+    "key": "google_places",
+    "uses": 2,
+    "en": "Google Maps",
+    "hiUntranslated": true
+  },
+  {
+    "key": "studio_tap_image",
+    "uses": 2,
+    "en": "Tap to add image",
+    "hiUntranslated": true
+  },
+  {
+    "key": "studio_tap_change_image",
+    "uses": 2,
+    "en": "Tap to change image",
+    "hiUntranslated": true
+  },
+  {
+    "key": "studio_title_placeholder",
+    "uses": 2,
+    "en": "Write title here",
+    "hiUntranslated": true
+  },
+  {
+    "key": "studio_body_placeholder",
+    "uses": 2,
+    "en": "Write message here",
+    "hiUntranslated": true
+  },
+  {
+    "key": "studio_layer_title",
+    "uses": 2,
+    "en": "Title",
+    "hiUntranslated": true
+  },
+  {
+    "key": "studio_layer_body",
+    "uses": 2,
+    "en": "Message",
+    "hiUntranslated": true
+  },
+  {
+    "key": "studio_edit_text",
+    "uses": 2,
+    "en": "Edit text",
+    "hiUntranslated": false
+  },
+  {
+    "key": "studio_align_h",
+    "uses": 2,
+    "en": "Horizontal",
+    "hiUntranslated": true
+  },
+  {
+    "key": "auth_unauthorized_domain_lan",
+    "uses": 2,
+    "en": "Sign-in is not allowed on this network address. Use localhost.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "auth_in_app_browser_hint",
+    "uses": 2,
+    "en": "Please open dinebuddies.com in Safari or Chrome to use this login.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "account_deletion_request",
+    "uses": 2,
+    "en": "Account Deletion Request",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_link_not_ready",
+    "uses": 2,
+    "en": "Your referral link is still being generated. Try again in a moment.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_marketing_title",
+    "uses": 2,
+    "en": "Your referral link",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_auth_err_required",
+    "uses": 2,
+    "en": "Please fill email and password.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_auth_email",
+    "uses": 2,
+    "en": "Email",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_auth_password",
+    "uses": 2,
+    "en": "Password",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_sign_out_escape_link",
+    "uses": 2,
+    "en": "Session stuck? Sign out here",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_signup_maps_required",
+    "uses": 2,
+    "en": "Search Google Maps and pick a place to set your city and country.",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_auth_phone",
+    "uses": 2,
+    "en": "Phone number",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_signup_maps_placeholder",
+    "uses": 2,
+    "en": "e.g. Dubai, London, Sydney…",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_signup_maps_selected",
+    "uses": 2,
+    "en": "Selected",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_signup_maps_clear",
+    "uses": 2,
+    "en": "Clear",
+    "hiUntranslated": false
+  },
+  {
+    "key": "affiliate_auth_paypal",
+    "uses": 2,
+    "en": "PayPal email",
+    "hiUntranslated": false
+  }
+]

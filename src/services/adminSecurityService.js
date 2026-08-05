@@ -1,6 +1,7 @@
+import app from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
-const functions = getFunctions();
+const functions = getFunctions(app, 'us-central1');
 
 const call = async (name, payload) => {
     const fn = httpsCallable(functions, name);
@@ -21,9 +22,6 @@ export const adminSecurityService = {
     cancelUserSubscription: (targetUid) =>
         call('adminCancelUserSubscription', { targetUid }),
 
-    updateBusinessLimits: (targetUid, customLimits, customLimitsExpiry, adminNotes) =>
-        call('adminUpdateBusinessLimits', { targetUid, customLimits, customLimitsExpiry, adminNotes }),
-
     deleteUser: (targetUid) =>
         call('adminDeleteUser', { targetUid }),
 
@@ -37,7 +35,16 @@ export const adminSecurityService = {
         call('adminWipeCommunityContent', {}),
 
     createNotification: (payload) =>
-        call('createNotification', payload)
-};
+        call('createNotification', payload),
 
-export const consumeOfferCredit = () => call('consumeOfferCredit', {});
+    previewEmailCampaign: (filters) =>
+        call('adminPreviewEmailCampaign', filters),
+
+    sendEmailCampaign: (payload) =>
+        call('adminSendEmailCampaign', payload),
+
+    getDashboardStats: () => call('adminGetDashboardStats', {}),
+
+    setReportStatus: (reportId, status) =>
+        call('adminSetReportStatus', { reportId, status }),
+};

@@ -1,378 +1,386 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { FaSearch, FaMapMarkerAlt, FaStore, FaGoogle } from 'react-icons/fa';
+import { FaSearch, FaMapMarkerAlt, FaStore } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
+import { parseGoogleAddressComponents } from '../utils/googlePlacesBusiness';
+import { resolveCountryIso2 } from '../utils/countryIso';
+import { PLACES_AUTOCOMPLETE_DEBOUNCE_MS } from '../utils/placesCostControl';
+import {
+  fetchCityBoundingBox,
+  searchPhoton,
+  filterPhotonByCityName,
+  photonFeatureToVenuePayload,
+  searchNominatimCities } from
+'../utils/osmPhotonSearch';
+import './venue-search.css';
+import { AppText, AppTextInput } from "./base";
 
-const SmartPlaceSearch = ({ onSelect, excludeIds = [], searchType = 'establishment', cityBias = null }) => {
-    const { t } = useTranslation();
-    const [input, setInput] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [results, setResults] = useState({ partners: [], google: [] });
-    const [showResults, setShowResults] = useState(false);
+const SmartPlaceSearch = ({
+  onSelect,
+  excludeIds = [],
+  searchType = 'establishment',
+  cityBias = null,
+  countryCode = null,
+  showPartnerResults = true,
+  fetchExtendedBusinessDetails = false
+}) => {
+  const { t, i18n } = useTranslation();
+  const isRtl = typeof i18n.dir === 'function' && i18n.dir(i18n.language) === 'rtl';
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState({ partners: [], osm: [] });
+  const [showResults, setShowResults] = useState(false);
+  const cityBboxRef = useRef(null);
+  const wrapperRef = useRef(null);
+  const searchDebounceRef = useRef(null);
+  const searchGenRef = useRef(0);
+  const lang = typeof i18n.language === 'string' ? i18n.language.split('-')[0] : 'en';
 
-    // Google Places Service
-    const autocompleteService = useRef(null);
-    const placesService = useRef(null);
-    const wrapperRef = useRef(null);
+  const iso = resolveCountryIso2(countryCode);
 
-    useEffect(() => {
-        let cancelled = false;
-        loadGoogleMapsScript()
-            .then(() => {
-                if (cancelled || typeof window === 'undefined') return;
-                if (window.google?.maps?.places) {
-                    autocompleteService.current = new window.google.maps.places.AutocompleteService();
-                    const dummyDiv = document.createElement('div');
-                    placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
-                }
-            })
-            .catch(() => {
-                if (!cancelled) console.warn('Google Maps API not available. Place search will show partners only.');
-            });
-        return () => { cancelled = true; };
-    }, []);
-
-    // Handle click outside to close
-    useEffect(() => {
-        function handleClickOutside(event) {
-            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
-                setShowResults(false);
-            }
-        }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [wrapperRef]);
-
-    const handleSearch = async (text) => {
-        setInput(text);
-        if (text.length < 3) {
-            setResults({ partners: [], google: [] });
-            setShowResults(false);
-            return;
-        }
-
-        setLoading(true);
-        setShowResults(true);
-
-        try {
-            // 1. FireStore Search (Partners) - Only if NOT searching for cities
-            let partnersPromise = Promise.resolve({ docs: [] });
-
-            if (searchType !== '(cities)' && searchType !== 'geocode') {
-                const normalizedText = text.trim().toLowerCase();
-                const partnersQuery = query(
-                    collection(db, 'public_profiles'),
-                    where('profileType', '==', 'business'),
-                    where('businessPublic.isPublished', '==', true),
-                    where('search.displayNameLower', '>=', normalizedText),
-                    where('search.displayNameLower', '<=', normalizedText + '\uf8ff'),
-                    limit(3)
-                );
-                partnersPromise = getDocs(partnersQuery);
-            }
-
-            // 2. Google Search Promise
-            const googlePromise = new Promise((resolve) => {
-                if (!autocompleteService.current) return resolve([]);
-
-                const request = {
-                    input: text,
-                    types: searchType === '(cities)' ? ['(cities)'] : (searchType === 'geocode' ? ['geocode'] : ['establishment', 'geocode']),
-                };
-
-                // Apply City Bias if available
-                if (cityBias && cityBias.lat && cityBias.lng && window.google) {
-                    request.location = new window.google.maps.LatLng(cityBias.lat, cityBias.lng);
-                    request.radius = 50000; // 50km radius
-                    console.log("📍 Applying City Bias:", cityBias);
-                }
-
-                autocompleteService.current.getPlacePredictions(request, (predictions, status) => {
-                    if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
-                        resolve(predictions.map(p => ({
-                            id: p.place_id,
-                            name: p.structured_formatting.main_text,
-                            address: p.structured_formatting.secondary_text,
-                            source: 'google',
-                            types: p.types,
-                            place_id: p.place_id
-                        })));
-                    } else {
-                        resolve([]);
-                    }
-                });
-            });
-
-            const [partnersSnapshot, googleResults] = await Promise.all([
-                partnersPromise,
-                googlePromise
-            ]);
-
-            const partners = partnersSnapshot.docs
-                .map(doc => {
-                    const data = doc.data();
-                    const business = data.businessPublic || {};
-                    return {
-                        id: doc.id,
-                        name: data.displayName || 'Business',
-                        address: business.address || business.city || '',
-                        image: data.avatarUrl || getSafeAvatar({}),
-                        source: 'business',
-                        businessId: doc.id
-                    };
-                })
-                .filter(p => !excludeIds.includes(p.id));
-
-            setResults({
-                partners,
-                google: googleResults.filter(g => !excludeIds.includes(g.place_id))
-            });
-
-        } catch (error) {
-            console.error('Search error:', error);
-        } finally {
-            setLoading(false);
-        }
+  useEffect(() => {
+    let cancelled = false;
+    cityBboxRef.current = null;
+    const lat = cityBias?.lat;
+    const lng = cityBias?.lng;
+    const cityName = cityBias?.city || cityBias?.name;
+    if (cityName && iso && typeof cityName === 'string') {
+      (async () => {
+        const bbox = await fetchCityBoundingBox(cityName, iso);
+        if (!cancelled) cityBboxRef.current = bbox;
+      })();
+    } else if (lat != null && lng != null && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+      const d = 0.12;
+      cityBboxRef.current = {
+        minLon: Number(lng) - d,
+        minLat: Number(lat) - d,
+        maxLon: Number(lng) + d,
+        maxLat: Number(lat) + d
+      };
+    }
+    return () => {
+      cancelled = true;
     };
+  }, [cityBias, iso]);
 
-    const handleSelect = async (place) => {
-        // If it's a google place, we might want to get more details (like lat/lng or photo)
-        if (place.source === 'google' && placesService.current) {
-            placesService.current.getDetails({
-                placeId: place.place_id,
-                fields: ['name', 'formatted_address', 'geometry', 'photos', 'url']
-            }, (placeDetails, status) => {
-                if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) setShowResults(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [wrapperRef]);
 
+  useEffect(
+    () => () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    },
+    []
+  );
 
-
-                    const photos = placeDetails.photos?.map(p => p.getUrl({ maxWidth: 400 })) || [];
-                    const photoUrl = photos.length > 0 ? photos[0] : null;
-
-                    const enrichedPlace = {
-                        ...place,
-                        name: placeDetails.name,
-                        address: placeDetails.formatted_address,
-                        image: photoUrl,
-                        photos: photos,
-                        location: {
-                            lat: placeDetails.geometry.location.lat(),
-                            lng: placeDetails.geometry.location.lng()
-                        },
-                        googleUrl: placeDetails.url
-                    };
-
-                    onSelect(enrichedPlace);
-                } else {
-                    // Fallback to basic info
-                    onSelect(place);
-                }
-            });
-        } else {
-            onSelect(place);
-        }
-
-        setInput('');
+  const executeSearch = async (text, gen) => {
+    const stale = () => gen !== searchGenRef.current;
+    if (text.length < 3) {
+      if (!stale()) {
+        setResults({ partners: [], osm: [] });
         setShowResults(false);
-    };
+      }
+      return;
+    }
+    if (stale()) return;
+    setLoading(true);
+    setShowResults(true);
 
-    const skeletonStyle = {
-        background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%)',
-        backgroundSize: '200% 100%',
-        animation: 'shimmer 1.5s infinite',
-        borderRadius: '8px'
-    };
+    try {
+      let partnersPromise = Promise.resolve({ docs: [] });
+      if (showPartnerResults && searchType !== '(cities)' && searchType !== 'geocode') {
+        const nt = text.trim().toLowerCase();
+        const q = query(
+          collection(db, 'public_profiles'),
+          where('profileType', '==', 'business'),
+          where('businessPublic.isPublished', '==', true),
+          where('search.displayNameLower', '>=', nt),
+          where('search.displayNameLower', '<=', nt + '\uf8ff'),
+          limit(3)
+        );
+        partnersPromise = getDocs(q);
+      }
 
-    return (
-        <div ref={wrapperRef} style={{ position: 'relative', width: '100%' }}>
+      let osmPromise;
+      if (searchType === '(cities)') {
+        osmPromise = searchNominatimCities(text, countryCode).then((rows) =>
+        rows.map((r) => ({
+          id: r.place_id,
+          name: r.main_text,
+          address: r.secondary_text,
+          source: 'osm',
+          nominatim: r.nominatim
+        }))
+        );
+      } else {
+        osmPromise = (async () => {
+          const bbox = cityBboxRef.current;
+          const { features } = await searchPhoton({
+            query: text,
+            lang,
+            limit: 12,
+            bbox: bbox || undefined,
+            lat: cityBias?.lat != null ? Number(cityBias.lat) : undefined,
+            lon: cityBias?.lng != null ? Number(cityBias.lng) : undefined
+          });
+          const cityName = cityBias?.city || cityBias?.name;
+          const list = cityName ? filterPhotonByCityName(features, cityName) : features;
+          return list.map((f, i) => {
+            const payload = photonFeatureToVenuePayload(f);
+            const p = f.properties || {};
+            const addr = [
+            [p.housenumber, p.street].filter(Boolean).join(' '),
+            p.city || p.town].
+
+            filter(Boolean).
+            join(', ');
+            return {
+              id: payload.placeId || `osm-${i}`,
+              name: payload.name,
+              address: addr || payload.fullAddress,
+              source: 'osm',
+              photonFeature: f
+            };
+          });
+        })();
+      }
+
+      const [snap, osm] = await Promise.all([partnersPromise, osmPromise]);
+      const partners = snap.docs.
+      map((doc) => {
+        const d = doc.data();
+        const bi = d.businessPublic || {};
+        return {
+          id: doc.id,
+          name: d.display_name || 'Business',
+          address: bi.address || bi.city || '',
+          image: getSafeAvatar(d),
+          source: 'business',
+          businessId: doc.id
+        };
+      }).
+      filter((p) => !excludeIds.includes(p.id));
+
+      const osmFiltered = (osm || []).filter((g) => !excludeIds.includes(g.id));
+
+      if (!stale()) setResults({ partners, osm: osmFiltered });
+    } catch (e) {
+      console.warn('Search error:', e);
+    } finally {
+      if (!stale()) setLoading(false);
+    }
+  };
+
+  const handleSelect = (place) => {
+    if (place.source === 'osm' && place.photonFeature) {
+      const payload = photonFeatureToVenuePayload(place.photonFeature);
+      if (fetchExtendedBusinessDetails) {
+        const ap = parseGoogleAddressComponents(payload.addressComponents);
+        onSelect({
+          ...place,
+          source: 'osm',
+          name: payload.name,
+          address: payload.fullAddress,
+          placeId: payload.placeId,
+          location: { lat: payload.lat, lng: payload.lng },
+          phone: '',
+          website: payload.website || '',
+          openingHours: null,
+          editorialSummary: '',
+          city: ap.city,
+          country: ap.country,
+          countryCode: ap.countryCode,
+          googleTypes: payload.types || []
+        });
+      } else {
+        onSelect({
+          ...place,
+          name: payload.name,
+          address: payload.fullAddress,
+          image: undefined,
+          photos: [],
+          location: { lat: payload.lat, lng: payload.lng },
+          placeId: payload.placeId
+        });
+      }
+    } else if (place.source === 'osm' && place.nominatim) {
+      const lat = parseFloat(place.nominatim.lat);
+      const lng = parseFloat(place.nominatim.lon);
+      onSelect({
+        ...place,
+        name: place.name,
+        address: place.address,
+        location: { lat, lng },
+        placeId: place.id
+      });
+    } else onSelect(place);
+    setInput('');
+    setShowResults(false);
+  };
+
+  const skeletonStyle = {
+    background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%)',
+    backgroundSize: '200% 100%',
+    animation: 'shimmer 1.5s infinite',
+    borderRadius: '8px'
+  };
+
+  return (
+    <div ref={wrapperRef} className="venue-location-picker" style={{ width: '100%' }}>
             <div style={{ position: 'relative' }}>
-                <FaSearch style={{
-                    position: 'absolute',
-                    left: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#9ca3af'
-                }} />
-
-                <input
-                    type="text"
-                    value={input}
-                    onChange={(e) => handleSearch(e.target.value)}
-                    placeholder={t('search_places_placeholder') || "Search for restaurants, cafes..."}
-                    style={{
-                        width: '100%',
-                        padding: '12px 12px 12px 40px',
-                        borderRadius: '12px',
-                        border: '1px solid var(--border-color)',
-                        background: 'var(--bg-card)',
-                        color: 'var(--text-primary)',
-                        fontSize: '1rem',
-                        outline: 'none'
-                    }}
-                />
-
-                {loading && (
-                    <div style={{
-                        position: 'absolute',
-                        right: '12px',
-                        top: '50%',
-                        transform: 'translateY(-50%)'
-                    }}>
-                        <div className="spinner-mini" style={{
-                            width: '16px', height: '16px', border: '2px solid #ccc', borderTopColor: '#333', borderRadius: '50%', animation: 'spin 1s linear infinite'
-                        }}></div>
+                <FaSearch
+          style={{
+            position: 'absolute',
+            [isRtl ? 'right' : 'left']: '12px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: '#9ca3af'
+          }} />
+        
+                <AppTextInput
+          type="text"
+          value={input}
+          onChange={(e) => {
+            const v = e.target.value;
+            setInput(v);
+            if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+            if (v.length < 3) {
+              searchGenRef.current += 1;
+              setResults({ partners: [], osm: [] });
+              setShowResults(false);
+              setLoading(false);
+              return;
+            }
+            searchGenRef.current += 1;
+            const gen = searchGenRef.current;
+            searchDebounceRef.current = setTimeout(() => {
+              searchDebounceRef.current = null;
+              void executeSearch(v, gen);
+            }, PLACES_AUTOCOMPLETE_DEBOUNCE_MS);
+          }}
+          placeholder={
+          fetchExtendedBusinessDetails ?
+          t('business_onboarding_google_placeholder') :
+          t('search_places_placeholder') || 'Search for restaurants, cafes…'
+          }
+          style={{
+            width: '100%',
+            padding: isRtl ? '12px 40px 12px 12px' : '12px 12px 12px 40px',
+            borderRadius: '12px',
+            border: '1px solid var(--border-color)',
+            background: 'var(--bg-input)',
+            color: 'var(--text-main)',
+            fontSize: '1rem',
+            outline: 'none',
+            boxSizing: 'border-box'
+          }} />
+        
+                {loading &&
+        <div
+          style={{
+            position: 'absolute',
+            [isRtl ? 'left' : 'right']: '12px',
+            top: '50%',
+            transform: 'translateY(-50%)'
+          }}>
+          
+                        <div
+            className="spinner-mini"
+            style={{
+              width: '16px',
+              height: '16px',
+              border: '2px solid #ccc',
+              borderTopColor: '#333',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+          
                     </div>
-                )}
+        }
             </div>
-
-            {/* Dropdown: show when results are visible OR while loading (skeleton rows) */}
-            {showResults && (loading || results.partners.length > 0 || results.google.length > 0) && (
-                <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    marginTop: '8px',
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '12px',
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
-                    zIndex: 1000,
-                    maxHeight: '400px',
-                    overflowY: 'auto'
-                }}>
-                    {/* Skeleton rows while loading */}
-                    {loading && (
-                        <div style={{ padding: '12px' }}>
-                            {[1, 2, 3, 4].map((i) => (
-                                <div
-                                    key={`skeleton-${i}`}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '12px',
-                                        padding: '10px 0',
-                                        borderBottom: i < 4 ? '1px solid var(--border-color)' : 'none'
-                                    }}
-                                >
-                                    <div style={{
-                                        width: '40px',
-                                        height: '40px',
-                                        borderRadius: '8px',
-                                        ...skeletonStyle
-                                    }} />
+            {showResults && (loading || results.partners.length > 0 || results.osm.length > 0) &&
+      <div className="venue-search-dropdown">
+                    {loading &&
+        <div style={{ padding: '12px' }}>
+                            {[1, 2, 3, 4].map((i) =>
+          <div
+            key={`skeleton-${i}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '10px 0',
+              borderBottom: i < 4 ? '1px solid var(--border-color)' : 'none'
+            }}>
+            
+                                    <div style={{ width: '40px', height: '40px', borderRadius: '8px', ...skeletonStyle }} />
                                     <div style={{ flex: 1 }}>
                                         <div style={{ width: '70%', height: '14px', marginBottom: '6px', ...skeletonStyle }} />
                                         <div style={{ width: '50%', height: '12px', ...skeletonStyle }} />
                                     </div>
                                 </div>
-                            ))}
+          )}
                         </div>
-                    )}
-
-                    {/* Partners Section */}
-                    {!loading && results.partners.length > 0 && (
-                        <div style={{ padding: '8px 0' }}>
-                            <div style={{
-                                padding: '4px 12px',
-                                fontSize: '0.75rem',
-                                fontWeight: '700',
-                                color: 'var(--luxury-gold)',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.5px'
-                            }}>
-                                DineBuddies Partners
-                            </div>
-                            {results.partners.map((item) => (
-                                <div
-                                    key={item.id}
-                                    onClick={() => handleSelect(item)}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '12px',
-                                        padding: '10px 12px',
-                                        cursor: 'pointer',
-                                        transition: 'background 0.2s',
-                                        borderBottom: '1px solid rgba(0,0,0,0.05)'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-body)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                                >
-                                    <div style={{
-                                        width: '40px', height: '40px', borderRadius: '8px',
-                                        backgroundImage: `url(${item.image || 'https://via.placeholder.com/40'})`,
-                                        backgroundSize: 'cover', backgroundPosition: 'center',
-                                        border: '1px solid var(--luxury-gold)'
-                                    }}></div>
+        }
+                    {showPartnerResults && !loading && results.partners.length > 0 &&
+        <div style={{ padding: '8px 0' }}>
+                            <div className="venue-search-section-label venue-search-section-label--accent">DineBuddies Partners</div>
+                            {results.partners.map((item) =>
+          <div key={item.id} onClick={() => handleSelect(item)} className="venue-search-row">
+                                    <div className="venue-search-partner-thumb">
+                                        <img
+                src={item.image || 'https://via.placeholder.com/40'}
+                alt={item.name}
+                onError={(e) => {
+                  e.target.src = 'https://via.placeholder.com/40?text=?';
+                }}
+                style={{ minWidth: '100%', minHeight: '100%', objectFit: 'cover' }} />
+              
+                                    </div>
                                     <div>
-                                        <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
-                                            {item.name} <span style={{ color: 'var(--primary)', fontSize: '0.8em' }}>✓</span>
+                                        <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>
+                                            {item.name} <AppText as="span" style={{ color: 'var(--primary)', fontSize: '0.8em' }}>✓</AppText>
                                         </div>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                            {item.address}
-                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{item.address}</div>
                                     </div>
                                 </div>
-                            ))}
+          )}
                         </div>
-                    )}
-
-                    {/* Google Section */}
-                    {!loading && results.google.length > 0 && (
-                        <div style={{ padding: '8px 0', borderTop: results.partners.length > 0 ? '1px solid var(--border-color)' : 'none' }}>
-                            <div style={{
-                                padding: '4px 12px',
-                                fontSize: '0.75rem',
-                                fontWeight: '700',
-                                color: '#9ca3af',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.5px',
-                                display: 'flex', alignItems: 'center', gap: '6px'
-                            }}>
-                                <FaGoogle /> Google Places
+        }
+                    {!loading && results.osm.length > 0 &&
+        <div
+          style={{
+            padding: '8px 0',
+            borderTop: showPartnerResults && results.partners.length > 0 ? '1px solid var(--border-color)' : 'none'
+          }}>
+          
+                            <div className="venue-search-section-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <FaStore /> OpenStreetMap
                             </div>
-                            {results.google.map((item) => (
-                                <div
-                                    key={item.id}
-                                    onClick={() => handleSelect(item)}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '12px',
-                                        padding: '10px 12px',
-                                        cursor: 'pointer',
-                                        transition: 'background 0.2s'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-body)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                                >
-                                    <div style={{
-                                        minWidth: '32px', height: '32px', borderRadius: '50%',
-                                        background: '#f3f4f6', color: '#6b7280',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                    }}>
+                            {results.osm.map((item) =>
+          <div key={item.id} onClick={() => handleSelect(item)} className="venue-search-row">
+                                    <div className="venue-search-google-pin">
                                         <FaMapMarkerAlt />
                                     </div>
                                     <div>
-                                        <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
-                                            {item.name}
-                                        </div>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                            {item.address}
-                                        </div>
+                                        <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>{item.name}</div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{item.address}</div>
                                     </div>
                                 </div>
-                            ))}
+          )}
                         </div>
-                    )}
+        }
                 </div>
-            )}
-        </div>
-    );
+      }
+        </div>);
+
 };
 
 export default SmartPlaceSearch;

@@ -1,0 +1,452 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { AnimatePresence, animate, motion, useMotionValue } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
+import { FaComments, FaGift, FaHeart, FaMapMarkerAlt, FaUserCheck, FaUserPlus } from 'react-icons/fa';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../firebase/config';
+import { useAuth } from '../../context/AuthContext';
+import { useInvitations } from '../../context/InvitationContext';
+import { useToast } from '../../context/ToastContext';
+import {
+  likeDiscoveryProfile,
+  unlikeDiscoveryProfile,
+} from '../../utils/discoveryProfile';
+import { showLikeCooldownWarning } from '../../utils/connectionActionCooldown';
+import { isFollowing as checkIsFollowing } from '../../utils/followHelpers';
+import { checkCanMessage } from '../../utils/chatHelpers';
+import {
+  profileShowsLikeButton,
+  connectionKindToCelebrationType,
+} from '../../utils/connectConnection';
+import { useDiscoveryActionStatus } from '../../hooks/useDiscoveryActionStatus';
+import { useCanMessageMember } from '../../hooks/useCanMessageMember';
+import { useMatchCelebration } from '../../context/MatchCelebrationContext';
+import { useUserPresence } from '../../hooks/usePresence';
+import InboxHubLink from './InboxHubLink';
+import './discovery.css';
+import './inbox.css';
+import { AppText } from '../base';
+
+const SWIPE_X_SKIP_THRESHOLD = 100;
+const BURST_MS = 1400;
+const DOUBLE_ACTIVATE_MS = 320;
+const DOUBLE_ACTIVATE_PX = 22;
+
+function formatAgeLabel(profile) {
+  const raw =
+    profile?.ageCategory ||
+    profile?.user?.ageRange ||
+    profile?.user?.ageCategory ||
+    profile?.user?.age ||
+    '';
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  // Prefer a leading number when present ("35", "35-44" → "35")
+  const match = text.match(/\d{1,3}/);
+  return match ? match[0] : text;
+}
+
+export default function DiscoveryCard({
+  profile,
+  onSkip,
+  onLike,
+  onSendGift,
+  onGreeting: _onGreeting,
+  isTop = true,
+}) {
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const { showToast, showPersistentWarning } = useToast();
+  const { currentUser, userProfile } = useAuth();
+  const { toggleFollow, currentUser: invitationUser } = useInvitations();
+  const { celebrateMatch } = useMatchCelebration();
+  const targetUser = profile?.user || profile;
+  const isOnline = useUserPresence(profile?.id, { fallback: Boolean(targetUser?.isOnline) });
+  const viewerProfile = userProfile || currentUser || invitationUser;
+  const useDatingLike = profileShowsLikeButton(targetUser);
+  const viewerUid = currentUser?.uid || currentUser?.id;
+  const viewerFollowing = useMemo(
+    () => invitationUser?.following || [],
+    [invitationUser?.following]
+  );
+  const canMessageFromServer = useCanMessageMember(viewerUid, profile?.id, viewerFollowing, {
+    enabled: Boolean(isTop),
+    viewerProfile: viewerProfile,
+    targetProfile: targetUser,
+  });
+  const { liked } = useDiscoveryActionStatus(viewerUid, profile?.id);
+
+  const x = useMotionValue(0);
+  const exitHandledRef = useRef(false);
+  const draggingRef = useRef(false);
+  const burstTimerRef = useRef(null);
+  const lastActivateRef = useRef({ at: 0, x: 0, y: 0 });
+
+  const [likeBusy, setLikeBusy] = useState(false);
+  const [likeBurst, setLikeBurst] = useState(false);
+  const [canChat, setCanChat] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  const isFollowingUser = checkIsFollowing(viewerFollowing, profile?.id);
+  const ageLabel = formatAgeLabel(profile);
+  const locationLabel = [profile?.city, profile?.country].filter(Boolean).join(', ') || profile?.city || '';
+
+  const refreshCanChat = useCallback(async () => {
+    if (!viewerUid || !profile?.id) return;
+    try {
+      const snap = await getDoc(doc(db, 'users', profile.id));
+      const targetFollowing = snap.exists() ? snap.data()?.following || [] : [];
+      const allowed = await checkCanMessage(
+        viewerUid,
+        profile.id,
+        viewerFollowing,
+        targetFollowing,
+        {
+          currentUserProfile: viewerProfile,
+          targetUserProfile: targetUser,
+        }
+      );
+      setCanChat(allowed);
+    } catch {
+      setCanChat(false);
+    }
+  }, [profile?.id, viewerFollowing, viewerUid, viewerProfile, targetUser]);
+
+  useEffect(() => {
+    setCanChat(canMessageFromServer);
+  }, [canMessageFromServer]);
+
+  const triggerBurst = useCallback((setter) => {
+    if (burstTimerRef.current) window.clearTimeout(burstTimerRef.current);
+    setter(true);
+    burstTimerRef.current = window.setTimeout(() => {
+      setter(false);
+      burstTimerRef.current = null;
+    }, BURST_MS);
+  }, []);
+
+  const resetPosition = useCallback(() => {
+    animate(x, 0, { type: 'spring', stiffness: 520, damping: 28 });
+  }, [x]);
+
+  const triggerSkip = useCallback(() => {
+    if (exitHandledRef.current) return;
+    exitHandledRef.current = true;
+    animate(x, -560, { duration: 0.22, ease: 'easeIn' }).then(() => {
+      onSkip?.(profile);
+    });
+  }, [onSkip, profile, x]);
+
+  const handleDragStart = () => {
+    draggingRef.current = true;
+  };
+
+  const handleDragEnd = (_, info) => {
+    window.setTimeout(() => {
+      draggingRef.current = false;
+    }, 50);
+
+    if (!isTop) return;
+    const { offset, velocity } = info;
+
+    if (offset.x < -SWIPE_X_SKIP_THRESHOLD || velocity.x < -450) {
+      triggerSkip();
+      return;
+    }
+    // Magnetic snap back into place
+    resetPosition();
+  };
+
+  const isInteractiveTarget = useCallback((target) => {
+    if (!target?.closest) return false;
+    return Boolean(
+      target.closest('.discovery-card__actions, .discovery-card__inbox, button, a')
+    );
+  }, []);
+
+  const handleNavigateActivate = useCallback(
+    (clientX, clientY) => {
+      if (!isTop || exitHandledRef.current || draggingRef.current) return;
+
+      const now = Date.now();
+      const prev = lastActivateRef.current;
+      const dt = now - prev.at;
+      const dist = Math.hypot(clientX - prev.x, clientY - prev.y);
+
+      if (prev.at && dt <= DOUBLE_ACTIVATE_MS && dist <= DOUBLE_ACTIVATE_PX) {
+        lastActivateRef.current = { at: 0, x: 0, y: 0 };
+        triggerSkip();
+        return;
+      }
+
+      lastActivateRef.current = { at: now, x: clientX, y: clientY };
+    },
+    [isTop, triggerSkip]
+  );
+
+  const handleCardPointerUp = useCallback(
+    (e) => {
+      if (!isTop) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (isInteractiveTarget(e.target)) return;
+      handleNavigateActivate(e.clientX, e.clientY);
+    },
+    [handleNavigateActivate, isInteractiveTarget, isTop]
+  );
+
+  const handleToggleLike = async (e) => {
+    e.stopPropagation();
+    if (!isTop || likeBusy) return;
+
+    if (!viewerUid) {
+      onLike?.(profile);
+      return;
+    }
+
+    setLikeBusy(true);
+    try {
+      if (liked) {
+        const result = await unlikeDiscoveryProfile(viewerUid, targetUser);
+        if (result?.ok) {
+          if (result.wasMutual) await refreshCanChat();
+        } else if (result?.reason === 'permission_denied') {
+          showToast(
+            t(
+              'discovery_unlike_rules_pending',
+              'Could not remove like yet — app rules may need updating. Try again shortly.'
+            ),
+            'error'
+          );
+        } else {
+          showToast(t('discovery_unlike_failed', 'Could not remove like. Try again.'), 'error');
+        }
+        return;
+      }
+
+      triggerBurst(setLikeBurst);
+      const result = await likeDiscoveryProfile(viewerUid, targetUser, userProfile || currentUser);
+      if (result?.reason === 'cooldown') {
+        showLikeCooldownWarning(showPersistentWarning, i18n, result.cancelledAtMs, result.retryAtMs);
+        return;
+      }
+      if (!result?.ok) {
+        showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
+        return;
+      }
+      if (result.mutual || result.match) {
+        setCanChat(true);
+        celebrateMatch({
+          type: connectionKindToCelebrationType(result.connectionKind || 'dating'),
+          otherUser: targetUser,
+          otherId: profile.id,
+          otherName: profile.name,
+        });
+      }
+    } catch (err) {
+      console.error('[DiscoveryCard] like', err);
+      showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
+    } finally {
+      setLikeBusy(false);
+    }
+  };
+
+  const handleFollow = async (e) => {
+    e.stopPropagation();
+    if (!isTop || followBusy) return;
+    setFollowBusy(true);
+    try {
+      const wasFollowing = isFollowingUser;
+      const result = await toggleFollow(profile.id);
+      if (!result?.ok) {
+        if (result?.reason !== 'cooldown') {
+          showToast(t('discovery_follow_failed', 'Could not follow. Try again.'), 'error');
+        }
+        return;
+      }
+      if (result.connectionComplete && result.connectionKind) {
+        setCanChat(true);
+        celebrateMatch({
+          type: connectionKindToCelebrationType(result.connectionKind),
+          otherUser: targetUser,
+          otherId: profile.id,
+          otherName: profile.name,
+        });
+      } else if (wasFollowing) {
+        await refreshCanChat();
+      }
+    } catch (err) {
+      console.error('[DiscoveryCard] follow', err);
+      showToast(t('discovery_follow_failed', 'Could not follow. Try again.'), 'error');
+    } finally {
+      setFollowBusy(false);
+    }
+  };
+
+  const handleGift = (e) => {
+    e.stopPropagation();
+    if (!isTop) return;
+    onSendGift?.(profile);
+  };
+
+  const handleOpenChat = (e) => {
+    e.stopPropagation();
+    if (!profile?.id) return;
+    if (!canChat) {
+      showToast(
+        t(
+          'discovery_chat_locked',
+          useDatingLike
+            ? 'Like each other to unlock chat.'
+            : 'Follow each other to unlock chat.'
+        ),
+        'info'
+      );
+      return;
+    }
+    navigate(`/chat/${profile.id}`);
+  };
+
+  const identityLine = ageLabel ? `${profile.name}, ${ageLabel}` : profile.name;
+
+  return (
+    <motion.article
+      className="discovery-card discovery-card--magnetic"
+      style={{ x, zIndex: isTop ? 2 : 1, touchAction: 'pan-y' }}
+      drag={isTop ? 'x' : false}
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.85}
+      dragMomentum={false}
+      initial={isTop ? { scale: 0.92, opacity: 0.65 } : false}
+      animate={isTop ? { scale: 1, opacity: 1 } : undefined}
+      transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onPointerUp={handleCardPointerUp}
+      title={isTop ? t('discovery_double_tap_next', 'Double-click or double-tap for next profile') : undefined}
+      aria-label={
+        isTop
+          ? t('discovery_double_tap_next', 'Double-click or double-tap for next profile')
+          : undefined
+      }
+    >
+      <div className="discovery-card__glow" aria-hidden />
+
+      <div className="discovery-card__frame">
+        <img
+          src={profile.profilePhoto}
+          alt=""
+          className="discovery-card__photo discovery-card__photo--profile"
+          draggable={false}
+        />
+
+        <div className="discovery-card__gradient" aria-hidden />
+
+        <div className="discovery-card__top-row">
+          {locationLabel ? (
+            <div className="discovery-card__location-bar">
+              <FaMapMarkerAlt className="discovery-card__location-pin" aria-hidden />
+              <AppText as="span" className="discovery-card__location-text">
+                {locationLabel}
+              </AppText>
+              {isOnline ? (
+                <AppText
+                  as="span"
+                  className="discovery-card__online-dot"
+                  aria-label={t('online', 'Online')}
+                />
+              ) : null}
+            </div>
+          ) : (
+            <span className="discovery-card__location-spacer" aria-hidden />
+          )}
+
+          <InboxHubLink
+            className="discovery-card__inbox discovery-card__action--glass"
+            tab="activity"
+            showLabel={false}
+            label={t('inbox_title', 'Inbox')}
+          />
+        </div>
+
+        <div className="discovery-card__identity">
+          <AppText as="h2" className="discovery-card__name-line">
+            {identityLine}
+          </AppText>
+          {profile.bio ? (
+            <AppText as="p" className="discovery-card__bio">
+              {profile.bio}
+            </AppText>
+          ) : null}
+        </div>
+
+        <div className="discovery-card__actions discovery-card__actions--rail">
+          <button
+            type="button"
+            className={`discovery-card__action discovery-card__action--glass discovery-card__action--chat${
+              canChat ? '' : ' discovery-card__action--locked'
+            }`}
+            aria-label={t('chat', 'Chat')}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleOpenChat}
+          >
+            <FaComments size={22} />
+          </button>
+
+          <button
+            type="button"
+            className="discovery-card__action discovery-card__action--glass discovery-card__action--gift"
+            aria-label={t('user_directory_send_gift', 'Send gift')}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleGift}
+          >
+            <FaGift size={22} />
+          </button>
+
+          {useDatingLike ? (
+            <button
+              type="button"
+              className={`discovery-card__action discovery-card__action--glass discovery-card__action--like${
+                liked ? ' discovery-card__action--liked' : ' discovery-card__action--like-idle'
+              }`}
+              disabled={likeBusy}
+              aria-label={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
+              aria-pressed={liked}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleToggleLike}
+            >
+              <FaHeart size={22} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`discovery-card__action discovery-card__action--glass discovery-card__action--follow${
+                isFollowingUser ? ' discovery-card__action--following' : ''
+              }`}
+              disabled={followBusy}
+              aria-label={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
+              aria-pressed={isFollowingUser}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleFollow}
+            >
+              {isFollowingUser ? <FaUserCheck size={22} /> : <FaUserPlus size={22} />}
+            </button>
+          )}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {likeBurst ? (
+          <motion.div
+            className="discovery-card__burst discovery-card__burst--heart"
+            initial={{ opacity: 0, scale: 0.35 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.08 }}
+            transition={{ duration: 0.28, ease: 'easeOut' }}
+          >
+            <FaHeart className="discovery-card__heart-3d" aria-hidden />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </motion.article>
+  );
+}

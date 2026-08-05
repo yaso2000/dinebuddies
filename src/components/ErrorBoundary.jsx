@@ -1,70 +1,35 @@
 import React from 'react';
+import { recoverFromFatalUiError } from '../utils/fatalUiRecovery';
 
+/**
+ * App-wide React error boundary. Does not render any error or "recovering" UI —
+ * see fatalUiRecovery.js (the only recovery implementation).
+ */
 class ErrorBoundary extends React.Component {
     constructor(props) {
         super(props);
-        this.state = { hasError: false };
+        this.state = { suppressTree: false };
     }
 
-    static getDerivedStateFromError(error) {
-        return { hasError: true };
+    static getDerivedStateFromError() {
+        return { suppressTree: true };
     }
 
     componentDidCatch(error, errorInfo) {
-        console.error("Critical UI Error:", error, errorInfo);
+        recoverFromFatalUiError(error, { source: 'ErrorBoundary' });
+        console.error('ErrorBoundary component stack:', errorInfo?.componentStack);
+    }
+
+    componentDidUpdate(prevProps) {
+        if (this.props.children !== prevProps.children && this.state.suppressTree) {
+            this.setState({ suppressTree: false });
+        }
     }
 
     render() {
-        if (this.state.hasError) {
-            return (
-                <div style={{
-                    height: '100vh',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '20px',
-                    textAlign: 'center',
-                    background: 'var(--bg-body)',
-                    color: 'var(--text-main)'
-                }}>
-                    <div style={{ fontSize: '4rem', marginBottom: '20px' }}>⚠️</div>
-                    <h2 style={{ fontWeight: '800' }}>Something went wrong.</h2>
-                    <p style={{ opacity: 0.8, maxWidth: '400px', marginBottom: '30px' }}>
-                        We've encountered an unexpected error. Please try refreshing the page or restarting the app.
-                    </p>
-                    <button
-                        onClick={() => window.location.reload()}
-                        style={{
-                            background: 'var(--primary)',
-                            color: 'white',
-                            border: 'none',
-                            padding: '12px 30px',
-                            borderRadius: '12px',
-                            fontWeight: 'bold',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        Refresh App
-                    </button>
-                    <button
-                        onClick={() => window.location.href = '/'}
-                        style={{
-                            background: 'transparent',
-                            color: 'var(--text-muted)',
-                            border: '1px solid var(--border-color)',
-                            marginTop: '15px',
-                            padding: '8px 20px',
-                            borderRadius: '10px',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        Go to Home
-                    </button>
-                </div>
-            );
+        if (this.state.suppressTree) {
+            return null;
         }
-
         return this.props.children;
     }
 }

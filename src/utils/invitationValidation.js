@@ -27,12 +27,14 @@ export const checkDailyInvitationLimit = async (userId) => {
         );
 
         const snapshot = await getDocs(q);
+        const validInvitations = snapshot.docs.filter(doc => doc.data().status !== 'draft');
+        
         return {
-            hasInvitationToday: snapshot.size > 0,
-            count: snapshot.size,
-            existingInvitation: snapshot.size > 0 ? {
-                id: snapshot.docs[0].id,
-                ...snapshot.docs[0].data()
+            hasInvitationToday: validInvitations.length > 0,
+            count: validInvitations.length,
+            existingInvitation: validInvitations.length > 0 ? {
+                id: validInvitations[0].id,
+                ...validInvitations[0].data()
             } : null
         };
     } catch (error) {
@@ -59,7 +61,7 @@ export const canEditInvitation = (invitation) => {
 };
 
 /**
- * Update invitation time/date and notify participants
+ * Upprivate invite time/date and notify participants
  */
 export const updateInvitationDateTime = async (invitationId, newDate, newTime, currentUser) => {
     try {
@@ -123,7 +125,7 @@ export const updateInvitationDateTime = async (invitationId, newDate, newTime, c
             affectedUsers: joinedUsers.length
         };
     } catch (error) {
-        console.error('Error updating invitation:', error);
+        console.error('Error upprivate invite:', error);
         return {
             success: false,
             error: error.message
@@ -132,7 +134,7 @@ export const updateInvitationDateTime = async (invitationId, newDate, newTime, c
 };
 
 /**
- * Validate invitation creation
+ * Valiprivate invite creation
  */
 export const validateInvitationCreation = async (userId) => {
     const dailyCheck = await checkDailyInvitationLimit(userId);

@@ -1,0 +1,533 @@
+/* Connect — immersive magnetic profile card (in-layout under header + bottom nav) */
+
+.discovery-shell {
+    --discovery-pink: #ff4d9a;
+    --discovery-cyan: #2ee6ff;
+    --discovery-ink: #07070c;
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: var(--max-width, 480px);
+    margin: 0 auto;
+    background: var(--discovery-ink);
+    overflow: hidden;
+    touch-action: manipulation;
+}
+
+.discovery-shell--in-layout {
+    position: relative;
+    inset: auto;
+    height: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
+    max-height: 100%;
+    box-sizing: border-box;
+    background:
+        radial-gradient(120% 80% at 50% 0%, rgba(255, 77, 154, 0.14) 0%, transparent 55%),
+        radial-gradient(90% 70% at 80% 100%, rgba(46, 230, 255, 0.1) 0%, transparent 50%),
+        #07070c;
+}
+
+/*
+ * Fullscreen mode zeroes app-main padding, but Connect keeps the bottom nav.
+ * Reserve nav + safe-area so the magnetic card never sits under the tab bar.
+ */
+.app-main.app-main--fullscreen.app-main--connect {
+    background: #07070c !important;
+    padding-bottom: calc(var(--nav-height, 70px) + env(safe-area-inset-bottom, 0px) + 10px) !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+.app-main--fullscreen > .discovery-shell--in-layout {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+.discovery-feed {
+    position: relative;
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    background: transparent;
+    padding: 0.5rem 0.7rem 0.55rem;
+    box-sizing: border-box;
+}
+
+.discovery-feed__hint {
+    display: none;
+}
+
+.discovery-feed__feedback {
+    position: absolute;
+    left: 50%;
+    top: 28%;
+    z-index: 40;
+    transform: translateX(-50%);
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 700;
+    pointer-events: none;
+    backdrop-filter: blur(8px);
+}
+
+.discovery-feed__next-bg {
+    position: absolute;
+    inset: 0.5rem 0.7rem 0.55rem;
+    border-radius: 1.35rem;
+    transform: scale(0.965);
+    opacity: 0.4;
+    pointer-events: none;
+    overflow: hidden;
+    filter: blur(2px);
+}
+
+.discovery-feed__next-bg img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.discovery-feed__next-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.discovery-feed__empty {
+    display: flex;
+    height: 100%;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    text-align: center;
+    color: #fff;
+}
+
+.discovery-feed__empty-title {
+    margin: 1rem 0 0;
+    font-family: var(--font-heading, 'Segoe UI', sans-serif);
+    font-size: 1.25rem;
+    font-weight: 800;
+    line-height: 1.3;
+}
+
+.discovery-feed__empty-sub {
+    margin: 0.5rem 0 0;
+    font-size: 0.875rem;
+    opacity: 0.65;
+    line-height: 1.45;
+    max-width: 280px;
+}
+
+.discovery-feed__replay-btn {
+    margin-top: 1.25rem;
+    padding: 0.65rem 1.35rem;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(145deg, #ff4d9a 0%, #2ee6ff 120%);
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 18px rgba(255, 77, 154, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.discovery-feed__replay-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+}
+
+.discovery-feed__replay-btn:active {
+    transform: scale(0.98);
+}
+
+/* ── Magnetic card ── */
+.discovery-card {
+    position: absolute;
+    inset: 0.5rem 0.7rem 0.55rem;
+    overflow: hidden;
+    background: transparent;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.discovery-card--magnetic {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+}
+
+.discovery-card__glow {
+    position: absolute;
+    inset: 0;
+    border-radius: 1.35rem;
+    pointer-events: none;
+    background:
+        linear-gradient(135deg, rgba(255, 77, 154, 0.85), rgba(46, 230, 255, 0.75));
+    filter: blur(8px);
+    opacity: 0.45;
+    animation: discovery-magnetic-pulse 3.6s ease-in-out infinite;
+    z-index: 0;
+}
+
+@keyframes discovery-magnetic-pulse {
+    0%,
+    100% {
+        opacity: 0.42;
+        filter: blur(10px);
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.72;
+        filter: blur(14px);
+        transform: scale(1.012);
+    }
+}
+
+.discovery-card__frame {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 1.35rem;
+    overflow: hidden;
+    background: #0a0a0a;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow:
+        0 0 0 1px rgba(46, 230, 255, 0.22),
+        0 0 28px rgba(255, 77, 154, 0.28),
+        0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+.discovery-card__photo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    pointer-events: none;
+}
+
+.discovery-card__photo--profile {
+    object-position: center top;
+}
+
+.discovery-card__gradient {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(
+            to top,
+            rgba(0, 0, 0, 0.88) 0%,
+            rgba(0, 0, 0, 0.45) 28%,
+            rgba(0, 0, 0, 0.08) 52%,
+            rgba(0, 0, 0, 0.35) 100%
+        );
+}
+
+/* Top row — location + Connect inbox (notifications / gifts / messages) */
+.discovery-card__top-row {
+    position: absolute;
+    top: 0.85rem;
+    inset-inline: 0.85rem;
+    z-index: 22;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    pointer-events: none;
+}
+
+.discovery-card__top-row > * {
+    pointer-events: auto;
+}
+
+.discovery-card__location-spacer {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.discovery-card__location-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    max-width: calc(100% - 3.75rem);
+    padding: 0.42rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(12, 14, 22, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+.discovery-card__inbox {
+    flex-shrink: 0;
+    width: 3rem !important;
+    height: 3rem !important;
+    min-width: 3rem !important;
+    min-height: 3rem !important;
+    color: #fff !important;
+    text-decoration: none;
+    position: relative;
+}
+
+.discovery-card__inbox svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.discovery-card__inbox .inbox-hub-link__badge {
+    top: -2px;
+    inset-inline-end: -2px;
+    border-color: rgba(7, 7, 12, 0.85);
+}
+
+.discovery-card__location-pin {
+    flex-shrink: 0;
+    color: var(--discovery-cyan);
+    font-size: 0.82rem;
+    filter: drop-shadow(0 0 6px rgba(46, 230, 255, 0.55));
+}
+
+.discovery-card__location-text {
+    font-family: var(--font-body, 'Segoe UI', sans-serif);
+    font-size: 0.82rem;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.discovery-card__online-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.25), 0 0 10px rgba(52, 211, 153, 0.7);
+    flex-shrink: 0;
+}
+
+/* Name + age + bio — bottom of card (must stay above bottom nav via shell padding) */
+.discovery-card__identity {
+    position: absolute;
+    inset-inline-start: 1.1rem;
+    bottom: 1.1rem;
+    z-index: 12;
+    max-width: calc(100% - 5.75rem);
+    text-align: start;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.discovery-card__name-line {
+    margin: 0;
+    font-family: var(--font-heading, 'Segoe UI', sans-serif);
+    font-size: clamp(1.45rem, 5.2vw, 1.85rem);
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: #fff;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+}
+
+.discovery-card__bio {
+    margin: 0;
+    max-width: 100%;
+    font-family: var(--font-body, 'Segoe UI', sans-serif);
+    font-size: 0.88rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Vertical glass action rail — right side: Chat, Gift, Heart */
+.discovery-card__actions--rail {
+    position: absolute;
+    inset-inline-end: 0.85rem;
+    top: 50%;
+    bottom: auto;
+    inset-inline-start: auto;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.85rem;
+    padding: 0;
+    transform: translateY(-50%);
+}
+
+.discovery-card__action--glass {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.35rem;
+    height: 3.35rem;
+    min-width: 3.35rem;
+    min-height: 3.35rem;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    backdrop-filter: blur(16px) saturate(170%);
+    -webkit-backdrop-filter: blur(16px) saturate(170%);
+    box-shadow:
+        0 8px 22px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+}
+
+.discovery-card__action--glass:active {
+    transform: scale(0.92);
+}
+
+.discovery-card__action--glass:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.discovery-card__action--chat {
+    color: #7ef0ff;
+}
+
+.discovery-card__action--chat.discovery-card__action--locked {
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.discovery-card__action--gift {
+    color: #ffd36a;
+}
+
+.discovery-card__action--like-idle {
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.discovery-card__action--liked {
+    color: #ff5aa5;
+    border-color: rgba(255, 90, 165, 0.55);
+    background: rgba(255, 77, 154, 0.22);
+    box-shadow:
+        0 0 18px rgba(255, 77, 154, 0.45),
+        0 8px 22px rgba(0, 0, 0, 0.28);
+}
+
+.discovery-card__action--follow {
+    color: #9ad7ff;
+}
+
+.discovery-card__action--following {
+    color: #5ec8ff;
+    border-color: rgba(46, 230, 255, 0.45);
+    background: rgba(46, 230, 255, 0.16);
+}
+
+.discovery-card__burst {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    border-radius: 1.35rem;
+    overflow: hidden;
+}
+
+.discovery-card__heart-3d {
+    width: 5.5rem;
+    height: 5.5rem;
+    color: #ff4d9a;
+    fill: currentColor;
+    transform: perspective(520px) rotateX(18deg) rotateY(-8deg);
+    filter:
+        drop-shadow(0 10px 18px rgba(255, 77, 154, 0.55))
+        drop-shadow(0 3px 6px rgba(0, 0, 0, 0.35));
+}
+
+/* Legacy / unused discovery chrome (kept inert) */
+.discovery-shell__chrome,
+.discovery-icon-btn,
+.discovery-card__stamp,
+.discovery-card__heart-burst,
+.discovery-card__avatar,
+.discovery-card__info--minimal,
+.discovery-card__actions--row,
+.discovery-card__action:not(.discovery-card__action--glass),
+.discovery-btn-primary,
+.discovery-btn-gift,
+.discovery-sheet-backdrop,
+.discovery-sheet {
+    display: none !important;
+}
+
+@media (min-width: 768px) {
+    .discovery-shell--in-layout {
+        max-width: 440px;
+    }
+
+    .discovery-feed {
+        padding: 0.75rem 0.85rem 0.85rem;
+    }
+
+    .discovery-card,
+    .discovery-feed__next-bg {
+        inset: 0.75rem 0.85rem 0.85rem;
+    }
+
+    .discovery-card__name-line {
+        font-size: 1.9rem;
+    }
+}
+
+@media (max-width: 1023px) {
+    .app-main.app-main--fullscreen.app-main--connect {
+        /* Match mobile tab bar: nav height + safe area (+ small gap) */
+        padding-bottom: calc(var(--nav-height, 70px) + env(safe-area-inset-bottom, 0px) + 12px) !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .discovery-card__glow {
+        animation: none;
+        opacity: 0.5;
+    }
+}

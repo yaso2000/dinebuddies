@@ -1,379 +1,566 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { FaMapMarkerAlt, FaSearch, FaStar, FaPlus, FaStore } from 'react-icons/fa';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { FaMapMarkerAlt, FaSearch, FaStore } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { geocode } from '../utils/locationUtils';
-import { loadGoogleMapsScript } from '../utils/loadGoogleMaps';
+import { geocode, bboxFromCoords } from '../utils/locationUtils';
+import { resolveCountryIso2 } from '../utils/countryIso';
+import { languageForCountryCode } from '../utils/authGeoLanguage';
+import { PLACES_AUTOCOMPLETE_DEBOUNCE_MS } from '../utils/placesCostControl';
+import { sortAutocompletePredictionsForInvitation } from '../utils/invitationVenueSearch';
+import {
+  fetchCityBoundingBox,
+  searchPhoton,
+  filterPhotonByCityName,
+  photonFeatureToVenuePayload } from
+'../utils/osmPhotonSearch';
+import './venue-search.css';
+import { resolveApiUrl } from '../utils/resolveApiUrl';
+import { AppText, AppTextInput } from "./base";
 
-const LocationAutocomplete = ({ value, onChange, onSelect, city, countryCode, userLat, userLng, className = '' }) => {
-    const { t, i18n } = useTranslation();
-    const [suggestions, setSuggestions] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [showSuggestions, setShowSuggestions] = useState(false);
-    const wrapperRef = useRef(null);
-    const autocompleteService = useRef(null);
-    const placesService = useRef(null);
+const PHOTON_CACHE_MAX = 64;
+const photonCache = new Map();
 
-    // Initialize Google Places API (wait for script to load to avoid race condition)
-    useEffect(() => {
-        let cancelled = false;
-        loadGoogleMapsScript()
-            .then(() => {
-                if (cancelled || typeof window === 'undefined') return;
-                if (window.google?.maps?.places) {
-                    autocompleteService.current = new window.google.maps.places.AutocompleteService();
-                    const dummyDiv = document.createElement('div');
-                    placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
-                }
+function newPlacesSessionToken() {
+  // Places API (New): URL-safe token, max 36 chars.
+  const bytes = new Uint8Array(18);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  const raw = btoa(String.fromCharCode(...bytes));
+  return raw.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '').slice(0, 36);
+}
+
+function makePhotonCacheKey(input, iso2, city, userLat, userLng, hasBbox) {
+  const t = String(input || '').trim().toLowerCase();
+  return [
+  t,
+  (iso2 || '').toUpperCase(),
+  (city || '').trim().toLowerCase(),
+  userLat != null ? String(userLat) : '',
+  userLng != null ? String(userLng) : '',
+  hasBbox ? '1' : '0'].
+  join('\u001f');
+}
+
+function cachePhoton(key, features) {
+  if (photonCache.size >= PHOTON_CACHE_MAX) {
+    const first = photonCache.keys().next().value;
+    if (first !== undefined) photonCache.delete(first);
+  }
+  photonCache.set(key, features);
+}
+
+const LocationAutocomplete = ({
+  value,
+  onChange,
+  onSelect,
+  city,
+  countryCode,
+  /** State / province / region name — tightens Google autocomplete bbox with city. */
+  region,
+  userLat,
+  userLng,
+  invitationType,
+  className = '',
+  style = {},
+  inputStyle = {},
+  placeholder: placeholderProp,
+  'aria-label': ariaLabelProp,
+  useGooglePlacesMinimal = false,
+  /** When true with Google minimal mode, bias autocomplete toward food/retail establishments (admin import). */
+  googleBusinessSearch = false,
+  /** Override Google Places language (e.g. `ar`). When omitted, admin business search uses the selected country. */
+  placesLanguageCode,
+  required: inputRequired = true,
+  disabled = false
+}) => {
+  const { t, i18n } = useTranslation();
+  const [suggestions, setSuggestions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [dropdownFixed, setDropdownFixed] = useState(null);
+  const wrapperRef = useRef(null);
+  const inputRef = useRef(null);
+  const dropdownPortalRef = useRef(null);
+  const cityBboxRef = useRef(null);
+  const placesInputDebounceRef = useRef(null);
+  const placesGenerationRef = useRef(0);
+  const placesSearchRunIdRef = useRef(0);
+  const sessionTokenRef = useRef(newPlacesSessionToken());
+
+  const countryIsoResolved = resolveCountryIso2(countryCode);
+  const uiLang = typeof i18n.language === 'string' ? i18n.language.split('-')[0] : 'en';
+  const placesLang =
+    (typeof placesLanguageCode === 'string' && placesLanguageCode.trim()) ||
+    (googleBusinessSearch && countryIsoResolved ? languageForCountryCode(countryIsoResolved) : uiLang);
+
+  useEffect(() => {
+    let cancelled = false;
+    cityBboxRef.current = null;
+
+    const lat = userLat != null ? Number(userLat) : NaN;
+    const lng = userLng != null ? Number(userLng) : NaN;
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      cityBboxRef.current = bboxFromCoords(lat, lng, 40);
+    }
+
+    const c = String(city || '').trim();
+    const iso = countryIsoResolved;
+    if (c.length < 2 || !iso) return () => {
+      cancelled = true;
+    };
+
+    (async () => {
+      const bbox = await fetchCityBoundingBox(c, iso, region);
+      if (!cancelled && bbox) cityBboxRef.current = bbox;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [city, countryIsoResolved, region, userLat, userLng]);
+
+  const updateDropdownPosition = useCallback(() => {
+    const openMin = useGooglePlacesMinimal ? 2 : 3;
+    const open = showSuggestions && String(value || '').trim().length >= openMin;
+    if (!open) {
+      setDropdownFixed(null);
+      return;
+    }
+    const el = inputRef.current || wrapperRef.current;
+    if (!el?.getBoundingClientRect) return;
+    const r = el.getBoundingClientRect();
+    const gap = 4;
+    setDropdownFixed({
+      top: r.bottom + gap,
+      left: r.left,
+      width: Math.max(r.width, 200)
+    });
+  }, [showSuggestions, value, useGooglePlacesMinimal]);
+
+  useLayoutEffect(() => {
+    updateDropdownPosition();
+  }, [updateDropdownPosition, suggestions, loading]);
+
+  useEffect(() => {
+    const openMin = useGooglePlacesMinimal ? 2 : 3;
+    const open = showSuggestions && String(value || '').trim().length >= openMin;
+    if (!open) {
+      setDropdownFixed(null);
+      return undefined;
+    }
+    updateDropdownPosition();
+    const onScrollOrResize = () => updateDropdownPosition();
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+  }, [showSuggestions, value, updateDropdownPosition]);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      const t = event.target;
+      if (wrapperRef.current?.contains(t)) return;
+      if (dropdownPortalRef.current?.contains(t)) return;
+      setShowSuggestions(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => () => {
+    if (placesInputDebounceRef.current) clearTimeout(placesInputDebounceRef.current);
+  }, []);
+
+  const rotateSessionToken = useCallback(() => {
+    sessionTokenRef.current = newPlacesSessionToken();
+  }, []);
+
+  const searchGoogleAutocomplete = useCallback(
+    async ({ trimmedInput, bbox, isStale }) => {
+      const params = new URLSearchParams({
+        input: trimmedInput,
+        sessionToken: sessionTokenRef.current,
+        languageCode: placesLang
+      });
+      if (countryIsoResolved) params.set('countryCode', countryIsoResolved);
+      if (googleBusinessSearch) params.set('businessOnly', '1');
+      const latNum = userLat != null ? Number(userLat) : NaN;
+      const lngNum = userLng != null ? Number(userLng) : NaN;
+      if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+        params.set('lat', String(latNum));
+        params.set('lng', String(lngNum));
+        params.set('radiusKm', '30');
+      }
+      if (bbox?.minLat != null && bbox?.minLon != null && bbox?.maxLat != null && bbox?.maxLon != null) {
+        params.set('minLat', String(bbox.minLat));
+        params.set('minLon', String(bbox.minLon));
+        params.set('maxLat', String(bbox.maxLat));
+        params.set('maxLon', String(bbox.maxLon));
+      }
+      const response = await fetch(`${resolveApiUrl('/api/place-autocomplete')}?${params.toString()}`);
+      const data = await response.json().catch(() => ({}));
+      if (isStale()) return;
+      if (!response.ok) {
+        const msg = data?.error || data?.hint || t('location_search_failed', 'Search failed');
+        setSearchError(msg);
+        setSuggestions([]);
+        setLoading(false);
+        return;
+      }
+      let predictions = Array.isArray(data?.predictions) ? data.predictions : [];
+      predictions = sortAutocompletePredictionsForInvitation(predictions, city, invitationType);
+      if (!predictions.length) {
+        setSearchError(
+          data?.hint ||
+          t('location_no_results', 'No matching places. Try a different name or widen the area.')
+        );
+        setSuggestions([]);
+        setLoading(false);
+        return;
+      }
+      setSearchError('');
+      setSuggestions(
+        predictions.map((p) => ({
+          source: 'google',
+          placeId: p.place_id,
+          name: p.structured_formatting?.main_text || p.description || '',
+          address: p.structured_formatting?.secondary_text || p.description || '',
+          full_description: p.description || '',
+          types: p.types || []
+        }))
+      );
+      setLoading(false);
+    },
+    [countryIsoResolved, placesLang, googleBusinessSearch, t, userLat, userLng, city, invitationType]
+  );
+
+  const handleInput = (e) => {
+    if (disabled) return;
+    const val = e.target.value;
+    onChange(e);
+
+    if (placesInputDebounceRef.current) clearTimeout(placesInputDebounceRef.current);
+
+    const minLen = useGooglePlacesMinimal ? 2 : 3;
+    if (val.length < minLen) {
+      placesGenerationRef.current += 1;
+      placesSearchRunIdRef.current += 1;
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setLoading(false);
+      setSearchError('');
+      if (useGooglePlacesMinimal && val.length === 0) rotateSessionToken();
+      return;
+    }
+
+    setSearchError('');
+    setLoading(true);
+    setShowSuggestions(true);
+    placesGenerationRef.current += 1;
+    const generation = placesGenerationRef.current;
+
+    placesInputDebounceRef.current = setTimeout(() => {
+      placesInputDebounceRef.current = null;
+      placesSearchRunIdRef.current += 1;
+      const searchRunId = placesSearchRunIdRef.current;
+      const isStale = () =>
+      searchRunId !== placesSearchRunIdRef.current || generation !== placesGenerationRef.current;
+
+      const trimmedInput = String(val).trim();
+      let bbox = cityBboxRef.current;
+      if (!bbox && userLat != null && userLng != null) {
+        bbox = bboxFromCoords(userLat, userLng, 40);
+      }
+      const cacheKey = makePhotonCacheKey(
+        trimmedInput,
+        countryIsoResolved,
+        city,
+        userLat,
+        userLng,
+        !!bbox
+      );
+
+      const runPhoton = async () => {
+        if (useGooglePlacesMinimal) {
+          await searchGoogleAutocomplete({ trimmedInput, bbox, isStale });
+          return;
+        }
+        let features;
+        if (photonCache.has(cacheKey)) {
+          features = photonCache.get(cacheKey) ?? [];
+        } else {
+          const { features: raw } = await searchPhoton({
+            query: trimmedInput,
+            lang: uiLang,
+            limit: 14,
+            bbox: bbox || undefined,
+            lat: userLat != null ? Number(userLat) : undefined,
+            lon: userLng != null ? Number(userLng) : undefined
+          });
+          features = city ? filterPhotonByCityName(raw, city) : raw;
+          cachePhoton(cacheKey, features);
+        }
+
+        if (isStale()) return;
+
+        if (features.length) {
+          setSuggestions(
+            features.map((f) => {
+              const payload = photonFeatureToVenuePayload(f);
+              const p = f.properties || {};
+              const addrLine = [
+              [p.housenumber, p.street].filter(Boolean).join(' '),
+              p.city || p.town].
+
+              filter(Boolean).
+              join(', ');
+              return {
+                source: 'osm',
+                name: payload.name,
+                address: addrLine || p.country || '',
+                full_description: addrLine || payload.name,
+                types: payload.types,
+                photonFeature: f
+              };
             })
-            .catch(() => {
-                if (!cancelled) console.warn('Google Maps API not available. Place search will use fallback.');
-            });
-        return () => { cancelled = true; };
-    }, []);
-
-    // Determine language based on country code
-    const getLanguageForCountry = (code) => {
-        if (!code) return 'en';
-
-        const countryLanguageMap = {
-            // Arabic-speaking countries
-            'SA': 'ar', 'AE': 'ar', 'EG': 'ar', 'IQ': 'ar', 'JO': 'ar',
-            'KW': 'ar', 'LB': 'ar', 'OM': 'ar', 'QA': 'ar', 'SY': 'ar',
-            'YE': 'ar', 'BH': 'ar', 'DZ': 'ar', 'MA': 'ar', 'TN': 'ar',
-            'LY': 'ar', 'SD': 'ar', 'MR': 'ar', 'SO': 'ar', 'DJ': 'ar',
-
-            // Chinese-speaking
-            'CN': 'zh', 'TW': 'zh', 'HK': 'zh', 'MO': 'zh',
-
-            // Spanish-speaking
-            'ES': 'es', 'MX': 'es', 'AR': 'es', 'CO': 'es', 'CL': 'es',
-            'PE': 'es', 'VE': 'es', 'EC': 'es', 'GT': 'es', 'CU': 'es',
-
-            // French-speaking
-            'FR': 'fr', 'BE': 'fr', 'CH': 'fr', 'CA': 'fr',
-
-            // German-speaking
-            'DE': 'de', 'AT': 'de',
-
-            // Japanese
-            'JP': 'ja',
-
-            // Korean
-            'KR': 'ko',
-
-            // Russian
-            'RU': 'ru',
-
-            // Portuguese
-            'PT': 'pt', 'BR': 'pt',
-
-            // Italian
-            'IT': 'it',
-        };
-
-        return countryLanguageMap[code] || 'en';
-    };
-
-    const searchLanguage = getLanguageForCountry(countryCode);
-
-    // Close suggestions on click outside
-    useEffect(() => {
-        function handleClickOutside(event) {
-            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
-                setShowSuggestions(false);
-            }
+          );
+          setLoading(false);
+          return;
         }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [wrapperRef]);
 
-    const handleInput = (e) => {
-        const val = e.target.value;
-        onChange(e);
-
-        if (val.length > 2) {
-            setLoading(true);
-            setShowSuggestions(true);
-
-            // Use Google Places Autocomplete API
-            if (autocompleteService.current) {
-                const request = {
-                    input: val,
-                    // Removed types restriction to allow both establishments AND addresses
-                    // This enables searching for: restaurants, cafes, stores, streets, buildings, landmarks
-                    componentRestrictions: countryCode ? { country: countryCode.toLowerCase() } : undefined,
-                    language: searchLanguage
-                };
-
-                // Add location bias if user coordinates are available
-                if (userLat && userLng && window.google && window.google.maps) {
-                    request.location = new window.google.maps.LatLng(userLat, userLng);
-                    request.radius = 50000; // 50km radius
-                    console.log('📍 Using location bias:', { lat: userLat, lng: userLng });
-                }
-
-                autocompleteService.current.getPlacePredictions(request, (predictions, status) => {
-                    console.log('🔍 Google Places Response:', { status, predictionsCount: predictions?.length, city });
-
-                    if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
-                        // Soft filtering: Sort by city match instead of removing
-                        let sortedPredictions = predictions;
-
-                        if (city) {
-                            const cityLower = city.toLowerCase();
-                            sortedPredictions = [...predictions].sort((a, b) => {
-                                const aMatches = a.description.toLowerCase().includes(cityLower);
-                                const bMatches = b.description.toLowerCase().includes(cityLower);
-
-                                // City matches come first
-                                if (aMatches && !bMatches) return -1;
-                                if (!aMatches && bMatches) return 1;
-                                return 0;
-                            });
-
-                            console.log('✅ Sorted results (city matches first):', sortedPredictions.length);
-                        }
-
-                        setSuggestions(sortedPredictions.map(p => ({
-                            place_id: p.place_id,
-                            name: p.structured_formatting.main_text,
-                            address: p.structured_formatting.secondary_text,
-                            full_description: p.description,
-                            types: p.types,
-                            matchesCity: city ? p.description.toLowerCase().includes(city.toLowerCase()) : false
-                        })));
-                    } else {
-                        setSuggestions([]);
-                    }
-                    setLoading(false);
-                });
-            } else {
-                // Fallback to our resilient geocode utility (Nominatim)
-                const searchQuery = city ? `${val} ${city}` : val;
-
-                geocode(searchQuery)
-                    .then(result => {
-                        if (result.success) {
-                            setSuggestions(result.results.map(item => ({
-                                name: item.raw.name || item.displayName.split(',')[0],
-                                address: item.displayName,
-                                lat: item.lat,
-                                lng: item.lng,
-                                fallback: true
-                            })));
-                        } else {
-                            setSuggestions([]);
-                        }
-                        setLoading(false);
-                    })
-                    .catch(() => {
-                        setLoading(false);
-                        setSuggestions([]);
-                    });
-            }
+        const geoQuery = city ? `${trimmedInput}, ${city}` : trimmedInput;
+        const result = await geocode(geoQuery);
+        if (isStale()) return;
+        if (result.success && result.results?.length) {
+          setSuggestions(
+            result.results.map((item) => ({
+              fallback: true,
+              name: item.raw?.name || item.displayName.split(',')[0],
+              address: item.displayName,
+              lat: item.lat,
+              lng: item.lng
+            }))
+          );
         } else {
-            setSuggestions([]);
-            setShowSuggestions(false);
+          setSuggestions([]);
         }
-    };
+        setLoading(false);
+      };
 
-    const handleSelectSuggestion = (place) => {
-        if (place.fallback) {
-            // OpenStreetMap result
-            onSelect({
-                name: place.name,
-                fullAddress: place.address,
-                lat: place.lat,
-                lng: place.lng
-            });
-            setShowSuggestions(false);
-        } else {
-            // Google Places result - Get full details
-            if (placesService.current && place.place_id) {
-                placesService.current.getDetails(
-                    {
-                        placeId: place.place_id,
-                        fields: ['name', 'formatted_address', 'geometry', 'place_id', 'types', 'photos']
-                    },
-                    (placeDetails, status) => {
-                        if (status === window.google.maps.places.PlacesServiceStatus.OK && placeDetails) {
-                            // Extract photos if available
-                            const photos = placeDetails.photos ? placeDetails.photos.slice(0, 5).map(photo => photo.getUrl({ maxWidth: 800 })) : [];
-
-                            onSelect({
-                                name: placeDetails.name,
-                                fullAddress: placeDetails.formatted_address,
-                                lat: placeDetails.geometry.location.lat(),
-                                lng: placeDetails.geometry.location.lng(),
-                                placeId: placeDetails.place_id,
-                                types: placeDetails.types,
-                                photos: photos
-                            });
-                        }
-                    }
-                );
-            }
-            setShowSuggestions(false);
+      runPhoton().catch((err) => {
+        console.error('[LocationAutocomplete] search failed:', err);
+        if (!isStale()) {
+          setSearchError(
+            err instanceof Error ?
+            err.message :
+            t('location_search_failed', 'Search failed')
+          );
+          setSuggestions([]);
+          setLoading(false);
         }
-    };
+      });
+    }, PLACES_AUTOCOMPLETE_DEBOUNCE_MS);
+  };
 
-    const handleManualSelect = () => {
+  const handleSelectSuggestion = async (place) => {
+    if (useGooglePlacesMinimal && place.source === 'google' && place.placeId) {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          placeId: place.placeId,
+          sessionToken: sessionTokenRef.current,
+          languageCode: placesLang
+        });
+        if (countryIsoResolved) params.set('regionCode', countryIsoResolved);
+        const response = await fetch(`${resolveApiUrl('/api/place-details')}?${params.toString()}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error || 'Google details request failed');
         onSelect({
-            name: value,
-            fullAddress: value,
-            lat: null,
-            lng: null
+          name: data.businessName || place.name || '',
+          fullAddress: data.address || place.full_description || place.address || '',
+          city: data.city || '',
+          country: data.country || '',
+          countryCode: data.countryCode || '',
+          lat: data.lat ?? null,
+          lng: data.lng ?? null,
+          placeId: data.placeId || place.placeId,
+          types: [],
+          addressComponents: data.addressComponents || [],
+          photos: [],
+          rating: null,
+          userRatingsTotal: null,
+          priceLevel: null,
+          phone: '',
+          website: '',
+          openingHours: null,
+          businessStatus: null,
+          editorialSummary: ''
         });
         setShowSuggestions(false);
-    };
+        setLoading(false);
+        rotateSessionToken();
+        return;
+      } catch (err) {
+        console.error('[LocationAutocomplete] Google details failed:', err);
+        setLoading(false);
+      }
+    }
+    if (place.fallback) {
+      onSelect({
+        name: place.name,
+        fullAddress: place.address,
+        lat: place.lat,
+        lng: place.lng,
+        placeId: null,
+        types: [],
+        addressComponents: [],
+        photos: [],
+        rating: null,
+        userRatingsTotal: null,
+        priceLevel: null,
+        phone: '',
+        website: '',
+        openingHours: null,
+        businessStatus: null,
+        editorialSummary: ''
+      });
+      setShowSuggestions(false);
+      return;
+    }
+    if (place.photonFeature) {
+      onSelect(photonFeatureToVenuePayload(place.photonFeature));
+    }
+    setShowSuggestions(false);
+  };
 
-    const getPlaceIcon = (types) => {
-        if (!types) return <FaMapMarkerAlt />;
+  const defaultInputStyle = {
+    width: '100%',
+    padding: '12px 12px 12px 1rem',
+    background: 'var(--bg-input)',
+    border: '1px solid var(--border-color)',
+    borderRadius: '12px',
+    color: 'var(--text-main)',
+    fontSize: 'calc(1rem + 2px)',
+    outline: 'none',
+    boxSizing: 'border-box'
+  };
 
-        if (types.includes('restaurant') || types.includes('food')) {
-            return <FaStore style={{ color: '#f59e0b' }} />;
+  const getIconForTypes = (types) => {
+    if (!types) return <FaMapMarkerAlt />;
+    const t = new Set(types);
+    if (t.has('night_club')) return <FaStore style={{ color: '#ec4899' }} />;
+    if (t.has('bar')) return <FaStore style={{ color: '#a855f7' }} />;
+    if (t.has('restaurant')) return <FaStore style={{ color: '#f59e0b' }} />;
+    return <FaMapMarkerAlt style={{ color: '#0ea5e9' }} />;
+  };
+
+  const isRtl = typeof i18n.dir === 'function' && i18n.dir(i18n.language) === 'rtl';
+  const spinnerEdge = isRtl ? 'right' : 'left';
+
+  return (
+    <div
+      className={`location-autocomplete venue-location-picker ${className}`}
+      ref={wrapperRef}
+      style={{ position: 'relative', width: '100%', ...style }}>
+      
+            <AppTextInput
+        ref={inputRef}
+        type="text"
+        name="location"
+        placeholder={
+        placeholderProp || (
+        city ? t('form_location_placeholder_with_city', { city }) : t('form_location_placeholder'))
         }
-        if (types.includes('cafe')) {
-            return <FaStore style={{ color: '#8b5cf6' }} />;
-        }
-        return <FaMapMarkerAlt style={{ color: '#0ea5e9' }} />;
-    };
-
-    return (
-        <div className="location-autocomplete" ref={wrapperRef} style={{ position: 'relative' }}>
-            <input
-                type="text"
-                name="location"
-                placeholder={city ? t('form_location_placeholder_with_city', { city }) : t('form_location_placeholder')}
-                value={value}
-                onChange={handleInput}
-                required
-                className={`input-field ${className}`}
-                autoComplete="off"
-            />
-            {loading && (
-                <div style={{ position: 'absolute', left: i18n.language === 'ar' ? '10px' : 'auto', right: i18n.language === 'ar' ? 'auto' : '10px', top: '12px', color: '#888' }}>
-                    <FaSearch className="spin-animation" />
+        aria-label={ariaLabelProp || undefined}
+        value={value}
+        onChange={handleInput}
+        disabled={disabled}
+        required={inputRequired}
+        style={{
+          ...defaultInputStyle,
+          ...inputStyle,
+          ...(loading ? { paddingInlineStart: '2.5rem' } : {})
+        }}
+        autoComplete="off" />
+      
+            {loading &&
+      <div style={{ position: 'absolute', [spinnerEdge]: '12px', top: '14px', color: '#9ca3af' }}>
+                    <FaSearch className="spin-animation" style={{ fontSize: '0.9rem' }} />
                 </div>
-            )}
+      }
+            {searchError && !loading &&
+      <AppText as="p"
+      role="alert"
+      style={{
+        marginTop: 6,
+        fontSize: 'calc(0.8rem + 2px)',
+        color: 'var(--danger, #ef4444)'
+      }}>
+        
+                    {searchError}
+                </AppText>
+      }
+            {showSuggestions &&
+      value.trim().length >= (useGooglePlacesMinimal ? 2 : 3) &&
+      typeof document !== 'undefined' &&
+      document.body &&
+      dropdownFixed ?
+      createPortal(
+        <div
+          ref={dropdownPortalRef}
+          className="venue-search-dropdown venue-search-dropdown--portal"
+          style={{
+            top: dropdownFixed.top,
+            left: dropdownFixed.left,
+            width: dropdownFixed.width
+          }}
+          role="listbox"
+          aria-label={t('search_places_placeholder', 'Search places')}>
+          
+                          {loading && suggestions.length === 0 &&
+          <div className="venue-search-dropdown__message venue-search-dropdown__message--left">
+                                  {t('searching')}
+                              </div>
+          }
+                          {!loading && suggestions.length === 0 &&
+          <div
+            className="venue-search-dropdown__message venue-search-dropdown__message--left"
+            style={{
+              color: searchError ? 'var(--danger, #ef4444)' : undefined
+            }}>
+            
+                                  {searchError || t('location_no_results')}
+                              </div>
+          }
+                          {suggestions.map((place, index) =>
+          <div
+            key={index}
+            role="option"
+            onClick={() => handleSelectSuggestion(place)}
+            className="venue-search-row">
+            
+                                  <div className="venue-search-icon">{getIconForTypes(place.types)}</div>
+                                  <div className="venue-search-row__body">
+                                      <div className="venue-search-row__title venue-search-row__title--google">
+                                          {place.name}
+                                      </div>
+                                      <div className="venue-search-row__subtitle venue-search-row__subtitle--google">
+                                          {place.address || place.full_description}
+                                      </div>
+                                  </div>
+                              </div>
+          )}
+                      </div>,
+        document.body
+      ) :
+      null}
+        </div>);
 
-            {showSuggestions && value.length > 2 && (
-                <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'var(--bg-card, #ffffff)',
-                    border: '1px solid var(--border-color, #e5e7eb)',
-                    borderRadius: '0 0 12px 12px',
-                    zIndex: 1000,
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-                    maxHeight: '350px',
-                    overflowY: 'auto'
-                }}>
-                    {suggestions.length === 0 && !loading && (
-                        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                            {city ? `${t('no_results_found')} in ${city}` : t('no_results_found')}
-                        </div>
-                    )}
-
-                    {suggestions.map((place, index) => (
-                        <div
-                            key={index}
-                            onClick={() => handleSelectSuggestion(place)}
-                            style={{
-                                padding: '14px 16px',
-                                cursor: 'pointer',
-                                borderBottom: '1px solid var(--border-color)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '12px',
-                                background: 'transparent',
-                                transition: 'background 0.2s'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                        >
-                            <div style={{
-                                minWidth: '36px', height: '36px', borderRadius: '50%',
-                                background: place.fallback ? 'var(--bg-input)' : 'var(--bg-input)',
-                                border: '1px solid var(--border-color)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '1.1rem'
-                            }}>
-                                {getPlaceIcon(place.types)}
-                            </div>
-
-                            <div style={{ flex: 1 }}>
-                                <div style={{
-                                    fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-main)',
-                                    marginBottom: '3px'
-                                }}>
-                                    {place.name}
-                                </div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.3' }}>
-                                    {place.address || place.full_description}
-                                </div>
-                            </div>
-
-                            {place.matchesCity && (
-                                <div style={{
-                                    fontSize: '0.65rem', background: '#8b5cf6', color: 'white',
-                                    padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold',
-                                    marginRight: '4px'
-                                }}>
-                                    {city}
-                                </div>
-                            )}
-
-                            {!place.fallback && (
-                                <div style={{
-                                    fontSize: '0.65rem', background: '#10b981', color: 'white',
-                                    padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold'
-                                }}>
-                                    GOOGLE
-                                </div>
-                            )}
-                        </div>
-                    ))}
-
-                    {/* Manual entry option */}
-                    {!loading && (
-                        <div
-                            onClick={handleManualSelect}
-                            style={{
-                                padding: '14px 16px',
-                                cursor: 'pointer',
-                                borderTop: suggestions.length > 0 ? '2px solid var(--border-color)' : 'none',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '12px',
-                                background: 'var(--bg-input)',
-                                transition: 'background 0.2s'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-input)'}
-                        >
-                            <div style={{
-                                minWidth: '36px', height: '36px', borderRadius: '50%', background: '#bbf7d0',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center'
-                            }}>
-                                <FaPlus style={{ color: 'var(--primary)', fontSize: '1rem' }} />
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-main)' }}>
-                                    {t('use_location', { value })}
-                                </div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>
-                                    {t('add_manual_location')}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-    );
 };
 
 export default LocationAutocomplete;

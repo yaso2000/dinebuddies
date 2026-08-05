@@ -1,6 +1,13 @@
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../firebase/config';
 import imageCompression from 'browser-image-compression';
+import { uploadManagedImage } from '../services/managedImageUpload';
+import { ImageUploadZone } from '../services/imageUploadZones';
+import {
+    beginImageUploadSession,
+    finishImageUploadSession,
+    updateImageUploadSession,
+} from '../services/imageUploadProgressStore';
 
 /**
  * Compress and resize image before upload
@@ -37,76 +44,240 @@ export const compressImage = async (file, options = {}) => {
  * @returns {Promise<string>} Download URL
  */
 const MAX_IMAGE_MB = 15;
+const COMPRESSION_TIMEOUT_MS = 12000;
+const UPLOAD_TIMEOUT_MS = 45000;
+const COMPRESSION_SKIP_THRESHOLD_BYTES = 700 * 1024; // Skip compression for small images
 
-export const uploadImage = (file, path, onProgress = null, compressionOptions = {}) => {
+/**
+ * @param {File|Blob} file
+ * @param {string} path — used for direct (unmoderated) uploads only
+ * @param {Function|null} onProgress
+ * @param {object} compressionOptions
+ * @param {{ moderationZone?: string, userId?: string }|null} uploadOptions — when set, runs Vision moderation
+ */
+export const uploadImage = (file, path, onProgress = null, compressionOptions = {}, uploadOptions = null) => {
+    if (uploadOptions?.moderationZone && uploadOptions?.userId) {
+        return uploadManagedImage(file, uploadOptions.userId, uploadOptions.moderationZone, {
+            compressionOptions,
+            onProgress,
+        });
+    }
+    const looksImage =
+        Boolean(file?.type?.startsWith?.('image/')) ||
+        /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(String(file?.name || path || ''));
+    if (looksImage) {
+        return Promise.reject(
+            new Error('Image uploads require AI moderation (moderationZone + userId).')
+        );
+    }
+    // Non-image (e.g. video) direct path upload.
+    return uploadImageToStoragePath(file, path, onProgress, compressionOptions);
+};
+
+const uploadImageToStoragePath = (file, path, onProgress = null, compressionOptions = {}) => {
+    beginImageUploadSession('preparing');
     return new Promise(async (resolve, reject) => {
+        let uploadTimedOut = false;
+        let uploadTimeoutId = null;
+        const report = (pct, phase) => {
+            updateImageUploadSession(pct, phase);
+            if (onProgress) onProgress(pct);
+        };
         try {
             const sizeMB = file.size / (1024 * 1024);
             if (sizeMB > MAX_IMAGE_MB) {
+                finishImageUploadSession();
                 reject(new Error(`Image must be under ${MAX_IMAGE_MB}MB (current: ${sizeMB.toFixed(1)}MB)`));
                 return;
             }
+            report(5, 'preparing');
             // Compress image before upload
             let uploadFile = file;
-            if (file.type.startsWith('image/')) {
-                uploadFile = await compressImage(file, compressionOptions);
+            if (file.type.startsWith('image/') && file.size > COMPRESSION_SKIP_THRESHOLD_BYTES) {
+                try {
+                    const compressionTask = compressImage(file, compressionOptions);
+                    const timeoutTask = new Promise((_, rej) =>
+                        setTimeout(() => rej(new Error('Image compression timeout')), COMPRESSION_TIMEOUT_MS)
+                    );
+                    uploadFile = await Promise.race([compressionTask, timeoutTask]);
+                } catch (compressionError) {
+                    console.warn('Compression skipped, uploading original file:', compressionError?.message || compressionError);
+                    uploadFile = file;
+                }
             }
+            report(12, 'uploading');
 
             const storageRef = ref(storage, path);
-            const uploadTask = uploadBytesResumable(storageRef, uploadFile);
+            const contentType = (uploadFile.type && uploadFile.type.startsWith('image/')) ? uploadFile.type : 'image/jpeg';
+            const uploadTask = uploadBytesResumable(storageRef, uploadFile, { contentType });
+            uploadTimeoutId = setTimeout(() => {
+                uploadTimedOut = true;
+                try {
+                    uploadTask.cancel();
+                } catch {
+                    // ignore cancel errors
+                }
+                finishImageUploadSession();
+                reject(new Error('Upload timeout. Please try a smaller image or check your connection.'));
+            }, UPLOAD_TIMEOUT_MS);
 
             uploadTask.on(
                 'state_changed',
                 (snapshot) => {
-                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                    if (onProgress) {
-                        onProgress(progress);
-                    }
+                    if (uploadTimedOut) return;
+                    const raw = snapshot.totalBytes
+                        ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+                        : 0;
+                    report(12 + raw * 0.88, 'uploading');
                 },
                 (error) => {
+                    if (uploadTimeoutId) clearTimeout(uploadTimeoutId);
+                    if (uploadTimedOut) return;
                     console.error('Upload error:', error);
+                    finishImageUploadSession();
                     reject(error);
                 },
                 async () => {
+                    if (uploadTimeoutId) clearTimeout(uploadTimeoutId);
+                    if (uploadTimedOut) return;
                     try {
+                        report(100, 'done');
                         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                        finishImageUploadSession();
                         resolve(downloadURL);
                     } catch (error) {
+                        finishImageUploadSession();
                         reject(error);
                     }
                 }
             );
         } catch (error) {
+            finishImageUploadSession();
             reject(error);
         }
     });
 };
 
 /**
- * Upload profile picture
- * @param {File} file - Image file
- * @param {string} userId - User ID
- * @param {Function} onProgress - Progress callback
- * @returns {Promise<string>} Download URL
+ * Upload community post media: images are moderated; videos upload directly.
+ */
+export const uploadPostMedia = (file, userId, path, onProgress = null, mediaType = 'image') => {
+    const isVideo = mediaType === 'video' || file.type?.startsWith('video/');
+    if (isVideo) {
+        return uploadImage(file, path, onProgress);
+    }
+    return uploadImage(file, path, onProgress, {}, {
+        moderationZone: ImageUploadZone.POST,
+        userId,
+    });
+};
+
+/**
+ * Decode any gallery/camera file (incl. iOS HEIC / empty MIME) into a JPEG File.
+ * Mobile Photos often exceed old 5MB checks and use formats browsers upload poorly.
+ * @param {File|Blob} file
+ * @returns {Promise<File>}
+ */
+export async function prepareImageFileForUpload(file) {
+    if (!file) throw new Error('No file selected');
+
+    const loadBitmap = async () => {
+        if (typeof createImageBitmap === 'function') {
+            return createImageBitmap(file);
+        }
+        const objectUrl = URL.createObjectURL(file);
+        try {
+            const img = await new Promise((resolve, reject) => {
+                const el = new Image();
+                el.onload = () => resolve(el);
+                el.onerror = () => reject(new Error('Could not read image'));
+                el.src = objectUrl;
+            });
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth || img.width;
+            canvas.height = img.naturalHeight || img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            return canvas;
+        } finally {
+            URL.revokeObjectURL(objectUrl);
+        }
+    };
+
+    try {
+        const source = await loadBitmap();
+        const srcW = source.width || source.naturalWidth || 0;
+        const srcH = source.height || source.naturalHeight || 0;
+        if (!srcW || !srcH) throw new Error('Invalid image dimensions');
+
+        const maxEdge = 1600;
+        const scale = Math.min(1, maxEdge / Math.max(srcW, srcH));
+        const w = Math.max(1, Math.round(srcW * scale));
+        const h = Math.max(1, Math.round(srcH * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(source, 0, 0, w, h);
+        if (typeof source.close === 'function') source.close();
+
+        const blob = await new Promise((resolve, reject) => {
+            canvas.toBlob(
+                (b) => (b ? resolve(b) : reject(new Error('Could not encode image'))),
+                'image/jpeg',
+                0.88
+            );
+        });
+        return new File([blob], 'photo.jpg', { type: 'image/jpeg', lastModified: Date.now() });
+    } catch (err) {
+        const type = String(file.type || '').toLowerCase();
+        if (
+            ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(type) ||
+            (!type && file.size > 0)
+        ) {
+            return file instanceof File
+                ? file
+                : new File([file], 'photo.jpg', { type: type || 'image/jpeg' });
+        }
+        throw new Error(
+            err?.message || 'Could not process this image. Please choose a JPG or PNG.'
+        );
+    }
+}
+
+/**
+ * Consumer profile media — always Vision-moderated (quarantine → moderateImage).
+ * Dest paths: avatars/ | gallery/ | covers/ (Admin SDK write after approval).
  */
 export const uploadProfilePicture = async (file, userId, onProgress = null) => {
-    const timestamp = Date.now();
-    const path = `avatars/${userId}_${timestamp}.jpg`;
-    return uploadImage(file, path, onProgress);
+    const prepared = await prepareImageFileForUpload(file);
+    return uploadManagedImage(prepared, userId, ImageUploadZone.AVATAR, { onProgress });
+};
+
+export const uploadProfileGalleryPhoto = async (file, userId, onProgress = null) => {
+    const prepared = await prepareImageFileForUpload(file);
+    return uploadManagedImage(prepared, userId, ImageUploadZone.GALLERY, { onProgress });
+};
+
+export const uploadProfileCoverPhoto = async (file, userId, onProgress = null) => {
+    const prepared = await prepareImageFileForUpload(file);
+    return uploadManagedImage(prepared, userId, ImageUploadZone.COVER, { onProgress });
 };
 
 /**
  * Upload invitation photo
  * @param {File} file - Image file
  * @param {string} invitationId - Invitation ID
+ * @param {string} userId - Uploader's UID (used to enforce storage ownership)
  * @param {number} index - Photo index
  * @param {Function} onProgress - Progress callback
  * @returns {Promise<string>} Download URL
  */
-export const uploadInvitationPhoto = async (file, invitationId, index = 0, onProgress = null) => {
-    const timestamp = Date.now();
-    const path = `invitations/${invitationId}/${timestamp}_${index}.jpg`;
-    return uploadImage(file, path, onProgress);
+export const uploadInvitationPhoto = async (file, invitationId, userId, index = 0, onProgress = null) => {
+    void invitationId;
+    void index;
+    void onProgress;
+    return uploadManagedImage(file, userId, ImageUploadZone.INVITATION);
 };
 
 /**
@@ -139,19 +310,24 @@ export const deleteImage = async (imageUrl) => {
  * @param {number} maxSize - Max size in MB (default: 5)
  * @returns {Object} { valid: boolean, error: string }
  */
-export const validateImageFile = (file, maxSize = 5) => {
-    // Check if file exists
+export const validateImageFile = (file, maxSize = 20) => {
     if (!file) {
         return { valid: false, error: 'No file selected' };
     }
 
-    // Check file type
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
+    const type = String(file.type || '').toLowerCase();
+    const name = String(file.name || '').toLowerCase();
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    const okType =
+        validTypes.includes(type) ||
+        !type ||
+        type === 'application/octet-stream' ||
+        type === 'image/*' ||
+        /\.(jpe?g|png|webp|heic|heif)$/i.test(name);
+    if (!okType) {
         return { valid: false, error: 'Only JPG, PNG, and WebP images are allowed' };
     }
 
-    // Check file size
     const maxSizeBytes = maxSize * 1024 * 1024;
     if (file.size > maxSizeBytes) {
         return { valid: false, error: `Image size must be less than ${maxSize}MB` };

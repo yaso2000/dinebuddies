@@ -1,0 +1,55 @@
+/* Brand Kit — stays within app column width (same as .app-container) */
+
+.brand-kit-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: var(--bg-body);
+    overflow-y: auto;
+    display: flex;
+    justify-content: center;
+}
+
+.brand-kit-page {
+    width: 100%;
+    max-width: var(--max-width);
+    margin-inline: auto;
+    padding: 1rem;
+    box-sizing: border-box;
+    position: relative;
+    min-height: 100%;
+}
+
+.brand-kit-page .brand-kit-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    align-items: start;
+}
+
+.brand-kit-save-bar {
+    display: flex;
+    z-index: 99999;
+}
+
+.brand-kit-save-bar--fixed {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: var(--max-width);
+    padding: 16px;
+    box-sizing: border-box;
+    background: var(--bg-body);
+    border-top: 1px solid var(--border-color);
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.brand-kit-save-bar--inline {
+    position: relative;
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}

@@ -1,700 +1,368 @@
-import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDoc, doc, updateDoc } from 'firebase/firestore'; // Added updateDoc
-import { db } from '../firebase/config';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router-dom';
+import { FaSignOutAlt, FaTimes } from 'react-icons/fa';
+import CommunityChatSwipePager from '../components/community/CommunityChatSwipePager';
+import CommunityFullChatView from '../components/community/CommunityFullChatView';
+import CommunityChatHeaderMenu from '../components/community/CommunityChatHeaderMenu';
+import UserAvatar from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
+import { useInvitations } from '../context/InvitationContext';
+import { useCommunityChatRoom } from '../hooks/useCommunityChatRoom';
+import { useDesktopShell } from '../hooks/useDesktopShell';
+import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
+import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
 import {
-    FaArrowLeft, FaEllipsisV, FaImage, FaPaperPlane,
-    FaCamera, FaMicrophone, FaPlus, FaStop,
-    FaPlay, FaPause, FaTrash, FaArrowDown
-} from 'react-icons/fa';
-import EmojiPickerPortal, { isMobile } from '../components/EmojiPickerPortal';
-import { uploadImage, formatFileSize, startRecording, uploadVoiceMessage } from '../utils/mediaUtils';
-import { getSafeAvatar } from '../utils/avatarUtils';
+  buildCommunityGuestFrameBackgroundStyle,
+  getCommunityGuestFrameShellAttributes,
+} from '../constants/communityChatGuestFrameLook';
 import './CommunityChatRoom.css';
+import '../components/community/community-chat-theme.css';
+import '../components/community/CommunityChatSwipePager.css';
+import '../styles/chatReferenceTheme.css';
+import { AppText } from '../components/base';
+import { useChatTheme } from '../hooks/useChatTheme';
 
-const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
+export default function CommunityChatRoom() {
+  const { t } = useTranslation();
+  const { partnerId } = useParams();
+  const { isBusiness } = useAuth();
+  const { joinCommunity, leaveCommunity, currentUser: inviteUser } = useInvitations();
+  const room = useCommunityChatRoom(partnerId);
+  const joinedCommunityIds = inviteUser?.joinedCommunities ?? [];
+  const canEnterChat =
+    room.isMember ||
+    room.isHost ||
+    (partnerId && joinedCommunityIds.includes(partnerId));
+  const containerRef = useRef(null);
+  const isDesktopShell = useDesktopShell();
+  const { goBack: goBackFromCommunity } = useAppBackNavigation({ fallback: '/messages?tab=communities' });
+  const useMobileFullscreen = !isDesktopShell;
+  const [joinStatus, setJoinStatus] = useState('idle');
+  const [leavingCommunity, setLeavingCommunity] = useState(false);
+  const joinAttemptRef = useRef(false);
+  const { themeId: chatThemeId, setThemeId: setChatThemeId, themeStyle: chatThemeStyle } = useChatTheme();
 
-const CommunityChatRoom = () => {
-    const { partnerId } = useParams();
-    const navigate = useNavigate();
-    const { currentUser, userProfile } = useAuth();
-    const { showToast } = useToast();
-
-    // Real Data State
-    const [messages, setMessages] = useState([]);
-    const [newMessage, setNewMessage] = useState('');
-    const [activeReactionId, setActiveReactionId] = useState(null);
-    const [extendedReactionPicker, setExtendedReactionPicker] = useState(null);
-    const [partner, setPartner] = useState(null);
-    const [isMember, setIsMember] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const [showScrollBottom, setShowScrollBottom] = useState(false);
-    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-
-    const emojiBtnRef = useRef(null);
-
-    const handleScroll = (e) => {
-        const { scrollTop, scrollHeight, clientHeight } = e.target;
-        const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
-        setShowScrollBottom(!isNearBottom);
-    };
-
-    const handleEmojiClick = (emojiData) => {
-        const emoji = emojiData.emoji;
-        const input = inputRef.current;
-        if (input) {
-            const s = input.selectionStart ?? newMessage.length;
-            const e = input.selectionEnd ?? newMessage.length;
-            setNewMessage(newMessage.slice(0, s) + emoji + newMessage.slice(e));
-            setTimeout(() => {
-                input.focus();
-                input.setSelectionRange(s + emoji.length, s + emoji.length);
-            }, 0);
-        } else {
-            setNewMessage(p => p + emoji);
-        }
-    };
-
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
-
-    // Recording State
-    const [isRecording, setIsRecording] = useState(false);
-    const [recordingDuration, setRecordingDuration] = useState(0);
-    const recordingRef = useRef(null);
-    const timerRef = useRef(null);
-
-    // Audio Playback State
-    const [playingAudioId, setPlayingAudioId] = useState(null);
-    const audioRef = useRef(new Audio());
-
-    const messagesEndRef = useRef(null);
-    const fileInputRef = useRef(null);
-    const inputRef = useRef(null);
-
-
-
-    // Close Popups on Click Outside
-    useEffect(() => {
-        function handleClickOutside(event) {
-            if (activeReactionId && !event.target.closest('.reaction-popup-container')) {
-                setActiveReactionId(null);
-            }
-            if (extendedReactionPicker && !event.target.closest('.extended-reaction-picker')) {
-                setExtendedReactionPicker(null);
-            }
-        }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
-    }, [activeReactionId, extendedReactionPicker]);
-
-    // Cleanup Audio on Unmount
-    useEffect(() => {
-        return () => {
-            audioRef.current.pause();
-            if (timerRef.current) clearInterval(timerRef.current);
-        };
-    }, []);
-
-    // Reaction handler
-    const handleReact = async (msgId, emoji) => {
-        try {
-            const msgRef = doc(db, 'communities', partnerId, 'messages', msgId);
-            const message = messages.find(m => m.id === msgId);
-            const currentReactions = message.reactions || {};
-
-            const newReactions = {
-                ...currentReactions,
-                [currentUser.uid]: emoji
-            };
-
-            await updateDoc(msgRef, {
-                reactions: newReactions
-            });
-            setActiveReactionId(null);
-        } catch (error) {
-            console.error("Error reacting:", error);
-        }
-    };
-
-    // Close reaction menu on click outside
-    useEffect(() => {
-        const handleClickOutside = () => setActiveReactionId(null);
-        if (activeReactionId) {
-            window.addEventListener('click', handleClickOutside);
-        }
-        return () => window.removeEventListener('click', handleClickOutside);
-    }, [activeReactionId]);
-
-    // 1. Fetch Partner & Check Membership
-    useEffect(() => {
-        const checkAccess = async () => {
-            if (!partnerId || !currentUser) return;
-            try {
-                const partnerDoc = await getDoc(doc(db, 'users', partnerId));
-                if (partnerDoc.exists()) {
-                    setPartner(partnerDoc.data());
-
-                    // Check membership
-                    if (currentUser.uid === partnerId) {
-                        setIsMember(true);
-                    } else {
-                        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-                        const joinedCommunities = userDoc.data()?.joinedCommunities || [];
-                        setIsMember(joinedCommunities.includes(partnerId));
-                    }
-                }
-            } catch (error) {
-                console.error("Error fetching partner:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        checkAccess();
-    }, [partnerId, currentUser]);
-
-    // 2. Subscribe to Messages
-    useEffect(() => {
-        if (!isMember || !partnerId) return;
-
-        const messagesRef = collection(db, 'communities', partnerId, 'messages');
-        const q = query(messagesRef, orderBy('createdAt', 'asc'));
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const msgs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setMessages(msgs);
-        });
-
-        return () => unsubscribe();
-    }, [partnerId, isMember]);
-
-    // Auto-scroll
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
-
-
-    // --- Audio Handlers ---
-
-    const handleStartRecording = async () => {
-        try {
-            const { stop } = await startRecording();
-            recordingRef.current = stop;
-            setIsRecording(true);
-            setRecordingDuration(0);
-
-            timerRef.current = setInterval(() => {
-                setRecordingDuration(prev => prev + 1);
-            }, 1000);
-        } catch (error) {
-            console.error("Failed to start recording:", error);
-            showToast('Could not access microphone.', 'error');
-        }
-    };
-
-    const handleStopRecording = async (shouldSend = true) => {
-        if (!recordingRef.current) return;
-
-        clearInterval(timerRef.current);
-        const audioBlob = await recordingRef.current();
-        setIsRecording(false);
-        setRecordingDuration(0);
-        recordingRef.current = null;
-
-        if (shouldSend && audioBlob) {
-            await sendVoiceMessage(audioBlob);
-        }
-    };
-
-    const sendVoiceMessage = async (audioBlob) => {
-        try {
-            const url = await uploadVoiceMessage(audioBlob, currentUser.uid);
-            await addDoc(collection(db, 'communities', partnerId, 'messages'), {
-                text: '',
-                audioUrl: url,
-                senderId: currentUser.uid,
-                senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: getSafeAvatar(userProfile || currentUser),
-                createdAt: serverTimestamp(),
-                type: 'audio',
-                duration: recordingDuration
-            });
-            scrollToBottom();
-        } catch (error) {
-            console.error("Error sending voice:", error);
-            showToast('Failed to send voice message. Try again.', 'error');
-        }
-    };
-
-    const handlePlayAudio = (url, msgId) => {
-        if (playingAudioId === msgId) {
-            audioRef.current.pause();
-            setPlayingAudioId(null);
-        } else {
-            audioRef.current.src = url;
-            audioRef.current.play();
-            setPlayingAudioId(msgId);
-            audioRef.current.onended = () => setPlayingAudioId(null);
-        }
-    };
-
-    const formatDuration = (sec) => {
-        const m = Math.floor(sec / 60);
-        const s = sec % 60;
-        return `${m}:${s.toString().padStart(2, '0')}`;
-    };
-
-    // --- Handlers ---
-
-    const handleSendMessage = async (e) => {
-        if (e && e.preventDefault) e.preventDefault();
-        if (!newMessage.trim()) return;
-
-        try {
-            const messagesRef = collection(db, 'communities', partnerId, 'messages');
-
-            const isAvgEmoji = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?|\p{Emoji_Component}){1,3}$/u.test(newMessage.trim());
-
-            await addDoc(messagesRef, {
-                text: newMessage.trim(),
-                senderId: currentUser.uid,
-                senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: getSafeAvatar(userProfile || currentUser),
-                createdAt: serverTimestamp(),
-                type: isAvgEmoji ? 'emoji-big' : 'text'
-            });
-
-            setNewMessage('');
-            setTimeout(() => inputRef.current?.focus(), 100);
-        } catch (error) {
-            console.error("Error sending message:", error);
-            showToast('Failed to send message. Try again.', 'error');
-        }
-    };
-
-
-
-    const handleImageUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        try {
-            const imageUrl = await uploadImage(file, currentUser.uid);
-            const messagesRef = collection(db, 'communities', partnerId, 'messages');
-
-            await addDoc(messagesRef, {
-                text: imageUrl,
-                caption: '',
-                senderId: currentUser.uid,
-                senderName: userProfile?.display_name || currentUser.displayName || 'User',
-                senderAvatar: getSafeAvatar(userProfile || currentUser),
-                createdAt: serverTimestamp(),
-                type: 'image'
-            });
-        } catch (error) {
-            console.error("Error uploading image:", error);
-            showToast('Failed to send image. Try again.', 'error');
-        } finally {
-            e.target.value = '';
-        }
-    };
-
-    // --- Render Helpers ---
-
-    const formatTime = (timestamp) => {
-        if (!timestamp) return '';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    };
-
-    const renderBubbleContent = (msg) => {
-        // Detect Links
-        const urlRegex = /(https?:\/\/[^\s]+)/g;
-
-        switch (msg.type) {
-            case 'image':
-                return (
-                    <div className="image-bubble">
-                        <img src={msg.text} alt="chat" className="chat-image" />
-                        {msg.caption && <div className="image-caption">{msg.caption}</div>}
-                    </div>
-                );
-            case 'emoji-big':
-                return (
-                    <div className="big-emoji-bubble">
-                        <span className="big-emoji">{msg.text}</span>
-                    </div>
-                );
-            case 'audio':
-                const isPlaying = playingAudioId === msg.id;
-                // Circle math: r=54 -> C = 2*pi*54 ~= 339.292
-                const circumference = 339.292;
-
-                return (
-                    <div className="voice-widget">
-                        <div className="ring-wrap">
-                            <svg className="progress-ring" viewBox="0 0 120 120">
-                                <circle cx="60" cy="60" r="54" stroke="rgba(0,0,0,0.06)" strokeWidth="12" fill="none" />
-                                <circle
-                                    cx="60" cy="60" r="54"
-                                    stroke="var(--accent)" strokeWidth="12" fill="none" strokeLinecap="round"
-                                    style={{
-                                        strokeDasharray: circumference,
-                                        strokeDashoffset: isPlaying ? 0 : circumference,
-                                        transition: isPlaying ? `stroke-dashoffset ${msg.duration || 10}s linear` : 'stroke-dashoffset 0.3s'
-                                    }}
-                                />
-                            </svg>
-                            <div className="voice-avatar">
-                                <img
-                                    src={msg.senderAvatar || getSafeAvatar(null)}
-                                    alt={msg.senderName}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="voice-controls">
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                <div className="voice-time">{formatTime(msg.createdAt)}</div>
-                            </div>
-
-                            <button className="voice-play-btn" onClick={() => handlePlayAudio(msg.audioUrl, msg.id)}>
-                                {isPlaying ? (
-                                    <FaPause color="var(--play-green)" size={18} />
-                                ) : (
-                                    <span className="play-shape"></span>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                );
-            default:
-                // Text with Link detection
-                const parts = msg.text.split(urlRegex);
-                return (
-                    <span>
-                        {parts.map((part, i) =>
-                            urlRegex.test(part) ? (
-                                <a key={i} href={part} target="_blank" rel="noopener noreferrer">{part}</a>
-                            ) : (
-                                <span key={i}>{part}</span>
-                            )
-                        )}
-                    </span>
-                );
-        }
-    };
-
-    if (loading) return <div className="chat-screen" style={{ justifyContent: 'center', alignItems: 'center', color: 'var(--text-primary)' }}>Loading...</div>;
-
-    if (!isMember) {
-        return (
-            <div className="chat-screen" style={{ justifyContent: 'center', alignItems: 'center', color: 'var(--text-primary)' }}>
-                <h2>Access Denied</h2>
-                <button onClick={() => navigate('/communities')} style={{ padding: '10px', marginTop: '10px' }}>Go Back</button>
-            </div>
-        );
+  const attemptJoin = useCallback(async () => {
+    if (!partnerId || joinAttemptRef.current) return;
+    joinAttemptRef.current = true;
+    setJoinStatus('joining');
+    try {
+      const ok = await joinCommunity(partnerId);
+      setJoinStatus(ok ? 'idle' : 'failed');
+    } catch {
+      setJoinStatus('failed');
+    } finally {
+      joinAttemptRef.current = false;
     }
+  }, [joinCommunity, partnerId]);
 
-    return (
-        <div className="chat-screen">
-            {/* 1. Glass Header */}
-            <header className="chat-header">
-                <button className="header-back-btn" onClick={() => navigate(-1)} style={{ color: 'var(--text-primary)' }}>
-                    <FaArrowLeft size={20} />
-                </button>
-                <div className="header-info" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', marginLeft: '8px' }}>
-                    <img
-                        src={getSafeAvatar(partner)}
-                        alt=""
-                        style={{ width: '40px', height: '40px', borderRadius: '50%', marginRight: '10px', objectFit: 'cover' }}
-                        onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';
-                        }}
-                    />
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                        <h1 className="header-title" style={{ fontSize: '16px' }}>{partner?.display_name || 'Community Chat'}</h1>
-                        <span className="header-subtitle" style={{ fontSize: '12px' }}>{partner?.communityMembers?.length || 0} members</span>
-                    </div>
-                </div>
-                <button className="header-menu-btn">
-                    <FaEllipsisV />
-                </button>
-            </header>
+  useEffect(() => {
+    setJoinStatus('idle');
+    joinAttemptRef.current = false;
+  }, [partnerId]);
 
-            {/* 2. Message List */}
-            <div className="message-list" onScroll={handleScroll}>
-                {messages.map((msg, index) => {
-                    const isMe = msg.senderId === currentUser.uid;
-                    const isBigEmoji = msg.type === 'emoji-big';
+  useEffect(() => {
+    if (room.loading || canEnterChat || room.isBlockedFromCommunity || !partnerId) return;
+    if (isBusiness) return;
+    if (joinStatus === 'joining' || joinStatus === 'failed') return;
+    void attemptJoin();
+  }, [
+    room.loading,
+    canEnterChat,
+    room.isBlockedFromCommunity,
+    partnerId,
+    isBusiness,
+    joinStatus,
+    attemptJoin,
+  ]);
 
-                    // Check previous message for grouping
-                    const prevMsg = messages[index - 1];
-                    const isFirstOfGroup = !prevMsg || prevMsg.senderId !== msg.senderId;
+  useEffect(() => {
+    if (canEnterChat || room.isHost || joinStatus === 'failed' || room.loading || !partnerId) return;
+    const timer = window.setTimeout(() => setJoinStatus('failed'), 12000);
+    return () => window.clearTimeout(timer);
+  }, [canEnterChat, room.isHost, joinStatus, room.loading, partnerId]);
 
-                    // Get reactions count/display
-                    const reactions = Object.values(msg.reactions || {});
-                    const hasReactions = reactions.length > 0;
-                    // Most recent/popular reaction to show? Just show distinct ones briefly or counts
-                    const distinctReactions = [...new Set(reactions)].slice(0, 3);
+  useEffect(() => {
+    if (!useMobileFullscreen) return undefined;
+    const { detach } = attachChatShellToVisualViewport(() => containerRef.current);
+    return detach;
+  }, [useMobileFullscreen]);
 
-                    return (
-                        <div
-                            key={msg.id}
-                            className={`message-row ${isMe ? 'outgoing' : 'incoming'} ${isBigEmoji ? 'emoji-center' : ''} ${isFirstOfGroup ? 'first-of-group' : ''}`}
-                            style={{
-                                ...(isBigEmoji ? { justifyContent: 'center' } : {}),
-                                position: 'relative', // Needed for centering popup within row
-                                marginTop: isFirstOfGroup ? '6px' : '0px'
-                            }}
-                            onContextMenu={(e) => {
-                                e.preventDefault();
-                                setActiveReactionId(msg.id);
-                            }}
-                        >
-                            {/* Avatar for Incoming */}
-                            {!isMe && !isBigEmoji && (
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                                    {isFirstOfGroup && (
-                                        <span style={{
-                                            fontSize: '11px',
-                                            fontWeight: '700',
-                                            color: 'var(--accent-color)',
-                                            marginLeft: '12px',
-                                            marginBottom: '2px'
-                                        }}>
-                                            {msg.senderName}
-                                        </span>
-                                    )}
-                                    <img
-                                        src={msg.senderAvatar || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E'}
-                                        alt=""
-                                        className="sender-avatar"
-                                        onError={(e) => {
-                                            e.target.onerror = null;
-                                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150"%3E%3Crect fill="%238b5cf6" width="150" height="150"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white"%3E👤%3C/text%3E%3C/svg%3E';
-                                        }}
-                                        style={{ visibility: isFirstOfGroup ? 'visible' : 'hidden' }}
-                                    />
-                                </div>
-                            )}
+  const closeChat = goBackFromCommunity;
 
-                            {/* Bubble */}
-                            <div className={`bubble ${isBigEmoji ? 'big-emoji-bubble' : ''} ${msg.type === 'audio' ? 'bubble-audio-transparent' : ''}`} style={{ position: 'relative' }}>
+  const handleLeaveCommunity = useCallback(async () => {
+    const name = room.partner?.display_name || t('community_chat', 'Community Chat');
+    if (
+      !window.confirm(
+        `${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${name}?`
+      )
+    ) {
+      return;
+    }
+    setLeavingCommunity(true);
+    try {
+      const success = await leaveCommunity(partnerId);
+      if (success) closeChat();
+    } catch (error) {
+      console.error('[CommunityChatRoom] leave', error);
+    } finally {
+      setLeavingCommunity(false);
+    }
+  }, [closeChat, leaveCommunity, partnerId, room.partner?.display_name, t]);
 
-                                {/* Sender Name (Optional, small on top?) - skipping for clean minimalist look requested */}
+  const headerMenuActions = useMemo(() => {
+    if (room.isHost || isBusiness) return [];
+    return [
+      {
+        id: 'leave',
+        label: t('Leave Community', 'Leave Community'),
+        icon: <FaSignOutAlt size={15} aria-hidden />,
+        danger: true,
+        disabled: leavingCommunity,
+        onClick: handleLeaveCommunity,
+      },
+    ];
+  }, [handleLeaveCommunity, isBusiness, leavingCommunity, room.isHost, t]);
 
-                                {renderBubbleContent(msg)}
+  const shellClass = [
+    'chat-room-container',
+    'chat-screen',
+    'community-chat-root',
+    'community-chat-swipe-shell',
+    useMobileFullscreen ? 'community-chat-fullscreen' : '',
+    room.bannerVisible === false ? 'community-chat-root--no-banner' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
-                                {/* Timestamp */}
-                                {!isBigEmoji && msg.type !== 'audio' && (
-                                    <span className="timestamp" style={{ color: isMe ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)' }}>
-                                        {formatTime(msg.createdAt)}
-                                    </span>
-                                )}
+  const zoneThemeId = room.zoneThemeId || 'stage';
+  const zoneThemeInlineStyle = room.zoneThemeInlineStyle;
+  const guestFrameBackground = room.guestFrameBackground;
 
-                                {/* Reaction Badge (Displayed on message) */}
-                                {hasReactions && !isBigEmoji && (
-                                    <div className="message-reaction-badge">
-                                        {distinctReactions.map((r, i) => <span key={i}>{r}</span>)}
-                                        {reactions.length > 1 && <span style={{ marginLeft: '2px', color: '#9CA3AF' }}>{reactions.length}</span>}
-                                    </div>
-                                )}
-                            </div>
+  const guestFrameShellAttrs = useMemo(
+    () =>
+      getCommunityGuestFrameShellAttributes({
+        background: guestFrameBackground,
+      }),
+    [guestFrameBackground]
+  );
 
-                            {/* Reaction Popup Menu - MOVED OUTSIDE BUBBLE */}
-                            {activeReactionId === msg.id && (
-                                <div className="reaction-popup-container" onClick={(e) => e.stopPropagation()}>
-                                    {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
-                                        <span
-                                            key={emoji}
-                                            className="reaction-popup-item"
-                                            onClick={() => handleReact(msg.id, emoji)}
-                                        >
-                                            {emoji}
-                                        </span>
-                                    ))}
-                                    {/* Mock Plus Button -> Real Button */}
-                                    <div
-                                        className="reaction-popup-item"
-                                        style={{ background: '#374151', borderRadius: '50%', padding: '2px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px' }}
-                                        onClick={() => {
-                                            setExtendedReactionPicker(msg.id);
-                                            setActiveReactionId(null);
-                                        }}
-                                    >
-                                        <FaPlus style={{ color: '#9CA3AF' }} />
-                                    </div>
-                                </div>
-                            )}
+  const guestFrameBackgroundStyle = useMemo(
+    () => buildCommunityGuestFrameBackgroundStyle(guestFrameBackground),
+    [guestFrameBackground]
+  );
 
-                            {/* Extended Emoji Picker for Reactions */}
-                            {extendedReactionPicker === msg.id && (
-                                <div className="extended-reaction-picker" style={{ position: 'absolute', bottom: '40px', left: '0', zIndex: 1001 }} onClick={(e) => e.stopPropagation()}>
-                                    <Suspense fallback={<div style={{ width: 300, height: 350, background: '#111827' }} />}>
-                                        <LazyEmojiPicker
-                                            onEmojiClick={(emojiObject) => {
-                                                handleReact(msg.id, emojiObject.emoji);
-                                                setExtendedReactionPicker(null);
-                                            }}
-                                            width="300px"
-                                            height="350px"
-                                            theme="dark"
-                                            searchDisabled={true}
-                                            previewConfig={{ showPreview: false }}
-                                        />
-                                    </Suspense>
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-                <div ref={messagesEndRef} />
+  const shellInlineStyle = useMemo(
+    () => ({ ...zoneThemeInlineStyle, ...guestFrameBackgroundStyle, ...chatThemeStyle }),
+    [zoneThemeInlineStyle, guestFrameBackgroundStyle, chatThemeStyle]
+  );
 
-                {showScrollBottom && (
-                    <button
-                        onClick={scrollToBottom}
-                        style={{
-                            position: 'fixed',
-                            bottom: '80px',
-                            right: '20px',
-                            background: 'var(--accent)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '50%',
-                            width: '40px',
-                            height: '40px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
-                            zIndex: 1001,
-                            transition: 'all 0.3s ease'
-                        }}
-                    >
-                        <FaArrowDown />
-                    </button>
-                )}
-            </div>
+  let shellContent;
 
+  const renderJoinGate = (title, description, action = null) => (
+    <div
+      ref={containerRef}
+      className={`${shellClass} community-chat-join-gate`}
+      data-cchat-zone-theme={zoneThemeId}
+      data-chat-theme={chatThemeId}
+      style={{ ...zoneThemeInlineStyle, ...chatThemeStyle }}
+    >
+      <button
+        type="button"
+        className="header-close-btn community-chat-fullscreen__close"
+        onClick={closeChat}
+        aria-label={t('close', 'Close')}
+      >
+        <FaTimes size={18} />
+      </button>
+      <AppText as="h2" style={{ margin: '0 0 10px', fontSize: '1.15rem' }}>{title}</AppText>
+      {description ? (
+        <AppText as="p" style={{ margin: '0 0 16px', opacity: 0.85, maxWidth: '320px', lineHeight: 1.5 }}>
+          {description}
+        </AppText>
+      ) : null}
+      {action}
+      <button
+        type="button"
+        onClick={closeChat}
+        className="community-chat-join-gate__back"
+      >
+        {t('go_back', 'Go back')}
+      </button>
+    </div>
+  );
 
-            {/* 3. Composer */}
-            {/* 3. Composer Section */}
-            <div style={{ flexShrink: 0, background: 'var(--bg-darker)' }}>
-                <div className="input-area" style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: '8px', borderTop: '1px solid var(--border-color)' }}>
-
-                    {/* Input Wrapper */}
-                    <div className="input-wrapper" style={{
-                        flex: 1, display: 'flex', alignItems: 'center',
-                        background: 'var(--composer-bg)', borderRadius: '24px', padding: '4px 12px',
-                        border: '1px solid var(--border-color)'
-                    }}>
-                        {isRecording ? (
-                            /* RECORDING UI */
-                            <div className="recording-ui" style={{ display: 'flex', alignItems: 'center', width: '100%', color: 'white' }}>
-                                <div className="recording-info" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <FaMicrophone className="recording-pulse" color="#ef4444" />
-                                    <span className="recording-timer">{formatDuration(recordingDuration)}</span>
-                                </div>
-                                <span className="recording-text" style={{ flex: 1, textAlign: 'center', fontSize: '0.85rem', opacity: 0.8 }}>Slide to cancel</span>
-                                <button
-                                    className="composer-icon-btn delete-recording-btn"
-                                    onClick={() => handleStopRecording(false)}
-                                    title="Cancel"
-                                    style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}
-                                >
-                                    <FaTrash />
-                                </button>
-                            </div>
-                        ) : (
-                            /* NORMAL INPUT UI */
-                            <>
-                                {!isMobile && (
-                                    <button
-                                        ref={emojiBtnRef}
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(p => !p); }}
-                                        style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', padding: '0 4px', opacity: 0.7, flexShrink: 0 }}
-                                        title="Emoji"
-                                    >😊</button>
-                                )}
-                                <input
-                                    ref={inputRef}
-                                    type="text"
-                                    className="message-input"
-                                    placeholder="Message"
-                                    value={newMessage}
-                                    onChange={(e) => setNewMessage(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
-                                />
-
-                                {/* Attachments */}
-                                <input
-                                    type="file"
-                                    ref={fileInputRef}
-                                    hidden
-                                    accept="image/*"
-                                    onChange={handleImageUpload}
-                                />
-
-                                <button className="composer-icon-btn" onClick={() => fileInputRef.current?.click()} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '0 4px' }}>
-                                    <FaCamera />
-                                </button>
-                            </>
-                        )}
-                    </div>
-
-                    {/* Mic or Send Button */}
-                    <button
-                        type="button"
-                        className="send-btn-circle"
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            if (isRecording) handleStopRecording(true);
-                            else handleSendMessage(e);
-                        }}
-                        style={{
-                            background: isRecording ? '#ef4444' : 'var(--primary)',
-                            color: 'white', border: 'none', borderRadius: '50%',
-                            width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', flexShrink: 0,
-                            boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
-                        }}
-                    >
-                        {isRecording ? (
-                            <FaPaperPlane />
-                        ) : (
-                            newMessage.trim() ? (
-                                <FaPaperPlane style={{ marginLeft: '-2px' }} />
-                            ) : (
-                                <FaMicrophone onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleStartRecording(); }} />
-                            )
-                        )}
-                    </button>
-                </div>
-
-            </div>
-
-            {/* Desktop Emoji Picker Portal */}
-            <EmojiPickerPortal
-                open={showEmojiPicker}
-                onClose={() => setShowEmojiPicker(false)}
-                anchorRef={emojiBtnRef}
-                onEmojiClick={handleEmojiClick}
-            />
-
-        </div>
+  if (room.loading && !canEnterChat) {
+    shellContent = (
+      <div
+        ref={containerRef}
+        className={shellClass}
+        data-cchat-zone-theme={zoneThemeId}
+        style={{
+          ...zoneThemeInlineStyle,
+          justifyContent: 'center',
+          alignItems: 'center',
+          color: 'var(--text-primary)',
+        }}
+      >
+        <button
+          type="button"
+          className="header-close-btn community-chat-fullscreen__close"
+          onClick={closeChat}
+          aria-label={t('close', 'Close')}
+        >
+          <FaTimes size={18} />
+        </button>
+        {t('inbox_loading', 'Loadingâ€¦')}
+      </div>
     );
-};
+  } else if (!canEnterChat) {
+    if (room.isBlockedFromCommunity) {
+      shellContent = renderJoinGate(
+        t('community_chat_unavailable', 'This community is not available'),
+        t('community_chat_blocked_hint', 'You cannot access this chat room right now.')
+      );
+    } else if (isBusiness) {
+      shellContent = renderJoinGate(
+        t('community_chat_business_title', 'Business accounts'),
+        t('business_cannot_join_community', 'Business accounts cannot join other communities.')
+      );
+    } else if (joinStatus === 'failed') {
+      shellContent = renderJoinGate(
+        t('community_chat_join_retry_title', 'Could not open chat right now'),
+        t(
+          'community_chat_join_retry_hint',
+          'This is not a problem with your account. Tap try again â€” you can chat with other members once you are in.'
+        ),
+        <button
+          type="button"
+          onClick={() => setJoinStatus('idle')}
+          style={{
+            padding: '12px 20px',
+            borderRadius: '14px',
+            border: 'none',
+            background: 'var(--brand-primary)',
+            color: 'var(--text-on-brand)',
+            fontWeight: 800,
+            cursor: 'pointer',
+          }}
+        >
+          {t('try_again', 'Try again')}
+        </button>
+      );
+    } else {
+      shellContent = renderJoinGate(
+        t('community_chat_joining', 'Opening community chatâ€¦'),
+        t(
+          'community_chat_joining_hint',
+          'Hang tight â€” you will be able to chat with other members in a moment.'
+        )
+      );
+    }
+  } else {
+    shellContent = (
+      <div
+        ref={containerRef}
+        dir="ltr"
+        className={shellClass}
+        data-cchat-zone-theme={zoneThemeId}
+        data-chat-theme={chatThemeId}
+        {...guestFrameShellAttrs}
+        style={shellInlineStyle}
+      >
+        <header className="chat-header">
+          <button
+            type="button"
+            className="header-close-btn"
+            onClick={closeChat}
+            style={{ color: 'var(--text-primary)' }}
+            aria-label={t('close', 'Close')}
+          >
+            <FaTimes size={18} />
+          </button>
+          <div
+            className="header-info"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'flex-start',
+              marginInlineStart: '8px',
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            <UserAvatar
+              user={room.partner}
+              alt=""
+              solidPlaceholder
+              noGenderRing
+              className="community-chat-header__avatar"
+              style={{
+                width: '40px',
+                height: '40px',
+                minWidth: '40px',
+                minHeight: '40px',
+                marginInlineEnd: '10px',
+              }}
+            />
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                flex: 1,
+                minWidth: 0,
+              }}
+            >
+              <AppText
+                as="h1"
+                className="header-title"
+                style={{
+                  fontSize: '16px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  width: '100%',
+                }}
+              >
+                {room.partner?.display_name || t('community_chat', 'Community Chat')}
+              </AppText>
+              <AppText
+                as="span"
+                className="header-subtitle"
+                style={{ fontSize: '12px', color: 'var(--text-muted)' }}
+              >
+                {room.partner?.communityMembers?.length || 0} {t('members', 'members')}
+              </AppText>
+            </div>
+          </div>
+          <div className="community-chat-header__actions">
+            <CommunityChatHeaderMenu
+              themeId={chatThemeId}
+              onThemeChange={setChatThemeId}
+              bannerChecked={room.bannerVisible !== false}
+              bannerDisabled={room.bannerVisibleSaving || room.bannerToggleDisabled}
+              bannerPersonal={!room.isHost}
+              onBannerChange={(visible) => room.setCommunityChatBannerVisible(visible)}
+              actions={headerMenuActions}
+            />
+          </div>
+        </header>
 
-export default CommunityChatRoom;
+        {isDesktopShell ? (
+          <CommunityFullChatView room={room} />
+        ) : (
+          <CommunityChatSwipePager room={room} />
+        )}
+      </div>
+    );
+  }
+
+  if (useMobileFullscreen && typeof document !== 'undefined') {
+    return createPortal(shellContent, document.body);
+  }
+  return shellContent;
+}
+
