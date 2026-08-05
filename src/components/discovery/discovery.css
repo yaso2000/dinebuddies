@@ -251,16 +251,34 @@
         );
 }
 
-/* Location bar — top of card */
-.discovery-card__location-bar {
+/* Top row — location + Connect inbox (notifications / gifts / messages) */
+.discovery-card__top-row {
     position: absolute;
     top: 0.85rem;
     inset-inline: 0.85rem;
-    z-index: 12;
+    z-index: 22;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    pointer-events: none;
+}
+
+.discovery-card__top-row > * {
+    pointer-events: auto;
+}
+
+.discovery-card__location-spacer {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.discovery-card__location-bar {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    max-width: calc(100% - 5.5rem);
+    min-width: 0;
+    max-width: calc(100% - 3.75rem);
     padding: 0.42rem 0.75rem;
     border-radius: 999px;
     background: rgba(12, 14, 22, 0.42);
@@ -269,6 +287,28 @@
     -webkit-backdrop-filter: blur(14px) saturate(160%);
     color: #fff;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+.discovery-card__inbox {
+    flex-shrink: 0;
+    width: 3rem !important;
+    height: 3rem !important;
+    min-width: 3rem !important;
+    min-height: 3rem !important;
+    color: #fff !important;
+    text-decoration: none;
+    position: relative;
+}
+
+.discovery-card__inbox svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.discovery-card__inbox .inbox-hub-link__badge {
+    top: -2px;
+    inset-inline-end: -2px;
+    border-color: rgba(7, 7, 12, 0.85);
 }
 
 .discovery-card__location-pin {
@@ -297,7 +337,7 @@
     flex-shrink: 0;
 }
 
-/* Name + age — bottom of card (must stay above bottom nav via shell padding) */
+/* Name + age + bio — bottom of card (must stay above bottom nav via shell padding) */
 .discovery-card__identity {
     position: absolute;
     inset-inline-start: 1.1rem;
@@ -306,6 +346,9 @@
     max-width: calc(100% - 5.75rem);
     text-align: start;
     pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
 }
 
 .discovery-card__name-line {
@@ -317,6 +360,21 @@
     letter-spacing: -0.02em;
     color: #fff;
     text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+}
+
+.discovery-card__bio {
+    margin: 0;
+    max-width: 100%;
+    font-family: var(--font-body, 'Segoe UI', sans-serif);
+    font-size: 0.88rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 /* Vertical glass action rail — right side: Chat, Gift, Heart */

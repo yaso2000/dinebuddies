@@ -23,7 +23,9 @@ import { useDiscoveryActionStatus } from '../../hooks/useDiscoveryActionStatus';
 import { useCanMessageMember } from '../../hooks/useCanMessageMember';
 import { useMatchCelebration } from '../../context/MatchCelebrationContext';
 import { useUserPresence } from '../../hooks/usePresence';
+import InboxHubLink from './InboxHubLink';
 import './discovery.css';
+import './inbox.css';
 import { AppText } from '../base';
 
 const SWIPE_X_SKIP_THRESHOLD = 100;
@@ -157,7 +159,9 @@ export default function DiscoveryCard({
 
   const isInteractiveTarget = useCallback((target) => {
     if (!target?.closest) return false;
-    return Boolean(target.closest('.discovery-card__actions, button, a'));
+    return Boolean(
+      target.closest('.discovery-card__actions, .discovery-card__inbox, button, a')
+    );
   }, []);
 
   const handleNavigateActivate = useCallback(
@@ -337,22 +341,42 @@ export default function DiscoveryCard({
 
         <div className="discovery-card__gradient" aria-hidden />
 
-        {locationLabel ? (
-          <div className="discovery-card__location-bar">
-            <FaMapMarkerAlt className="discovery-card__location-pin" aria-hidden />
-            <AppText as="span" className="discovery-card__location-text">
-              {locationLabel}
-            </AppText>
-            {isOnline ? (
-              <AppText as="span" className="discovery-card__online-dot" aria-label={t('online', 'Online')} />
-            ) : null}
-          </div>
-        ) : null}
+        <div className="discovery-card__top-row">
+          {locationLabel ? (
+            <div className="discovery-card__location-bar">
+              <FaMapMarkerAlt className="discovery-card__location-pin" aria-hidden />
+              <AppText as="span" className="discovery-card__location-text">
+                {locationLabel}
+              </AppText>
+              {isOnline ? (
+                <AppText
+                  as="span"
+                  className="discovery-card__online-dot"
+                  aria-label={t('online', 'Online')}
+                />
+              ) : null}
+            </div>
+          ) : (
+            <span className="discovery-card__location-spacer" aria-hidden />
+          )}
+
+          <InboxHubLink
+            className="discovery-card__inbox discovery-card__action--glass"
+            tab="activity"
+            showLabel={false}
+            label={t('inbox_title', 'Inbox')}
+          />
+        </div>
 
         <div className="discovery-card__identity">
           <AppText as="h2" className="discovery-card__name-line">
             {identityLine}
           </AppText>
+          {profile.bio ? (
+            <AppText as="p" className="discovery-card__bio">
+              {profile.bio}
+            </AppText>
+          ) : null}
         </div>
 
         <div className="discovery-card__actions discovery-card__actions--rail">
