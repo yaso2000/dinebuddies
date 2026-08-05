@@ -9,6 +9,10 @@ admin.initializeApp();
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
 const { runSuggestInvitationMessages } = require('./suggestInvitationMessages');
+const {
+    contentOwnerIds,
+    safeDeleteStorageUrl,
+} = require('./storageDeleteSafety');
 const functions = require('firebase-functions');
 const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
 const db = admin.firestore();
@@ -1961,17 +1965,6 @@ exports.deleteExpiredInvitations = functions.pubsub
         const twentyFourHoursAgo = new Date(now.toMillis() - 24 * 60 * 60 * 1000);
         const cutoff = admin.firestore.Timestamp.fromDate(twentyFourHoursAgo);
 
-        function extractStoragePath(url) {
-            if (!url || typeof url !== 'string' || !url.includes('firebasestorage') || !url.includes('/o/')) return null;
-            try {
-                const part = url.split('/o/')[1];
-                if (!part) return null;
-                return decodeURIComponent(part.split('?')[0]);
-            } catch (e) {
-                return null;
-            }
-        }
-
         function getInvitationMediaUrls(data) {
             if (!data) return [];
             const urls = [];
@@ -2009,17 +2002,17 @@ exports.deleteExpiredInvitations = functions.pubsub
             for (const invDoc of expiredSnap.docs) {
                 const invId = invDoc.id;
                 const invData = invDoc.data();
+                const hostId = invData?.author?.id || invData?.authorId || null;
                 const messagesSnap = await db.collection('invitations').doc(invId).collection('messages').get();
 
-                const urls = [...getInvitationMediaUrls(invData)];
-                messagesSnap.docs.forEach(d => urls.push(...getMessageMediaUrls(d.data())));
-
-                const paths = [...new Set(urls)].map(extractStoragePath).filter(Boolean);
-                for (const path of paths) {
-                    try {
-                        await bucket.file(path).delete();
-                    } catch (err) {
-                        if (err.code !== 404) console.warn('Storage delete failed:', path, err.message);
+                for (const url of getInvitationMediaUrls(invData)) {
+                    await safeDeleteStorageUrl(bucket, url, [hostId], console);
+                }
+                for (const msgDoc of messagesSnap.docs) {
+                    const md = msgDoc.data() || {};
+                    const owners = [md.senderId, hostId].filter(Boolean);
+                    for (const url of getMessageMediaUrls(md)) {
+                        await safeDeleteStorageUrl(bucket, url, owners, console);
                     }
                 }
 
@@ -2049,11 +2042,6 @@ exports.archiveAndDeleteExpiredInvitationChats = functions.pubsub
         const cutoff = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
         const cutoffTs = admin.firestore.Timestamp.fromDate(cutoff);
 
-        function extractStoragePath(url) {
-            if (!url || typeof url !== 'string' || !url.includes('firebasestorage') || !url.includes('/o/')) return null;
-            try { return decodeURIComponent(url.split('/o/')[1].split('?')[0]); } catch { return null; }
-        }
-
         try {
             // Query completed invitations whose event date ended > 30 days ago
             const expiredSnap = await db.collection('invitations')
@@ -2071,6 +2059,7 @@ exports.archiveAndDeleteExpiredInvitationChats = functions.pubsub
             for (const invDoc of expiredSnap.docs) {
                 const invId = invDoc.id;
                 const invData = invDoc.data() || {};
+                const hostId = invData.author?.id || invData.authorId || null;
 
                 // 1) Fetch messages subcollection
                 const messagesSnap = await db.collection('invitations').doc(invId).collection('messages').get();
@@ -2082,25 +2071,26 @@ exports.archiveAndDeleteExpiredInvitationChats = functions.pubsub
                     eventDate: invData.endDate || invData.date || null,
                     guestCount: invData.guestCount || invData.attendeeCount || messagesSnap.size || 0,
                     restaurantId: invData.restaurantId || null,
-                    hostId: invData.author?.id || invData.authorId || null,
+                    hostId,
                     messageCount: messagesSnap.size,
                     title: invData.title || null
                 });
 
-                // 3) Delete Storage media
+                // 3) Delete Storage media only when path is owned by host/sender
                 const mediaFields = ['customImage', 'customVideo', 'videoThumbnail', 'image', 'restaurantImage'];
                 const messageMediaFields = ['imageUrl', 'audioUrl', 'fileUrl'];
-                const urls = [];
-                mediaFields.forEach(f => { if (invData[f]) urls.push(invData[f]); });
-                messagesSnap.docs.forEach(d => {
+                for (const f of mediaFields) {
+                    if (invData[f]) await safeDeleteStorageUrl(bucket, invData[f], [hostId], console);
+                }
+                for (const d of messagesSnap.docs) {
                     const md = d.data() || {};
-                    messageMediaFields.forEach(f => { if (md[f]) urls.push(md[f]); });
-                    if (md.attachment?.url) urls.push(md.attachment.url);
-                });
-                const paths = [...new Set(urls)].map(extractStoragePath).filter(Boolean);
-                for (const path of paths) {
-                    try { await bucket.file(path).delete(); }
-                    catch (err) { if (err.code !== 404) console.warn('Storage delete failed:', path, err.message); }
+                    const owners = [md.senderId, hostId].filter(Boolean);
+                    for (const f of messageMediaFields) {
+                        if (md[f]) await safeDeleteStorageUrl(bucket, md[f], owners, console);
+                    }
+                    if (md.attachment?.url) {
+                        await safeDeleteStorageUrl(bucket, md.attachment.url, owners, console);
+                    }
                 }
 
                 // 4) Delete Firestore documents
@@ -2167,11 +2157,6 @@ exports.deleteOldCommunityPosts = functions.pubsub
         const cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         const cutoffTs = admin.firestore.Timestamp.fromDate(cutoff);
 
-        function extractStoragePath(url) {
-            if (!url || typeof url !== 'string' || !url.includes('firebasestorage') || !url.includes('/o/')) return null;
-            try { return decodeURIComponent(url.split('/o/')[1].split('?')[0]); } catch { return null; }
-        }
-
         try {
             const oldPostsSnap = await db.collection('communityPosts')
                 .where('createdAt', '<=', cutoffTs)
@@ -2194,7 +2179,7 @@ exports.deleteOldCommunityPosts = functions.pubsub
                 const batch = db.batch();
                 for (const postDoc of chunk) {
                     const pd = postDoc.data() || {};
-                    // Delete associated media files
+                    const owners = contentOwnerIds(pd);
                     const mediaUrls = [];
                     ['imageUrl', 'videoUrl', 'mediaUrl', 'image', 'video'].forEach(f => {
                         if (pd[f]) mediaUrls.push(pd[f]);
@@ -2202,11 +2187,7 @@ exports.deleteOldCommunityPosts = functions.pubsub
                     if (Array.isArray(pd.images)) pd.images.forEach(u => { if (u) mediaUrls.push(u); });
 
                     for (const url of mediaUrls) {
-                        const path = extractStoragePath(url);
-                        if (path) {
-                            try { await bucket.file(path).delete(); }
-                            catch (err) { if (err.code !== 404) console.warn('Storage delete failed:', path, err.message); }
-                        }
+                        await safeDeleteStorageUrl(bucket, url, owners, console);
                     }
                     batch.delete(postDoc.ref);
                 }
@@ -2315,19 +2296,12 @@ exports.cleanupOldMedia = functions.pubsub.schedule('every 24 hours').onRun(asyn
     const thirtyDaysAgo = admin.firestore.Timestamp.fromMillis(thirtyDaysAgoMillis);
     const bucket = admin.storage().bucket();
 
-    // Helper to extract file path and delete from Storage
-    const deleteStorageFileFromUrl = async (url) => {
-        try {
-            if (!url || !url.includes('firebasestorage.googleapis.com')) return;
-            const encodedPath = url.split('/o/')[1].split('?')[0];
-            const filePath = decodeURIComponent(encodedPath);
-            await bucket.file(filePath).delete();
-            functions.logger.info(`Deleted old media file: ${filePath}`);
-        } catch (e) {
-            if (e.code !== 404) {
-                functions.logger.warn(`Error deleting media file ${url}:`, e);
-            }
+    const deleteOwnedMediaUrl = async (url, ownerUids) => {
+        const deleted = await safeDeleteStorageUrl(bucket, url, ownerUids, functions.logger);
+        if (deleted) {
+            functions.logger.info(`Deleted old media file for owners ${[...ownerUids].join(',')}`);
         }
+        return deleted;
     };
 
     let filesDeleted = 0;
@@ -2350,8 +2324,7 @@ exports.cleanupOldMedia = functions.pubsub.schedule('every 24 hours').onRun(asyn
                 if (['image', 'video', 'audio'].includes(data.type)) {
                     const fileUrl = data.text || data.audioUrl || data.imageUrl;
                     if (fileUrl && fileUrl.includes('firebasestorage')) {
-                        await deleteStorageFileFromUrl(fileUrl);
-                        filesDeleted++;
+                        if (await deleteOwnedMediaUrl(fileUrl, [data.senderId])) filesDeleted++;
                     }
                     msgBatch.update(doc.ref, {
                         type: 'text',
@@ -2390,8 +2363,7 @@ exports.cleanupOldMedia = functions.pubsub.schedule('every 24 hours').onRun(asyn
                 if (['image', 'video', 'audio'].includes(data.type)) {
                     const fileUrl = data.text || data.audioUrl || data.imageUrl;
                     if (fileUrl && fileUrl.includes('firebasestorage')) {
-                        await deleteStorageFileFromUrl(fileUrl);
-                        filesDeleted++;
+                        if (await deleteOwnedMediaUrl(fileUrl, [data.senderId])) filesDeleted++;
                     }
                     msgBatch.update(doc.ref, {
                         type: 'text',
@@ -2430,8 +2402,7 @@ exports.cleanupOldMedia = functions.pubsub.schedule('every 24 hours').onRun(asyn
                 if (['image', 'video', 'audio'].includes(data.type)) {
                     const fileUrl = data.text || data.audioUrl || data.imageUrl;
                     if (fileUrl && fileUrl.includes('firebasestorage')) {
-                        await deleteStorageFileFromUrl(fileUrl);
-                        filesDeleted++;
+                        if (await deleteOwnedMediaUrl(fileUrl, [data.senderId])) filesDeleted++;
                     }
                     msgBatch.update(doc.ref, {
                         type: 'text',
@@ -2466,19 +2437,18 @@ exports.cleanupOldMedia = functions.pubsub.schedule('every 24 hours').onRun(asyn
 
         for (const doc of oldPostsSnap.docs) {
             const data = doc.data();
+            const owners = contentOwnerIds(data);
             let updated = false;
 
             if (data.mediaUrl && data.mediaUrl.includes('firebasestorage')) {
-                await deleteStorageFileFromUrl(data.mediaUrl);
+                if (await deleteOwnedMediaUrl(data.mediaUrl, owners)) filesDeleted++;
                 postBatch.update(doc.ref, { mediaUrl: admin.firestore.FieldValue.delete() });
                 updated = true;
-                filesDeleted++;
             }
             if (data.image && data.image.includes('firebasestorage')) {
-                await deleteStorageFileFromUrl(data.image);
+                if (await deleteOwnedMediaUrl(data.image, owners)) filesDeleted++;
                 postBatch.update(doc.ref, { image: admin.firestore.FieldValue.delete() });
                 updated = true;
-                filesDeleted++;
             }
             
             if (updated) {
@@ -2507,11 +2477,6 @@ exports.deleteExpiredStories = functions.pubsub.schedule('every 1 hours').onRun(
     const bucket = admin.storage().bucket();
     const now = admin.firestore.Timestamp.now();
 
-    function extractStoragePath(url) {
-        if (!url || typeof url !== 'string' || !url.includes('firebasestorage') || !url.includes('/o/')) return null;
-        try { return decodeURIComponent(url.split('/o/')[1].split('?')[0]); } catch { return null; }
-    }
-
     try {
         const expiredStoriesSnap = await db.collection('stories')
             .where('expiresAt', '<=', now)
@@ -2532,13 +2497,11 @@ exports.deleteExpiredStories = functions.pubsub.schedule('every 1 hours').onRun(
         for (const chunk of chunks) {
             const batch = db.batch();
             for (const doc of chunk) {
-                const data = doc.data();
+                const data = doc.data() || {};
+                // Only delete Storage objects under the story author's prefix.
+                // Planted foreign URLs (avatars/, gallery/, etc.) must not be wiped.
                 if (data.url && data.url.includes('firebasestorage')) {
-                    const path = extractStoragePath(data.url);
-                    if (path) {
-                        try { await bucket.file(path).delete(); }
-                        catch (err) { if (err.code !== 404) console.warn('Storage delete failed:', path, err.message); }
-                    }
+                    await safeDeleteStorageUrl(bucket, data.url, contentOwnerIds(data), console);
                 }
                 batch.delete(doc.ref);
             }
