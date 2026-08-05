@@ -1,87 +1,46 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
-
-import { useNavigate } from 'react-router-dom';
-
 import { useTranslation } from 'react-i18next';
-
-import { LuX } from 'react-icons/lu';
-
 import DiscoveryFeed from '../components/discovery/DiscoveryFeed';
-import InboxHubLink from '../components/discovery/InboxHubLink';
-
 import { useAuth } from '../context/AuthContext';
-
 import { useToast } from '../context/ToastContext';
-
 import { useDiscoveryProfiles } from '../hooks/useDiscoveryProfiles';
 import { useProfileGiftPicker } from '../hooks/useProfileGiftPicker';
-
 import { likeDiscoveryProfile, sendDiscoveryGreeting } from '../utils/discoveryProfile';
 import { showLikeCooldownWarning } from '../utils/connectionActionCooldown';
-
 import { goToLogin } from '../utils/goToLogin';
-
 import '../components/discovery/discovery.css';
+import { AppText } from '../components/base';
 
-import { AppText } from "../components/base";
-
-
-
+/**
+ * Connect — single immersive magnetic profile card inside the app shell
+ * (header + bottom nav). Replaces the old multi-card grid as the primary view.
+ */
 export default function DiscoveryPage() {
-
   const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
-
   const { showToast, showPersistentWarning } = useToast();
-
   const { currentUser, userProfile, isGuest } = useAuth();
 
-
-
   const viewerUid = currentUser?.uid || currentUser?.id;
-
   const { profiles, loading, loadingMore, hasMore, loadMore, canLoad } = useDiscoveryProfiles();
   const { openGiftPicker, giftModal } = useProfileGiftPicker();
 
-  const handleClose = useCallback(() => {
-    navigate('/search/list', { replace: true });
-  }, [navigate]);
-
-
-
   useEffect(() => {
-
     if (isGuest || userProfile?.role === 'guest') {
-
       goToLogin({ returnPath: '/search' });
-
     }
-
   }, [isGuest, userProfile?.role]);
 
-
-
   const handleLike = useCallback(
-
     async (profile) => {
-
       if (!viewerUid) {
-
         goToLogin({ returnPath: '/search' });
-
         return false;
-
       }
-
-
 
       try {
         const result = await likeDiscoveryProfile(viewerUid, profile.user, userProfile || currentUser);
         if (result?.reason === 'already_liked') {
-          showToast(
-            t('discovery_like_already', 'You already liked this profile.'),
-            'info'
-          );
+          showToast(t('discovery_like_already', 'You already liked this profile.'), 'info');
           return { ok: false, limited: true };
         }
         if (result?.reason === 'cooldown') {
@@ -98,28 +57,16 @@ export default function DiscoveryPage() {
         showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
         return { ok: false };
       }
-
     },
-
     [currentUser, i18n, showPersistentWarning, showToast, t, userProfile, viewerUid]
-
   );
 
-
-
   const handleGreeting = useCallback(
-
     async (profile) => {
-
       if (!viewerUid) {
-
         goToLogin({ returnPath: '/search' });
-
         return false;
-
       }
-
-
 
       try {
         const result = await sendDiscoveryGreeting(viewerUid, profile.user, userProfile || currentUser);
@@ -140,14 +87,9 @@ export default function DiscoveryPage() {
         showToast(t('discovery_greeting_failed', 'Could not send greeting. Try again.'), 'error');
         return { ok: false };
       }
-
     },
-
     [currentUser, showToast, t, userProfile, viewerUid]
-
   );
-
-
 
   const handleGift = useCallback(
     (profile) => {
@@ -160,99 +102,41 @@ export default function DiscoveryPage() {
     [openGiftPicker, viewerUid]
   );
 
-
-
   const handleNearEnd = useCallback(() => {
-
     if (hasMore && !loadingMore) loadMore();
-
   }, [hasMore, loadMore, loadingMore]);
 
-
-
   const feedHandlers = useMemo(
-
     () => ({
-
       onLike: handleLike,
-
       onGreeting: handleGreeting,
-
       onSendGift: handleGift,
-
-      onNearEnd: handleNearEnd
-
+      onNearEnd: handleNearEnd,
     }),
-
     [handleGift, handleGreeting, handleLike, handleNearEnd]
-
   );
 
-
-
   return (
+    <div className="discovery-shell discovery-shell--in-layout">
+      {!canLoad ? (
+        <div className="discovery-feed discovery-feed__empty">
+          <AppText as="p">{t('user_directory_login_required', 'Sign in to browse members.')}</AppText>
+        </div>
+      ) : loading && profiles.length === 0 ? (
+        <div className="discovery-feed discovery-feed__empty">
+          <AppText as="p">{t('loading', 'Loading…')}</AppText>
+        </div>
+      ) : (
+        <DiscoveryFeed profiles={profiles} {...feedHandlers} />
+      )}
 
-    <div className="discovery-shell">
-
-      <div className="discovery-shell__chrome discovery-shell__chrome--start">
-
-        <button
-          type="button"
-          className="discovery-icon-btn"
-          onClick={handleClose}
-          aria-label={t('close', 'Close')}
-        >
-          <LuX size={22} aria-hidden />
-        </button>
-
-      </div>
-
-
-
-      {!canLoad ?
-
-      <div className="discovery-feed discovery-feed__empty">
-
-        <AppText as="p">{t('user_directory_login_required', 'Sign in to browse members.')}</AppText>
-
-      </div> :
-
-      loading && profiles.length === 0 ?
-
-      <div className="discovery-feed discovery-feed__empty">
-
-        <AppText as="p">{t('loading', 'Loading…')}</AppText>
-
-      </div> :
-
-      <DiscoveryFeed profiles={profiles} {...feedHandlers} />
-
-      }
-
-
-
-      {loadingMore ?
-
-      <div className="discovery-feed__feedback" style={{ opacity: 0.85 }}>
-
-        {t('user_directory_load_more', 'Load more')}
-
-      </div> :
-
-      null}
-
-
-
-      <div className="discovery-shell__chrome discovery-shell__chrome--end">
-
-        <InboxHubLink className="discovery-icon-btn" tab="activity" />
-
-      </div>
+      {loadingMore ? (
+        <div className="discovery-feed__feedback" style={{ opacity: 0.85 }}>
+          {t('user_directory_load_more', 'Load more')}
+        </div>
+      ) : null}
 
       {giftModal}
-
-    </div>);
-
+    </div>
+  );
 }
-
-

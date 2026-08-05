@@ -302,6 +302,8 @@ const Layout = ({ children }) => {
   location.pathname.startsWith('/search/');
   const isSearchListRoute =
   location.pathname === '/search/list' || location.pathname.startsWith('/search/list/');
+  const isConnectMagneticRoute =
+  location.pathname === '/search' || location.pathname === '/search/';
   const isInboxMessagesActive = isMessagesHub && !isNotificationsRoute;
   const isAdminRoute = location.pathname.startsWith('/admin');
 
@@ -672,9 +674,9 @@ const Layout = ({ children }) => {
 
                 {/* Column 2 — Main content */}
                 <main
-                  className={`app-main${useChatMainLayout ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute || isStudioRoute ? ' app-main--fullscreen' : ''}${isCommunityFullscreen ? ' app-main--community-fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}${isDashboardRoute ? ' app-main--dashboard' : ''}`}>
-                    {!isSearchListRoute && !isCommunityFullscreen && <EmailVerificationBusinessBanner />}
-                    {!isSearchListRoute && !isCommunityFullscreen && <UnpublishedBusinessReminder />}
+                  className={`app-main${useChatMainLayout ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute || isStudioRoute || isConnectMagneticRoute ? ' app-main--fullscreen' : ''}${isCommunityFullscreen ? ' app-main--community-fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}${isDashboardRoute ? ' app-main--dashboard' : ''}${isConnectMagneticRoute ? ' app-main--connect' : ''}`}>
+                    {!isSearchListRoute && !isConnectMagneticRoute && !isCommunityFullscreen && <EmailVerificationBusinessBanner />}
+                    {!isSearchListRoute && !isConnectMagneticRoute && !isCommunityFullscreen && <UnpublishedBusinessReminder />}
                     {children}
                     <Suspense fallback={<AppRouteLoading variant="route" />}>
                         <Outlet />

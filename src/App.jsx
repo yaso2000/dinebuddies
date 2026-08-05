@@ -219,14 +219,6 @@ function App() {
                                             />
 
                                             <Route
-                                                path="/search"
-                                                element={
-                                                    <GuestBlockedRoute>
-                                                        <DiscoveryPage />
-                                                    </GuestBlockedRoute>
-                                                }
-                                            />
-                                            <Route
                                                 path="/search/inbox"
                                                 element={
                                                     <GuestBlockedRoute>
@@ -265,6 +257,14 @@ function App() {
 
                                                     <Route path="/business-dashboard" element={<GuestBlockedRoute><BusinessDashboard /></GuestBlockedRoute>} />
 
+                                                    <Route
+                                                        path="/search"
+                                                        element={
+                                                            <GuestBlockedRoute>
+                                                                <DiscoveryPage />
+                                                            </GuestBlockedRoute>
+                                                        }
+                                                    />
                                                     <Route path="/search/list" element={<UsersDirectory />} />
                                                     <Route path="/restaurants" element={<BusinessesDirectory />} />
                                                     <Route path="/rankings" element={<BusinessRankings />} />

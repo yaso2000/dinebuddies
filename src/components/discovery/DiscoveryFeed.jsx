@@ -5,7 +5,7 @@ import DiscoveryCard from './DiscoveryCard';
 import './discovery.css';
 import { AppText } from '../base';
 
-/** Immersive discovery feed — profile photo background + like / wave / gift. */
+/** Immersive magnetic Connect feed — one full-portrait profile at a time. */
 export default function DiscoveryFeed({
   profiles = [],
   onSkip,

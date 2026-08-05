@@ -230,10 +230,10 @@ export default function UsersDirectory() {
             <Link
               to="/search"
               className="users-directory-feed-link"
-              title={t('user_directory_feed_view', 'Swipe discovery')}>
+              title={t('user_directory_feed_view', 'Connect cards')}>
               <LuSparkles aria-hidden />
               <AppText as="span" className="users-directory-feed-link__label">
-                {t('user_directory_feed_view', 'Swipe view')}
+                {t('user_directory_feed_view', 'Card view')}
               </AppText>
             </Link>
             <InboxHubLink

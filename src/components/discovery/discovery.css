@@ -1,74 +1,60 @@
-/* Discovery feed — explicit styles (Tailwind not loaded on this route). */
+/* Connect — immersive magnetic profile card (in-layout under header + bottom nav) */
 
 .discovery-shell {
-    position: fixed;
-    inset: 0;
-    z-index: 40;
+    --discovery-pink: #ff4d9a;
+    --discovery-cyan: #2ee6ff;
+    --discovery-ink: #07070c;
+    position: relative;
+    z-index: 1;
     width: 100%;
     max-width: var(--max-width, 480px);
     margin: 0 auto;
-    background: #000;
+    background: var(--discovery-ink);
     overflow: hidden;
     touch-action: manipulation;
 }
 
-.discovery-shell__chrome {
-    position: absolute;
-    z-index: 60;
+.discovery-shell--in-layout {
+    position: relative;
+    inset: auto;
+    height: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
     display: flex;
-    gap: 0.5rem;
-}
-
-.discovery-shell__chrome--start {
-    top: max(0.75rem, env(safe-area-inset-top));
-    inset-inline-start: 1rem;
-}
-
-.discovery-shell__chrome--end {
-    top: max(0.75rem, env(safe-area-inset-top));
-    inset-inline-end: 1rem;
     flex-direction: column;
+    max-width: 100%;
+    background:
+        radial-gradient(120% 80% at 50% 0%, rgba(255, 77, 154, 0.14) 0%, transparent 55%),
+        radial-gradient(90% 70% at 80% 100%, rgba(46, 230, 255, 0.1) 0%, transparent 50%),
+        #07070c;
 }
 
-.discovery-icon-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 3.25rem;
-    height: 3.25rem;
-    border: none;
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.5);
-    color: #fff;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    text-decoration: none;
-    cursor: pointer;
-    font-size: 1.35rem;
+.app-main--connect {
+    background: #07070c !important;
 }
 
-.discovery-icon-btn svg {
-    width: 1.35em;
-    height: 1.35em;
-    flex-shrink: 0;
-}
-
-/* Connect — card/grid view (primary action in top chrome) */
-.discovery-icon-btn--cards {
-    width: 3.5rem;
-    height: 3.5rem;
-    font-size: 1.65rem;
-    background: rgba(232, 110, 46, 0.88);
-    box-shadow: 0 4px 16px rgba(232, 110, 46, 0.35);
+.app-main--fullscreen > .discovery-shell--in-layout {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
 }
 
 .discovery-feed {
     position: relative;
     width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
     height: 100%;
-    height: 100dvh;
     overflow: hidden;
-    background: #000;
+    background: transparent;
+    padding: 0.65rem 0.75rem 0.85rem;
+    box-sizing: border-box;
 }
 
 .discovery-feed__hint {
@@ -78,7 +64,7 @@
 .discovery-feed__feedback {
     position: absolute;
     left: 50%;
-    top: 33%;
+    top: 28%;
     z-index: 40;
     transform: translateX(-50%);
     padding: 0.5rem 1rem;
@@ -93,10 +79,13 @@
 
 .discovery-feed__next-bg {
     position: absolute;
-    inset: 0;
-    transform: scale(0.96);
-    opacity: 0.55;
+    inset: 0.65rem 0.75rem 0.85rem;
+    border-radius: 1.35rem;
+    transform: scale(0.965);
+    opacity: 0.4;
     pointer-events: none;
+    overflow: hidden;
+    filter: blur(2px);
 }
 
 .discovery-feed__next-bg img {
@@ -109,12 +98,13 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(0, 0, 0, 0.4);
 }
 
 .discovery-feed__empty {
     display: flex;
     height: 100%;
+    flex: 1;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -125,6 +115,7 @@
 
 .discovery-feed__empty-title {
     margin: 1rem 0 0;
+    font-family: var(--font-heading, 'Segoe UI', sans-serif);
     font-size: 1.25rem;
     font-weight: 800;
     line-height: 1.3;
@@ -143,34 +134,83 @@
     padding: 0.65rem 1.35rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(145deg, #f59e0b 0%, #e86e2e 100%);
+    background: linear-gradient(145deg, #ff4d9a 0%, #2ee6ff 120%);
     color: #fff;
     font-size: 0.9rem;
     font-weight: 700;
     cursor: pointer;
-    box-shadow: 0 4px 16px rgba(232, 110, 46, 0.35);
+    box-shadow: 0 4px 18px rgba(255, 77, 154, 0.35);
     transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
 }
 
 .discovery-feed__replay-btn:hover {
     transform: translateY(-1px);
     filter: brightness(1.05);
-    box-shadow: 0 6px 20px rgba(232, 110, 46, 0.45);
 }
 
 .discovery-feed__replay-btn:active {
     transform: scale(0.98);
 }
 
-/* Card */
+/* ── Magnetic card ── */
 .discovery-card {
     position: absolute;
-    inset: 0;
-    overflow: hidden;
-    background: #0a0a0a;
+    inset: 0.65rem 0.75rem 0.85rem;
+    overflow: visible;
+    background: transparent;
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
+}
+
+.discovery-card--magnetic {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+}
+
+.discovery-card__glow {
+    position: absolute;
+    inset: -2px;
+    border-radius: 1.45rem;
+    pointer-events: none;
+    background:
+        linear-gradient(135deg, rgba(255, 77, 154, 0.85), rgba(46, 230, 255, 0.75));
+    filter: blur(10px);
+    opacity: 0.55;
+    animation: discovery-magnetic-pulse 3.6s ease-in-out infinite;
+    z-index: 0;
+}
+
+@keyframes discovery-magnetic-pulse {
+    0%,
+    100% {
+        opacity: 0.42;
+        filter: blur(10px);
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.72;
+        filter: blur(14px);
+        transform: scale(1.012);
+    }
+}
+
+.discovery-card__frame {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 1.35rem;
+    overflow: hidden;
+    background: #0a0a0a;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow:
+        0 0 0 1px rgba(46, 230, 255, 0.22),
+        0 0 28px rgba(255, 77, 154, 0.28),
+        0 18px 40px rgba(0, 0, 0, 0.45);
 }
 
 .discovery-card__photo {
@@ -191,233 +231,164 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(
-        to top,
-        rgba(0, 0, 0, 0.94) 0%,
-        rgba(0, 0, 0, 0.72) 28%,
-        rgba(0, 0, 0, 0.28) 52%,
-        rgba(0, 0, 0, 0.08) 100%
-    );
+    background:
+        linear-gradient(
+            to top,
+            rgba(0, 0, 0, 0.88) 0%,
+            rgba(0, 0, 0, 0.45) 28%,
+            rgba(0, 0, 0, 0.08) 52%,
+            rgba(0, 0, 0, 0.35) 100%
+        );
 }
 
-.discovery-card__meta-row {
-    display: flex;
+/* Location bar — top of card */
+.discovery-card__location-bar {
+    position: absolute;
+    top: 0.85rem;
+    inset-inline: 0.85rem;
+    z-index: 12;
+    display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
-    flex-wrap: wrap;
-}
-
-.discovery-card__city {
-    padding: 0.28rem 0.65rem;
+    gap: 0.4rem;
+    max-width: calc(100% - 5.5rem);
+    padding: 0.42rem 0.75rem;
     border-radius: 999px;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(12, 14, 22, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
     color: #fff;
-    font-size: 0.78rem;
-    font-weight: 700;
-    line-height: 1.2;
-    white-space: nowrap;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
 }
 
-.discovery-card__online-badge {
-    position: static;
+.discovery-card__location-pin {
+    flex-shrink: 0;
+    color: var(--discovery-cyan);
+    font-size: 0.82rem;
+    filter: drop-shadow(0 0 6px rgba(46, 230, 255, 0.55));
+}
+
+.discovery-card__location-text {
+    font-family: var(--font-body, 'Segoe UI', sans-serif);
+    font-size: 0.82rem;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.discovery-card__online-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.25), 0 0 10px rgba(52, 211, 153, 0.7);
     flex-shrink: 0;
 }
 
-.discovery-card__info--profile {
+/* Name + age — bottom left */
+.discovery-card__identity {
     position: absolute;
-    inset-inline: 0;
-    bottom: 5.75rem;
-    z-index: 10;
-    padding: 0 1.15rem;
-    color: #fff;
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
+    inset-inline-start: 1.1rem;
+    bottom: 1.25rem;
+    z-index: 12;
+    max-width: calc(100% - 5.75rem);
     text-align: start;
 }
 
-.discovery-card__headline {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.45rem 0.65rem;
-}
-
-.discovery-card__bio {
+.discovery-card__name-line {
     margin: 0;
-    max-width: 100%;
-    font-size: 0.9rem;
-    font-weight: 500;
-    line-height: 1.4;
-    color: rgba(255, 255, 255, 0.92);
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
-}
-
-.discovery-card__name {
-    margin: 0;
-    font-size: 1.65rem;
-    font-weight: 900;
+    font-family: var(--font-heading, 'Segoe UI', sans-serif);
+    font-size: clamp(1.45rem, 5.2vw, 1.85rem);
+    font-weight: 800;
     line-height: 1.15;
     letter-spacing: -0.02em;
-    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+    color: #fff;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
 }
 
-.discovery-card__age-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.22rem 0.62rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.16);
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    font-size: 0.82rem;
-    font-weight: 800;
-    color: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-}
-
-.discovery-card__section {
+/* Vertical glass action rail — right side: Chat, Gift, Heart */
+.discovery-card__actions--rail {
+    position: absolute;
+    inset-inline-end: 0.85rem;
+    top: 50%;
+    bottom: auto;
+    inset-inline-start: auto;
+    z-index: 20;
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.85rem;
+    padding: 0;
+    transform: translateY(-50%);
 }
 
-.discovery-card__section-label {
-    margin: 0;
-    font-size: 0.68rem;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.62);
-}
-
-.discovery-card__chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-}
-
-.discovery-card__chip {
+.discovery-card__action--glass {
     display: inline-flex;
     align-items: center;
-    max-width: 100%;
-    padding: 0.32rem 0.68rem;
-    border-radius: 999px;
-    font-size: 0.74rem;
-    font-weight: 700;
-    line-height: 1.25;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-}
-
-.discovery-card__chip--reason {
-    background: rgba(139, 92, 246, 0.22);
-    border: 1px solid rgba(167, 139, 250, 0.38);
-    color: #ede9fe;
-}
-
-.discovery-card__chip--looking {
-    background: rgba(236, 72, 153, 0.22);
-    border: 1px solid rgba(244, 114, 182, 0.38);
-    color: #fce7f3;
-}
-
-.discovery-card__chip--interest {
-    background: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    color: rgba(255, 255, 255, 0.94);
-}
-
-.discovery-card__actions--ghost {
     justify-content: center;
-    gap: 1.75rem;
-    padding-inline: 1.25rem;
-}
-
-.discovery-card__action--ghost {
-    width: auto;
-    height: auto;
-    min-width: 2.75rem;
-    min-height: 2.75rem;
-    padding: 0.35rem;
-    border: none;
-    background: transparent;
-    box-shadow: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    width: 3.35rem;
+    height: 3.35rem;
+    min-width: 3.35rem;
+    min-height: 3.35rem;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    background: rgba(255, 255, 255, 0.12);
     color: #fff;
-    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.45));
+    backdrop-filter: blur(16px) saturate(170%);
+    -webkit-backdrop-filter: blur(16px) saturate(170%);
+    box-shadow:
+        0 8px 22px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
 
-.discovery-card__action--ghost:active {
+.discovery-card__action--glass:active {
     transform: scale(0.92);
 }
 
-.discovery-card__action--ghost:disabled {
+.discovery-card__action--glass:disabled {
     opacity: 0.45;
+    cursor: default;
 }
 
-.discovery-card__action--ghost.discovery-card__action--like {
-    color: rgba(255, 255, 255, 0.55);
+.discovery-card__action--chat {
+    color: #7ef0ff;
 }
 
-.discovery-card__action--ghost.discovery-card__action--like-idle {
-    color: rgba(255, 255, 255, 0.5);
-    opacity: 0.85;
+.discovery-card__action--chat.discovery-card__action--locked {
+    color: rgba(255, 255, 255, 0.72);
 }
 
-.discovery-card__action--ghost.discovery-card__action--liked {
-    color: #fb7185;
-    opacity: 1;
+.discovery-card__action--gift {
+    color: #ffd36a;
 }
 
-.discovery-card__action--ghost.discovery-card__action--liked svg {
-    fill: currentColor;
-    filter: drop-shadow(0 2px 8px rgba(244, 63, 94, 0.65));
+.discovery-card__action--like-idle {
+    color: rgba(255, 255, 255, 0.88);
 }
 
-.discovery-card__action--ghost.discovery-card__action--follow {
-    color: #93c5fd;
+.discovery-card__action--liked {
+    color: #ff5aa5;
+    border-color: rgba(255, 90, 165, 0.55);
+    background: rgba(255, 77, 154, 0.22);
+    box-shadow:
+        0 0 18px rgba(255, 77, 154, 0.45),
+        0 8px 22px rgba(0, 0, 0, 0.28);
 }
 
-.discovery-card__action--ghost.discovery-card__action--following {
-    color: #60a5fa;
-    filter: drop-shadow(0 2px 8px rgba(37, 99, 235, 0.55));
+.discovery-card__action--follow {
+    color: #9ad7ff;
 }
 
-.discovery-card__action--ghost.discovery-card__action--like:not(:disabled) svg {
-    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
-}
-
-.discovery-card__action--ghost.discovery-card__action--gift {
-    color: #fbbf24;
-    filter: drop-shadow(0 2px 8px rgba(232, 110, 46, 0.45));
-}
-
-.discovery-card__action--ghost.discovery-card__action--greeting {
-    color: #c4b5fd;
-    filter: drop-shadow(0 2px 8px rgba(124, 58, 237, 0.4));
-}
-
-.discovery-card__action--ghost.discovery-card__action--chat {
-    color: #5eead4;
-    filter: drop-shadow(0 2px 8px rgba(15, 118, 110, 0.45));
-}
-
-.discovery-card__action--ghost.discovery-card__action--greeted {
-    opacity: 0.45;
-}
-
-.discovery-card__wave-btn {
-    font-size: 1.85rem;
-    line-height: 1;
-    display: block;
+.discovery-card__action--following {
+    color: #5ec8ff;
+    border-color: rgba(46, 230, 255, 0.45);
+    background: rgba(46, 230, 255, 0.16);
 }
 
 .discovery-card__burst {
@@ -428,176 +399,59 @@
     align-items: center;
     justify-content: center;
     pointer-events: none;
+    border-radius: 1.35rem;
+    overflow: hidden;
 }
 
 .discovery-card__heart-3d {
     width: 5.5rem;
     height: 5.5rem;
-    color: #ef4444;
+    color: #ff4d9a;
     fill: currentColor;
     transform: perspective(520px) rotateX(18deg) rotateY(-8deg);
     filter:
-        drop-shadow(0 10px 18px rgba(239, 68, 68, 0.55))
-        drop-shadow(0 3px 6px rgba(0, 0, 0, 0.35))
-        drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.25));
+        drop-shadow(0 10px 18px rgba(255, 77, 154, 0.55))
+        drop-shadow(0 3px 6px rgba(0, 0, 0, 0.35));
 }
 
-.discovery-card__wave-3d {
-    font-size: 5.25rem;
-    line-height: 1;
-    display: block;
-    transform-origin: 70% 80%;
-    filter:
-        drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35))
-        drop-shadow(0 2px 4px rgba(255, 255, 255, 0.15));
-}
-
-.discovery-card__stamp {
-    display: none;
-}
-
-.discovery-card__heart-burst {
-    display: none;
-}
-
-.discovery-card__avatar {
-    display: none;
-}
-
-.discovery-card__info--minimal {
-    display: none;
-}
-
-.discovery-card__actions--row {
-    display: none;
-}
-
-.discovery-card__action:not(.discovery-card__action--ghost) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 3.5rem;
-    height: 3.5rem;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
-    backdrop-filter: blur(8px);
-    cursor: pointer;
-}
-
-.discovery-card__action:active {
-    transform: scale(0.95);
-}
-
-.discovery-card__action:disabled {
-    opacity: 0.55;
-    cursor: default;
-}
-
-.discovery-card__action:not(.discovery-card__action--ghost) {
-    display: none;
-}
-
-.discovery-card__action--like:not(.discovery-card__action--ghost),
-.discovery-card__action--greeting:not(.discovery-card__action--ghost),
-.discovery-card__action--gift:not(.discovery-card__action--ghost) {
-    display: none;
-}
-
-.discovery-card__wave {
-    font-size: 1.35rem;
-    line-height: 1;
-}
-
-.discovery-card__actions {
-    position: absolute;
-    inset-inline: 0;
-    bottom: 0;
-    z-index: 20;
-    display: flex;
-    align-items: center;
-    padding: 0 1rem max(1rem, env(safe-area-inset-bottom));
-}
-
+/* Legacy / unused discovery chrome (kept inert) */
+.discovery-shell__chrome,
+.discovery-icon-btn,
+.discovery-card__stamp,
+.discovery-card__heart-burst,
+.discovery-card__avatar,
+.discovery-card__info--minimal,
+.discovery-card__actions--row,
+.discovery-card__action:not(.discovery-card__action--glass),
 .discovery-btn-primary,
-.discovery-btn-gift {
-    display: none;
-}
-
-/* Icebreaker sheet — unused in simplified discovery UI */
-.discovery-sheet-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 80;
-    border: none;
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(2px);
-}
-
+.discovery-btn-gift,
+.discovery-sheet-backdrop,
 .discovery-sheet {
-    position: fixed;
-    inset-inline: 0;
-    bottom: 0;
-    z-index: 90;
-    width: 100%;
-    max-width: var(--max-width, 480px);
-    margin: 0 auto;
-    padding: 0.75rem 1.25rem max(1.25rem, env(safe-area-inset-bottom));
-    border-radius: 1.5rem 1.5rem 0 0;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(12, 12, 12, 0.96);
-    color: #fff;
-    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+    display: none !important;
 }
 
-.discovery-sheet__handle {
-    width: 2.5rem;
-    height: 0.25rem;
-    margin: 0 auto 1rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.28);
+@media (min-width: 768px) {
+    .discovery-shell--in-layout {
+        max-width: 440px;
+    }
+
+    .discovery-feed {
+        padding: 1rem 1rem 1.15rem;
+    }
+
+    .discovery-card,
+    .discovery-feed__next-bg {
+        inset: 1rem;
+    }
+
+    .discovery-card__name-line {
+        font-size: 1.9rem;
+    }
 }
 
-.discovery-sheet__header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin-bottom: 1.25rem;
-}
-
-.discovery-sheet__grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.75rem;
-}
-
-.discovery-sheet__item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 1rem 0.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 1rem;
-    background: rgba(255, 255, 255, 0.05);
-    color: #fff;
-    cursor: pointer;
-}
-
-.discovery-sheet__item:active {
-    background: rgba(255, 255, 255, 0.12);
-    transform: scale(0.96);
-}
-
-.discovery-sheet__emoji {
-    font-size: 1.75rem;
-    line-height: 1;
-}
-
-.discovery-sheet__label {
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-align: center;
+@media (prefers-reduced-motion: reduce) {
+    .discovery-card__glow {
+        animation: none;
+        opacity: 0.5;
+    }
 }

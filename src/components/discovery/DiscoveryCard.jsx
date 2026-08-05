@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, animate, motion, useMotionValue } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { FaComments, FaGift, FaHeart, FaUserCheck, FaUserPlus } from 'react-icons/fa';
+import { FaComments, FaGift, FaHeart, FaMapMarkerAlt, FaUserCheck, FaUserPlus } from 'react-icons/fa';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
@@ -15,27 +15,43 @@ import {
 import { showLikeCooldownWarning } from '../../utils/connectionActionCooldown';
 import { isFollowing as checkIsFollowing } from '../../utils/followHelpers';
 import { checkCanMessage } from '../../utils/chatHelpers';
-import { profileShowsLikeButton, connectionKindToCelebrationType, tryCelebrateConnectionComplete } from '../../utils/connectConnection';
+import {
+  profileShowsLikeButton,
+  connectionKindToCelebrationType,
+} from '../../utils/connectConnection';
 import { useDiscoveryActionStatus } from '../../hooks/useDiscoveryActionStatus';
 import { useCanMessageMember } from '../../hooks/useCanMessageMember';
 import { useMatchCelebration } from '../../context/MatchCelebrationContext';
-import OnlineStatusBadge from '../profile/OnlineStatusBadge';
 import { useUserPresence } from '../../hooks/usePresence';
 import './discovery.css';
-import { AppText } from "../base";
+import { AppText } from '../base';
 
 const SWIPE_X_SKIP_THRESHOLD = 100;
 const BURST_MS = 1400;
 const DOUBLE_ACTIVATE_MS = 320;
 const DOUBLE_ACTIVATE_PX = 22;
 
+function formatAgeLabel(profile) {
+  const raw =
+    profile?.ageCategory ||
+    profile?.user?.ageRange ||
+    profile?.user?.ageCategory ||
+    profile?.user?.age ||
+    '';
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  // Prefer a leading number when present ("35", "35-44" → "35")
+  const match = text.match(/\d{1,3}/);
+  return match ? match[0] : text;
+}
+
 export default function DiscoveryCard({
   profile,
   onSkip,
   onLike,
   onSendGift,
-  onGreeting,
-  isTop = true
+  onGreeting: _onGreeting,
+  isTop = true,
 }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -57,7 +73,7 @@ export default function DiscoveryCard({
     viewerProfile: viewerProfile,
     targetProfile: targetUser,
   });
-  const { liked, greetedToday } = useDiscoveryActionStatus(viewerUid, profile?.id);
+  const { liked } = useDiscoveryActionStatus(viewerUid, profile?.id);
 
   const x = useMotionValue(0);
   const exitHandledRef = useRef(false);
@@ -66,12 +82,12 @@ export default function DiscoveryCard({
   const lastActivateRef = useRef({ at: 0, x: 0, y: 0 });
 
   const [likeBusy, setLikeBusy] = useState(false);
-  const [greetingBusy, setGreetingBusy] = useState(false);
   const [likeBurst, setLikeBurst] = useState(false);
-  const [waveBurst, setWaveBurst] = useState(false);
   const [canChat, setCanChat] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
   const isFollowingUser = checkIsFollowing(viewerFollowing, profile?.id);
+  const ageLabel = formatAgeLabel(profile);
+  const locationLabel = [profile?.city, profile?.country].filter(Boolean).join(', ') || profile?.city || '';
 
   const refreshCanChat = useCallback(async () => {
     if (!viewerUid || !profile?.id) return;
@@ -108,13 +124,13 @@ export default function DiscoveryCard({
   }, []);
 
   const resetPosition = useCallback(() => {
-    animate(x, 0, { type: 'spring', stiffness: 420, damping: 32 });
+    animate(x, 0, { type: 'spring', stiffness: 520, damping: 28 });
   }, [x]);
 
   const triggerSkip = useCallback(() => {
     if (exitHandledRef.current) return;
     exitHandledRef.current = true;
-    animate(x, -520, { duration: 0.22, ease: 'easeIn' }).then(() => {
+    animate(x, -560, { duration: 0.22, ease: 'easeIn' }).then(() => {
       onSkip?.(profile);
     });
   }, [onSkip, profile, x]);
@@ -135,6 +151,7 @@ export default function DiscoveryCard({
       triggerSkip();
       return;
     }
+    // Magnetic snap back into place
     resetPosition();
   };
 
@@ -261,18 +278,6 @@ export default function DiscoveryCard({
     }
   };
 
-  const handleGreeting = async (e) => {
-    e.stopPropagation();
-    if (!isTop || greetingBusy || greetedToday) return;
-    setGreetingBusy(true);
-    triggerBurst(setWaveBurst);
-    try {
-      await onGreeting?.(profile);
-    } finally {
-      setGreetingBusy(false);
-    }
-  };
-
   const handleGift = (e) => {
     e.stopPropagation();
     if (!isTop) return;
@@ -282,138 +287,141 @@ export default function DiscoveryCard({
   const handleOpenChat = (e) => {
     e.stopPropagation();
     if (!profile?.id) return;
+    if (!canChat) {
+      showToast(
+        t(
+          'discovery_chat_locked',
+          useDatingLike
+            ? 'Like each other to unlock chat.'
+            : 'Follow each other to unlock chat.'
+        ),
+        'info'
+      );
+      return;
+    }
     navigate(`/chat/${profile.id}`);
   };
 
+  const identityLine = ageLabel ? `${profile.name}, ${ageLabel}` : profile.name;
+
   return (
     <motion.article
-      className="discovery-card"
+      className="discovery-card discovery-card--magnetic"
       style={{ x, zIndex: isTop ? 2 : 1, touchAction: 'pan-y' }}
       drag={isTop ? 'x' : false}
       dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.9}
+      dragElastic={0.85}
       dragMomentum={false}
+      initial={isTop ? { scale: 0.92, opacity: 0.65 } : false}
+      animate={isTop ? { scale: 1, opacity: 1 } : undefined}
+      transition={{ type: 'spring', stiffness: 380, damping: 26 }}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onPointerUp={handleCardPointerUp}
       title={isTop ? t('discovery_double_tap_next', 'Double-click or double-tap for next profile') : undefined}
-      aria-label={isTop ? t('discovery_double_tap_next', 'Double-click or double-tap for next profile') : undefined}>
+      aria-label={
+        isTop
+          ? t('discovery_double_tap_next', 'Double-click or double-tap for next profile')
+          : undefined
+      }
+    >
+      <div className="discovery-card__glow" aria-hidden />
 
-      <img
-        src={profile.profilePhoto}
-        alt=""
-        className="discovery-card__photo discovery-card__photo--profile"
-        draggable={false} />
+      <div className="discovery-card__frame">
+        <img
+          src={profile.profilePhoto}
+          alt=""
+          className="discovery-card__photo discovery-card__photo--profile"
+          draggable={false}
+        />
 
-      <div className="discovery-card__gradient" aria-hidden />
+        <div className="discovery-card__gradient" aria-hidden />
 
-      <div className="discovery-card__info discovery-card__info--profile">
-        <div className="discovery-card__meta-row">
-          {profile.city ? (
-            <AppText as="span" className="discovery-card__city">
-              {profile.city}
+        {locationLabel ? (
+          <div className="discovery-card__location-bar">
+            <FaMapMarkerAlt className="discovery-card__location-pin" aria-hidden />
+            <AppText as="span" className="discovery-card__location-text">
+              {locationLabel}
             </AppText>
-          ) : null}
-          <OnlineStatusBadge
-            isOnline={isOnline}
-            className="discovery-card__online-badge"
-            size="sm"
-            showLabel={false}
-          />
-        </div>
-        <div className="discovery-card__headline">
-          <AppText as="h2" className="discovery-card__name">{profile.name}</AppText>
-        </div>
-        {profile.bio ? (
-          <AppText as="p" className="discovery-card__bio">
-            {profile.bio}
-          </AppText>
+            {isOnline ? (
+              <AppText as="span" className="discovery-card__online-dot" aria-label={t('online', 'Online')} />
+            ) : null}
+          </div>
         ) : null}
-      </div>
 
-      <div className="discovery-card__actions discovery-card__actions--ghost">
-        {useDatingLike ? (
-        <button
-          type="button"
-          className={`discovery-card__action discovery-card__action--ghost discovery-card__action--like${liked ? ' discovery-card__action--liked' : ' discovery-card__action--like-idle'}`}
-          disabled={likeBusy}
-          aria-label={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
-          aria-pressed={liked}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={handleToggleLike}>
-          <FaHeart size={26} />
-        </button>
-        ) : (
-        <button
-          type="button"
-          className={`discovery-card__action discovery-card__action--ghost discovery-card__action--follow${isFollowingUser ? ' discovery-card__action--following' : ''}`}
-          disabled={followBusy}
-          aria-label={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
-          aria-pressed={isFollowingUser}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={handleFollow}>
-          {isFollowingUser ? <FaUserCheck size={24} /> : <FaUserPlus size={24} />}
-        </button>
-        )}
-        <button
-          type="button"
-          className={`discovery-card__action discovery-card__action--ghost discovery-card__action--greeting${greetedToday ? ' discovery-card__action--greeted' : ''}`}
-          disabled={greetingBusy || greetedToday}
-          aria-label={t('user_directory_greeting', 'Wave hi')}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={handleGreeting}>
-          <AppText as="span" className="discovery-card__wave-btn" aria-hidden>👋</AppText>
-        </button>
-        <button
-          type="button"
-          className="discovery-card__action discovery-card__action--ghost discovery-card__action--gift"
-          aria-label={t('user_directory_send_gift', 'Send gift')}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={handleGift}>
-          <FaGift size={24} />
-        </button>
-        {canChat ?
-        <button
-          type="button"
-          className="discovery-card__action discovery-card__action--ghost discovery-card__action--chat"
-          aria-label={t('chat', 'Chat')}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={handleOpenChat}>
-          <FaComments size={24} />
-        </button> :
-        null}
+        <div className="discovery-card__identity">
+          <AppText as="h2" className="discovery-card__name-line">
+            {identityLine}
+          </AppText>
+        </div>
+
+        <div className="discovery-card__actions discovery-card__actions--rail">
+          <button
+            type="button"
+            className={`discovery-card__action discovery-card__action--glass discovery-card__action--chat${
+              canChat ? '' : ' discovery-card__action--locked'
+            }`}
+            aria-label={t('chat', 'Chat')}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleOpenChat}
+          >
+            <FaComments size={22} />
+          </button>
+
+          <button
+            type="button"
+            className="discovery-card__action discovery-card__action--glass discovery-card__action--gift"
+            aria-label={t('user_directory_send_gift', 'Send gift')}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleGift}
+          >
+            <FaGift size={22} />
+          </button>
+
+          {useDatingLike ? (
+            <button
+              type="button"
+              className={`discovery-card__action discovery-card__action--glass discovery-card__action--like${
+                liked ? ' discovery-card__action--liked' : ' discovery-card__action--like-idle'
+              }`}
+              disabled={likeBusy}
+              aria-label={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
+              aria-pressed={liked}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleToggleLike}
+            >
+              <FaHeart size={22} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`discovery-card__action discovery-card__action--glass discovery-card__action--follow${
+                isFollowingUser ? ' discovery-card__action--following' : ''
+              }`}
+              disabled={followBusy}
+              aria-label={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
+              aria-pressed={isFollowingUser}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleFollow}
+            >
+              {isFollowingUser ? <FaUserCheck size={22} /> : <FaUserPlus size={22} />}
+            </button>
+          )}
+        </div>
       </div>
 
       <AnimatePresence>
-        {likeBurst ?
-        <motion.div
-          className="discovery-card__burst discovery-card__burst--heart"
-          initial={{ opacity: 0, scale: 0.35 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 1.08 }}
-          transition={{ duration: 0.28, ease: 'easeOut' }}>
-          <FaHeart className="discovery-card__heart-3d" aria-hidden />
-        </motion.div> :
-        null}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {waveBurst ?
-        <motion.div
-          className="discovery-card__burst discovery-card__burst--wave"
-          initial={{ opacity: 0, scale: 0.45 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 1.05 }}
-          transition={{ duration: 0.24, ease: 'easeOut' }}>
-          <motion.span
-            className="discovery-card__wave-3d"
-            aria-hidden
-            animate={{ rotate: [-18, 18, -14, 14, -8, 8, 0] }}
-            transition={{ duration: 0.85, ease: 'easeInOut' }}>
-            👋
-          </motion.span>
-        </motion.div> :
-        null}
+        {likeBurst ? (
+          <motion.div
+            className="discovery-card__burst discovery-card__burst--heart"
+            initial={{ opacity: 0, scale: 0.35 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.08 }}
+            transition={{ duration: 0.28, ease: 'easeOut' }}
+          >
+            <FaHeart className="discovery-card__heart-3d" aria-hidden />
+          </motion.div>
+        ) : null}
       </AnimatePresence>
     </motion.article>
   );
