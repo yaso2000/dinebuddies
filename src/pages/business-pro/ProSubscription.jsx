@@ -13,6 +13,7 @@ import {
   PAYPAL_CURRENCY,
   PAYPAL_TEST_MODE,
 } from '../../config/paypalCommerce';
+import PayPalScriptStatus from '../../components/PayPalScriptGate';
 import PayPalBusinessPlanButton from '../../components/PayPalBusinessPlanButton';
 import {
   BUSINESS_FREE_PLAN_FEATURE_KEYS,
@@ -220,6 +221,7 @@ const ProSubscription = () => {
           null}
           {paymentMethod === 'paypal' && PAYPAL_CLIENT_CONFIGURED ?
           <PayPalScriptProvider options={payPalScriptOptions}>
+            <PayPalScriptStatus />
             <PayPalBusinessPlanButton
               disabled={loading === 'paid'}
               onSuccess={() => window.location.reload()}

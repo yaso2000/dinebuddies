@@ -152,7 +152,7 @@ async function main() {
     // Sync client PayPal vars from functions/.env if missing
     let clientContent = existsSync(clientEnvPath) ? readFileSync(clientEnvPath, 'utf8') : '';
     clientContent = setEnvLine(clientContent, 'VITE_PAYPAL_CLIENT_ID', paypalId);
-    clientContent = setEnvLine(clientContent, 'VITE_PAYPAL_CURRENCY', fn.PAYPAL_CURRENCY || 'USD');
+    clientContent = setEnvLine(clientContent, 'VITE_PAYPAL_CURRENCY', fn.PAYPAL_CURRENCY || 'AUD');
     clientContent = setEnvLine(clientContent, 'VITE_PAYPAL_MODE', 'live');
     clientContent = setEnvLine(clientContent, 'VITE_PAYPAL_TEST_MODE', 'false');
     if (!pk) clientContent = setEnvLine(clientContent, 'VITE_STRIPE_PUBLISHABLE_KEY', pk);
@@ -178,7 +178,7 @@ async function main() {
         ...process.env,
         VITE_STRIPE_PUBLISHABLE_KEY: pk,
         VITE_PAYPAL_CLIENT_ID: paypalId,
-        VITE_PAYPAL_CURRENCY: fn.PAYPAL_CURRENCY || 'USD',
+        VITE_PAYPAL_CURRENCY: fn.PAYPAL_CURRENCY || 'AUD',
         VITE_PAYPAL_MODE: 'live',
         VITE_PAYPAL_TEST_MODE: 'false',
         NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --use-system-ca`.trim(),

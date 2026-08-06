@@ -6,6 +6,7 @@ import app from '../firebase/config';
 import { useToast } from '../context/ToastContext';
 import { PAYPAL_CURRENCY, PAYPAL_MODE } from '../config/paypalCommerce';
 import { paypalCallableErrorMessage } from '../utils/paypalCallableError';
+import { PayPalReady } from './PayPalScriptGate';
 
 const FUNCTIONS_REGION = 'us-central1';
 
@@ -16,6 +17,7 @@ export default function PayPalBusinessPlanButton({ disabled = false, onSuccess }
   const createOrderFailedRef = useRef(false);
 
   return (
+    <PayPalReady fallback={<div style={{ width: '100%', minHeight: 45 }} aria-hidden />}>
     <div style={{ width: '100%', opacity: disabled ? 0.7 : 1 }}>
       <PayPalButtons
         // Do not set fundingSource — if that source is ineligible PayPal renders nothing.
@@ -111,5 +113,6 @@ export default function PayPalBusinessPlanButton({ disabled = false, onSuccess }
         }}
       />
     </div>
+    </PayPalReady>
   );
 }

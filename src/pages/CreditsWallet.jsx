@@ -31,6 +31,7 @@ import {
 import StripeTestModeBanner from '../components/StripeTestModeBanner';
 import GooglePlayCommerceBanner from '../components/GooglePlayCommerceBanner';
 import PayPalCreditsButton from '../components/PayPalCreditsButton';
+import PayPalScriptStatus from '../components/PayPalScriptGate';
 import { useCreditsPurchase } from '../hooks/useCreditsPurchase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../firebase/config';
@@ -89,7 +90,6 @@ export default function CreditsWallet() {
       components: 'buttons',
       // Hide card/credit rails that need extra merchant enablement; keep PayPal wallet visible.
       disableFunding: 'card,credit,paylater',
-      'data-namespace': 'dinebuddies_paypal_credits',
     }),
     []
   );
@@ -389,6 +389,7 @@ export default function CreditsWallet() {
                         ) : null}
                         {showPayPalOnWeb ? (
                           <PayPalScriptProvider options={payPalScriptOptions}>
+                            <PayPalScriptStatus />
                             {packGrid}
                             <button
                               type="button"
