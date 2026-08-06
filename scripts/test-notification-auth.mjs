@@ -179,6 +179,17 @@ assert.doesNotMatch(
     assert.equal(picked.matchCount, 2);
 }
 
+// --- placeId: once set, client owner updates cannot replace it ---
+{
+    const rules = readFileSync(join(root, 'firestore.rules'), 'utf8');
+    assert.match(rules, /function businessPlaceIdWriteOk/, 'rules must define businessPlaceIdWriteOk');
+    assert.match(
+        rules,
+        /businessPlaceIdWriteOk\(\)/,
+        'owner user updates must gate businessInfo.placeId via businessPlaceIdWriteOk'
+    );
+}
+
 // --- special_offers: server create; updates keep ownership bind ---
 {
     const rules = readFileSync(join(root, 'firestore.rules'), 'utf8');
