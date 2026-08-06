@@ -29,8 +29,11 @@ export function formatInvitationGenderLabel(t, invitation) {
 }
 
 export function formatInvitationAgeLabel(t, ageRange) {
-  if (!ageRange) return t('age_any', 'Any age');
-  return `${t('age_range_preference', 'Age')}: ${ageRange}`;
+  const raw = String(ageRange || '').trim();
+  if (!raw || raw.toLowerCase() === 'custom' || raw.toLowerCase() === 'any') {
+    return t('age_any', 'Any age');
+  }
+  return `${t('age_range_preference', 'Age')}: ${raw}`;
 }
 
 export function formatInvitationDistanceLabel(t, distanceKm) {
