@@ -43,6 +43,7 @@ const ProSubscription = () => {
       intent: 'capture',
       components: 'buttons',
       disableFunding: 'card,credit,paylater',
+      enableFunding: 'paypal',
     }),
     []
   );

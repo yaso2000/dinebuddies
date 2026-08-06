@@ -89,6 +89,8 @@ export default function CreditsWallet() {
       components: 'buttons',
       // Card / Pay Later need extra PayPal merchant enablement; wallet PayPal is enough.
       disableFunding: 'card,credit,paylater',
+      // Prefer wallet button; PayPalCreditsButton also sets fundingSource="paypal".
+      enableFunding: 'paypal',
       'data-namespace': 'dinebuddies_paypal_credits',
     }),
     []

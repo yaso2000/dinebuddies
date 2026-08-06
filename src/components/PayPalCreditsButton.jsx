@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PayPalButtons } from '@paypal/react-paypal-js';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../firebase/config';
 import { useToast } from '../context/ToastContext';
-import { PAYPAL_MODE } from '../config/paypalCommerce';
+import { PAYPAL_CURRENCY, PAYPAL_MODE } from '../config/paypalCommerce';
 import { paypalCallableErrorMessage } from '../utils/paypalCallableError';
 
 const FUNCTIONS_REGION = 'us-central1';
@@ -13,12 +13,15 @@ export default function PayPalCreditsButton({ pack, disabled = false }) {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
+  const createOrderFailedRef = useRef(false);
 
   return (
     <div style={{ width: '100%', opacity: disabled ? 0.7 : 1 }}>
       <PayPalButtons
+        // Wallet PayPal only — card/guest checkout needs extra merchant enablement.
+        fundingSource="paypal"
         disabled={disabled || busy}
-        forceReRender={[pack.id, disabled]}
+        forceReRender={[pack.id, disabled, PAYPAL_CURRENCY]}
         style={{
           layout: 'vertical',
           shape: 'pill',
@@ -28,12 +31,17 @@ export default function PayPalCreditsButton({ pack, disabled = false }) {
         }}
         createOrder={async () => {
           setBusy(true);
+          createOrderFailedRef.current = false;
           try {
             const fn = httpsCallable(
               getFunctions(app, FUNCTIONS_REGION),
               'createPayPalCreditsOrder'
             );
-            const result = await fn({ packageId: pack.id, clientMode: PAYPAL_MODE });
+            const result = await fn({
+              packageId: pack.id,
+              clientMode: PAYPAL_MODE,
+              currency: PAYPAL_CURRENCY,
+            });
             const orderId = result.data?.orderId;
             if (!orderId) {
               throw new Error(
@@ -42,6 +50,7 @@ export default function PayPalCreditsButton({ pack, disabled = false }) {
             }
             return orderId;
           } catch (error) {
+            createOrderFailedRef.current = true;
             console.error('[PayPalCreditsButton/createOrder]', error);
             showToast(
               paypalCallableErrorMessage(
@@ -115,6 +124,11 @@ export default function PayPalCreditsButton({ pack, disabled = false }) {
         onError={(error) => {
           console.error('[PayPalCreditsButton/onError]', error);
           setBusy(false);
+          // createOrder already toasted the actionable Functions/PayPal message.
+          if (createOrderFailedRef.current) {
+            createOrderFailedRef.current = false;
+            return;
+          }
           showToast(
             paypalCallableErrorMessage(
               error,

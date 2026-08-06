@@ -2,7 +2,8 @@ const clientId = String(import.meta.env.VITE_PAYPAL_CLIENT_ID || '').trim();
 
 export const PAYPAL_CLIENT_ID = clientId;
 export const PAYPAL_CLIENT_CONFIGURED = Boolean(clientId);
-export const PAYPAL_CURRENCY = String(import.meta.env.VITE_PAYPAL_CURRENCY || 'USD')
+// AU PayPal merchants commonly receive AUD; USD orders often fail business validation.
+export const PAYPAL_CURRENCY = String(import.meta.env.VITE_PAYPAL_CURRENCY || 'AUD')
   .trim()
   .toUpperCase();
 

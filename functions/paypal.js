@@ -94,7 +94,33 @@ function paypalClientSecret() {
 }
 
 function paypalCurrency() {
-    return String(process.env.PAYPAL_CURRENCY || 'USD').trim().toUpperCase();
+    // AU PayPal business accounts often cannot receive USD until enabled.
+    return String(process.env.PAYPAL_CURRENCY || 'AUD').trim().toUpperCase();
+}
+
+/** Prefer the currency the frontend SDK loaded with so order + buttons stay aligned. */
+function resolveOrderCurrency(clientCurrency) {
+    const fromClient = String(clientCurrency || '')
+        .trim()
+        .toUpperCase();
+    if (/^[A-Z]{3}$/.test(fromClient)) return fromClient;
+    return paypalCurrency();
+}
+
+function enhancePayPalCreateFailure(data, currency) {
+    const base = formatPayPalApiFailure(data, 'Could not create PayPal order.');
+    const issue = String(data?.details?.[0]?.issue || '').toUpperCase();
+    const message = String(data?.message || '').toLowerCase();
+    const currencyHint =
+        issue.includes('CURRENCY') ||
+        message.includes('business validation') ||
+        message.includes('semantically incorrect');
+    if (!currencyHint) return base;
+    return (
+        `${base} Currency tried: ${currency}. ` +
+        `If this PayPal business account is Australian, set PAYPAL_CURRENCY=AUD ` +
+        `(and Vercel VITE_PAYPAL_CURRENCY=AUD), enable that currency in PayPal, then redeploy Functions.`
+    );
 }
 
 function assertPayPalConfigured() {
@@ -522,6 +548,7 @@ exports.createPayPalCreditsOrder = functions.https.onCall(async (data, context) 
 
     const userId = context.auth.uid;
     const clientMode = normalizePayPalMode(data?.clientMode);
+    const currency = resolveOrderCurrency(data?.currency);
     const orderPayload = {
         intent: 'CAPTURE',
         purchase_units: [
@@ -534,7 +561,7 @@ exports.createPayPalCreditsOrder = functions.https.onCall(async (data, context) 
                     credits: def.credits,
                 }),
                 amount: {
-                    currency_code: paypalCurrency(),
+                    currency_code: currency,
                     value: getCreditPackagePrice(packageId),
                 },
             },
@@ -553,10 +580,10 @@ exports.createPayPalCreditsOrder = functions.https.onCall(async (data, context) 
     });
 
     if (!result.ok || !result.data?.id) {
-        console.error('PayPal order create error:', result.status, result.data);
+        console.error('PayPal order create error:', result.status, result.data, { currency });
         throw new functions.https.HttpsError(
             'failed-precondition',
-            formatPayPalApiFailure(result.data, 'Could not create PayPal order.')
+            enhancePayPalCreateFailure(result.data, currency)
         );
     }
 
@@ -565,7 +592,7 @@ exports.createPayPalCreditsOrder = functions.https.onCall(async (data, context) 
         kind: 'credits',
         packageId,
         credits: def.credits,
-        currency: paypalCurrency(),
+        currency,
         amount: getCreditPackagePrice(packageId),
     });
 
@@ -640,6 +667,7 @@ exports.createPayPalBusinessPlanOrder = functions.https.onCall(async (data, cont
 
     const planId = String(data?.planId || 'paid').trim();
     const clientMode = normalizePayPalMode(data?.clientMode);
+    const currency = resolveOrderCurrency(data?.currency);
     const orderPayload = {
         intent: 'CAPTURE',
         purchase_units: [
@@ -648,7 +676,7 @@ exports.createPayPalBusinessPlanOrder = functions.https.onCall(async (data, cont
                 description: 'DineBuddies Paid Business — 1 month',
                 custom_id: buildPayPalBusinessPlanCustomId({ userId, planId }),
                 amount: {
-                    currency_code: paypalCurrency(),
+                    currency_code: currency,
                     value: getBusinessPlanPrice(),
                 },
             },
@@ -667,10 +695,12 @@ exports.createPayPalBusinessPlanOrder = functions.https.onCall(async (data, cont
     });
 
     if (!result.ok || !result.data?.id) {
-        console.error('PayPal business plan order create error:', result.status, result.data);
+        console.error('PayPal business plan order create error:', result.status, result.data, {
+            currency,
+        });
         throw new functions.https.HttpsError(
             'failed-precondition',
-            formatPayPalApiFailure(result.data, 'Could not create PayPal order.')
+            enhancePayPalCreateFailure(result.data, currency)
         );
     }
 
@@ -678,7 +708,7 @@ exports.createPayPalBusinessPlanOrder = functions.https.onCall(async (data, cont
         userId,
         kind: 'business_plan',
         planId,
-        currency: paypalCurrency(),
+        currency,
         amount: getBusinessPlanPrice(),
     });
 
@@ -687,7 +717,7 @@ exports.createPayPalBusinessPlanOrder = functions.https.onCall(async (data, cont
         status: result.data.status || 'CREATED',
         planId,
         amount: getBusinessPlanPrice(),
-        currency: paypalCurrency(),
+        currency,
     };
 });
 

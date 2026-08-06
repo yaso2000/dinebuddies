@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PayPalButtons } from '@paypal/react-paypal-js';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../firebase/config';
 import { useToast } from '../context/ToastContext';
-import { PAYPAL_MODE } from '../config/paypalCommerce';
+import { PAYPAL_CURRENCY, PAYPAL_MODE } from '../config/paypalCommerce';
 import { paypalCallableErrorMessage } from '../utils/paypalCallableError';
 
 const FUNCTIONS_REGION = 'us-central1';
@@ -13,12 +13,14 @@ export default function PayPalBusinessPlanButton({ disabled = false, onSuccess }
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
+  const createOrderFailedRef = useRef(false);
 
   return (
     <div style={{ width: '100%', opacity: disabled ? 0.7 : 1 }}>
       <PayPalButtons
+        fundingSource="paypal"
         disabled={disabled || busy}
-        forceReRender={[disabled]}
+        forceReRender={[disabled, PAYPAL_CURRENCY]}
         style={{
           layout: 'vertical',
           shape: 'pill',
@@ -28,12 +30,17 @@ export default function PayPalBusinessPlanButton({ disabled = false, onSuccess }
         }}
         createOrder={async () => {
           setBusy(true);
+          createOrderFailedRef.current = false;
           try {
             const fn = httpsCallable(
               getFunctions(app, FUNCTIONS_REGION),
               'createPayPalBusinessPlanOrder'
             );
-            const result = await fn({ planId: 'paid', clientMode: PAYPAL_MODE });
+            const result = await fn({
+              planId: 'paid',
+              clientMode: PAYPAL_MODE,
+              currency: PAYPAL_CURRENCY,
+            });
             const orderId = result.data?.orderId;
             if (!orderId) {
               throw new Error(
@@ -42,6 +49,7 @@ export default function PayPalBusinessPlanButton({ disabled = false, onSuccess }
             }
             return orderId;
           } catch (error) {
+            createOrderFailedRef.current = true;
             console.error('[PayPalBusinessPlanButton/createOrder]', error);
             showToast(
               paypalCallableErrorMessage(
@@ -91,6 +99,10 @@ export default function PayPalBusinessPlanButton({ disabled = false, onSuccess }
         onError={(error) => {
           console.error('[PayPalBusinessPlanButton/onError]', error);
           setBusy(false);
+          if (createOrderFailedRef.current) {
+            createOrderFailedRef.current = false;
+            return;
+          }
           showToast(
             t('paypal_checkout_error', 'Something went wrong with PayPal checkout.'),
             'error'
