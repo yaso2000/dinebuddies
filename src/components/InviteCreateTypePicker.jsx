@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaChevronRight, FaGlobe, FaHeart, FaLock } from 'react-icons/fa';
+import { FaChevronRight, FaGlobe, FaHeart, FaLock, FaMicrophone } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { AppText } from './base';
 import { useInviteCreateNavigation } from '../hooks/useInviteCreateNavigation';
@@ -17,7 +17,7 @@ export function inviteCreateTypeSubtitle(t, venueName) {
 
 /**
  * Canonical invitation-type picker (public / social / private).
- * Stage creation lives outside this list — it is not an invitation.
+ * Stage is optional — show on mobile + sheet only; desktop keeps a separate Open Stage nav item.
  * @param {'selector' | 'sheet'} variant
  */
 export default function InviteCreateTypePicker({
@@ -26,13 +26,16 @@ export default function InviteCreateTypePicker({
   businessId = null,
   onAfterNavigate = null,
   className = '',
+  includeStage = false,
 }) {
   const { t } = useTranslation();
-  const { goCreate, publicGateChecking } = useInviteCreateNavigation({
+  const { goCreate, publicGateChecking, activeHostedStage } = useInviteCreateNavigation({
     navigationState,
     businessId,
     onAfterNavigate,
   });
+
+  const hasLiveStage = Boolean(activeHostedStage?.id);
 
   const options = [
     {
@@ -62,6 +65,28 @@ export default function InviteCreateTypePicker({
       title: t('invite_create_private_title'),
       desc: t('invite_create_private_desc'),
     },
+    ...(includeStage
+      ? [
+          {
+            kind: 'stage',
+            className: 'social',
+            sheetIconClass: 'business-create-option__icon--private',
+            icon: FaMicrophone,
+            title: hasLiveStage
+              ? t('invite_enter_stage_title', 'Enter Stage')
+              : t('invite_create_stage_title', 'Stage'),
+            desc: hasLiveStage
+              ? t(
+                  'invite_enter_stage_desc',
+                  'You already have a live Stage. Tap to enter — it stays open for 24 hours.'
+                )
+              : t(
+                  'invite_create_stage_desc',
+                  'Open a free Stage for 24 hours. Guests are optional.'
+                ),
+          },
+        ]
+      : []),
   ];
 
   if (variant === 'sheet') {

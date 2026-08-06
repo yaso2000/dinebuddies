@@ -843,6 +843,7 @@ const Layout = ({ children }) => {
                         </div>
                         <InviteCreateTypePicker
                           variant="sheet"
+                          includeStage={!isDesktopShell}
                           onAfterNavigate={closeInviteCreate}
                         />
                     </div>
