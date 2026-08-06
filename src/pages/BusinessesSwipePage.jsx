@@ -20,7 +20,7 @@ export default function BusinessesSwipePage() {
   );
 
   return (
-    <div className="discovery-shell discovery-shell--in-layout">
+    <div className="discovery-shell discovery-shell--in-layout discovery-shell--partners">
       {loading && items.length === 0 ? (
         <div className="discovery-feed discovery-feed__empty">
           <AppText as="p">{t('loading', 'Loading…')}</AppText>

@@ -310,7 +310,7 @@ export default function DiscoveryCard({
 
   return (
     <motion.article
-      className="discovery-card discovery-card--magnetic"
+      className="discovery-card discovery-card--magnetic discovery-card--connect"
       style={{ x, zIndex: isTop ? 2 : 1, touchAction: 'pan-y' }}
       drag={isTop ? 'x' : false}
       dragConstraints={{ left: 0, right: 0 }}

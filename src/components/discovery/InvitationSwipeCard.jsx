@@ -37,10 +37,19 @@ export default function InvitationSwipeCard({ item, isTop = true, onSkip, listPa
   const [joining, setJoining] = useState(false);
 
   const inv = item?.raw || {};
-  const { x, handleDragStart, handleDragEnd, handleCardPointerUp } = useMagneticCardDrag({
+  const {
+    styleMotion,
+    drag,
+    dragConstraints,
+    touchAction,
+    handleDragStart,
+    handleDragEnd,
+    handleCardPointerUp,
+  } = useMagneticCardDrag({
     isTop,
     onSkip,
     item,
+    axis: 'y',
   });
 
   const joined = inv.joined || [];
@@ -166,10 +175,10 @@ export default function InvitationSwipeCard({ item, isTop = true, onSkip, listPa
 
   return (
     <motion.article
-      className="discovery-card discovery-card--magnetic discovery-card--entity"
-      style={{ x, zIndex: isTop ? 2 : 1, touchAction: 'pan-y' }}
-      drag={isTop ? 'x' : false}
-      dragConstraints={{ left: 0, right: 0 }}
+      className="discovery-card discovery-card--magnetic discovery-card--entity discovery-card--invite"
+      style={{ ...styleMotion, zIndex: isTop ? 2 : 1, touchAction }}
+      drag={drag}
+      dragConstraints={dragConstraints}
       dragElastic={0.85}
       dragMomentum={false}
       initial={isTop ? { scale: 0.92, opacity: 0.65 } : false}
@@ -178,6 +187,11 @@ export default function InvitationSwipeCard({ item, isTop = true, onSkip, listPa
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onPointerUp={handleCardPointerUp}
+      title={
+        isTop
+          ? t('invitations_swipe_hint', 'Swipe up or down for next · double-tap to skip')
+          : undefined
+      }
     >
       <div className="discovery-card__glow" aria-hidden />
       <div className="discovery-card__frame">

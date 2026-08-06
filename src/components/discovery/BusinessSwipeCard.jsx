@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
@@ -36,10 +36,24 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
   const [inviteSelectorState, setInviteSelectorState] = useState(null);
 
   const res = item?.raw || {};
-  const { x, handleDragStart, handleDragEnd, handleCardPointerUp } = useMagneticCardDrag({
+  const openProfile = useCallback(() => {
+    navigate(item.href || `/business/${res.id}`);
+  }, [item.href, navigate, res.id]);
+
+  const {
+    styleMotion,
+    drag,
+    dragConstraints,
+    touchAction,
+    handleDragStart,
+    handleDragEnd,
+    handleCardPointerUp,
+  } = useMagneticCardDrag({
     isTop,
     onSkip,
     item,
+    axis: 'y',
+    onPhotoActivate: openProfile,
   });
 
   const joinedCommunities = invitationUser?.joinedCommunities || currentUser?.joinedCommunities || [];
@@ -84,11 +98,6 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
   const handleClose = (e) => {
     e.stopPropagation();
     navigate(listPath, { replace: true });
-  };
-
-  const handleOpen = (e) => {
-    e.stopPropagation();
-    navigate(item.href || `/business/${res.id}`);
   };
 
   const handleJoin = async (e) => {
@@ -154,10 +163,10 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
   return (
     <>
       <motion.article
-        className="discovery-card discovery-card--magnetic discovery-card--entity"
-        style={{ x, zIndex: isTop ? 2 : 1, touchAction: 'pan-y' }}
-        drag={isTop ? 'x' : false}
-        dragConstraints={{ left: 0, right: 0 }}
+        className="discovery-card discovery-card--magnetic discovery-card--entity discovery-card--partner"
+        style={{ ...styleMotion, zIndex: isTop ? 2 : 1, touchAction }}
+        drag={drag}
+        dragConstraints={dragConstraints}
         dragElastic={0.85}
         dragMomentum={false}
         initial={isTop ? { scale: 0.92, opacity: 0.65 } : false}
@@ -166,6 +175,11 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         onPointerUp={handleCardPointerUp}
+        title={
+          isTop
+            ? t('partners_swipe_hint', 'Swipe up or down for next · tap photo for profile')
+            : undefined
+        }
       >
         <div className="discovery-card__glow" aria-hidden />
         <div className="discovery-card__frame">
@@ -220,8 +234,8 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
               })}
             </div>
 
-            <div className="discovery-card__actions discovery-card__actions--entity">
-              {!isBusinessAccount ? (
+            {!isBusinessAccount ? (
+              <div className="discovery-card__actions discovery-card__actions--entity">
                 <button
                   type="button"
                   className="discovery-card__cta discovery-card__action discovery-card__action--glass discovery-card__action--join"
@@ -232,8 +246,6 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
                   <FaComments size={14} aria-hidden />
                   <AppText as="span">{joinLabel}</AppText>
                 </button>
-              ) : null}
-              {!isBusinessAccount ? (
                 <button
                   type="button"
                   className="discovery-card__cta discovery-card__action discovery-card__action--glass discovery-card__action--invite"
@@ -243,16 +255,8 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
                   <FaPlus size={14} aria-hidden />
                   <AppText as="span">{t('host_invitation_here', 'Create invitation')}</AppText>
                 </button>
-              ) : null}
-              <button
-                type="button"
-                className="discovery-card__cta discovery-card__action discovery-card__action--glass discovery-card__action--open"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={handleOpen}
-              >
-                <AppText as="span">{t('view_business', 'View partner')}</AppText>
-              </button>
-            </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </motion.article>

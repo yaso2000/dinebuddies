@@ -117,7 +117,7 @@ export default function DiscoveryPage() {
   );
 
   return (
-    <div className="discovery-shell discovery-shell--in-layout">
+    <div className="discovery-shell discovery-shell--in-layout discovery-shell--connect">
       {!canLoad ? (
         <div className="discovery-feed discovery-feed__empty">
           <AppText as="p">{t('user_directory_login_required', 'Sign in to browse members.')}</AppText>
