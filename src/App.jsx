@@ -29,6 +29,7 @@ import AuthActionHandler from './pages/AuthActionHandler';
 import VerifyEmail from './pages/VerifyEmail';
 import InviteReceivedPage from './pages/InviteReceivedPage';
 import DiscoveryInboxPage from './pages/DiscoveryInboxPage';
+import DiscoveryPage from './pages/DiscoveryPage';
 import UsersDirectory from './pages/UsersDirectory';
 import { isCashoutFeatureEnabled } from './config/cashoutFeature';
 
