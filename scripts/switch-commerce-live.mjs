@@ -170,7 +170,7 @@ async function main() {
         'run',
         'deploy:firebase-functions',
         '--',
-        'functions:stripeWebhook,functions:createCheckoutSession,functions:createCreditsCheckoutSession,functions:getStripeCommerceStatus,functions:createPayPalCreditsOrder,functions:capturePayPalCreditsOrder,functions:getPayPalCommerceStatus',
+        'functions:stripeWebhook,functions:createCheckoutSession,functions:createCreditsCheckoutSession,functions:getStripeCommerceStatus,functions:createPayPalCreditsOrder,functions:capturePayPalCreditsOrder,functions:reconcilePayPalCreditsOrder,functions:createPayPalBusinessPlanOrder,functions:capturePayPalBusinessPlanOrder,functions:getPayPalCommerceStatus',
     ]);
 
     console.log('\nBuilding frontend with Live env…');

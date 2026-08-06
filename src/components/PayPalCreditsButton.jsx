@@ -4,6 +4,7 @@ import { PayPalButtons } from '@paypal/react-paypal-js';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../firebase/config';
 import { useToast } from '../context/ToastContext';
+import { paypalCallableErrorMessage } from '../utils/paypalCallableError';
 
 const FUNCTIONS_REGION = 'us-central1';
 
@@ -42,8 +43,10 @@ export default function PayPalCreditsButton({ pack, disabled = false }) {
           } catch (error) {
             console.error('[PayPalCreditsButton/createOrder]', error);
             showToast(
-              error?.message ||
-                t('paypal_checkout_start_failed', 'Could not start PayPal checkout.'),
+              paypalCallableErrorMessage(
+                error,
+                t('paypal_checkout_start_failed', 'Could not start PayPal checkout.')
+              ),
               'error'
             );
             setBusy(false);
@@ -83,12 +86,16 @@ export default function PayPalCreditsButton({ pack, disabled = false }) {
             } catch (recoverError) {
               console.error('[PayPalCreditsButton/reconcile]', recoverError);
               showToast(
-                recoverError?.message ||
-                  error?.message ||
-                  t(
-                    'paypal_capture_failed',
-                    'PayPal payment was approved but credits were not added. Contact support with your PayPal receipt.'
-                  ),
+                paypalCallableErrorMessage(
+                  recoverError,
+                  paypalCallableErrorMessage(
+                    error,
+                    t(
+                      'paypal_capture_failed',
+                      'PayPal payment was approved but credits were not added. Contact support with your PayPal receipt.'
+                    )
+                  )
+                ),
                 'error'
               );
               throw recoverError;

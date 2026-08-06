@@ -39,16 +39,23 @@ async function assertCallerIsBusinessUser(userId) {
     }
 }
 
+/** When set, overrides PAYPAL_MODE after OAuth auto-detect finds working credentials. */
+let paypalApiBaseOverride = null;
+
 function paypalMode() {
     const mode = String(process.env.PAYPAL_MODE || 'sandbox').trim().toLowerCase();
     return mode === 'live' ? 'live' : 'sandbox';
 }
 
 function isPayPalSandbox() {
+    if (paypalApiBaseOverride) {
+        return paypalApiBaseOverride.includes('sandbox');
+    }
     return paypalMode() !== 'live';
 }
 
 function paypalApiBase() {
+    if (paypalApiBaseOverride) return paypalApiBaseOverride;
     return isPayPalSandbox()
         ? 'https://api-m.sandbox.paypal.com'
         : 'https://api-m.paypal.com';
@@ -152,10 +159,28 @@ function buildPayPalAuthErrorMessage(data, configuredMode) {
 }
 
 async function getPayPalAccessToken() {
-    const result = await probePayPalOAuth(paypalApiBase());
+    const configuredBase = paypalApiBase();
+    const result = await probePayPalOAuth(configuredBase);
     if (result.accessToken) return result.accessToken;
 
     console.error('PayPal token error:', result.data);
+
+    // Common production footgun: Vercel has Live Client ID while Functions still use
+    // PAYPAL_MODE=sandbox (or the opposite). Auto-switch to whichever environment
+    // accepts these Client ID/Secret so checkout can complete.
+    const otherBase = configuredBase.includes('sandbox')
+        ? 'https://api-m.paypal.com'
+        : 'https://api-m.sandbox.paypal.com';
+    const other = await probePayPalOAuth(otherBase);
+    if (other.accessToken) {
+        paypalApiBaseOverride = otherBase;
+        console.warn(
+            `[PayPal] OAuth failed for configured mode (${paypalMode()}); ` +
+                `auto-using ${otherBase.includes('sandbox') ? 'sandbox' : 'live'} API to match credentials.`
+        );
+        return other.accessToken;
+    }
+
     const detected = await detectPayPalCredentialEnvironment();
     let message = buildPayPalAuthErrorMessage(result.data, paypalMode());
     if (detected && detected !== paypalMode()) {
@@ -208,10 +233,12 @@ async function savePayPalCheckoutOrder(orderId, payload) {
 }
 
 /**
- * Resolve credits metadata from PayPal custom_id, reference_id, or server-stored checkout doc.
+ * Resolve credits metadata from PayPal custom_id or server-stored checkout doc.
+ * Never trust reference_id alone — that would let any signed-in caller capture another
+ * user's paid order and grant the credits to themselves.
  */
 async function resolveCreditsOrderMeta(orderId, orderData, authUid) {
-    const { customId, referenceId } = extractPayPalCapture(orderData);
+    const { customId } = extractPayPalCapture(orderData);
     const parsed = parsePayPalCustomId(customId);
     if (
         parsed.userId &&
@@ -220,15 +247,17 @@ async function resolveCreditsOrderMeta(orderId, orderData, authUid) {
         CREDIT_PACKAGES[parsed.packageId] &&
         parsed.credits > 0
     ) {
-        return parsed;
+        // Prefer server catalog credits over client-influenced custom_id credit counts.
+        return {
+            userId: parsed.userId,
+            packageId: parsed.packageId,
+            credits: CREDIT_PACKAGES[parsed.packageId].credits,
+        };
     }
 
-    if (referenceId && CREDIT_PACKAGES[referenceId]) {
-        return {
-            userId: authUid,
-            packageId: referenceId,
-            credits: CREDIT_PACKAGES[referenceId].credits,
-        };
+    // custom_id present but belongs to someone else → hard deny (do not fall through).
+    if (parsed.userId && parsed.userId !== authUid) {
+        return { userId: '', packageId: '', credits: 0, kind: '', planId: '' };
     }
 
     const pending = await loadPayPalCheckoutOrder(orderId);
@@ -241,11 +270,11 @@ async function resolveCreditsOrderMeta(orderId, orderData, authUid) {
         return {
             userId: authUid,
             packageId: String(pending.packageId).trim(),
-            credits: Math.floor(Number(pending.credits) || CREDIT_PACKAGES[pending.packageId].credits),
+            credits: CREDIT_PACKAGES[pending.packageId].credits,
         };
     }
 
-    return parsed;
+    return { userId: '', packageId: '', credits: 0, kind: '', planId: '' };
 }
 
 async function fetchPayPalOrder(orderId) {
@@ -477,9 +506,14 @@ exports.createPayPalCreditsOrder = functions.https.onCall(async (data, context) 
 
     if (!result.ok || !result.data?.id) {
         console.error('PayPal order create error:', result.status, result.data);
+        const detail = Array.isArray(result.data?.details) ? result.data.details[0] : null;
+        const detailMsg =
+            (detail?.description && String(detail.description)) ||
+            (detail?.issue && String(detail.issue)) ||
+            '';
         throw new functions.https.HttpsError(
             'internal',
-            result.data?.message || 'Could not create PayPal order.'
+            detailMsg || result.data?.message || 'Could not create PayPal order.'
         );
     }
 
@@ -583,9 +617,14 @@ exports.createPayPalBusinessPlanOrder = functions.https.onCall(async (data, cont
 
     if (!result.ok || !result.data?.id) {
         console.error('PayPal business plan order create error:', result.status, result.data);
+        const detail = Array.isArray(result.data?.details) ? result.data.details[0] : null;
+        const detailMsg =
+            (detail?.description && String(detail.description)) ||
+            (detail?.issue && String(detail.issue)) ||
+            '';
         throw new functions.https.HttpsError(
             'internal',
-            result.data?.message || 'Could not create PayPal order.'
+            detailMsg || result.data?.message || 'Could not create PayPal order.'
         );
     }
 
@@ -679,15 +718,27 @@ exports.capturePayPalBusinessPlanOrder = functions.https.onCall(async (data, con
 exports.getPayPalCommerceStatus = functions.https.onCall(async () => {
     const mode = paypalMode();
     const detectedEnvironment = await detectPayPalCredentialEnvironment();
+    // Warm OAuth + auto-switch so status reflects the API host that will actually be used.
+    let activeMode = mode;
+    let oauthOk = false;
+    try {
+        await getPayPalAccessToken();
+        activeMode = isPayPalSandbox() ? 'sandbox' : 'live';
+        oauthOk = true;
+    } catch {
+        oauthOk = false;
+    }
     return {
         mode,
-        sandbox: isPayPalSandbox(),
+        activeMode,
+        sandbox: activeMode === 'sandbox',
         clientIdPresent: Boolean(paypalClientId()),
         clientSecretPresent: Boolean(paypalClientSecret()),
         currency: paypalCurrency(),
-        oauthOk: detectedEnvironment === mode,
+        oauthOk,
         detectedCredentialEnvironment: detectedEnvironment,
         modeMatchesCredentials: !detectedEnvironment || detectedEnvironment === mode,
+        autoSwitched: Boolean(paypalApiBaseOverride) && activeMode !== mode,
         businessPlanPrice: getBusinessPlanPrice(),
         businessPlanCurrency: paypalCurrency(),
     };
