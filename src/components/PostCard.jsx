@@ -255,7 +255,8 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                         type: 'like',
                         title: `${likerName} liked your post`,
                         message: post.content?.slice(0, 60) || post.caption?.slice(0, 60) || 'Liked your post',
-                        actionUrl: post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`
+                        actionUrl: post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`,
+                        metadata: { postId: post.id, collection: collectionName }
                     }).catch(() => {});
                 }
             }
@@ -314,7 +315,8 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                     type: 'comment',
                     title: `${commenterName} commented on your post`,
                     message: comment.text.slice(0, 80),
-                    actionUrl: `/post/${post.id}`
+                    actionUrl: `/post/${post.id}`,
+                    metadata: { postId: post.id, collection: collectionName }
                 }).catch(() => { });
             }
         } catch (error) {

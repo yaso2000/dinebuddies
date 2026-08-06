@@ -49,3 +49,7 @@ export const adminSecurityService = {
 };
 
 export const consumeOfferCredit = () => call('consumeOfferCredit', {});
+
+export const publishPremiumOffer = (payload) => call('publishPremiumOffer', payload || {});
+
+export const publishSpecialOffer = (payload) => call('publishSpecialOffer', payload || {});

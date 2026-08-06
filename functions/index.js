@@ -9,6 +9,10 @@ admin.initializeApp();
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
 const { runSuggestInvitationMessages } = require('./suggestInvitationMessages');
+const {
+    canSenderTriggerNotificationType,
+    pickBusinessForPlaceId,
+} = require('./notificationAuth');
 const functions = require('firebase-functions');
 const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
 const db = admin.firestore();
@@ -162,92 +166,12 @@ async function enforceNotificationRateLimit(uid, scope, limits) {
     await enforceCallableRateLimit(uid, `notifications_${scope}`, limits);
 }
 
-async function canSenderTriggerNotificationType({ senderId, userId, type, invitationId, metadata }) {
-    if (senderId === userId) {
-        // Self-directed notifications are allowed for trusted self actions.
-        return true;
-    }
-
-    if (
-        type === 'join_request' ||
-        type === 'invitation_full' ||
-        type === 'request_approved' ||
-        type === 'invitation_accepted' ||
-        type === 'invitation_rejected' ||
-        type === 'invitation_cancelled' ||
-        type === 'booking_cancelled' ||
-        type === 'invitation_completed' ||
-        type === 'booking_confirmed' ||
-        type === 'invitation_updated'
-    ) {
-        if (!invitationId) return false;
-        const invSnap = await db.collection('invitations').doc(invitationId).get();
-        if (!invSnap.exists) return false;
-        const inv = invSnap.data() || {};
-        const hostId = inv.author?.id || inv.hostId || inv.authorId;
-        if (type === 'join_request') return hostId === userId && senderId !== hostId;
-        if (type === 'request_approved' || type === 'invitation_full') return hostId === senderId;
-        if (type === 'invitation_accepted' || type === 'invitation_rejected') return hostId === userId && senderId !== hostId;
-        if (
-            type === 'invitation_cancelled' ||
-            type === 'booking_cancelled' ||
-            type === 'invitation_completed' ||
-            type === 'booking_confirmed' ||
-            type === 'invitation_updated'
-        ) return hostId === senderId;
-        return false;
-    }
-
-    // comment & like: allowed for both post-based (no invitationId) and invitation-based interactions
-    if (type === 'like' || type === 'comment') {
-        if (!invitationId) return true; // post-based: always allow
-        const invSnap = await db.collection('invitations').doc(invitationId).get();
-        if (!invSnap.exists) return false;
-        const inv = invSnap.data() || {};
-        const hostId = inv.author?.id || inv.hostId || inv.authorId;
-        return hostId === userId;
-    }
-
-    if (type === 'private_invitation' || type === 'private_invitation_response' || type === 'system_announcement') {
-        if (invitationId) {
-            const privateInvSnap = await db.collection('private_invitations').doc(invitationId).get();
-            if (!privateInvSnap.exists) return false;
-            const inv = privateInvSnap.data() || {};
-            const hostId = inv.authorId || inv.author?.id;
-            const invitedFriends = Array.isArray(inv.invitedFriends) ? inv.invitedFriends : [];
-            if (type === 'private_invitation') return senderId === hostId && invitedFriends.includes(userId);
-            if (type === 'private_invitation_response') return userId === hostId && invitedFriends.includes(senderId);
-            if (type === 'system_announcement') return userId === hostId && invitedFriends.includes(senderId);
-            return false;
-        }
-        // Generic system announcements must be self-addressed when no scoped resource is attached.
-        return type === 'system_announcement' && senderId === userId;
-    }
-
-    if (type === 'new_community_member') {
-        const userSnap = await db.collection('users').doc(senderId).get();
-        if (!userSnap.exists) return false;
-        const joined = userSnap.data()?.joinedCommunities || [];
-        return Array.isArray(joined) && joined.includes(userId);
-    }
-
-    if (type === 'community_message' || type === 'community_removed') {
-        const partnerId = metadata?.partnerId;
-        return typeof partnerId === 'string' && partnerId === senderId;
-    }
-
-    if (type === 'follow') {
-        const senderSnap = await db.collection('users').doc(senderId).get();
-        if (!senderSnap.exists) return false;
-        const following = senderSnap.data()?.following || [];
-        return Array.isArray(following) && following.includes(userId);
-    }
-
-    if (type === 'message' || type === 'reminder') {
-        return true;
-    }
-
-    return false;
+async function isAdminUid(uid) {
+    if (!uid) return false;
+    if (SUPER_OWNER_UIDS.includes(uid)) return true;
+    const requesterDoc = await db.collection('users').doc(uid).get();
+    const role = requesterDoc.exists ? requesterDoc.data()?.role : null;
+    return role === 'admin';
 }
 
 async function assertAdminContext(context) {
@@ -1074,20 +998,22 @@ exports.lookupBusinessByPlaceId = functions.https.onCall(async (data, context) =
 
     const businessSnap = await db.collection('users')
         .where('businessInfo.placeId', '==', placeId)
-        .limit(5)
+        .limit(10)
         .get();
 
-    const businessDoc = businessSnap.docs.find((d) => {
-        const u = d.data() || {};
-        const role = u.role || u.accountType;
-        return role === 'business' || role === 'partner' || u.isBusiness === true;
-    });
-
-    if (!businessDoc) {
-        return { success: true, found: false, businessId: null };
+    // Non-unique placeId claims: prefer earliest-created business (defeats late hijacks).
+    const picked = pickBusinessForPlaceId(businessSnap.docs);
+    if (!picked.found) {
+        return { success: true, found: false, businessId: null, ambiguous: false, matchCount: 0 };
     }
 
-    return { success: true, found: true, businessId: businessDoc.id };
+    return {
+        success: true,
+        found: true,
+        businessId: picked.businessId,
+        ambiguous: picked.ambiguous,
+        matchCount: picked.matchCount,
+    };
 });
 
 // ─── Trusted admin callable: add test locations to businesses ────────────────
@@ -1320,6 +1246,25 @@ exports.adminUpdateBusinessLimits = functions.https.onCall(async (data, context)
     return { success: true, targetUid };
 });
 
+function drainOneOfferCredit(tx, userRef, user) {
+    const tier = String(user.subscriptionTier || 'free').toLowerCase();
+    if (tier === 'elite') {
+        return { consumed: false, remaining: null, tier: 'elite' };
+    }
+    const offerCredits = Number(user.offerCredits || 0);
+    const offerSlotCredits = Number(user.offerSlotCredits || 0);
+    const total = offerCredits + offerSlotCredits;
+    if (total <= 0) {
+        throw new functions.https.HttpsError('failed-precondition', 'No offer credits remaining.');
+    }
+    if (offerCredits > 0) {
+        tx.update(userRef, { offerCredits: offerCredits - 1 });
+        return { consumed: true, remaining: total - 1, tier };
+    }
+    tx.update(userRef, { offerSlotCredits: offerSlotCredits - 1 });
+    return { consumed: true, remaining: total - 1, tier };
+}
+
 // ─── Trusted callable: consume premium offer credit ─────────────────────────
 exports.consumeOfferCredit = functions.https.onCall(async (_data, context) => {
     if (!context.auth) {
@@ -1333,21 +1278,218 @@ exports.consumeOfferCredit = functions.https.onCall(async (_data, context) => {
         if (!userSnap.exists) {
             throw new functions.https.HttpsError('not-found', 'User profile not found.');
         }
-        const user = userSnap.data() || {};
-        const tier = (user.subscriptionTier || 'free').toLowerCase();
-        const isElite = tier === 'elite';
-
-        if (isElite) return { consumed: false, remaining: null };
-
-        const credits = user.offerCredits || 0;
-        if (credits <= 0) {
-            throw new functions.https.HttpsError('failed-precondition', 'No offer credits remaining.');
-        }
-        tx.update(userRef, { offerCredits: credits - 1 });
-        return { consumed: true, remaining: credits - 1 };
+        return drainOneOfferCredit(tx, userRef, userSnap.data() || {});
     });
 
     return { success: true, ...result };
+});
+
+// ─── Trusted callable: atomically publish premium offer + spend credit ───────
+exports.publishPremiumOffer = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+    const uid = context.auth.uid;
+    assertAllowedKeys(data, new Set([
+        'title', 'description', 'imageUrl', 'cta', 'discountLabel',
+        'status', 'theme', 'badgeText', 'expiresAt', 'perpetual'
+    ]), 'Premium offer payload');
+
+    await enforceCallableRateLimit(uid, 'publish_premium_offer', {
+        perMinute: 10,
+        perHour: 60,
+        perDay: 120,
+        cooldownMs: 1000
+    });
+
+    const userRef = db.collection('users').doc(uid);
+    const offerRef = db.collection('offers').doc();
+    const activeRef = db.collection('active_offers').doc(offerRef.id);
+
+    const title = asTrimmedString(data?.title) || '';
+    const description = asTrimmedString(data?.description) || '';
+    const imageUrl = asTrimmedString(data?.imageUrl) || '';
+    if (!title || title.length > 120) {
+        throw new functions.https.HttpsError('invalid-argument', 'Valid title is required.');
+    }
+    if (description.length > 2000) {
+        throw new functions.https.HttpsError('invalid-argument', 'Description too long.');
+    }
+    if (imageUrl.length > 2000) {
+        throw new functions.https.HttpsError('invalid-argument', 'imageUrl too long.');
+    }
+
+    const result = await db.runTransaction(async (tx) => {
+        const userSnap = await tx.get(userRef);
+        if (!userSnap.exists) {
+            throw new functions.https.HttpsError('not-found', 'User profile not found.');
+        }
+        const user = userSnap.data() || {};
+        const role = user.role || user.accountType;
+        if (role !== 'business' && role !== 'partner' && user.isBusiness !== true) {
+            throw new functions.https.HttpsError('permission-denied', 'Only business accounts can publish offers.');
+        }
+
+        const creditResult = drainOneOfferCredit(tx, userRef, user);
+        const isElite = creditResult.tier === 'elite';
+        const PROFESSIONAL_HOURS = 50;
+        const expiresAt = isElite
+            ? null
+            : (data?.expiresAt ? new Date(data.expiresAt) : new Date(Date.now() + PROFESSIONAL_HOURS * 60 * 60 * 1000));
+
+        const payload = {
+            title,
+            description,
+            imageUrl,
+            cta: asTrimmedString(data?.cta) || '',
+            discountLabel: asTrimmedString(data?.discountLabel) || '',
+            theme: asTrimmedString(data?.theme) || '',
+            badgeText: asTrimmedString(data?.badgeText) || '',
+            partnerId: uid,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            status: 'active',
+            tier: isElite ? 'elite' : 'professional',
+            perpetual: isElite ? true : data?.perpetual === true,
+            expiresAt,
+        };
+
+        tx.set(offerRef, payload);
+        tx.set(activeRef, payload);
+        return { offerId: offerRef.id, ...creditResult };
+    });
+
+    return { success: true, ...result };
+});
+
+// ─── Trusted callable: atomically publish special_offers + spend credit ──────
+exports.publishSpecialOffer = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+    const uid = context.auth.uid;
+    assertAllowedKeys(data, new Set([
+        'title', 'description', 'mediaUrl', 'mediaType', 'expirationType',
+        'endDate', 'status', 'identityType', 'badgeId', 'visual'
+    ]), 'Special offer payload');
+
+    await enforceCallableRateLimit(uid, 'publish_special_offer', {
+        perMinute: 10,
+        perHour: 60,
+        perDay: 120,
+        cooldownMs: 1000
+    });
+
+    const userRef = db.collection('users').doc(uid);
+    const offerRef = db.collection('special_offers').doc();
+
+    const title = asTrimmedString(data?.title) || '';
+    const description = asTrimmedString(data?.description) || '';
+    const mediaUrl = asTrimmedString(data?.mediaUrl) || '';
+    if (!title || title.length > 120) {
+        throw new functions.https.HttpsError('invalid-argument', 'Valid title is required.');
+    }
+
+    const result = await db.runTransaction(async (tx) => {
+        const userSnap = await tx.get(userRef);
+        if (!userSnap.exists) {
+            throw new functions.https.HttpsError('not-found', 'User profile not found.');
+        }
+        const user = userSnap.data() || {};
+        const role = user.role || user.accountType;
+        if (role !== 'business' && role !== 'partner') {
+            throw new functions.https.HttpsError('permission-denied', 'Only business accounts can publish offers.');
+        }
+
+        const creditResult = drainOneOfferCredit(tx, userRef, user);
+        const isElite = creditResult.tier === 'elite';
+        const expirationType = asTrimmedString(data?.expirationType) || 'perpetual';
+        const status = asTrimmedString(data?.status) || 'active';
+        const visual = (data?.visual && typeof data.visual === 'object' && !Array.isArray(data.visual))
+            ? data.visual
+            : { theme: 'midnight', isGlass: true, hasShimmer: false };
+
+        const payload = {
+            partnerId: uid,
+            restaurantId: uid,
+            status,
+            business: {
+                name: user.display_name || user.businessInfo?.businessName || 'Restaurant',
+                logo: user.photo_url || user.businessInfo?.logoImage || ''
+            },
+            content: {
+                title,
+                description,
+                mediaUrl,
+                mediaType: asTrimmedString(data?.mediaType) || 'image'
+            },
+            logic: {
+                expirationType,
+                expiryDate: expirationType === 'fixed' && data?.endDate ? new Date(data.endDate) : null,
+                isPerpetual: expirationType === 'perpetual'
+            },
+            visual,
+            visibility: {
+                isPinned: status === 'active',
+                status,
+                identityType: asTrimmedString(data?.identityType) || 'logo',
+                badgeId: asTrimmedString(data?.badgeId) || null,
+                priorityScore: isElite ? 100 : 50,
+                location: user.businessInfo?.location || user.location || null
+            },
+            stats: { impressions: 0, invitationsCreated: 0 },
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        tx.set(offerRef, payload);
+        return { offerId: offerRef.id, ...creditResult };
+    });
+
+    return { success: true, ...result };
+});
+
+// ─── Trusted callable: publish a business motion post draft ──────────────────
+exports.publishBusinessMotionPost = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+    const uid = context.auth.uid;
+    const postId = typeof data?.postId === 'string' ? data.postId.trim() : '';
+    if (!postId) {
+        throw new functions.https.HttpsError('invalid-argument', 'postId is required.');
+    }
+
+    await enforceCallableRateLimit(uid, 'publish_motion_post', {
+        perMinute: 20,
+        perHour: 200,
+        perDay: 500,
+        cooldownMs: 500
+    });
+
+    const postRef = db.collection('business_motion_posts').doc(postId);
+    await db.runTransaction(async (tx) => {
+        const snap = await tx.get(postRef);
+        if (!snap.exists) {
+            throw new functions.https.HttpsError('not-found', 'Motion post not found.');
+        }
+        const post = snap.data() || {};
+        if (post.ownerId !== uid && post.businessId !== uid) {
+            throw new functions.https.HttpsError('permission-denied', 'Not allowed to publish this post.');
+        }
+        if (post.status === 'archived') {
+            throw new functions.https.HttpsError('failed-precondition', 'Archived posts cannot be published.');
+        }
+        if (post.status === 'published') {
+            return;
+        }
+        tx.update(postRef, {
+            status: 'published',
+            publishedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    });
+
+    return { success: true, postId };
 });
 
 // ─── Trusted admin callable: migrate legacy partner roles ───────────────────
@@ -1612,11 +1754,13 @@ exports.createNotification = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('invalid-argument', 'metadata contains too many keys.');
     }
     const isAllowedEvent = await canSenderTriggerNotificationType({
+        db,
         senderId,
         userId,
         type,
         invitationId,
-        metadata
+        metadata,
+        isAdminUid,
     });
     if (!isAllowedEvent) {
         throw new functions.https.HttpsError('permission-denied', 'Caller is not allowed to trigger this notification event.');

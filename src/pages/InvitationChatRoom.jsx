@@ -418,7 +418,9 @@ const InvitationChatRoom = () => {
                     type: 'message',
                     title: senderName,
                     message: text.slice(0, 80),
-                    actionUrl
+                    actionUrl,
+                    invitationId,
+                    metadata: { invitationId }
                 }).catch(() => { });
             });
         } catch (error) {
