@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import MagneticDeck from '../components/discovery/MagneticDeck';
-import MagneticEntityCard from '../components/discovery/MagneticEntityCard';
+import BusinessSwipeCard from '../components/discovery/BusinessSwipeCard';
 import { useBusinessSwipeDeck } from '../hooks/useBusinessSwipeDeck';
 import '../components/discovery/discovery.css';
 import { AppText } from '../components/base';
@@ -14,17 +14,9 @@ export default function BusinessesSwipePage() {
 
   const renderCard = useCallback(
     ({ item, isTop, onSkip }) => (
-      <MagneticEntityCard
-        key={item.id}
-        item={item}
-        isTop={isTop}
-        onSkip={onSkip}
-        listPath="/restaurants/list"
-        openPath={item.href}
-        openLabel={t('view_business', 'View partner')}
-      />
+      <BusinessSwipeCard key={item.id} item={item} isTop={isTop} onSkip={onSkip} />
     ),
-    [t]
+    []
   );
 
   return (

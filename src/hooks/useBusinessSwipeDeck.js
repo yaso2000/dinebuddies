@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -8,6 +8,7 @@ import {
 import { pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import { getBusinessCardCity } from '../utils/businessCardLocation';
 import { calculateDistance } from '../utils/locationVerification';
+import { fetchIpLocation } from '../utils/locationUtils';
 
 function parseBusinessLatLng(res) {
   const lat = Number(res?.lat ?? res?.location?.lat ?? res?.businessInfo?.lat);
@@ -23,13 +24,42 @@ export function useBusinessSwipeDeck() {
   const { restaurants = [], loadingInvitations = true } = useInvitations() || {};
   const { userProfile } = useAuth();
   const loading = loadingInvitations && restaurants.length === 0;
+  const [deviceLocation, setDeviceLocation] = useState(null);
 
-  const userLocation = useMemo(() => {
-    const lat = Number(userProfile?.lat ?? userProfile?.location?.lat);
-    const lng = Number(userProfile?.lng ?? userProfile?.location?.lng);
-    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
-    return null;
+  useEffect(() => {
+    let cancelled = false;
+    const profileLat = Number(userProfile?.lat ?? userProfile?.location?.lat);
+    const profileLng = Number(userProfile?.lng ?? userProfile?.location?.lng);
+    if (Number.isFinite(profileLat) && Number.isFinite(profileLng)) {
+      setDeviceLocation({ lat: profileLat, lng: profileLng });
+      return undefined;
+    }
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (!cancelled) {
+            setDeviceLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          }
+        },
+        async () => {
+          try {
+            const ip = await fetchIpLocation();
+            if (!cancelled && ip?.lat != null && ip?.lng != null) {
+              setDeviceLocation({ lat: Number(ip.lat), lng: Number(ip.lng) });
+            }
+          } catch {
+            /* ignore */
+          }
+        },
+        { maximumAge: 120000, timeout: 8000 }
+      );
+    }
+    return () => {
+      cancelled = true;
+    };
   }, [userProfile]);
+
+  const userLocation = deviceLocation;
 
   const items = useMemo(() => {
     const mapped = (restaurants || [])

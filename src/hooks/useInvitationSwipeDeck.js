@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { asUidArray } from '../utils/userSocialLists';
@@ -7,6 +7,7 @@ import { isPublicInvitationExpiredForArchive } from '../utils/invitationExpiry';
 import { getInvitationLatLng } from '../utils/invitationCoords';
 import { pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import { calculateDistance } from '../utils/locationVerification';
+import { fetchIpLocation } from '../utils/locationUtils';
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80';
@@ -37,18 +38,47 @@ export function useInvitationSwipeDeck() {
   const { invitations = [], loadingInvitations: loading = true, currentUser = null } =
     useInvitations() || {};
   const { userProfile } = useAuth();
+  const [deviceLocation, setDeviceLocation] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const profileLat = Number(userProfile?.lat ?? userProfile?.location?.lat);
+    const profileLng = Number(userProfile?.lng ?? userProfile?.location?.lng);
+    if (Number.isFinite(profileLat) && Number.isFinite(profileLng)) {
+      setDeviceLocation({ lat: profileLat, lng: profileLng });
+      return undefined;
+    }
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (!cancelled) {
+            setDeviceLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          }
+        },
+        async () => {
+          try {
+            const ip = await fetchIpLocation();
+            if (!cancelled && ip?.lat != null && ip?.lng != null) {
+              setDeviceLocation({ lat: Number(ip.lat), lng: Number(ip.lng) });
+            }
+          } catch {
+            /* ignore */
+          }
+        },
+        { maximumAge: 120000, timeout: 8000 }
+      );
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [userProfile]);
 
   const blockedAuthorIds = useMemo(
     () => new Set(asUidArray(userProfile?.blockedUserIds || currentUser?.blockedUserIds)),
     [currentUser?.blockedUserIds, userProfile?.blockedUserIds]
   );
 
-  const userLocation = useMemo(() => {
-    const lat = Number(userProfile?.lat ?? userProfile?.location?.lat);
-    const lng = Number(userProfile?.lng ?? userProfile?.location?.lng);
-    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
-    return null;
-  }, [userProfile]);
+  const userLocation = deviceLocation;
 
   const items = useMemo(() => {
     const now = new Date();
