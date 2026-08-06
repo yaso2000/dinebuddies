@@ -120,17 +120,24 @@ function resolveOrderCurrency(clientCurrency) {
 function enhancePayPalCreateFailure(data, currency) {
     const base = formatPayPalApiFailure(data, 'Could not create PayPal order.');
     const issue = String(data?.details?.[0]?.issue || '').toUpperCase();
-    const message = String(data?.message || '').toLowerCase();
-    const currencyHint =
-        issue.includes('CURRENCY') ||
-        message.includes('business validation') ||
-        message.includes('semantically incorrect');
-    if (!currencyHint) return base;
-    return (
-        `${base} Currency tried: ${currency}. ` +
-        `If this PayPal business account is Australian, set PAYPAL_CURRENCY=AUD ` +
-        `(and Vercel VITE_PAYPAL_CURRENCY=AUD), enable that currency in PayPal, then redeploy Functions.`
-    );
+
+    if (issue === 'PAYEE_ACCOUNT_RESTRICTED' || issue.includes('ACCOUNT_RESTRICTED')) {
+        return (
+            `${base} Open PayPal Business → settings / account status and complete ` +
+            `verification (identity, bank, business info) until receiving payments is enabled. ` +
+            `This cannot be fixed from the app until PayPal lifts the restriction.`
+        );
+    }
+
+    if (issue.includes('CURRENCY')) {
+        return (
+            `${base} Currency tried: ${currency}. ` +
+            `For an Australian PayPal business account use PAYPAL_CURRENCY=AUD ` +
+            `(and Vercel VITE_PAYPAL_CURRENCY=AUD), enable that currency in PayPal, then redeploy Functions.`
+        );
+    }
+
+    return base;
 }
 
 function assertPayPalConfigured() {
