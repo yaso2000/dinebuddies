@@ -8,10 +8,11 @@ import UserAvatar from '../components/UserAvatar';
 import { AppText } from '../components/base';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { useJoinedStages } from '../hooks/useJoinedStages';
+import { useMyLiveStage } from '../hooks/useMyLiveStage';
 import app from '../firebase/config';
 import { getMutualFollowers } from '../utils/followHelpers';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { isVirtualUser } from '../utils/accountRole';
 import './CreateStage.css';
 
 const MAX_INVITEES = 40;
@@ -20,30 +21,49 @@ export default function CreateStage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { currentUser, userProfile, cannotCreateInvitations } = useAuth();
-  const { stages, loading: stagesLoading } = useJoinedStages();
+  const { currentUser, userProfile, isBusiness } = useAuth();
+  const {
+    stageId: liveStageId,
+    hasLiveStage,
+    loading: liveStageLoading,
+  } = useMyLiveStage();
   const [title, setTitle] = useState('');
   const [visibility, setVisibility] = useState('public');
   const [mutuals, setMutuals] = useState([]);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
-  const [loadingMutuals, setLoadingMutuals] = useState(true);
+  const [loadingMutuals, setLoadingMutuals] = useState(!isBusiness);
   const [submitting, setSubmitting] = useState(false);
 
   const uid = currentUser?.uid || userProfile?.id;
-
-  const existingHostedStage = useMemo(
-    () => stages.find((s) => s.isHost) || null,
-    [stages]
-  );
+  const blockedAccount = isVirtualUser(userProfile);
 
   useEffect(() => {
-    if (cannotCreateInvitations) {
+    if (blockedAccount) {
       showToast(t('business_cannot_create_invitation'), 'error');
       navigate(-1);
     }
-  }, [cannotCreateInvitations, navigate, showToast, t]);
+  }, [blockedAccount, navigate, showToast, t]);
+
+  // Business accounts use Community Chat — Stage open is personal-only.
+  useEffect(() => {
+    if (!isBusiness) return;
+    showToast(
+      t(
+        'business_cannot_create_stage',
+        'Business accounts use Community Chat instead of Stage rooms.'
+      ),
+      'error'
+    );
+    const communityId = uid || currentUser?.uid;
+    navigate(communityId ? `/community/${communityId}` : '/my-community', { replace: true });
+  }, [isBusiness, navigate, showToast, t, uid, currentUser?.uid]);
 
   useEffect(() => {
+    if (isBusiness) {
+      setLoadingMutuals(false);
+      setMutuals([]);
+      return undefined;
+    }
     if (!uid) {
       setLoadingMutuals(false);
       return undefined;
@@ -73,7 +93,7 @@ export default function CreateStage() {
     return () => {
       cancelled = true;
     };
-  }, [uid, userProfile?.following]);
+  }, [uid, userProfile?.following, isBusiness]);
 
   const selectedCount = selectedIds.size;
 
@@ -89,8 +109,9 @@ export default function CreateStage() {
     });
   }, []);
 
-  const blockedByExisting = Boolean(existingHostedStage);
-  const canSubmit = !submitting && !cannotCreateInvitations && !blockedByExisting;
+  const blockedByExisting = Boolean(hasLiveStage && liveStageId);
+  const canSubmit =
+    !submitting && !blockedAccount && !blockedByExisting && !liveStageLoading;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -101,15 +122,20 @@ export default function CreateStage() {
       const createStageRoom = httpsCallable(functions, 'createStageRoom');
       const result = await createStageRoom({
         title: title.trim(),
-        visibility,
-        inviteeIds: [...selectedIds],
+        // Business Stages are always community-gated (server ignores public/private).
+        ...(isBusiness ? {} : { visibility }),
+        inviteeIds: isBusiness ? [] : [...selectedIds],
       });
       const stageId = result?.data?.stageId;
       if (!stageId) {
         throw new Error('missing_stage_id');
       }
-      showToast(t('stage_created', 'Stage opened'), 'success');
-      // Pass host bootstrap so chat does not wait on profile/joinedStages lag.
+      showToast(
+        isBusiness
+          ? t('business_stage_created', 'Business Stage opened')
+          : t('stage_created', 'Stage opened'),
+        'success'
+      );
       navigate(`/stage/${stageId}`, {
         replace: true,
         state: { stageJustCreated: true, stageHostId: uid },
@@ -129,7 +155,6 @@ export default function CreateStage() {
         return;
       }
       const rawMsg = String(err?.message || '');
-      // Legacy paid-booking CF may still surface this if an old revision was cached.
       if (/insufficient.*credit|paid Credits to book/i.test(rawMsg)) {
         showToast(
           t(
@@ -154,15 +179,19 @@ export default function CreateStage() {
 
   const subtitle = useMemo(
     () =>
-      t(
-        'create_stage_subtitle',
-        'Open alone or invite mutual follows. Choose public for everyone, or private for your followers only.'
-      ),
-    [t]
+      isBusiness
+        ? t(
+            'create_business_stage_subtitle',
+            'Open a free Stage for your community members for 24 hours. Then it closes and everything is deleted.'
+          )
+        : t(
+            'create_stage_subtitle',
+            'Open alone or invite mutual follows. Choose public for everyone, or private for your followers only.'
+          ),
+    [isBusiness, t]
   );
 
-  // Never block the create form on stages hub loading — that was freezing "Open Stage".
-  if (!stagesLoading && existingHostedStage?.id) {
+  if (isBusiness) {
     return (
       <div className="create-stage-page">
         <header className="create-stage-page__header">
@@ -173,7 +202,58 @@ export default function CreateStage() {
             </AppText>
             <div>
               <AppText as="h1" className="create-stage-page__title">
-                {t('create_stage_title', 'Open Stage')}
+                {t('create_stage_open', 'Open Stage')}
+              </AppText>
+              <AppText as="p" className="create-stage-page__subtitle">
+                {t(
+                  'business_cannot_create_stage',
+                  'Business accounts use Community Chat instead of Stage rooms.'
+                )}
+              </AppText>
+            </div>
+          </div>
+        </header>
+      </div>
+    );
+  }
+
+  if (liveStageLoading) {
+    return (
+      <div className="create-stage-page">
+        <header className="create-stage-page__header">
+          <AppBackButton className="create-stage-page__back" />
+          <div className="create-stage-page__heading">
+            <AppText as="span" className="create-stage-page__icon" aria-hidden>
+              <FaMicrophone />
+            </AppText>
+            <div>
+              <AppText as="h1" className="create-stage-page__title">
+                {isBusiness
+                  ? t('create_business_stage_title', 'Open business Stage')
+                  : t('create_stage_title', 'Open Stage')}
+              </AppText>
+              <AppText as="p" className="create-stage-page__subtitle">
+                {t('loading_stages', 'Loading stages…')}
+              </AppText>
+            </div>
+          </div>
+        </header>
+      </div>
+    );
+  }
+
+  if (hasLiveStage && liveStageId) {
+    return (
+      <div className="create-stage-page">
+        <header className="create-stage-page__header">
+          <AppBackButton className="create-stage-page__back" />
+          <div className="create-stage-page__heading">
+            <AppText as="span" className="create-stage-page__icon" aria-hidden>
+              <FaMicrophone />
+            </AppText>
+            <div>
+              <AppText as="h1" className="create-stage-page__title">
+                {t('stage_open_existing', 'Open your Stage')}
               </AppText>
               <AppText as="p" className="create-stage-page__subtitle">
                 {t(
@@ -185,7 +265,7 @@ export default function CreateStage() {
           </div>
         </header>
         <Link
-          to={`/stage/${existingHostedStage.id}`}
+          to={`/stage/${liveStageId}`}
           state={{ stageJustCreated: false, stageHostId: uid }}
           className="create-stage-page__submit"
           style={{ display: 'inline-flex', justifyContent: 'center', textDecoration: 'none' }}
@@ -206,7 +286,9 @@ export default function CreateStage() {
           </AppText>
           <div>
             <AppText as="h1" className="create-stage-page__title">
-              {t('create_stage_title', 'Open Stage')}
+              {isBusiness
+                ? t('create_business_stage_title', 'Open business Stage')
+                : t('create_stage_title', 'Open Stage')}
             </AppText>
             <AppText as="p" className="create-stage-page__subtitle">
               {subtitle}
@@ -225,105 +307,120 @@ export default function CreateStage() {
             className="create-stage-page__input"
             value={title}
             maxLength={80}
-            placeholder={t('create_stage_title_placeholder', 'Tonight’s Stage')}
+            placeholder={
+              isBusiness
+                ? t('create_business_stage_title_placeholder', 'Tonight at our place')
+                : t('create_stage_title_placeholder', 'Tonight’s Stage')
+            }
             onChange={(e) => setTitle(e.target.value)}
           />
         </label>
 
-        <div className="create-stage-page__field" role="group" aria-label={t('create_stage_visibility', 'Visibility')}>
-          <AppText as="span" className="create-stage-page__label">
-            {t('create_stage_visibility', 'Visibility')}
-          </AppText>
-          <div className="create-stage-page__visibility">
-            <button
-              type="button"
-              className={`create-stage-page__visibility-btn${visibility === 'public' ? ' is-selected' : ''}`}
-              aria-pressed={visibility === 'public'}
-              onClick={() => setVisibility('public')}
-            >
-              <AppText as="span" className="create-stage-page__visibility-title">
-                {t('create_stage_visibility_public', 'Public')}
-              </AppText>
-              <AppText as="span" className="create-stage-page__visibility-hint">
-                {t('create_stage_visibility_public_hint', 'Anyone can join')}
-              </AppText>
-            </button>
-            <button
-              type="button"
-              className={`create-stage-page__visibility-btn${visibility === 'private' ? ' is-selected' : ''}`}
-              aria-pressed={visibility === 'private'}
-              onClick={() => setVisibility('private')}
-            >
-              <AppText as="span" className="create-stage-page__visibility-title">
-                {t('create_stage_visibility_private', 'Private')}
-              </AppText>
-              <AppText as="span" className="create-stage-page__visibility-hint">
-                {t('create_stage_visibility_private_hint', 'Followers only')}
-              </AppText>
-            </button>
-          </div>
-        </div>
-
-        <div className="create-stage-page__field">
-          <div className="create-stage-page__label-row">
+        {!isBusiness ? (
+          <div className="create-stage-page__field" role="group" aria-label={t('create_stage_visibility', 'Visibility')}>
             <AppText as="span" className="create-stage-page__label">
-              {t('create_stage_guests_optional', 'Invite guests (optional)')}
+              {t('create_stage_visibility', 'Visibility')}
             </AppText>
-            <AppText as="span" className="create-stage-page__count">
-              {selectedCount}/{MAX_INVITEES}
-            </AppText>
+            <div className="create-stage-page__visibility">
+              <button
+                type="button"
+                className={`create-stage-page__visibility-btn${visibility === 'public' ? ' is-selected' : ''}`}
+                aria-pressed={visibility === 'public'}
+                onClick={() => setVisibility('public')}
+              >
+                <AppText as="span" className="create-stage-page__visibility-title">
+                  {t('create_stage_visibility_public', 'Public')}
+                </AppText>
+                <AppText as="span" className="create-stage-page__visibility-hint">
+                  {t('create_stage_visibility_public_hint', 'Anyone can join')}
+                </AppText>
+              </button>
+              <button
+                type="button"
+                className={`create-stage-page__visibility-btn${visibility === 'private' ? ' is-selected' : ''}`}
+                aria-pressed={visibility === 'private'}
+                onClick={() => setVisibility('private')}
+              >
+                <AppText as="span" className="create-stage-page__visibility-title">
+                  {t('create_stage_visibility_private', 'Private')}
+                </AppText>
+                <AppText as="span" className="create-stage-page__visibility-hint">
+                  {t('create_stage_visibility_private_hint', 'Followers only')}
+                </AppText>
+              </button>
+            </div>
           </div>
-
+        ) : (
           <AppText as="p" className="create-stage-page__hint">
             {t(
-              'create_stage_guests_later_hint',
-              'Guests are optional. Open the Stage now — you can invite people after it is created.'
+              'create_business_stage_audience_note',
+              'Only members who joined your business community can enter this Stage.'
             )}
           </AppText>
+        )}
 
-          {loadingMutuals ? (
-            <AppText as="p" className="create-stage-page__hint">
-              {t('loading', 'Loading…')}
-            </AppText>
-          ) : mutuals.length === 0 ? (
+        {!isBusiness ? (
+          <div className="create-stage-page__field">
+            <div className="create-stage-page__label-row">
+              <AppText as="span" className="create-stage-page__label">
+                {t('create_stage_guests_optional', 'Invite guests (optional)')}
+              </AppText>
+              <AppText as="span" className="create-stage-page__count">
+                {selectedCount}/{MAX_INVITEES}
+              </AppText>
+            </div>
+
             <AppText as="p" className="create-stage-page__hint">
               {t(
-                'create_stage_no_mutuals_optional',
-                'No mutual follows yet. You can still open the Stage alone and share a join link.'
+                'create_stage_guests_later_hint',
+                'Guests are optional. Open the Stage now — you can invite people after it is created.'
               )}
             </AppText>
-          ) : (
-            <ul className="create-stage-page__list">
-              {mutuals.map((person) => {
-                const selected = selectedIds.has(person.id);
-                return (
-                  <li key={person.id}>
-                    <button
-                      type="button"
-                      className={`create-stage-page__person${selected ? ' is-selected' : ''}`}
-                      onClick={() => toggleInvitee(person.id)}
-                      aria-pressed={selected}
-                    >
-                      <UserAvatar
-                        user={person.raw}
-                        alt=""
-                        solidPlaceholder
-                        noGenderRing
-                        className="create-stage-page__avatar"
-                      />
-                      <AppText as="span" className="create-stage-page__person-name">
-                        {person.name}
-                      </AppText>
-                      <AppText as="span" className="create-stage-page__check" aria-hidden>
-                        {selected ? <FaCheck /> : null}
-                      </AppText>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
+
+            {loadingMutuals ? (
+              <AppText as="p" className="create-stage-page__hint">
+                {t('loading', 'Loading…')}
+              </AppText>
+            ) : mutuals.length === 0 ? (
+              <AppText as="p" className="create-stage-page__hint">
+                {t(
+                  'create_stage_no_mutuals_optional',
+                  'No mutual follows yet. You can still open the Stage alone and share a join link.'
+                )}
+              </AppText>
+            ) : (
+              <ul className="create-stage-page__list">
+                {mutuals.map((person) => {
+                  const selected = selectedIds.has(person.id);
+                  return (
+                    <li key={person.id}>
+                      <button
+                        type="button"
+                        className={`create-stage-page__person${selected ? ' is-selected' : ''}`}
+                        onClick={() => toggleInvitee(person.id)}
+                        aria-pressed={selected}
+                      >
+                        <UserAvatar
+                          user={person.raw}
+                          alt=""
+                          solidPlaceholder
+                          noGenderRing
+                          className="create-stage-page__avatar"
+                        />
+                        <AppText as="span" className="create-stage-page__person-name">
+                          {person.name}
+                        </AppText>
+                        <AppText as="span" className="create-stage-page__check" aria-hidden>
+                          {selected ? <FaCheck /> : null}
+                        </AppText>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        ) : null}
 
         <AppText as="p" className="create-stage-page__free-note">
           {t(
@@ -341,7 +438,9 @@ export default function CreateStage() {
         <button type="submit" className="create-stage-page__submit" disabled={!canSubmit}>
           {submitting
             ? t('creating', 'Creating…')
-            : t('create_stage_open', 'Open Stage')}
+            : isBusiness
+              ? t('create_business_stage_open', 'Open business Stage')
+              : t('create_stage_open', 'Open Stage')}
         </button>
       </form>
     </div>

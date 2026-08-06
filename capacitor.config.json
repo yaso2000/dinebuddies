@@ -4,7 +4,6 @@
   "webDir": "dist",
   "server": {
     "androidScheme": "https",
-    "url": "https://www.dinebuddies.com",
     "cleartext": false
   },
   "plugins": {

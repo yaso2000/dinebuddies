@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { FaMicrophone, FaTrash } from 'react-icons/fa';
 import { AppText } from '../base';
 import { useAuth } from '../../context/AuthContext';
+import { useMyLiveStage } from '../../hooks/useMyLiveStage';
 
 export default function StagesChatPanel({
   stages = [],
@@ -13,7 +14,10 @@ export default function StagesChatPanel({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { cannotCreateInvitations } = useAuth();
+  const { cannotCreateInvitations, isBusiness } = useAuth();
+  const { stageId: myLiveStageId, hasLiveStage, loading: myLiveLoading } = useMyLiveStage();
+  // Stage open is personal-only; business accounts use Community Chat.
+  const canCreateStage = !isBusiness && !cannotCreateInvitations;
 
   const filtered = stages.filter((s) =>
     (s.name || '').toLowerCase().includes(searchQuery.toLowerCase())
@@ -71,10 +75,16 @@ export default function StagesChatPanel({
                 'Open a Stage with mutual follows, or wait for an invite.'
               )}
         </AppText>
-        {!searchQuery && !cannotCreateInvitations ? (
-          <Link to="/create-stage" className="messages-page__empty-cta">
-            {t('create_stage_open', 'Open Stage')}
-          </Link>
+        {!searchQuery && canCreateStage && !myLiveLoading ? (
+          hasLiveStage && myLiveStageId ? (
+            <Link to={`/stage/${myLiveStageId}`} className="messages-page__empty-cta">
+              {t('stage_open_existing', 'Open your Stage')}
+            </Link>
+          ) : (
+            <Link to="/create-stage" className="messages-page__empty-cta">
+              {t('create_stage_open', 'Open Stage')}
+            </Link>
+          )
         ) : null}
       </div>
     );

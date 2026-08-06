@@ -5,6 +5,7 @@ import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp, ge
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useExternalLinkGuard } from '../context/ExternalLinkGuardContext';
 import { FaRegCommentDots, FaTrash, FaEllipsisH, FaEdit, FaEyeSlash } from 'react-icons/fa';
 import { AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
 import { BiRepost } from 'react-icons/bi';
@@ -62,6 +63,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
   const navigate = useNavigate();
   const { currentUser, userProfile } = useAuth();
   const { showToast } = useToast();
+  const { requestOpenLink } = useExternalLinkGuard();
 
   const [showComments, setShowComments] = useState(defaultExpandComments);
   const [showMenu, setShowMenu] = useState(false);
@@ -798,7 +800,11 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                             </div>
                             {displayPost.eventDetails.actionLink &&
             <button
-              onClick={(e) => {e.stopPropagation();window.open(displayPost.eventDetails.actionLink, '_blank', 'noopener,noreferrer');}}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                requestOpenLink(displayPost.eventDetails.actionLink);
+              }}
               style={{ width: '100%', padding: '12px', borderRadius: 10, background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}>
               {t('view_event_details', 'View Event Details')}</button>
             }

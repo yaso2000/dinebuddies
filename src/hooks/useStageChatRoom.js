@@ -23,17 +23,22 @@ import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { uploadImage } from '../utils/mediaUtils';
+import { uploadImage, uploadVoiceMessage } from '../utils/mediaUtils';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { createNotification } from '../utils/notificationHelpers';
+import { deleteStorageFileByUrl } from '../utils/storageCleanup';
 import {
     buildBannerImageUpdate,
     buildBannerClearImageUpdate,
     buildBannerYoutubeUpdate,
+    buildBannerVoiceUpdate,
+    buildBannerVoiceClearFields,
+    buildBannerVoiceLoopUpdate,
     buildBannerUpdate,
     mergeBannerPatch,
     normalizeCommunityBanner,
     sanitizeBannerAxis,
+    BANNER_VOICE_MAX_DURATION_SEC,
 } from '../utils/communityChatBanner';
 import { buildReplyFields } from '../utils/communityChatReply';
 import { resolveCommunityBannerDisplay } from '../utils/communityBannerDisplay';
@@ -48,7 +53,6 @@ import {
     resolveCommunityChatGuestFrameBackground,
 } from '../constants/communityChatGuestFrameLook';
 import { sanitizeBannerBgDensity } from '../utils/communityChatBanner';
-import { COMMUNITY_GUEST_FRAME_BACKGROUND_PRESET_IDS } from '../constants/communityGuestFrameBackgrounds';
 import { resolveCommunityChatBannerVisible } from '../constants/communityChatBannerMode';
 import {
     readGuestCommunityBannerVisible,
@@ -98,6 +102,7 @@ export function useStageChatRoom(stageId) {
     const [isDisplaySession, setIsDisplaySession] = useState(false);
     const latestMessageDocsRef = useRef([]);
     const readReceiptTimeoutRef = useRef(null);
+    const expiredMuteClearRef = useRef(null);
 
     const uid = currentUser?.uid || auth.currentUser?.uid || userProfile?.id || null;
     const hostId = partner?.hostId || partner?.ownerId || null;
@@ -229,6 +234,10 @@ export function useStageChatRoom(stageId) {
             const mutedIds = Array.isArray(merged.communityMutedUserIds)
                 ? merged.communityMutedUserIds
                 : [];
+            const mutedUntil =
+                merged.communityMutedUntil && typeof merged.communityMutedUntil === 'object'
+                    ? merged.communityMutedUntil
+                    : {};
             const blockedIds = Array.isArray(merged.communityBlockedUserIds)
                 ? merged.communityBlockedUserIds
                 : [];
@@ -241,7 +250,29 @@ export function useStageChatRoom(stageId) {
             }
 
             setIsBlockedFromCommunity(false);
-            setIsMutedInChat(!viewerIsHost && mutedIds.includes(uid));
+            let mutedNow = !viewerIsHost && mutedIds.includes(uid);
+            if (mutedNow) {
+                const untilRaw = mutedUntil[uid];
+                const untilMs =
+                    typeof untilRaw?.toMillis === 'function'
+                        ? untilRaw.toMillis()
+                        : typeof untilRaw?.toDate === 'function'
+                          ? untilRaw.toDate().getTime()
+                          : Number(untilRaw) || 0;
+                if (untilMs && untilMs <= Date.now()) {
+                    mutedNow = false;
+                    const clearKey = `${partnerId}:${uid}:${untilMs}`;
+                    if (expiredMuteClearRef.current !== clearKey) {
+                        expiredMuteClearRef.current = clearKey;
+                        void httpsCallable(functions, 'setStageMembership')({
+                            stageId: partnerId,
+                            action: 'unmute_member',
+                            targetUid: uid,
+                        }).catch(() => {});
+                    }
+                }
+            }
+            setIsMutedInChat(mutedNow);
         };
 
         setLoading(true);
@@ -480,6 +511,40 @@ export function useStageChatRoom(stageId) {
     }, [isMember, messages, partnerId, uid, isDisplaySession]);
 
     const memberIdsKey = (partner?.communityMembers || []).join(',');
+    const muteStateKey = useMemo(() => {
+        const muted = Array.isArray(partner?.communityMutedUserIds)
+            ? partner.communityMutedUserIds.map(String).sort().join(',')
+            : '';
+        const until =
+            partner?.communityMutedUntil && typeof partner.communityMutedUntil === 'object'
+                ? Object.keys(partner.communityMutedUntil).sort().join(',')
+                : '';
+        return `${muted}|${until}`;
+    }, [partner?.communityMutedUserIds, partner?.communityMutedUntil]);
+
+    const activeMutedIds = useMemo(() => {
+        const mutedIds = Array.isArray(partner?.communityMutedUserIds)
+            ? partner.communityMutedUserIds.map(String)
+            : [];
+        const mutedUntil =
+            partner?.communityMutedUntil && typeof partner.communityMutedUntil === 'object'
+                ? partner.communityMutedUntil
+                : {};
+        const now = Date.now();
+        return new Set(
+            mutedIds.filter((id) => {
+                const untilRaw = mutedUntil[id];
+                const untilMs =
+                    typeof untilRaw?.toMillis === 'function'
+                        ? untilRaw.toMillis()
+                        : typeof untilRaw?.toDate === 'function'
+                          ? untilRaw.toDate().getTime()
+                          : Number(untilRaw) || 0;
+                if (untilMs && untilMs <= now) return false;
+                return true;
+            })
+        );
+    }, [muteStateKey, partner?.communityMutedUntil, partner?.communityMutedUserIds]);
 
     // Community participants — live profile + isOnline from users/{uid}
     useEffect(() => {
@@ -531,6 +596,7 @@ export function useStageChatRoom(stageId) {
                             photoURL: data.photo_url || data.photoURL,
                             isOnline: Boolean(data.isOnline),
                             isHost: Boolean(stageHostId && memberId === stageHostId),
+                            isMuted: activeMutedIds.has(String(memberId)),
                         });
                     }
                     publish();
@@ -543,7 +609,7 @@ export function useStageChatRoom(stageId) {
         );
 
         return () => unsubs.forEach((unsub) => unsub());
-    }, [partnerId, isMember, memberIdsKey]);
+    }, [partnerId, isMember, memberIdsKey, activeMutedIds, partner?.communityMembers, partner?.hostId, partner?.ownerId]);
 
     // Mark community as read
     useEffect(() => {
@@ -584,34 +650,76 @@ export function useStageChatRoom(stageId) {
                 banner_updated_at: serverTimestamp(),
                 ownerId: hostId || partnerId,
             };
-            if (Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_id')) {
+            if (
+                Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_id') ||
+                Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_playlist_id')
+            ) {
                 const ytId = String(fields.banner_youtube_id || '').trim();
-                if (/^[a-zA-Z0-9_-]{11}$/.test(ytId)) {
-                    payload.banner_youtube_sync_at = serverTimestamp();
-                } else if (!ytId) {
+                const listId = String(fields.banner_youtube_playlist_id || '').trim();
+                const hasYt =
+                    /^[a-zA-Z0-9_-]{11}$/.test(ytId) ||
+                    (/^[a-zA-Z0-9_-]{10,64}$/.test(listId) &&
+                        !(listId.length === 11 && !/^(PL|UU|RD|OL|LL|FL|WL)/i.test(listId)));
+                if (hasYt) {
+                    // Only stamp a new sync epoch when the caller asks for it
+                    // (new YouTube media / explicit syncYoutubePlayback). Title/text
+                    // edits must NOT reset sync_at — that made guest start= huge/broken.
+                    const refreshSync = Object.prototype.hasOwnProperty.call(
+                        fields,
+                        'banner_youtube_sync_client_ms'
+                    );
+                    if (refreshSync) {
+                        payload.banner_youtube_sync_at = serverTimestamp();
+                        if (!Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_paused')) {
+                            payload.banner_youtube_paused = false;
+                        }
+                        if (
+                            !Object.prototype.hasOwnProperty.call(
+                                fields,
+                                'banner_youtube_position_sec'
+                            )
+                        ) {
+                            payload.banner_youtube_position_sec = 0;
+                        }
+                    }
+                } else if (!ytId && !listId) {
                     payload.banner_youtube_sync_at = null;
+                    payload.banner_youtube_sync_client_ms = 0;
                 }
             }
             await setDoc(doc(db, 'stages', partnerId), payload, { merge: true });
         },
-        [isHost, partnerId]
+        [hostId, isHost, partnerId]
     );
 
-    const syncYoutubePlayback = useCallback(async () => {
-        if (!isHost || !partnerId || !banner.youtubeId) return;
-        try {
-            await setDoc(
-                doc(db, 'stages', partnerId),
-                {
+    const syncYoutubePlayback = useCallback(
+        async ({ paused, positionSec } = {}) => {
+            if (!isHost || !partnerId) return;
+            if (!banner.youtubeId && !banner.youtubePlaylistId) return;
+            try {
+                const payload = {
                     banner_youtube_sync_at: serverTimestamp(),
+                    // Instant guest math — avoid waiting for serverTimestamp resolution.
+                    banner_youtube_sync_client_ms: Date.now(),
                     ownerId: hostId || partnerId,
-                },
-                { merge: true }
-            );
-        } catch (err) {
-            console.error('[useStageChatRoom] youtube sync', err);
-        }
-    }, [isHost, partnerId, banner.youtubeId]);
+                };
+                if (typeof paused === 'boolean') {
+                    payload.banner_youtube_paused = paused;
+                }
+                // Only update position when explicitly provided (0 = hard stop / restart from start).
+                if (positionSec !== undefined && Number.isFinite(Number(positionSec))) {
+                    payload.banner_youtube_position_sec = Math.max(
+                        0,
+                        Math.floor(Number(positionSec))
+                    );
+                }
+                await setDoc(doc(db, 'stages', partnerId), payload, { merge: true });
+            } catch (err) {
+                console.error('[useStageChatRoom] youtube sync', err);
+            }
+        },
+        [banner.youtubeId, banner.youtubePlaylistId, hostId, isHost, partnerId]
+    );
 
     const setBannerImage = useCallback(
         async (file) => {
@@ -645,14 +753,20 @@ export function useStageChatRoom(stageId) {
     }, [banner.url, isHost, partnerId, replaceBanner, showToast, t]);
 
     const setBannerYoutube = useCallback(
-        async (videoId, { isShort = false } = {}) => {
+        async (
+            videoId,
+            { isShort = false, isLive = false, isMusic = false, playlistId = '' } = {}
+        ) => {
             if (!isHost || !partnerId) return false;
             const id = String(videoId || '').trim();
+            const listId = String(playlistId || '').trim();
             try {
-                if (id) {
+                if (id || listId) {
                     await unpinAllHostMessages();
                 }
-                await replaceBanner(buildBannerYoutubeUpdate(id, { isShort }));
+                await replaceBanner(
+                    buildBannerYoutubeUpdate(id, { isShort, isLive, isMusic, playlistId: listId })
+                );
                 return true;
             } catch (err) {
                 console.error('[useStageChatRoom] banner youtube', err);
@@ -661,6 +775,80 @@ export function useStageChatRoom(stageId) {
             }
         },
         [isHost, partnerId, replaceBanner, unpinAllHostMessages, showToast, t]
+    );
+
+    const setBannerVoice = useCallback(
+        async (audioBlob, durationSec = 0) => {
+            if (!audioBlob || !isHost || !partnerId || !uid) return false;
+            setUploadingBanner(true);
+            const previousUrl = String(banner.voiceUrl || '').trim();
+            try {
+                const url = await uploadVoiceMessage(audioBlob, uid);
+                const secs = Math.max(
+                    1,
+                    Math.min(
+                        BANNER_VOICE_MAX_DURATION_SEC,
+                        Math.floor(Number(durationSec) || 0) || 1
+                    )
+                );
+                await replaceBanner({
+                    ...buildBannerVoiceUpdate(url, secs),
+                    banner_voice_updated_at: serverTimestamp(),
+                });
+                if (previousUrl && previousUrl !== url) {
+                    void deleteStorageFileByUrl(previousUrl);
+                }
+                showToast(
+                    t('community_banner_voice_published', 'Voice message published to the banner.'),
+                    'success'
+                );
+                return true;
+            } catch (err) {
+                console.error('[useStageChatRoom] banner voice', err);
+                showToast(t('failed_send_voice', 'Could not send voice message.'), 'error');
+                return false;
+            } finally {
+                setUploadingBanner(false);
+            }
+        },
+        [banner.voiceUrl, isHost, partnerId, uid, replaceBanner, showToast, t]
+    );
+
+    const clearBannerVoice = useCallback(async () => {
+        if (!isHost || !partnerId) return false;
+        const previousUrl = String(banner.voiceUrl || '').trim();
+        if (!previousUrl) return false;
+        try {
+            await replaceBanner(buildBannerVoiceClearFields());
+            void deleteStorageFileByUrl(previousUrl);
+            return true;
+        } catch (err) {
+            console.error('[useStageChatRoom] clear banner voice', err);
+            showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
+            return false;
+        }
+    }, [banner.voiceUrl, isHost, partnerId, replaceBanner, showToast, t]);
+
+    const setBannerVoiceLoop = useCallback(
+        async (loop) => {
+            if (!isHost || !partnerId) return false;
+            if (!String(banner.voiceUrl || '').trim()) return false;
+            try {
+                await replaceBanner(buildBannerVoiceLoopUpdate(loop));
+                showToast(
+                    loop
+                        ? t('community_banner_voice_loop_on', 'Voice will repeat.')
+                        : t('community_banner_voice_loop_off', 'Voice plays once.'),
+                    'success'
+                );
+                return true;
+            } catch (err) {
+                console.error('[useStageChatRoom] banner voice loop', err);
+                showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
+                return false;
+            }
+        },
+        [banner.voiceUrl, isHost, partnerId, replaceBanner, showToast, t]
     );
 
     const updateBanner = useCallback(
@@ -902,34 +1090,88 @@ export function useStageChatRoom(stageId) {
         setPendingReplyTo(null);
     }, []);
 
-    const muteMemberInChat = useCallback(
-        async (memberId) => {
-            if (!isHost || !partnerId || !memberId || memberId === hostId) return false;
-
-            const confirmRemove = window.confirm(
-                t(
-                    'stage_remove_member_confirm',
-                    'Remove this member from the Stage? They will lose access to the chat.'
-                )
-            );
-            if (!confirmRemove) return false;
-
+    const callStageModeration = useCallback(
+        async (action, targetUid, extra = {}) => {
+            if (!partnerId || !targetUid || targetUid === hostId) return false;
             try {
                 const setStageMembership = httpsCallable(functions, 'setStageMembership');
                 await setStageMembership({
                     stageId: partnerId,
-                    action: 'remove_member',
-                    targetUid: memberId,
+                    action,
+                    targetUid,
+                    ...extra,
                 });
-                showToast(t('stage_member_removed', 'Member removed from Stage'), 'success');
                 return true;
             } catch (err) {
-                console.error('[useStageChatRoom] muteMemberInChat', err);
+                console.error(`[useStageChatRoom] ${action}`, err);
+                throw err;
+            }
+        },
+        [functions, hostId, partnerId]
+    );
+
+    /** Mute for this Stage only (does not carry to future Stages). duration: 5m | 1h | session */
+    const muteMemberInChat = useCallback(
+        async (memberId, duration = 'session') => {
+            if (!isHost || !partnerId || !memberId || memberId === hostId) return false;
+            try {
+                await callStageModeration('mute_member', memberId, { duration });
+                const label =
+                    duration === '5m'
+                        ? t('stage_mute_5_minutes', '5 minutes')
+                        : duration === '1h'
+                          ? t('stage_mute_1_hour', '1 hour')
+                          : t('stage_mute_entire_broadcast', 'Entire broadcast');
+                showToast(
+                    t('stage_member_muted_success', 'Muted for {{duration}}', { duration: label }),
+                    'success'
+                );
+                return true;
+            } catch (err) {
                 showToast(t('member_mute_error', 'Failed to update mute status'), 'error');
                 return false;
             }
         },
-        [isHost, partnerId, hostId, functions, showToast, t]
+        [callStageModeration, hostId, isHost, partnerId, showToast, t]
+    );
+
+    const kickMemberFromStage = useCallback(
+        async (memberId) => {
+            if (!isHost || !partnerId || !memberId || memberId === hostId) return false;
+            try {
+                await callStageModeration('remove_member', memberId);
+                showToast(t('stage_member_removed', 'Member removed from Stage'), 'success');
+                return true;
+            } catch (err) {
+                showToast(
+                    t('stage_member_remove_error', 'Failed to remove member from Stage'),
+                    'error'
+                );
+                return false;
+            }
+        },
+        [callStageModeration, hostId, isHost, partnerId, showToast, t]
+    );
+
+    const blockMemberFromStages = useCallback(
+        async (memberId) => {
+            if (!isHost || !partnerId || !memberId || memberId === hostId) return false;
+            try {
+                await callStageModeration('block_member', memberId);
+                showToast(
+                    t(
+                        'stage_member_blocked_success',
+                        'Blocked from this and all your future Stages'
+                    ),
+                    'success'
+                );
+                return true;
+            } catch (err) {
+                showToast(t('member_blocked_error', 'Failed to block member'), 'error');
+                return false;
+            }
+        },
+        [callStageModeration, hostId, isHost, partnerId, showToast, t]
     );
 
     const deleteHostSpotlightMessage = useCallback(
@@ -1084,22 +1326,17 @@ export function useStageChatRoom(stageId) {
         [isHost, partnerId, showToast, t]
     );
 
-    const uploadCommunityChatGuestFrameBackgroundFile = useCallback(
-        async (file) => {
-            if (!file || !uid) return null;
-            setGuestFrameBackgroundUploading(true);
-            try {
-                return await uploadImage(file, uid);
-            } catch (err) {
-                console.error('[useStageChatRoom] uploadCommunityChatGuestFrameBackgroundFile', err);
-                notifyImageUploadError(showToast, err, t);
-                return null;
-            } finally {
-                setGuestFrameBackgroundUploading(false);
-            }
-        },
-        [showToast, t, uid]
-    );
+    /** Device upload removed — guest-frame images are AI-only. */
+    const uploadCommunityChatGuestFrameBackgroundFile = useCallback(async () => {
+        showToast(
+            t(
+                'community_guest_frame_bg_upload_disabled',
+                'Chat backgrounds are AI-generated only.'
+            ),
+            'info'
+        );
+        return null;
+    }, [showToast, t]);
 
     const generateCommunityChatGuestFrameBackgroundImage = useCallback(
         async (userPrompt) => {
@@ -1157,8 +1394,11 @@ export function useStageChatRoom(stageId) {
         async ({ themeId, guestFrame }) => {
             if (!isHost || !partnerId) return false;
             const id = COMMUNITY_CHAT_ZONE_THEME_IDS.includes(themeId) ? themeId : 'stage';
+            // Image backgrounds: AI-generated custom URLs only (no presets / device upload).
             const imageMode = guestFrame?.imageMode || 'none';
-            const hasImage = imageMode === 'preset' || imageMode === 'custom';
+            const customUrl =
+                imageMode === 'custom' ? String(guestFrame?.customUrl || '').trim() : '';
+            const hasImage = Boolean(customUrl);
             const hasColor = guestFrame?.colorOverlayEnabled !== false;
             const intensity = sanitizeBannerBgDensity(guestFrame?.intensity, 100);
             const color1 = normalizeCommunityGuestFrameHexColor(guestFrame?.colorStart);
@@ -1166,33 +1406,18 @@ export function useStageChatRoom(stageId) {
 
             const update = {
                 communityChatZoneTheme: id,
+                communityChatGuestFrameBgPreset: null,
             };
 
             if (!hasImage && !hasColor) {
                 update.communityChatGuestFrameBgMode = 'none';
-                update.communityChatGuestFrameBgPreset = null;
                 update.communityChatGuestFrameBgUrl = null;
                 update.communityChatGuestFrameBgColor1 = null;
                 update.communityChatGuestFrameBgColor2 = null;
                 update.communityChatGuestFrameBgIntensity = null;
             } else if (hasImage) {
-                if (imageMode === 'preset') {
-                    const presetId = COMMUNITY_GUEST_FRAME_BACKGROUND_PRESET_IDS.includes(
-                        guestFrame?.presetId
-                    )
-                        ? guestFrame.presetId
-                        : null;
-                    if (!presetId) return false;
-                    update.communityChatGuestFrameBgMode = 'preset';
-                    update.communityChatGuestFrameBgPreset = presetId;
-                    update.communityChatGuestFrameBgUrl = null;
-                } else {
-                    const url = String(guestFrame?.customUrl || '').trim();
-                    if (!url) return false;
-                    update.communityChatGuestFrameBgMode = 'custom';
-                    update.communityChatGuestFrameBgPreset = null;
-                    update.communityChatGuestFrameBgUrl = url;
-                }
+                update.communityChatGuestFrameBgMode = 'custom';
+                update.communityChatGuestFrameBgUrl = customUrl;
                 if (hasColor) {
                     update.communityChatGuestFrameBgColor1 = color1;
                     update.communityChatGuestFrameBgColor2 = color2;
@@ -1204,7 +1429,6 @@ export function useStageChatRoom(stageId) {
                 }
             } else {
                 update.communityChatGuestFrameBgMode = 'color';
-                update.communityChatGuestFrameBgPreset = null;
                 update.communityChatGuestFrameBgUrl = null;
                 update.communityChatGuestFrameBgIntensity = intensity;
                 update.communityChatGuestFrameBgColor1 = color1;
@@ -1303,10 +1527,16 @@ export function useStageChatRoom(stageId) {
         pendingReplyTo,
         startReplyToMessage,
         cancelReplyToMessage,
+        isStageRoom: true,
         muteMemberInChat,
+        kickMemberFromStage,
+        blockMemberFromStages,
         setBannerImage,
         clearBannerImage,
         setBannerYoutube,
+        setBannerVoice,
+        clearBannerVoice,
+        setBannerVoiceLoop,
         syncYoutubePlayback,
         updateBanner,
         currentUserId: uid,

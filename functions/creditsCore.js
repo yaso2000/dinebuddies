@@ -1,8 +1,9 @@
 /**
  * Dine Credits — server-side ledger and spend helpers.
- * Two wallets (never mixed on the client):
- * - `paidCredits` — purchase / consumption wallet
- * - `savedCredits` — gift receipts at 50% of sent value
+ * Two wallets:
+ * - `paidCredits` — purchase wallet (buys, gifts-out, and primary spend)
+ * - `savedCredits` — gift receipts at 50% of sent value; spendable on internal
+ *   services (invites, AI) after purchase balance, unless allowSavedCredits=false
  * Never expose raw balance updates to clients; use transactions + credit_transactions.
  */
 const admin = require('firebase-admin');
@@ -12,6 +13,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
+const { planCreditSpend } = require('./creditsSpendMath');
 
 /** @typedef {'user'|'business'} AccountRole */
 
@@ -79,7 +81,8 @@ function computeGiftSavedAmount(giftSentAmount) {
 }
 
 /**
- * Spend from purchase wallet (`paidCredits`) only.
+ * Spend credits: purchase wallet first, then savings (when allowSavedCredits).
+ * Internal spends (invites, AI, gifts) use default allowSavedCredits=true.
  * @param {FirebaseFirestore.Transaction} tx
  * @param {FirebaseFirestore.DocumentReference} userRef
  * @param {Record<string, unknown>} userData
@@ -90,30 +93,47 @@ function computeGiftSavedAmount(giftSentAmount) {
  *   type: string,
  *   reason: string,
  *   relatedId?: string|null,
+ *   allowSavedCredits?: boolean,
  * }} args
- * @returns {{ paidUsed: number, balanceType: string }}
+ * @returns {{ paidUsed: number, savedUsed: number, freeUsed: number, balanceType: string }}
  */
 function spendCreditsInTransaction(tx, userRef, userData, args) {
     const { uid, accountRole, amount, type, reason, relatedId } = args;
-    const n = Math.floor(Number(amount));
-    if (!Number.isFinite(n) || n <= 0) {
-        return { paidUsed: 0, balanceType: 'none' };
-    }
+    const planned = planCreditSpend({
+        paidCredits: userData.paidCredits,
+        savedCredits: userData.savedCredits,
+        amount,
+        allowSavedCredits: args.allowSavedCredits,
+    });
 
-    let paid = Math.max(0, Math.floor(Number(userData.paidCredits) || 0));
-    if (paid < n) {
+    if (!planned.ok) {
+        if (planned.code === 'INVALID_AMOUNT') {
+            return { paidUsed: 0, savedUsed: 0, freeUsed: 0, balanceType: 'none' };
+        }
         const err = new Error('INSUFFICIENT_CREDITS');
         err.code = 'INSUFFICIENT_CREDITS';
         throw err;
     }
 
-    paid -= n;
+    const { amount: n, paidUsed, savedUsed, paidAfter, savedAfter, balanceType, wallet } = planned;
 
-    tx.update(userRef, {
-        paidCredits: paid,
+    /** @type {Record<string, unknown>} */
+    const patch = {
+        paidCredits: paidAfter,
+        // STRICT: increment by full deduction; never touch totalSavedCreditsEarned (Shield).
         totalCreditsSpent: FieldValue.increment(n),
         updatedAt: FieldValue.serverTimestamp(),
-    });
+    };
+    if (savedUsed > 0) {
+        patch.savedCredits = savedAfter;
+    }
+    tx.update(userRef, patch);
+
+    // Keep in-tx reads consistent if the same user doc is reused later.
+    userData.paidCredits = paidAfter;
+    if (savedUsed > 0) {
+        userData.savedCredits = savedAfter;
+    }
 
     const ledgerRef = db.collection('credit_transactions').doc();
     tx.set(ledgerRef, {
@@ -121,16 +141,17 @@ function spendCreditsInTransaction(tx, userRef, userData, args) {
         accountRole,
         type,
         amount: -n,
-        balanceType: 'paid',
-        wallet: 'purchase',
+        balanceType,
+        wallet,
         reason: String(reason || '').slice(0, 200),
         relatedId: relatedId ? String(relatedId).slice(0, 200) : null,
         createdAt: FieldValue.serverTimestamp(),
-        paidUsed: n,
+        paidUsed,
+        savedUsed,
         freeUsed: 0,
     });
 
-    return { paidUsed: n, balanceType: 'paid', freeUsed: 0 };
+    return { paidUsed, savedUsed, freeUsed: 0, balanceType };
 }
 
 /**

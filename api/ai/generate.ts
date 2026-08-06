@@ -163,7 +163,7 @@ export default async function handler(req: any, res: any) {
     const request = parsed;
     const creditCost = resolveCreditCost(request.generationPackage, legacyPostType);
 
-    let charged: { freeUsed: number; paidUsed: number } | null = null;
+    let charged: { freeUsed: number; paidUsed: number; savedUsed: number } | null = null;
     let db: Firestore | null = null;
     let userRef: DocumentReference | null = null;
 
@@ -183,7 +183,11 @@ export default async function handler(req: any, res: any) {
             });
         }
 
-        charged = { freeUsed: spend.freeUsed, paidUsed: spend.paidUsed };
+        charged = {
+            freeUsed: spend.freeUsed,
+            paidUsed: spend.paidUsed,
+            savedUsed: Number(spend.savedUsed) || 0,
+        };
         db = spend.db;
         userRef = spend.userRef;
 

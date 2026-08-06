@@ -789,21 +789,40 @@
 
 .credits-wallet__pack-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: 1fr;
+    gap: 12px;
 }
 
 .credits-wallet-page .credits-wallet__pack.settings-card {
-    padding: 1rem 0.75rem 0.85rem;
+    padding: 1rem 1rem 0.95rem;
     border-radius: 16px;
     position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    text-align: center;
+    align-items: stretch;
+    text-align: start;
     border: 1px solid var(--border-color);
     background: linear-gradient(180deg, color-mix(in srgb, var(--bg-card) 92%, var(--primary) 4%), var(--bg-card));
     transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.credits-wallet__pack-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.credits-wallet__pack-copy {
+    flex: 1;
+    min-width: 0;
+}
+
+.credits-wallet__pack-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+    width: 100%;
 }
 
 .credits-wallet__pack:hover {
@@ -838,7 +857,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 8px;
+    margin-bottom: 0;
+    flex-shrink: 0;
     background: color-mix(in srgb, var(--primary) 12%, transparent);
     border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border-color));
 }
@@ -872,7 +892,7 @@
 .credits-wallet__pack-price {
     font-size: 1.2rem;
     font-weight: 900;
-    margin-top: 6px;
+    margin-top: 4px;
     line-height: 1.1;
     color: var(--primary);
 }
@@ -882,7 +902,7 @@
     color: var(--primary);
     font-weight: 800;
     margin-top: 4px;
-    min-height: 1.1em;
+    min-height: 0;
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
@@ -892,10 +912,10 @@
 }
 
 .credits-wallet__buy-btn {
-    margin-top: 10px;
+    margin-top: 0;
     width: 100%;
-    padding: 0.5rem 0.65rem;
-    font-size: 0.8rem;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.88rem;
     font-weight: 800;
     border-radius: 11px;
     border: none;
@@ -932,11 +952,11 @@
     }
 
     .credits-wallet__pack-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
+        grid-template-columns: 1fr;
+        gap: 14px;
     }
 
     .credits-wallet-page .credits-wallet__pack.settings-card {
-        padding: 1.1rem 0.85rem 0.95rem;
+        padding: 1.15rem 1.15rem 1.05rem;
     }
 }

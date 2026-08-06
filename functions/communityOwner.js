@@ -1,8 +1,25 @@
 /**
  * Resolve business community owners from users/ or restaurants/ (Google-imported profiles).
+ * Community join/chat is available for Free and Paid business listings.
+ * Business Stage rooms are separate and disabled for business hosts.
  */
 
 /**
+ * @param {{ source: string; data: Record<string, unknown> } | null} owner
+ */
+function isCommunityOwnerBusiness(owner) {
+    if (!owner?.data) return false;
+    const data = owner.data;
+    const role = String(data.role || data.accountType || data.accountRole || '').toLowerCase();
+    if (role === 'business' || role === 'partner') return true;
+    if (data.isBusiness === true) return true;
+    // Any restaurants/ listing can accept community members (virtual or claimed).
+    if (owner.source === 'restaurants') return true;
+    return false;
+}
+
+/**
+ * Prefer a doc that is a valid community owner when the same id exists in both collections.
  * @param {FirebaseFirestore.Firestore} db
  * @param {string} partnerId
  * @returns {Promise<{
@@ -17,34 +34,19 @@ async function resolveCommunityOwner(db, partnerId) {
     if (!id) return null;
 
     const userRef = db.collection('users').doc(id);
-    const userSnap = await userRef.get();
-    if (userSnap.exists) {
-        return { source: 'users', ref: userRef, id, data: userSnap.data() || {} };
-    }
-
     const restaurantRef = db.collection('restaurants').doc(id);
-    const restaurantSnap = await restaurantRef.get();
-    if (restaurantSnap.exists) {
-        return { source: 'restaurants', ref: restaurantRef, id, data: restaurantSnap.data() || {} };
-    }
+    const [userSnap, restaurantSnap] = await Promise.all([userRef.get(), restaurantRef.get()]);
 
-    return null;
-}
+    const userOwner = userSnap.exists
+        ? { source: 'users', ref: userRef, id, data: userSnap.data() || {} }
+        : null;
+    const restaurantOwner = restaurantSnap.exists
+        ? { source: 'restaurants', ref: restaurantRef, id, data: restaurantSnap.data() || {} }
+        : null;
 
-/**
- * @param {{ source: string; data: Record<string, unknown> } | null} owner
- */
-function isCommunityOwnerBusiness(owner) {
-    if (!owner?.data) return false;
-    const data = owner.data;
-    const role = String(data.role || data.accountType || '').toLowerCase();
-    if (role === 'business' || role === 'partner') return true;
-    if (data.isBusiness === true) return true;
-    if (owner.source === 'restaurants') {
-        if (data.isVirtual === true) return true;
-        if (String(data.accountType || '').toLowerCase() === 'business') return true;
-    }
-    return false;
+    if (userOwner && isCommunityOwnerBusiness(userOwner)) return userOwner;
+    if (restaurantOwner && isCommunityOwnerBusiness(restaurantOwner)) return restaurantOwner;
+    return userOwner || restaurantOwner || null;
 }
 
 /**
@@ -54,9 +56,15 @@ function isCommunityOwnerPublic(owner) {
     if (!owner?.data) return false;
     const data = owner.data;
     if (data.emailVerified === true) return true;
-    if (owner.source === 'restaurants' && data.isVirtual === true) return true;
+    if (owner.source === 'restaurants') {
+        if (data.isVirtual === true) return true;
+        const bi = data.businessInfo && typeof data.businessInfo === 'object' ? data.businessInfo : {};
+        if (bi.isPublished !== false) return true;
+        return true;
+    }
+    // Published free businesses should still accept join / member lists.
     const bi = data.businessInfo && typeof data.businessInfo === 'object' ? data.businessInfo : {};
-    if (owner.source === 'restaurants' && bi.isPublished !== false) return true;
+    if (bi.isPublished === true) return true;
     return false;
 }
 

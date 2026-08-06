@@ -33,6 +33,35 @@ export const uploadImage = async (file, userId, options = {}) => {
     }
 };
 
+/** Prefer MP4/AAC on Safari/iOS (WebM is often silent or unplayable there). */
+export const pickAudioRecorderMimeType = () => {
+    if (typeof MediaRecorder === 'undefined') return '';
+    const candidates = [
+        'audio/mp4;codecs=mp4a.40.2',
+        'audio/mp4',
+        'audio/aac',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+    ];
+    for (const type of candidates) {
+        try {
+            if (MediaRecorder.isTypeSupported(type)) return type;
+        } catch {
+            /* ignore */
+        }
+    }
+    return '';
+};
+
+const audioExtensionForMime = (mimeType = '') => {
+    const type = String(mimeType || '').toLowerCase();
+    if (type.includes('mp4') || type.includes('m4a') || type.includes('aac')) return 'm4a';
+    if (type.includes('ogg')) return 'ogg';
+    if (type.includes('mpeg') || type.includes('mp3')) return 'mp3';
+    return 'webm';
+};
+
 /**
  * Upload voice message to Firebase Storage
  * @param {Blob} audioBlob - Audio blob
@@ -43,10 +72,12 @@ export const uploadVoiceMessage = async (audioBlob, userId) => {
     try {
         const timestamp = Date.now();
         const uniqueId = Math.random().toString(36).substring(2, 8);
-        const fileName = `${userId}_${timestamp}_${uniqueId}.webm`;
+        const contentType = String(audioBlob?.type || '').trim() || 'audio/webm';
+        const ext = audioExtensionForMime(contentType);
+        const fileName = `${userId}_${timestamp}_${uniqueId}.${ext}`;
         const storageRef = ref(storage, `voice_messages/${userId}/${fileName}`);
 
-        await uploadBytes(storageRef, audioBlob);
+        await uploadBytes(storageRef, audioBlob, { contentType });
         const downloadURL = await getDownloadURL(storageRef);
 
         return downloadURL;
@@ -90,38 +121,57 @@ export const uploadFile = async (file, userId) => {
 };
 
 /**
- * Record audio using MediaRecorder API
- * @param {number} maxDuration - Max duration in seconds (default: 60)
- * @returns {Promise<Blob>} - Audio blob
- */
-/**
- * Start recording audio
- * @returns {Promise<{stop: () => Promise<Blob>, mediaRecorder: MediaRecorder}>}
+ * Start recording audio (MP4/AAC on iPhone/Safari when available).
+ * @returns {Promise<{stop: () => Promise<Blob>, mediaRecorder: MediaRecorder, mimeType: string}>}
  */
 export const startRecording = () => {
     return new Promise((resolve, reject) => {
-        navigator.mediaDevices.getUserMedia({ audio: true })
+        navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+            },
+        })
             .then(stream => {
-                const mediaRecorder = new MediaRecorder(stream);
+                const mimeType = pickAudioRecorderMimeType();
+                const mediaRecorder = mimeType
+                    ? new MediaRecorder(stream, { mimeType })
+                    : new MediaRecorder(stream);
+                const resolvedMime =
+                    mediaRecorder.mimeType || mimeType || 'audio/webm';
                 const audioChunks = [];
 
                 mediaRecorder.addEventListener('dataavailable', event => {
-                    audioChunks.push(event.data);
+                    if (event.data && event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
                 });
 
                 const stop = () => {
                     return new Promise(resolveStop => {
-                        mediaRecorder.addEventListener('stop', () => {
-                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const finish = () => {
+                            const blobType =
+                                audioChunks[0]?.type || resolvedMime || 'audio/webm';
+                            const audioBlob = new Blob(audioChunks, { type: blobType });
                             stream.getTracks().forEach(track => track.stop());
                             resolveStop(audioBlob);
-                        });
+                        };
+                        mediaRecorder.addEventListener('stop', finish, { once: true });
+                        try {
+                            if (mediaRecorder.state === 'recording') {
+                                mediaRecorder.requestData?.();
+                            }
+                        } catch {
+                            /* ignore */
+                        }
                         mediaRecorder.stop();
                     });
                 };
 
-                mediaRecorder.start();
-                resolve({ stop, mediaRecorder });
+                // Timeslice helps Safari flush chunks before stop.
+                mediaRecorder.start(250);
+                resolve({ stop, mediaRecorder, mimeType: resolvedMime });
             })
             .catch(reject);
     });

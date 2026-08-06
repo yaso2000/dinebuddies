@@ -53,6 +53,7 @@ import { isAuthRoutePath } from '../utils/authRoutePaths';
 import { usePresence } from '../hooks/usePresence';
 import { AppText } from "./base";
 import InviteCreateTypePicker from './InviteCreateTypePicker';
+import { useMyLiveStage } from '../hooks/useMyLiveStage';
 
 function DesktopNavGroup({ title, variant = 'default', children }) {
   const items = React.Children.toArray(children).filter(Boolean);
@@ -84,6 +85,11 @@ const Layout = ({ children }) => {
 
   const [businessCreateOpen, setBusinessCreateOpen] = useState(false);
   const [inviteCreateOpen, setInviteCreateOpen] = useState(false);
+  const {
+    stageId: businessLiveStageId,
+    hasLiveStage: businessHasLiveStage,
+    loading: businessLiveStageLoading,
+  } = useMyLiveStage();
 
   const viewerUid = currentUser?.uid || currentUser?.id;
   const businessNavHintEarly = useMemo(() => {
@@ -233,12 +239,18 @@ const Layout = ({ children }) => {
   location.pathname.startsWith('/invite/p/');
   const isCommunityChatPath = location.pathname.startsWith('/community/');
   const isStageChatPath = location.pathname.startsWith('/stage/');
+  const isFirstEntryHomePath =
+    location.pathname === '/posts-feed' ||
+    location.pathname === '/business-dashboard' ||
+    location.pathname.startsWith('/business/');
   const keepOutletMountedWhileLoading =
-  isAuthRoutePath(location.pathname) ||
-  ((isCommunityChatPath || isStageChatPath) && Boolean(currentUser?.uid)) ||
-  (isAdminPath || isCreateInvitationPath || isPrivateInvitationDeepLink) &&
-  Boolean(currentUser?.uid);
+    isAuthRoutePath(location.pathname) ||
+    ((isCommunityChatPath || isStageChatPath) && Boolean(currentUser?.uid)) ||
+    (isFirstEntryHomePath && Boolean(currentUser?.uid)) ||
+    ((isAdminPath || isCreateInvitationPath || isPrivateInvitationDeepLink) &&
+      Boolean(currentUser?.uid));
 
+  // Do not tear down the first home page on auth/profile loading flips.
   if (loading && !keepOutletMountedWhileLoading) {
     return <AppShellLoading variant="session" />;
   }
@@ -301,9 +313,15 @@ const Layout = ({ children }) => {
   location.pathname === '/search/list' ||
   location.pathname.startsWith('/search/');
   const isSearchListRoute =
+<<<<<<< HEAD
   location.pathname === '/search/list' || location.pathname.startsWith('/search/list/');
   const isConnectMagneticRoute =
   location.pathname === '/search' || location.pathname === '/search/';
+=======
+  location.pathname === '/search' ||
+  location.pathname === '/search/list' ||
+  location.pathname.startsWith('/search/list/');
+>>>>>>> ac703671 (Restore local Stage and chat changes)
   const isInboxMessagesActive = isMessagesHub && !isNotificationsRoute;
   const isAdminRoute = location.pathname.startsWith('/admin');
 
@@ -488,7 +506,7 @@ const Layout = ({ children }) => {
                                 to="/stages"
                                 className={`notification-bell header-stages-btn${location.pathname === '/stages' || location.pathname.startsWith('/stage/') ? ' active' : ''}`}
                                 aria-label={t('stages_hub_title', 'Stages')}
-                                title={t('stages_hub_title', 'Stages')}
+                                title={t('stages_hub_live_subtitle', 'Browse live open rooms near you')}
                               >
                                 <FaMicrophone />
                                 {(stageUnreadCount > 0 || stageActiveCount > 0) && (
@@ -568,6 +586,7 @@ const Layout = ({ children }) => {
                                 <FaPenAlt aria-hidden /><AppText as="span">{t('ai_text_nav', 'AI Text')}</AppText>
                             </Link>
                         {!isBusinessAccount && currentUser &&
+          <>
           <button
             type="button"
             className={`ds-nav-item${inviteCreateFabActive || inviteCreateOpen ? ' active' : ''}`}
@@ -577,6 +596,38 @@ const Layout = ({ children }) => {
             
                                 <FaPlusCircle /><AppText as="span">{t('create_invitation', 'Create Invitation')}</AppText>
                             </button>
+          <button
+            type="button"
+            className={`ds-nav-item${
+              location.pathname === '/create-stage' ||
+              (businessHasLiveStage &&
+                businessLiveStageId &&
+                location.pathname === `/stage/${businessLiveStageId}`)
+                ? ' active'
+                : ''
+            }`}
+            disabled={businessLiveStageLoading}
+            aria-busy={businessLiveStageLoading || undefined}
+            onClick={() => {
+              if (businessLiveStageLoading) return;
+              if (businessHasLiveStage && businessLiveStageId) {
+                navigate(`/stage/${businessLiveStageId}`, {
+                  state: { stageHostId: currentUser?.uid || null },
+                });
+                return;
+              }
+              navigate('/create-stage');
+            }}>
+            <FaMicrophone />
+            <AppText as="span">
+              {businessLiveStageLoading
+                ? t('loading_stages', 'Loading stages…')
+                : businessHasLiveStage
+                  ? t('invite_enter_stage_title', 'Enter Stage')
+                  : t('create_stage_open', 'Open Stage')}
+            </AppText>
+          </button>
+          </>
           }
           </DesktopNavGroup>
           }
@@ -810,7 +861,10 @@ const Layout = ({ children }) => {
                                     {t('business_create_title', 'Create')}
                                 </AppText>
                                 <AppText as="p" className="business-create-sheet__subtitle">
-                                    {t('business_create_subtitle', 'Choose what you want to publish')}
+                                    {t(
+                                      'business_create_subtitle',
+                                      'Publish a featured post for your community.'
+                                    )}
                                 </AppText>
                             </div>
                             <button

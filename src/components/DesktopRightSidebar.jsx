@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import RankingSidebarWidget from './RankingSidebarWidget';
 import SuggestedFriendsSidebarWidget from './SuggestedFriendsSidebarWidget';
 import PublicInvitationsSidebarWidget from './PublicInvitationsSidebarWidget';
+import FeaturedBusinessesSidebarWidget from './FeaturedBusinessesSidebarWidget';
 import { AppText } from './base';
 
 /** Desktop-only right column — stable component (must not be defined inside Layout). */
@@ -15,6 +16,7 @@ export default function DesktopRightSidebar() {
       <RankingSidebarWidget />
       <SuggestedFriendsSidebarWidget />
       <PublicInvitationsSidebarWidget />
+      <FeaturedBusinessesSidebarWidget />
       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', paddingLeft: '4px', lineHeight: 2, display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
         <AppText as="span" dir="ltr">© {new Date().getFullYear()} DineBuddies</AppText>
         {' · '}

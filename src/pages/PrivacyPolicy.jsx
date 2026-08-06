@@ -136,11 +136,11 @@ const PrivacyPolicy = () => {
                             <li>استضافة Firebase</li>
                         </ul>
                         <AppText as="p">تعالج Firebase البيانات وفقًا لسياسات خصوصية Google.</AppText>
-                        <AppText as="p"><a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>https://firebase.google.com/support/privacy</a></AppText>
+                        <AppText as="p"><a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener noreferrer" data-external-allow="system" style={{ color: 'var(--primary)' }}>https://firebase.google.com/support/privacy</a></AppText>
 
                         <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.2 منصة خرائط Google</AppText>
                         <AppText as="p">قد تستخدم DineBuddies واجهات برمجة تطبيقات خرائط Google لعرض المواقع أو المطاعم أو الدعوات على الخرائط. يخضع استخدام خرائط Google لسياسة خصوصية Google وشروط خدمة خرائط Google.</AppText>
-                        <AppText as="p"><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>https://policies.google.com/privacy</a></AppText>
+                        <AppText as="p"><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" data-external-allow="system" style={{ color: 'var(--primary)' }}>https://policies.google.com/privacy</a></AppText>
 
                         <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.3 خدمات التحليلات</AppText>
                         <AppText as="p">قد نستخدم خدمات التحليلات مثل تحليلات Google وتحليلات Firebase. تساعدنا هذه الخدمات على فهم كيفية تفاعل المستخدمين مع المنصة. عادة ما يتم تجميع بيانات التحليلات ولا تحدد هوية المستخدمين الفرديين بشكل مباشر.</AppText>
@@ -348,11 +348,11 @@ const PrivacyPolicy = () => {
                             <li>Firebase Hosting</li>
                         </ul>
                         <AppText as="p">Firebase processes data according to Google's privacy policies.</AppText>
-                        <AppText as="p"><a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>https://firebase.google.com/support/privacy</a></AppText>
+                        <AppText as="p"><a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener noreferrer" data-external-allow="system" style={{ color: 'var(--primary)' }}>https://firebase.google.com/support/privacy</a></AppText>
 
                         <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.2 Google Maps Platform</AppText>
                         <AppText as="p">DineBuddies may use Google Maps APIs to display locations, restaurants, or invitations on maps. Use of Google Maps is subject to Google Privacy Policy and Google Maps Terms of Service.</AppText>
-                        <AppText as="p"><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>https://policies.google.com/privacy</a></AppText>
+                        <AppText as="p"><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" data-external-allow="system" style={{ color: 'var(--primary)' }}>https://policies.google.com/privacy</a></AppText>
 
                         <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.3 Analytics Services</AppText>
                         <AppText as="p">We may use analytics services such as Google Analytics and Firebase Analytics. These services help us understand how users interact with the platform. Analytics data is typically aggregated and does not directly identify individual users.</AppText>

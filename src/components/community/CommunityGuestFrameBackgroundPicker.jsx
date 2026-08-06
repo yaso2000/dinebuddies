@@ -1,12 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaBan, FaCheck, FaImage, FaMagic, FaUpload } from 'react-icons/fa';
+import { FaBan, FaCheck, FaImage, FaMagic, FaTrash } from 'react-icons/fa';
 import { AppText, AppTextInput } from '../base';
-import {
-  COMMUNITY_GUEST_FRAME_BACKGROUND_PRESETS,
-  buildCommunityGuestFrameColorBackgroundCss,
-  getCommunityGuestFramePresetUrl,
-} from '../../constants/communityChatGuestFrameLook';
+import { buildCommunityGuestFrameColorBackgroundCss } from '../../constants/communityChatGuestFrameLook';
 import BannerGradientPresetCarousel from './BannerGradientPresetCarousel';
 import {
   DEFAULT_BANNER_BG,
@@ -34,35 +30,6 @@ function NoneBackgroundCard({ selected, disabled, onSelect, label }) {
       >
         <FaBan size={14} />
       </div>
-      <AppText as="span" className="community-zone-theme-picker__texture-card-title">
-        {label}
-        {selected ? (
-          <FaCheck size={10} className="community-zone-theme-picker__check" aria-hidden />
-        ) : null}
-      </AppText>
-    </button>
-  );
-}
-
-function PresetBackgroundCard({ preset, selected, disabled, onSelect, t }) {
-  const label = t(preset.labelKey, preset.labelDefault);
-  const imageUrl = getCommunityGuestFramePresetUrl(preset.id);
-
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      aria-label={label}
-      disabled={disabled}
-      className={`community-zone-theme-picker__texture-card${selected ? ' community-zone-theme-picker__texture-card--active' : ''}`}
-      onClick={() => onSelect?.(preset.id)}
-    >
-      <div
-        className="community-zone-theme-picker__bg-preview"
-        style={{ backgroundImage: imageUrl ? `url("${imageUrl}")` : undefined }}
-        aria-hidden
-      />
       <AppText as="span" className="community-zone-theme-picker__texture-card-title">
         {label}
         {selected ? (
@@ -111,26 +78,26 @@ function GuestFrameBackgroundPreview({ background }) {
   );
 }
 
+/**
+ * Lower chat-frame background editor.
+ * Image backgrounds are AI-generated only (no device upload / camera / presets).
+ */
 export default function CommunityGuestFrameBackgroundPicker({
   background,
   saving = false,
-  uploading = false,
   generating = false,
   onSelectTransparent,
   onSelectGradientPreset,
-  onChangeColors,
   onChangeDensity,
   onSelectImageNone,
-  onSelectPreset,
-  onUploadFile,
   onGenerateAi,
 }) {
   const { t } = useTranslation();
-  const fileInputRef = useRef(null);
   const [aiPrompt, setAiPrompt] = useState('');
-  const busy = saving || uploading || generating;
+  const busy = saving || generating;
   const imageMode = background?.imageMode || 'none';
-  const isImageNone = imageMode !== 'preset' && imageMode !== 'custom';
+  const hasAiImage = imageMode === 'custom' && Boolean(background?.imageUrl);
+  const isImageNone = !hasAiImage;
   const colorOverlayEnabled = background?.colorOverlayEnabled !== false;
   const colorStart = sanitizeBannerHexColor(
     background?.pickerColorStart,
@@ -142,13 +109,6 @@ export default function CommunityGuestFrameBackgroundPicker({
   );
   const density = sanitizeBannerBgDensity(background?.intensity ?? 100);
   const noneLabel = t('community_guest_frame_bg_none', 'None');
-
-  const handleFileChange = (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    onUploadFile?.(file);
-  };
 
   const handleGenerateAi = () => {
     if (busy) return;
@@ -162,14 +122,11 @@ export default function CommunityGuestFrameBackgroundPicker({
       </AppText>
       <AppText as="p" className="community-zone-theme-picker__bg-ai-hint">
         {t(
-          'community_guest_frame_bg_image_hint',
-          'Optional image behind the message list. Color overlay (below) sits on top.'
+          'community_guest_frame_bg_image_ai_only_hint',
+          'AI-generated images only — no upload from device or camera. Optional color overlay sits on top.'
         )}
       </AppText>
 
-      <AppText as="span" className="community-zone-theme-picker__subsection-label">
-        {t('community_guest_frame_bg_presets_label', 'Preset backgrounds')}
-      </AppText>
       <div className="community-zone-theme-picker__texture-grid" role="radiogroup">
         <NoneBackgroundCard
           selected={isImageNone}
@@ -177,53 +134,7 @@ export default function CommunityGuestFrameBackgroundPicker({
           onSelect={onSelectImageNone}
           label={noneLabel}
         />
-        {COMMUNITY_GUEST_FRAME_BACKGROUND_PRESETS.map((preset) => (
-          <PresetBackgroundCard
-            key={preset.id}
-            preset={preset}
-            selected={imageMode === 'preset' && background?.presetId === preset.id}
-            disabled={busy}
-            onSelect={onSelectPreset}
-            t={t}
-          />
-        ))}
       </div>
-
-      <AppText as="span" className="community-zone-theme-picker__subsection-label">
-        {t('community_guest_frame_bg_custom_label', 'Your own background')}
-      </AppText>
-      <div className="community-zone-theme-picker__bg-actions">
-        <button
-          type="button"
-          className="community-zone-theme-picker__bg-action-btn"
-          disabled={busy}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <FaUpload aria-hidden />
-          {uploading
-            ? t('community_guest_frame_bg_uploading', 'Uploading…')
-            : t('community_guest_frame_bg_upload', 'Upload from device')}
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          hidden
-          onChange={handleFileChange}
-        />
-      </div>
-      <AppText as="p" className="community-zone-theme-picker__bg-ai-hint">
-        {t(
-          'community_guest_frame_bg_upload_hint',
-          'Use a wide image (16:9 works best). Members see it behind the message list.'
-        )}
-      </AppText>
-
-      {imageMode === 'custom' && background?.imageUrl ? (
-        <div className="community-zone-theme-picker__bg-custom-active">
-          <img src={background.imageUrl} alt="" />
-        </div>
-      ) : null}
 
       <div className="community-zone-theme-picker__bg-ai">
         <AppText as="span" className="community-zone-theme-picker__subsection-label">
@@ -248,21 +159,40 @@ export default function CommunityGuestFrameBackgroundPicker({
           onChange={(event) => setAiPrompt(event.target.value)}
           disabled={busy}
         />
-        <button
-          type="button"
-          className="community-zone-theme-picker__bg-action-btn"
-          disabled={busy}
-          onClick={handleGenerateAi}
-        >
-          <FaImage aria-hidden />
-          {generating
-            ? t('community_guest_frame_bg_generating', 'Generating…')
-            : t('community_guest_frame_bg_ai_generate', {
-                cost: AI_IMAGE_GENERATION_CREDITS,
-                defaultValue: 'Generate background ({{cost}} credits)',
-              })}
-        </button>
+        <div className="community-zone-theme-picker__bg-actions">
+          <button
+            type="button"
+            className="community-zone-theme-picker__bg-action-btn"
+            disabled={busy}
+            onClick={handleGenerateAi}
+          >
+            <FaImage aria-hidden />
+            {generating
+              ? t('community_guest_frame_bg_generating', 'Generating…')
+              : t('community_guest_frame_bg_ai_generate', {
+                  cost: AI_IMAGE_GENERATION_CREDITS,
+                  defaultValue: 'Generate background ({{cost}} credits)',
+                })}
+          </button>
+          {hasAiImage ? (
+            <button
+              type="button"
+              className="community-zone-theme-picker__bg-action-btn community-zone-theme-picker__bg-action-btn--danger"
+              disabled={busy}
+              onClick={() => onSelectImageNone?.()}
+            >
+              <FaTrash aria-hidden />
+              {t('community_guest_frame_bg_remove_ai', 'Remove AI image')}
+            </button>
+          ) : null}
+        </div>
       </div>
+
+      {hasAiImage ? (
+        <div className="community-zone-theme-picker__bg-custom-active">
+          <img src={background.imageUrl} alt="" />
+        </div>
+      ) : null}
 
       <div className="community-banner-modal__section">
         <AppText as="span" className="community-banner-modal__label">
@@ -278,7 +208,7 @@ export default function CommunityGuestFrameBackgroundPicker({
         <AppText as="p" className="community-banner-modal__hint">
           {t(
             'community_guest_frame_bg_overlay_hint',
-            'Gradient cover on top of the selected background image (same as the banner).'
+            'Gradient cover on top of the AI background (or alone if no image).'
           )}
         </AppText>
         <BannerGradientPresetCarousel

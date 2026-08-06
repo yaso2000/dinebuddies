@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaClock } from 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
+import { isPublicInvitationInactiveForLiveUi } from '../utils/invitationExpiry';
 import { AppText } from './base';
 
 const THUMB_LIMIT = 6;
@@ -20,9 +21,16 @@ function invitationTimestamp(inv) {
   return Number.isFinite(ms) ? Math.floor(ms / 1000) : 0;
 }
 
+/** Active public invites only — past/completed invites never appear here. */
 function pickLatestPublic(invitations) {
+  const now = new Date();
   return (invitations || [])
-    .filter((inv) => inv.adminBlocked !== true && (inv.privacy === 'public' || !inv.privacy))
+    .filter((inv) => {
+      if (inv.adminBlocked === true) return false;
+      if (!(inv.privacy === 'public' || !inv.privacy)) return false;
+      if (isPublicInvitationInactiveForLiveUi(inv, now)) return false;
+      return true;
+    })
     .sort((a, b) => invitationTimestamp(b) - invitationTimestamp(a))
     .slice(0, THUMB_LIMIT);
 }

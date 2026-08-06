@@ -6,6 +6,7 @@ import { FaArrowLeft, FaFileInvoice, FaDownload, FaCheckCircle, FaClock } from '
 import { useTranslation } from 'react-i18next';
 import './SettingsPages.css';
 import { AppText } from "../components/base";
+import { openExternalUrl } from '../platform/externalLinks';
 
 const BillingSettings = () => {
   const { t } = useTranslation();
@@ -54,8 +55,8 @@ const BillingSettings = () => {
   };
 
   const handleDownloadInvoice = (invoice) => {
-    // In real app, download from Stripe
-    window.open(invoice.invoiceUrl, '_blank');
+    // Stripe-hosted invoice URLs only (explicit system allow).
+    openExternalUrl(invoice.invoiceUrl, { allow: 'system' });
   };
 
   const getStatusBadge = (status) => {

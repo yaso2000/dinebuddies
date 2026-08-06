@@ -204,7 +204,13 @@ const MyCommunity = () => {
             <div className="my-community-actions">
                 <button
           type="button"
-          onClick={() => navigate(`/community/${currentUser.uid}`)}
+          onClick={() => {
+            if (!tierAccess.canUseCommunityGroupChat) {
+              navigate('/settings/subscription');
+              return;
+            }
+            navigate(`/community/${currentUser.uid}`);
+          }}
           className="my-community-btn my-community-btn--chat">
 
                     <FaComments style={{ fontSize: '0.8rem' }} />

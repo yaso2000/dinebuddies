@@ -1,8 +1,9 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaFileContract, FaArrowLeft, FaGavel, FaUserCheck, FaShieldAlt, FaUsers, FaStore, FaBan, FaHandshake, FaCopyright, FaLock, FaPlug, FaCog, FaTimes, FaExclamationTriangle, FaBalanceScale, FaGlobe, FaEdit, FaEnvelope } from 'react-icons/fa';
+import { FaFileContract, FaArrowLeft, FaGavel, FaUserCheck, FaShieldAlt, FaUsers, FaStore, FaBan, FaHandshake, FaCopyright, FaLock, FaPlug, FaCog, FaTimes, FaExclamationTriangle, FaBalanceScale, FaGlobe, FaEdit, FaEnvelope, FaCoins } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import { AppText } from "../components/base";
+import { isCashoutFeatureEnabled } from '../config/cashoutFeature';
 
 const listStyle = (isAr) => ({ paddingLeft: isAr ? '0' : '1.5rem', paddingRight: isAr ? '1.5rem' : '0', marginBottom: '0.5rem' });
 
@@ -10,6 +11,7 @@ const TermsOfService = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const isAr = i18n.language?.startsWith('ar');
+  const cashoutEnabled = isCashoutFeatureEnabled();
 
   return (
     <div
@@ -36,7 +38,7 @@ const TermsOfService = () => {
                 <FaFileContract size={40} color="var(--primary)" />
                 <div>
                     <AppText as="h1" style={{ margin: 0, fontSize: '2rem', fontWeight: '900' }}>{t('terms_of_service', 'Terms of Service')}</AppText>
-                    <AppText as="p" style={{ margin: '0.25rem 0 0', opacity: 0.6 }}>{t('last_updated', 'Last Updated')}: March 8, 2025</AppText>
+                    <AppText as="p" style={{ margin: '0.25rem 0 0', opacity: 0.6 }}>{t('last_updated', 'Last Updated')}: July 31, 2026</AppText>
                 </div>
             </div>
 
@@ -99,6 +101,7 @@ const TermsOfService = () => {
                             <li>إرسال بريد عشوائي إلى المستخدمين أو توزيع محتوى ضار</li>
                             <li>محاولة اختراق المنصة أو استغلالها أو تعطيلها</li>
                             <li>انتهاك حقوق الملكية الفكرية</li>
+                            <li>التلاعب باقتصاد الهدايا أو الكريدت (بما في ذلك الإهداء الدائري أو الحسابات الوهمية بهدف تضخيم رصيد الادخار أو شارات التقدّم)</li>
                         </ul>
                         <AppText as="p">قد تقوم DineBuddies بإزالة المحتوى أو تعليق الحسابات التي تنتهك هذه القواعد.</AppText>
                     </section>
@@ -127,57 +130,72 @@ const TermsOfService = () => {
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaCopyright /> 9. الملكية الفكرية</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaCoins /> 9. الكريدت الافتراضي والهدايا والادخار</AppText>
+                        <AppText as="p"><strong>9.1 طبيعة الكريدت.</strong> Dine Credits وحدات افتراضية داخل المنصة للاستخدام في الخدمات داخل التطبيق فقط. لا تُعد رصيداً بنكياً أو أموالاً مخزّنة أو أوراقاً مالية، ولا تمنح حقاً في استرداد نقدي.</AppText>
+                        <AppText as="p"><strong>9.2 محفظة الشراء.</strong> الكريدت المشترى عبر المتاجر أو بوابات الدفع يُستخدم للخدمات داخل التطبيق (مثل الدعوات والذكاء الاصطناعي والهدايا). وهو غير قابل للسحب النقدي، وتسري سياسات الاسترداد الخاصة بالمتاجر والقانون المعمول به.</AppText>
+                        <AppText as="p"><strong>9.3 محفظة الادخار والهدايا.</strong> قد تُضاف إلى محفظة الادخار نسبة من قيمة الهدايا المستلمة (حالياً 50٪ من المبلغ المرسل، قابلة للتغيير). يمكن إنفاق رصيد الادخار على خدمات داخلية وفق قواعد الخصم المعتمدة (الشراء أولاً ثم الادخار). شارات التقدّم البصرية (إن وُجدت) للمتعة داخل التطبيق فقط وليست مقابل نقد.</AppText>
+                        <AppText as="p"><strong>9.4 لا يوجد سحب نقدي حالياً.</strong> لا نقدّم حالياً أي برنامج لسحب الكريدت أو تحويله إلى أموال حقيقية. الأرصدة للاستخدام داخل DineBuddies فقط.</AppText>
+                        {cashoutEnabled ? (
+                          <>
+                            <AppText as="p"><strong>9.4أ السحب النقدي بحزم الدروع (مفعّل).</strong> عند تفعيل البرنامج، يتم السحب فقط باستبدال حزمة درع ثابتة معلنة داخل التطبيق، شريطة كفاية رصيد الادخار. كريدت الشراء غير قابل للسحب.</AppText>
+                          </>
+                        ) : null}
+                        <AppText as="p"><strong>9.5 الاحتيال والتجميد.</strong> نحتفظ بالحق في مراجعة سجل العمليات، والأجهزة، والحسابات المرتبطة؛ ورفض أو تأخير أو تجميد الأرصدة؛ وعكس الكريدت؛ وإنهاء الحسابات عند الاشتباه بالاحتيال أو الإهداء الاصطناعي أو انتهاك هذه الشروط.</AppText>
+                        <AppText as="p"><strong>9.6 التغييرات.</strong> يجوز لنا تعديل قواعد الكريدت أو الهدايا أو الادخار في أي وقت، مع تحديث هذه الشروط أو الإعلان داخل التطبيق عند الاقتضاء.</AppText>
+                    </section>
+
+                    <section style={{ marginBottom: '2rem' }}>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaCopyright /> 10. الملكية الفكرية</AppText>
                         <AppText as="p">جميع الحقوق في منصة DineBuddies بما في ذلك البرامج والتصميم والشعارات والمحتوى والميزات مملوكة لشركة DineBuddies أو المرخصين لها. لا يجوز لك استخدام علاماتنا التجارية أو ملكيتنا الفكرية دون إذن.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaLock /> 10. الخصوصية</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaLock /> 11. الخصوصية</AppText>
                         <AppText as="p">يخضع استخدامك للخدمة أيضًا لسياسة الخصوصية الخاصة بنا، والتي تشرح كيف نجمع ونستخدم المعلومات. يرجى مراجعتها هنا: <a href="https://dinebuddies.com/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>https://dinebuddies.com/privacy</a></AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaPlug /> 11. خدمات الجهات الخارجية</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaPlug /> 12. خدمات الجهات الخارجية</AppText>
                         <AppText as="p">قد تدمج الخدمة خدمات جهات خارجية مثل خرائط Google وFirebase وخدمات التحليلات وروابط وسائل التواصل الاجتماعي. لا تتحمل DineBuddies مسؤولية خدمات الجهات الخارجية أو ممارسات الخصوصية الخاصة بها.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaCog /> 12. توافر المنصة</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaCog /> 13. توافر المنصة</AppText>
                         <AppText as="p">نهدف إلى إبقاء الخدمة متاحة لكننا لا نضمن التوافر المستمر أو التشغيل الخالي من الأخطاء أو التوافق مع جميع الأجهزة. قد نقوم بتعديل أو إيقاف الميزات في أي وقت.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaTimes /> 13. الإنهاء</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaTimes /> 14. الإنهاء</AppText>
                         <AppText as="p">يجوز لنا تعليق الحسابات أو إنهائها إذا خالف المستخدمون هذه الشروط، أو شاركوا في سلوك مسيء، أو حاولوا استغلال المنصة، أو نشروا محتوى ضارًا أو غير قانوني. يجوز للمستخدمين أيضًا التوقف عن استخدام الخدمة في أي وقت.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaExclamationTriangle /> 14. إخلاء المسؤولية عن الضمانات</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaExclamationTriangle /> 15. إخلاء المسؤولية عن الضمانات</AppText>
                         <AppText as="p">تُقدم الخدمة "كما هي" و"كما تتوفر". لا تقدم DineBuddies أي ضمانات بشأن دقة المعلومات، أو موثوقية المستخدمين أو الشركات، أو سلامة الاجتماعات في العالم الحقيقي، أو توافر الخدمة المستمر.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaBalanceScale /> 15. تحديد المسؤولية</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaBalanceScale /> 16. تحديد المسؤولية</AppText>
                         <AppText as="p">إلى أقصى حد يسمح به القانون، لن تتحمل DineBuddies المسؤولية عن الأضرار غير المباشرة أو التبعية، أو فقدان البيانات، أو النزاعات الشخصية بين المستخدمين، أو الأضرار الناشئة عن التفاعلات في العالم الحقيقي. استخدام الخدمة يكون على مسؤوليتك الخاصة.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>16. التعويض</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>17. التعويض</AppText>
                         <AppText as="p">أنت توافق على تعويض DineBuddies وإبراء ذمتها من أي مطالبات أو أضرار أو نزاعات قانونية تنشأ عن استخدامك للخدمة، أو المحتوى الذي تنشره، أو انتهاكات هذه الشروط، أو انتهاكات القوانين المعمول بها.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaGlobe /> 17. القانون المطبق</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaGlobe /> 18. القانون المطبق</AppText>
                         <AppText as="p">تخضع هذه الشروط للقوانين المعمول بها في أستراليا، ما لم تقتضِ قوانين حماية المستهلك المعمول بها خلاف ذلك.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaEdit /> 18. التغييرات على هذه الشروط</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaEdit /> 19. التغييرات على هذه الشروط</AppText>
                         <AppText as="p">قد نقوم بتحديث هذه الشروط من وقت لآخر. عند حدوث تغييرات، سيتم نشر الشروط المحدثة في هذه الصفحة، وستتم مراجعة تاريخ "آخر تحديث"، ويُعد الاستمرار في استخدام الخدمة قبولًا للشروط المحدثة.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaEnvelope /> 19. اتصل بنا</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaEnvelope /> 20. اتصل بنا</AppText>
                         <AppText as="p">للأسئلة المتعلقة بهذه الشروط:</AppText>
                         <AppText as="p"><strong>{t('email', 'Email')}:</strong> support@dinebuddies.com</AppText>
                         <AppText as="p"><strong>{t('website', 'Website')}:</strong> https://dinebuddies.com</AppText>
@@ -242,6 +260,7 @@ const TermsOfService = () => {
                             <li>Spam users or distribute malicious content</li>
                             <li>Attempt to hack, exploit, or disrupt the platform</li>
                             <li>Violate intellectual property rights</li>
+                            <li>Manipulate the gift or credits economy (including circular gifting, coordinated fake accounts, or other schemes intended to inflate savings balances or in-app progress badges)</li>
                         </ul>
                         <AppText as="p">DineBuddies may remove content or suspend accounts that violate these rules.</AppText>
                     </section>
@@ -270,57 +289,70 @@ const TermsOfService = () => {
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaCopyright /> 9. Intellectual Property</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaCoins /> 9. Virtual Credits, Gifts, and Savings</AppText>
+                        <AppText as="p"><strong>9.1 Nature of Credits.</strong> Dine Credits are virtual units used only for in-app services on the Service. They are not bank deposits, stored value, securities, or a right to redeem cash.</AppText>
+                        <AppText as="p"><strong>9.2 Purchase Wallet.</strong> Credits purchased through app stores or payment providers may be used for in-app services (including invitations, AI features, and sending gifts). Purchased credits are not cash-withdrawable. Refunds, if any, follow applicable store policies and law.</AppText>
+                        <AppText as="p"><strong>9.3 Savings Wallet and Gifts.</strong> When you receive eligible gifts, a portion of the sent amount may be credited to your savings wallet (currently 50% of the amount sent, subject to change). Savings credits may be spent on eligible in-app services under our deduction rules (purchase wallet first, then savings). Any visual progress badges are for in-app engagement only and have no cash value.</AppText>
+                        <AppText as="p"><strong>9.4 No cash-out currently.</strong> We do not currently offer any program to withdraw credits or convert them into real money. Balances are for use inside DineBuddies only.</AppText>
+                        {cashoutEnabled ? (
+                          <AppText as="p"><strong>9.4a Shield cash-out (enabled).</strong> When the program is enabled, redemption is only via fixed Shield packages announced in the Service, from savings balance only. Purchased credits remain non-withdrawable.</AppText>
+                        ) : null}
+                        <AppText as="p"><strong>9.5 Fraud Prevention and Freezes.</strong> We may review credit ledgers, devices, and linked accounts; delay, reject, or freeze balances; reverse credits; and suspend or terminate accounts if we suspect fraud, artificial gifting, abuse, or other violations of these Terms.</AppText>
+                        <AppText as="p"><strong>9.6 Program Changes.</strong> We may change credit, gift, or savings rules at any time, including by updating these Terms or posting notice in the Service.</AppText>
+                    </section>
+
+                    <section style={{ marginBottom: '2rem' }}>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaCopyright /> 10. Intellectual Property</AppText>
                         <AppText as="p">All rights in the DineBuddies platform including software, design, logos, content, and features are owned by DineBuddies or its licensors. You may not use our trademarks or intellectual property without permission.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaLock /> 10. Privacy</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaLock /> 11. Privacy</AppText>
                         <AppText as="p">Your use of the Service is also governed by our Privacy Policy, which explains how we collect and use information. Please review it here: <a href="https://dinebuddies.com/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>https://dinebuddies.com/privacy</a></AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaPlug /> 11. Third-Party Services</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaPlug /> 12. Third-Party Services</AppText>
                         <AppText as="p">The Service may integrate third-party services such as Google Maps, Firebase, analytics services, and social media links. DineBuddies is not responsible for third-party services or their privacy practices.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaCog /> 12. Platform Availability</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaCog /> 13. Platform Availability</AppText>
                         <AppText as="p">We aim to keep the Service available but do not guarantee continuous availability, error-free operation, or compatibility with all devices. We may modify or discontinue features at any time.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaTimes /> 13. Termination</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaTimes /> 14. Termination</AppText>
                         <AppText as="p">We may suspend or terminate accounts if users violate these Terms, engage in abusive behavior, attempt to exploit the platform, or post harmful or illegal content. Users may also stop using the Service at any time.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaExclamationTriangle /> 14. Disclaimer of Warranties</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaExclamationTriangle /> 15. Disclaimer of Warranties</AppText>
                         <AppText as="p">The Service is provided "as is" and "as available." DineBuddies makes no warranties regarding accuracy of information, reliability of users or businesses, safety of real-world meetings, or continuous service availability.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaBalanceScale /> 15. Limitation of Liability</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaBalanceScale /> 16. Limitation of Liability</AppText>
                         <AppText as="p">To the fullest extent permitted by law, DineBuddies shall not be liable for indirect or consequential damages, loss of data, personal disputes between users, or damages arising from real-world interactions. Use of the Service is at your own risk.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>16. Indemnification</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>17. Indemnification</AppText>
                         <AppText as="p">You agree to indemnify and hold harmless DineBuddies from any claims, damages, or legal disputes arising from your use of the Service, content you post, violations of these Terms, or violations of applicable laws.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaGlobe /> 17. Governing Law</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaGlobe /> 18. Governing Law</AppText>
                         <AppText as="p">These Terms are governed by the laws applicable in Australia, unless otherwise required by applicable consumer protection laws.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaEdit /> 18. Changes to These Terms</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaEdit /> 19. Changes to These Terms</AppText>
                         <AppText as="p">We may update these Terms from time to time. When changes occur, the updated Terms will be posted on this page, the "Last Updated" date will be revised, and continued use of the Service indicates acceptance of the updated Terms.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaEnvelope /> 19. Contact</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaEnvelope /> 20. Contact</AppText>
                         <AppText as="p">For questions regarding these Terms:</AppText>
                         <AppText as="p"><strong>{t('email', 'Email')}:</strong> support@dinebuddies.com</AppText>
                         <AppText as="p"><strong>{t('website', 'Website')}:</strong> https://dinebuddies.com</AppText>
@@ -329,7 +361,7 @@ const TermsOfService = () => {
       }
 
             <div style={{ marginTop: '2.5rem', padding: '1.5rem', background: 'var(--bg-card)', borderRadius: '20px', border: '1px solid var(--border-color)', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }}>
-                <AppText as="p" style={{ margin: 0, fontSize: '0.85rem', opacity: 0.8 }}>{t('last_updated', 'Last Updated')}: March 8, 2025</AppText>
+                <AppText as="p" style={{ margin: 0, fontSize: '0.85rem', opacity: 0.8 }}>{t('last_updated', 'Last Updated')}: July 31, 2026</AppText>
             </div>
         </div>);
 

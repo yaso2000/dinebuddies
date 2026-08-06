@@ -1,3 +1,5 @@
+import { openExternalUrl } from '../platform/externalLinks';
+
 /**
  * Web Share API when available; otherwise copy text and open WhatsApp.
  * @param {{ file?: File | null, title?: string, text?: string, url?: string, skipExternalFallback?: boolean }} opts
@@ -35,6 +37,8 @@ export async function shareNativeOrFallback({
     } catch (_) {
         /* ignore */
     }
-    window.open(`https://wa.me/?text=${encodeURIComponent(combined)}`, '_blank', 'noopener,noreferrer');
+    openExternalUrl(`https://wa.me/?text=${encodeURIComponent(combined)}`, {
+        allow: 'product_share',
+    });
     return 'external';
 }

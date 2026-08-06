@@ -96,11 +96,30 @@ export default async function handler(req, res) {
                 message: 'Email already in use',
             });
         }
-        if (code === 'phone-mismatch' || code === 'invalid-request') {
+        if (code === 'phone-mismatch' || code === 'invalid-request' || code === 'place-required') {
             return res.status(400).json({
                 status: 'error',
                 code,
-                message: 'Invalid signup session',
+                message:
+                    code === 'place-required'
+                        ? 'Select your Google Business listing to continue'
+                        : 'Invalid signup session',
+            });
+        }
+        if (code === 'place-claim-required') {
+            return res.status(409).json({
+                status: 'error',
+                code,
+                restaurantId: err?.restaurantId || null,
+                message: 'This business is already listed. Claim it instead of creating a new account.',
+            });
+        }
+        if (code === 'place-already-claimed') {
+            return res.status(409).json({
+                status: 'error',
+                code,
+                restaurantId: err?.restaurantId || null,
+                message: 'This business has already been claimed.',
             });
         }
         console.error('[complete-business-signup]', err);

@@ -19,7 +19,7 @@ import {
   getLanguageNativeLabel,
   resolveLanguageCode } from
 '../constants/languageOptions';
-import { getPurchaseCredits } from '../utils/walletCredits';
+import { getSpendableCredits } from '../utils/walletCredits';
 import { AppText, AppTextInput } from "../components/base";
 
 const BUSINESS_PAID_MONTHLY_USD = Number(String(BUSINESS_PAID_PLAN_DISPLAY.priceLabel).replace(/[^\d.]/g, '')) || 29;
@@ -300,7 +300,7 @@ const Settings = () => {
   }
 
   if (!isBusiness) {
-    const creditTotal = getPurchaseCredits(userProfile);
+    const creditTotal = getSpendableCredits(userProfile);
     settingsSections.unshift({
       title: t('subscription_billing', 'Subscription & Billing'),
       items: [

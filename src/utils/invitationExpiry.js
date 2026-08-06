@@ -1,8 +1,5 @@
-/**
- * When a public invitation should leave the live feed / be archived.
- * Event end + 24 hours grace (matches Cloud Functions invitationArchiveCore).
- */
-export function computeArchiveAfterDate(date, time = '20:30') {
+/** Event end datetime (no archive grace). */
+export function computeEventEndDate(date, time = '20:30') {
     const base = date ? new Date(date) : new Date();
     if (Number.isNaN(base.getTime())) return new Date();
 
@@ -10,7 +7,32 @@ export function computeArchiveAfterDate(date, time = '20:30') {
     const hours = parseInt(hoursRaw, 10);
     const minutes = parseInt(minutesRaw, 10);
     base.setHours(Number.isFinite(hours) ? hours : 20, Number.isFinite(minutes) ? minutes : 30, 0, 0);
-    return new Date(base.getTime() + 24 * 60 * 60 * 1000);
+    return base;
+}
+
+/**
+ * When a public invitation should leave the live feed / be archived.
+ * Event end + 24 hours grace (matches Cloud Functions invitationArchiveCore).
+ */
+export function computeArchiveAfterDate(date, time = '20:30') {
+    return new Date(computeEventEndDate(date, time).getTime() + 24 * 60 * 60 * 1000);
+}
+
+/**
+ * Hide from live UI (desktop sidebar / public thumbs) as soon as the event is over
+ * or marked completed — do not wait for the 24h archive job.
+ */
+export function isPublicInvitationInactiveForLiveUi(inv, now = new Date()) {
+    if (!inv) return true;
+    if (inv.privacy === 'private') return false;
+    if (inv.status === 'draft') return true;
+    const status = String(inv.meetingStatus || '').toLowerCase();
+    if (status === 'completed' || status === 'cancelled') return true;
+    if (isPublicInvitationExpiredForArchive(inv, now)) return true;
+    if (inv.date) {
+        return computeEventEndDate(inv.date, inv.time).getTime() <= now.getTime();
+    }
+    return false;
 }
 
 /** @param {import('firebase/firestore').Timestamp} Timestamp */

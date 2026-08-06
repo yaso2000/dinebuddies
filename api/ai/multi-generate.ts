@@ -140,7 +140,7 @@ export default async function handler(req, res) {
     const request = parsed;
     const creditCost = resolveCreditCost(request.generationPackage, request.postType);
 
-    /** @type {{ freeUsed: number, paidUsed: number } | null} */
+    /** @type {{ freeUsed: number, paidUsed: number, savedUsed: number } | null} */
     let charged = null;
     /** @type {import('firebase-admin/firestore').DocumentReference | null} */
     let userRef = null;
@@ -165,6 +165,7 @@ export default async function handler(req, res) {
         charged = {
             freeUsed: Number(spend.freeUsed) || 0,
             paidUsed: Number(spend.paidUsed) || 0,
+            savedUsed: Number(spend.savedUsed) || 0,
         };
         db = spend.db;
         userRef = spend.userRef;

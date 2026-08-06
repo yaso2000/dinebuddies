@@ -1,6 +1,7 @@
 /**
- * Detect, classify, and safely open URLs found in chat message text.
- * Blocks dangerous schemes / obfuscated hosts; external http(s) needs a leave-app confirm.
+ * Detect and classify URLs found in chat / user content.
+ * External http(s) are never opened from content (anti-spam);
+ * use openExternalUrl with an explicit allow mode for exceptions.
  */
 
 const APP_HOST_SUFFIXES = ['dinebuddies.com'];

@@ -46,6 +46,7 @@ import ServiceModal, { SERVICE_ICONS } from '../components/ServiceModal';
 import { getContrastText } from '../utils/colorUtils';
 import { isBusinessUser } from '../utils/accountRole';
 import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
+import { openExternalUrl } from '../platform/externalLinks';
 import { normalizeUserProfile } from '../utils/userProfileNormalize';
 import PremiumBadge from '../components/PremiumBadge';
 import PremiumPaywallModal from '../components/PremiumPaywallModal';
@@ -906,6 +907,16 @@ const BusinessProfile = () => {
     if (!cid) return;
 
     if (effectiveIsMember) {
+      if (!isPaid) {
+        showToast(
+          t(
+            'community_chat_paid_only_member_hint',
+            'Group chat is available when this business has a Paid plan.'
+          ),
+          'info'
+        );
+        return;
+      }
       navigate(`/community/${cid}`);
       return;
     }
@@ -1498,7 +1509,9 @@ const BusinessProfile = () => {
   const hasMapCoords =
   profileMapCoords?.lat != null && profileMapCoords?.lng != null ||
   businessInfo.lat != null && businessInfo.lng != null;
-  const canClickExternalLinks = isPaid;
+  /** Paid plan: Maps + delivery only. Website/social stay display-only (anti-spam). */
+  const canOpenBusinessMapsAndDelivery = isPaid;
+  const canClickExternalLinks = false;
   const showImportedContactExtras = isVirtualGoogleImport;
   const showGoogleImportedExtras = showImportedContactExtras;
   const hasSocialLinks =
@@ -2019,7 +2032,9 @@ const BusinessProfile = () => {
                                     {effectiveIsMember ? (
                                       <>
                                         <FaComments style={{ fontSize: '1.1rem' }} aria-hidden />
-                                        {t('business_grid_join_chat', 'Join chat')}
+                                        {isPaid
+                                          ? t('business_grid_join_chat', 'Join chat')
+                                          : t('joined', 'Joined')}
                                       </>
                                     ) : (
                                       `+ ${t('join_community', 'Join Community')}`
@@ -2746,9 +2761,9 @@ const BusinessProfile = () => {
                 address={businessInfo.address}
                 city={businessInfo.city}
                 country={businessInfo.country}
-                allowExternalLinks={canClickExternalLinks} />
+                allowExternalLinks={canOpenBusinessMapsAndDelivery} />
 
-                                    {!canClickExternalLinks &&
+                                    {!canOpenBusinessMapsAndDelivery &&
               <div
                 style={{
                   position: 'absolute',
@@ -2776,8 +2791,18 @@ const BusinessProfile = () => {
                                             </div>
               }
                                 </div>
-                                {canClickExternalLinks && hasMapCoords &&
-            <button onClick={() => {const addr = encodeURIComponent(businessInfo.address + (businessInfo.city ? ', ' + businessInfo.city : '') + (businessInfo.country ? ', ' + businessInfo.country : ''));window.open(`https://www.google.com/maps/search/?api=1&query=${addr}`, '_blank');}} style={{ width: '100%', padding: '16px', background: 'var(--brand-primary)', border: 'none', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginTop: '20px', transition: 'all 0.2s' }} onMouseEnter={(e) => {e.currentTarget.style.transform = 'translateY(-2px)';e.currentTarget.style.boxShadow = '0 8px 24px color-mix(in srgb, var(--brand-primary) 30%, transparent)';}} onMouseLeave={(e) => {e.currentTarget.style.transform = 'translateY(0)';e.currentTarget.style.boxShadow = 'none';}}>
+                                {canOpenBusinessMapsAndDelivery && hasMapCoords &&
+            <button type="button" onClick={() => {
+              const addr = encodeURIComponent(
+                businessInfo.address +
+                  (businessInfo.city ? ', ' + businessInfo.city : '') +
+                  (businessInfo.country ? ', ' + businessInfo.country : '')
+              );
+              openExternalUrl(
+                `https://www.google.com/maps/search/?api=1&query=${addr}`,
+                { allow: 'business_maps' }
+              );
+            }} style={{ width: '100%', padding: '16px', background: 'var(--brand-primary)', border: 'none', borderRadius: '16px', color: 'white', fontWeight: '800', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginTop: '20px', transition: 'all 0.2s' }} onMouseEnter={(e) => {e.currentTarget.style.transform = 'translateY(-2px)';e.currentTarget.style.boxShadow = '0 8px 24px color-mix(in srgb, var(--brand-primary) 30%, transparent)';}} onMouseLeave={(e) => {e.currentTarget.style.transform = 'translateY(0)';e.currentTarget.style.boxShadow = 'none';}}>
                                         <FaMapMarkerAlt style={{ fontSize: '1.2rem' }} />
                                         Open in Google Maps
                                         <FaExternalLinkAlt style={{ fontSize: '0.9rem' }} />

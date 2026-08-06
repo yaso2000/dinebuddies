@@ -161,6 +161,12 @@
     cursor: wait;
 }
 
+.community-zone-theme-picker__bg-action-btn--danger {
+    border-color: color-mix(in srgb, #ef4444 45%, transparent);
+    color: #fecaca;
+    background: color-mix(in srgb, #7f1d1d 35%, var(--bg-card, #1e293b));
+}
+
 .community-zone-theme-picker__bg-ai {
     display: flex;
     flex-direction: column;

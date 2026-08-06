@@ -44,7 +44,7 @@ export default function SuggestedFriendsSidebarWidget() {
       <div className="ds-widget-header">
         <FaUserFriends size={14} style={{ color: 'var(--primary)' }} />
         <AppText as="span">{t('suggested_friends', 'Suggested Friends')}</AppText>
-        <Link to="/search/list" className="ds-widget-see-all">{t('see_all', 'See all')}</Link>
+        <Link to="/search" className="ds-widget-see-all">{t('see_all', 'See all')}</Link>
       </div>
       {suggested.map((user) => (
         <div

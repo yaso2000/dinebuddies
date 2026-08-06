@@ -357,7 +357,8 @@ export default function PublicSocialInvitationJoin() {
 
     return (
 
-      <div className="loading-container public-social-invite-join">
+      <div className="loading-container public-social-invite-join">
+
                 
         {claiming ?
 
@@ -367,7 +368,8 @@ export default function PublicSocialInvitationJoin() {
 
         t('social_invite_signing_in', 'Completing sign-in…') :
 
-        t('loading')}
+        t('loading')}
+
             
       </div>);
 
@@ -381,19 +383,26 @@ export default function PublicSocialInvitationJoin() {
 
     return (
 
-      <div className="page-container public-social-invite-join" style={{ textAlign: 'center' }}>
+      <div className="page-container public-social-invite-join" style={{ textAlign: 'center' }}>
+
                 
-        <AppText as="p" style={{ color: 'var(--text-muted)', marginBottom: 16 }}>
+        <AppText as="p" style={{ color: 'var(--text-muted)', marginBottom: 16 }}>
+
                     
-          {t('social_invite_link_invalid', 'This invitation link is invalid or has expired.')}
+          {t('social_invite_link_invalid', 'This invitation link is invalid or has expired.')}
+
                 
-        </AppText>
+        </AppText>
+
                 
-        <button type="button" className="vip-btn vip-btn-primary" onClick={() => navigate('/')}>
+        <button type="button" className="vip-btn vip-btn-primary" onClick={() => navigate('/')}>
+
                     
-          {t('back_home', 'Back home')}
+          {t('back_home', 'Back home')}
+
                 
-        </button>
+        </button>
+
             
       </div>);
 
@@ -409,21 +418,27 @@ export default function PublicSocialInvitationJoin() {
 
   return (
 
-    <div className="public-social-invite-join page-container">
+    <div className="public-social-invite-join page-container">
+
             
-      <div className="public-social-invite-join__hero">
+      <div className="public-social-invite-join__hero">
+
                 
-        <AppText as="p" className="public-social-invite-join__eyebrow">
+        <AppText as="p" className="public-social-invite-join__eyebrow">
+
                     
           {t('social_invite_viewing_now', {
 
             defaultValue: 'You are viewing a private invitation'
 
-          })}
+          })}
+
                 
-        </AppText>
+        </AppText>
+
                 
-        <AppText as="h1" className="public-social-invite-join__headline">
+        <AppText as="h1" className="public-social-invite-join__headline">
+
                     
           {hostName ?
 
@@ -435,21 +450,27 @@ export default function PublicSocialInvitationJoin() {
 
           }) :
 
-          t('social_invite_guest_title', 'You are invited!')}
+          t('social_invite_guest_title', 'You are invited!')}
+
                 
-        </AppText>
+        </AppText>
+
                 
         {preview.title ?
 
         <AppText as="p" className="public-social-invite-join__event-title">{preview.title}</AppText> :
 
-        null}
+        null}
+
             
-      </div>
-
+      </div>
+
+
+
             
 
-      <div className="public-social-invite-join__card-wrap">
+      <div className="public-social-invite-join__card-wrap">
+
                 
         <SocialInvitationCardPreview
 
@@ -499,49 +520,65 @@ export default function PublicSocialInvitationJoin() {
 
           textBackdropTone={preview.socialCardTextBackdropTone || undefined} />
 
-        
+        
+
             
-      </div>
-
+      </div>
+
+
+
             
 
       {(eventWhen || preview.location) &&
 
-      <div className="public-social-invite-join__meta">
+      <div className="public-social-invite-join__meta">
+
                     
         {eventWhen ?
 
-        <AppText as="span" className="public-social-invite-join__meta-chip">
+        <AppText as="span" className="public-social-invite-join__meta-chip">
+
                             
-          <FaCalendarAlt aria-hidden />
+          <FaCalendarAlt aria-hidden />
+
                             
-          {eventWhen}
+          {eventWhen}
+
                         
         </AppText> :
 
-        null}
+        null}
+
                     
         {preview.location ?
 
-        <AppText as="span" className="public-social-invite-join__meta-chip">
+        <AppText as="span" className="public-social-invite-join__meta-chip">
+
                             
-          <FaMapMarkerAlt aria-hidden />
+          <FaMapMarkerAlt aria-hidden />
+
                             
-          {preview.location}
+          {preview.location}
+
                         
         </AppText> :
 
-        null}
+        null}
+
                 
       </div>
 
-      }
-
+      }
+
+
+
             
 
-      <div className="public-social-invite-join__cta public-social-invite-join__cta--landing">
+      <div className="public-social-invite-join__cta public-social-invite-join__cta--landing">
+
                 
-        <AppText as="p" className="public-social-invite-join__subtitle">
+        <AppText as="p" className="public-social-invite-join__subtitle">
+
                     
           {hostName ?
 
@@ -561,10 +598,13 @@ export default function PublicSocialInvitationJoin() {
 
             'Join DineBuddies free to accept or decline — it only takes a few seconds.'
 
-          })}
+          })}
+
                 
-        </AppText>
-
+        </AppText>
+
+
+
                 
 
         <PersonalOAuthButtons
@@ -575,20 +615,26 @@ export default function PublicSocialInvitationJoin() {
 
           onOAuthRedirect={() => setOauthRedirecting(true)} />
 
-        
-
+        
+
+
+
                 
 
-        <AppText as="p" className="public-social-invite-join__oauth-hint">
+        <AppText as="p" className="public-social-invite-join__oauth-hint">
+
                     
           {t('social_invite_oauth_hint', {
 
             defaultValue: 'Free account · no password needed'
 
-          })}
+          })}
+
                 
-        </AppText>
-
+        </AppText>
+
+
+
                 
 
         <button
@@ -599,17 +645,21 @@ export default function PublicSocialInvitationJoin() {
 
           onClick={handleMoreSignInOptions}>
 
-          
+          
+
                     
           {t('social_invite_more_options', {
 
             defaultValue: 'More sign-in options'
 
-          })}
+          })}
+
                 
-        </button>
+        </button>
+
             
-      </div>
+      </div>
+
         
     </div>);
 

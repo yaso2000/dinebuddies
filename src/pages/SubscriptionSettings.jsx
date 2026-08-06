@@ -36,7 +36,7 @@ const SubscriptionSettings = () => {
                         <AppText as="p" className="settings-description">
                             {t(
               'consumer_no_plans',
-              'Your purchase wallet pays for private invites, AI, boosts, and sending gifts. Gifts you receive accumulate in your savings wallet at half the sent value — the two never mix.'
+              'Purchase credits are used first for invites, AI, gifts, and boosts. Gift savings (50% of amounts sent to you) can also be spent in-app or redeemed later as fixed Shield cash-out packages.'
             )}
                         </AppText>
                         <div style={{ marginTop: 12, fontWeight: 800 }}>

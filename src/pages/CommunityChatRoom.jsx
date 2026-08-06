@@ -13,6 +13,7 @@ import { useCommunityChatRoom } from '../hooks/useCommunityChatRoom';
 import { useDesktopShell } from '../hooks/useDesktopShell';
 import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
 import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
+import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import {
   buildCommunityGuestFrameBackgroundStyle,
   getCommunityGuestFrameShellAttributes,
@@ -22,7 +23,6 @@ import '../components/community/community-chat-theme.css';
 import '../components/community/CommunityChatSwipePager.css';
 import '../styles/chatReferenceTheme.css';
 import { AppText } from '../components/base';
-import { useChatTheme } from '../hooks/useChatTheme';
 
 export default function CommunityChatRoom() {
   const { t } = useTranslation();
@@ -35,6 +35,9 @@ export default function CommunityChatRoom() {
     room.isMember ||
     room.isHost ||
     (partnerId && joinedCommunityIds.includes(partnerId));
+  const chatEnabled = getBusinessSubscriptionAccess(
+    room.partner?.subscriptionTier
+  ).canUseCommunityGroupChat;
   const containerRef = useRef(null);
   const isDesktopShell = useDesktopShell();
   const { goBack: goBackFromCommunity } = useAppBackNavigation({ fallback: '/messages?tab=communities' });
@@ -42,7 +45,6 @@ export default function CommunityChatRoom() {
   const [joinStatus, setJoinStatus] = useState('idle');
   const [leavingCommunity, setLeavingCommunity] = useState(false);
   const joinAttemptRef = useRef(false);
-  const { themeId: chatThemeId, setThemeId: setChatThemeId, themeStyle: chatThemeStyle } = useChatTheme();
 
   const attemptJoin = useCallback(async () => {
     if (!partnerId || joinAttemptRef.current) return;
@@ -155,8 +157,8 @@ export default function CommunityChatRoom() {
   );
 
   const shellInlineStyle = useMemo(
-    () => ({ ...zoneThemeInlineStyle, ...guestFrameBackgroundStyle, ...chatThemeStyle }),
-    [zoneThemeInlineStyle, guestFrameBackgroundStyle, chatThemeStyle]
+    () => ({ ...zoneThemeInlineStyle, ...guestFrameBackgroundStyle }),
+    [zoneThemeInlineStyle, guestFrameBackgroundStyle]
   );
 
   let shellContent;
@@ -166,8 +168,7 @@ export default function CommunityChatRoom() {
       ref={containerRef}
       className={`${shellClass} community-chat-join-gate`}
       data-cchat-zone-theme={zoneThemeId}
-      data-chat-theme={chatThemeId}
-      style={{ ...zoneThemeInlineStyle, ...chatThemeStyle }}
+      style={zoneThemeInlineStyle}
     >
       <button
         type="button"
@@ -194,7 +195,7 @@ export default function CommunityChatRoom() {
     </div>
   );
 
-  if (room.loading && !canEnterChat) {
+  if (room.loading && (!canEnterChat || !room.partner)) {
     shellContent = (
       <div
         ref={containerRef}
@@ -217,6 +218,19 @@ export default function CommunityChatRoom() {
         </button>
         {t('inbox_loading', 'Loadingâ€¦')}
       </div>
+    );
+  } else if (canEnterChat && !chatEnabled) {
+    shellContent = renderJoinGate(
+      t('community_chat_paid_only_title', 'Community group chat'),
+      room.isHost
+        ? t(
+            'community_chat_paid_only_host_hint',
+            'Community group chat requires a Paid Business plan.'
+          )
+        : t(
+            'community_chat_paid_only_member_hint',
+            'Group chat is available when this business has a Paid plan.'
+          )
     );
   } else if (!canEnterChat) {
     if (room.isBlockedFromCommunity) {
@@ -268,7 +282,6 @@ export default function CommunityChatRoom() {
         dir="ltr"
         className={shellClass}
         data-cchat-zone-theme={zoneThemeId}
-        data-chat-theme={chatThemeId}
         {...guestFrameShellAttrs}
         style={shellInlineStyle}
       >
@@ -340,8 +353,6 @@ export default function CommunityChatRoom() {
           </div>
           <div className="community-chat-header__actions">
             <CommunityChatHeaderMenu
-              themeId={chatThemeId}
-              onThemeChange={setChatThemeId}
               bannerChecked={room.bannerVisible !== false}
               bannerDisabled={room.bannerVisibleSaving || room.bannerToggleDisabled}
               bannerPersonal={!room.isHost}

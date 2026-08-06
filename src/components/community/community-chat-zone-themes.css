@@ -1,10 +1,75 @@
 /**
  * Zone palette presets for business community chat.
  * Activate with data-cchat-zone-theme on .community-chat-root
- * (default = inherit app theme mapping in community-chat-theme.css)
  */
 
-/* ── Stage — layered theatre (recommended) ── */
+/* ── Default / Slate — neutral gray (distinct from brand orange) ── */
+.community-chat-root[data-cchat-zone-theme='default'] {
+    --cchat-zone-header-bg: #0f1218;
+    --cchat-zone-header-border: rgba(148, 163, 184, 0.28);
+    --cchat-zone-banner-frame-bg: #1e293b;
+    --cchat-zone-banner-frame-border: #64748b;
+    --cchat-zone-banner-placeholder-bg: #0f172a;
+    --cchat-zone-banner-title-text: #f8fafc;
+    --cchat-zone-banner-title-border: rgba(148, 163, 184, 0.35);
+    --cchat-zone-banner-body-text: #cbd5e1;
+    --cchat-zone-spotlight-bg: #475569;
+    --cchat-zone-spotlight-border: #94a3b8;
+    --cchat-zone-spotlight-text: #f8fafc;
+    --cchat-zone-spotlight-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    --cchat-zone-guest-frame-bg: #111827;
+    --cchat-zone-guest-frame-border: rgba(148, 163, 184, 0.28);
+    --cchat-zone-guest-frame-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+    --cchat-zone-incoming-bg: #334155;
+    --cchat-zone-incoming-border: #64748b;
+    --cchat-zone-incoming-text: #f1f5f9;
+    --cchat-zone-incoming-time: #94a3b8;
+    --cchat-zone-incoming-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+    --cchat-zone-outgoing-bg: #64748b;
+    --cchat-zone-outgoing-border: #475569;
+    --cchat-zone-outgoing-text: #ffffff;
+    --cchat-zone-outgoing-time: #e2e8f0;
+    --cchat-zone-outgoing-shadow: 0 2px 8px rgba(100, 116, 139, 0.35);
+    --cchat-zone-host-bg: #475569;
+    --cchat-zone-host-border: #334155;
+    --cchat-zone-host-text: #ffffff;
+    --cchat-zone-composer-bg: #0b0f16;
+    --cchat-zone-composer-border: rgba(148, 163, 184, 0.22);
+    --cchat-zone-composer-input-bg: #1e293b;
+    --cchat-zone-composer-input-border: #475569;
+    --cchat-zone-composer-text: #f8fafc;
+    --cchat-zone-composer-placeholder: #94a3b8;
+}
+
+[data-theme='light'] .community-chat-root[data-cchat-zone-theme='default'] {
+    --cchat-zone-header-bg: #f8fafc;
+    --cchat-zone-header-border: #cbd5e1;
+    --cchat-zone-banner-frame-bg: #e2e8f0;
+    --cchat-zone-banner-frame-border: #64748b;
+    --cchat-zone-banner-title-text: #0f172a;
+    --cchat-zone-banner-body-text: #334155;
+    --cchat-zone-spotlight-bg: #e2e8f0;
+    --cchat-zone-spotlight-border: #64748b;
+    --cchat-zone-spotlight-text: #0f172a;
+    --cchat-zone-guest-frame-bg: #f1f5f9;
+    --cchat-zone-guest-frame-border: #cbd5e1;
+    --cchat-zone-incoming-bg: #ffffff;
+    --cchat-zone-incoming-border: #cbd5e1;
+    --cchat-zone-incoming-text: #0f172a;
+    --cchat-zone-incoming-time: #64748b;
+    --cchat-zone-outgoing-bg: #475569;
+    --cchat-zone-outgoing-border: #334155;
+    --cchat-zone-outgoing-text: #ffffff;
+    --cchat-zone-outgoing-time: #e2e8f0;
+    --cchat-zone-host-bg: #334155;
+    --cchat-zone-host-border: #1e293b;
+    --cchat-zone-host-text: #ffffff;
+    --cchat-zone-composer-bg: #ffffff;
+    --cchat-zone-composer-input-bg: #f8fafc;
+    --cchat-zone-composer-input-border: #cbd5e1;
+}
+
+/* ── Stage / Orange — brand orange ── */
 .community-chat-root[data-cchat-zone-theme='stage'] {
     --cchat-zone-header-bg: #0d0d12;
     --cchat-zone-header-border: rgba(255, 255, 255, 0.1);
@@ -83,63 +148,68 @@
     --cchat-zone-composer-placeholder: #94a3b8;
 }
 
-/* ── Warm — amber business lounge (solid 100%) ── */
+/* ── Warm / Gold — distinct yellow-gold (not orange) ── */
 .community-chat-root[data-cchat-zone-theme='warm'] {
-    --cchat-zone-header-bg: #14100c;
-    --cchat-zone-header-border: #78350f;
-    --cchat-zone-banner-frame-bg: #2a1a12;
-    --cchat-zone-banner-frame-border: #ea580c;
-    --cchat-zone-banner-placeholder-bg: #1c1410;
-    --cchat-zone-banner-title-text: #fff7ed;
-    --cchat-zone-banner-title-border: #c2410c;
-    --cchat-zone-banner-body-text: #fed7aa;
-    --cchat-zone-spotlight-bg: #ea580c;
-    --cchat-zone-spotlight-border: #fb923c;
-    --cchat-zone-spotlight-text: #fffbeb;
+    --cchat-zone-header-bg: #12100a;
+    --cchat-zone-header-border: #713f12;
+    --cchat-zone-banner-frame-bg: #292010;
+    --cchat-zone-banner-frame-border: #ca8a04;
+    --cchat-zone-banner-placeholder-bg: #1a160c;
+    --cchat-zone-banner-title-text: #fefce8;
+    --cchat-zone-banner-title-border: #a16207;
+    --cchat-zone-banner-body-text: #fef08a;
+    --cchat-zone-spotlight-bg: #ca8a04;
+    --cchat-zone-spotlight-border: #eab308;
+    --cchat-zone-spotlight-text: #422006;
     --cchat-zone-spotlight-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-    --cchat-zone-guest-frame-bg: #18120e;
-    --cchat-zone-guest-frame-border: #c2410c;
+    --cchat-zone-guest-frame-bg: #16120a;
+    --cchat-zone-guest-frame-border: #a16207;
     --cchat-zone-guest-frame-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-    --cchat-zone-incoming-bg: #3d2e1a;
-    --cchat-zone-incoming-border: #b45309;
-    --cchat-zone-incoming-text: #fef3c7;
-    --cchat-zone-incoming-time: #fbbf24;
-    --cchat-zone-outgoing-bg: #ea580c;
-    --cchat-zone-outgoing-border: #9a3412;
-    --cchat-zone-outgoing-text: #ffffff;
-    --cchat-zone-outgoing-time: #ffedd5;
-    --cchat-zone-host-bg: #ea580c;
-    --cchat-zone-host-border: #9a3412;
-    --cchat-zone-host-text: #ffffff;
-    --cchat-zone-composer-bg: #120e0a;
-    --cchat-zone-composer-border: #78350f;
-    --cchat-zone-composer-input-bg: #221810;
-    --cchat-zone-composer-input-border: #c2410c;
-    --cchat-zone-composer-text: #fff7ed;
-    --cchat-zone-composer-placeholder: #d97706;
+    --cchat-zone-incoming-bg: #3f3214;
+    --cchat-zone-incoming-border: #a16207;
+    --cchat-zone-incoming-text: #fef9c3;
+    --cchat-zone-incoming-time: #facc15;
+    --cchat-zone-outgoing-bg: #ca8a04;
+    --cchat-zone-outgoing-border: #854d0e;
+    --cchat-zone-outgoing-text: #422006;
+    --cchat-zone-outgoing-time: #713f12;
+    --cchat-zone-host-bg: #eab308;
+    --cchat-zone-host-border: #a16207;
+    --cchat-zone-host-text: #422006;
+    --cchat-zone-composer-bg: #100e08;
+    --cchat-zone-composer-border: #713f12;
+    --cchat-zone-composer-input-bg: #221c0e;
+    --cchat-zone-composer-input-border: #a16207;
+    --cchat-zone-composer-text: #fefce8;
+    --cchat-zone-composer-placeholder: #eab308;
 }
 
 [data-theme='light'] .community-chat-root[data-cchat-zone-theme='warm'] {
-    --cchat-zone-header-bg: #fffbeb;
-    --cchat-zone-header-border: #fdba74;
-    --cchat-zone-banner-frame-bg: #ffedd5;
-    --cchat-zone-banner-frame-border: #ea580c;
-    --cchat-zone-banner-title-text: #7c2d12;
-    --cchat-zone-banner-body-text: #9a3412;
-    --cchat-zone-spotlight-bg: #ffedd5;
-    --cchat-zone-spotlight-border: #ea580c;
-    --cchat-zone-spotlight-text: #7c2d12;
-    --cchat-zone-guest-frame-bg: #fff7ed;
-    --cchat-zone-guest-frame-border: #fdba74;
+    --cchat-zone-header-bg: #fefce8;
+    --cchat-zone-header-border: #fde047;
+    --cchat-zone-banner-frame-bg: #fef9c3;
+    --cchat-zone-banner-frame-border: #ca8a04;
+    --cchat-zone-banner-title-text: #713f12;
+    --cchat-zone-banner-body-text: #854d0e;
+    --cchat-zone-spotlight-bg: #fef08a;
+    --cchat-zone-spotlight-border: #ca8a04;
+    --cchat-zone-spotlight-text: #713f12;
+    --cchat-zone-guest-frame-bg: #fefce8;
+    --cchat-zone-guest-frame-border: #facc15;
     --cchat-zone-incoming-bg: #ffffff;
-    --cchat-zone-incoming-border: #fdba74;
-    --cchat-zone-incoming-text: #431407;
-    --cchat-zone-incoming-time: #c2410c;
-    --cchat-zone-outgoing-bg: #ea580c;
-    --cchat-zone-outgoing-border: #c2410c;
+    --cchat-zone-incoming-border: #fde047;
+    --cchat-zone-incoming-text: #422006;
+    --cchat-zone-incoming-time: #a16207;
+    --cchat-zone-outgoing-bg: #ca8a04;
+    --cchat-zone-outgoing-border: #a16207;
+    --cchat-zone-outgoing-text: #ffffff;
+    --cchat-zone-outgoing-time: #fef9c3;
+    --cchat-zone-host-bg: #eab308;
+    --cchat-zone-host-border: #a16207;
+    --cchat-zone-host-text: #422006;
     --cchat-zone-composer-bg: #ffffff;
-    --cchat-zone-composer-input-bg: #fff7ed;
-    --cchat-zone-composer-input-border: #fdba74;
+    --cchat-zone-composer-input-bg: #fefce8;
+    --cchat-zone-composer-input-border: #facc15;
 }
 
 /* ── Cool — slate + sky (solid 100%) ── */
@@ -201,63 +271,68 @@
     --cchat-zone-composer-input-border: #7dd3fc;
 }
 
-/* ── Vivid — maximum opaque contrast ── */
+/* ── Vivid / Purple — violet (replaces old orange duplicate) ── */
 .community-chat-root[data-cchat-zone-theme='vivid'] {
-    --cchat-zone-header-bg: #0a0a0f;
-    --cchat-zone-header-border: #374151;
-    --cchat-zone-banner-frame-bg: #312e81;
-    --cchat-zone-banner-frame-border: #818cf8;
+    --cchat-zone-header-bg: #0c0a14;
+    --cchat-zone-header-border: #5b21b6;
+    --cchat-zone-banner-frame-bg: #2e1065;
+    --cchat-zone-banner-frame-border: #8b5cf6;
     --cchat-zone-banner-placeholder-bg: #1e1b4b;
-    --cchat-zone-banner-title-text: #ffffff;
-    --cchat-zone-banner-title-border: #6366f1;
-    --cchat-zone-banner-body-text: #e0e7ff;
-    --cchat-zone-spotlight-bg: #e86e2e;
-    --cchat-zone-spotlight-border: #fb923c;
+    --cchat-zone-banner-title-text: #f5f3ff;
+    --cchat-zone-banner-title-border: #7c3aed;
+    --cchat-zone-banner-body-text: #ddd6fe;
+    --cchat-zone-spotlight-bg: #7c3aed;
+    --cchat-zone-spotlight-border: #a78bfa;
     --cchat-zone-spotlight-text: #ffffff;
-    --cchat-zone-spotlight-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    --cchat-zone-guest-frame-bg: #111827;
-    --cchat-zone-guest-frame-border: #4b5563;
+    --cchat-zone-spotlight-shadow: 0 4px 16px rgba(124, 58, 237, 0.35);
+    --cchat-zone-guest-frame-bg: #120f1e;
+    --cchat-zone-guest-frame-border: #6d28d9;
     --cchat-zone-guest-frame-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
-    --cchat-zone-incoming-bg: #374151;
-    --cchat-zone-incoming-border: #6b7280;
-    --cchat-zone-incoming-text: #f9fafb;
-    --cchat-zone-incoming-time: #d1d5db;
-    --cchat-zone-outgoing-bg: #e86e2e;
-    --cchat-zone-outgoing-border: #c9561a;
+    --cchat-zone-incoming-bg: #2e1065;
+    --cchat-zone-incoming-border: #7c3aed;
+    --cchat-zone-incoming-text: #ede9fe;
+    --cchat-zone-incoming-time: #c4b5fd;
+    --cchat-zone-outgoing-bg: #7c3aed;
+    --cchat-zone-outgoing-border: #5b21b6;
     --cchat-zone-outgoing-text: #ffffff;
-    --cchat-zone-outgoing-time: #ffedd5;
-    --cchat-zone-host-bg: #e86e2e;
-    --cchat-zone-host-border: #c9561a;
+    --cchat-zone-outgoing-time: #ddd6fe;
+    --cchat-zone-host-bg: #6d28d9;
+    --cchat-zone-host-border: #5b21b6;
     --cchat-zone-host-text: #ffffff;
-    --cchat-zone-composer-bg: #0a0a0f;
-    --cchat-zone-composer-border: #374151;
-    --cchat-zone-composer-input-bg: #1f2937;
-    --cchat-zone-composer-input-border: #4b5563;
-    --cchat-zone-composer-text: #ffffff;
-    --cchat-zone-composer-placeholder: #9ca3af;
+    --cchat-zone-composer-bg: #0a0812;
+    --cchat-zone-composer-border: #5b21b6;
+    --cchat-zone-composer-input-bg: #1e1b4b;
+    --cchat-zone-composer-input-border: #7c3aed;
+    --cchat-zone-composer-text: #f5f3ff;
+    --cchat-zone-composer-placeholder: #a78bfa;
 }
 
 [data-theme='light'] .community-chat-root[data-cchat-zone-theme='vivid'] {
-    --cchat-zone-header-bg: #ffffff;
-    --cchat-zone-header-border: #d1d5db;
-    --cchat-zone-banner-frame-bg: #eef2ff;
-    --cchat-zone-banner-frame-border: #6366f1;
-    --cchat-zone-banner-title-text: #312e81;
-    --cchat-zone-banner-body-text: #4338ca;
-    --cchat-zone-spotlight-bg: #ffedd5;
-    --cchat-zone-spotlight-border: #e86e2e;
-    --cchat-zone-spotlight-text: #7c2d12;
-    --cchat-zone-guest-frame-bg: #f3f4f6;
-    --cchat-zone-guest-frame-border: #9ca3af;
+    --cchat-zone-header-bg: #f5f3ff;
+    --cchat-zone-header-border: #c4b5fd;
+    --cchat-zone-banner-frame-bg: #ede9fe;
+    --cchat-zone-banner-frame-border: #7c3aed;
+    --cchat-zone-banner-title-text: #4c1d95;
+    --cchat-zone-banner-body-text: #5b21b6;
+    --cchat-zone-spotlight-bg: #ddd6fe;
+    --cchat-zone-spotlight-border: #7c3aed;
+    --cchat-zone-spotlight-text: #4c1d95;
+    --cchat-zone-guest-frame-bg: #f5f3ff;
+    --cchat-zone-guest-frame-border: #c4b5fd;
     --cchat-zone-incoming-bg: #ffffff;
-    --cchat-zone-incoming-border: #d1d5db;
-    --cchat-zone-incoming-text: #111827;
-    --cchat-zone-incoming-time: #6b7280;
-    --cchat-zone-outgoing-bg: #e86e2e;
-    --cchat-zone-outgoing-border: #c9561a;
+    --cchat-zone-incoming-border: #c4b5fd;
+    --cchat-zone-incoming-text: #4c1d95;
+    --cchat-zone-incoming-time: #7c3aed;
+    --cchat-zone-outgoing-bg: #7c3aed;
+    --cchat-zone-outgoing-border: #6d28d9;
+    --cchat-zone-outgoing-text: #ffffff;
+    --cchat-zone-outgoing-time: #ede9fe;
+    --cchat-zone-host-bg: #6d28d9;
+    --cchat-zone-host-border: #5b21b6;
+    --cchat-zone-host-text: #ffffff;
     --cchat-zone-composer-bg: #ffffff;
-    --cchat-zone-composer-input-bg: #f3f4f6;
-    --cchat-zone-composer-input-border: #d1d5db;
+    --cchat-zone-composer-input-bg: #f5f3ff;
+    --cchat-zone-composer-input-border: #c4b5fd;
 }
 
 /* ── Neon — electric nightlife (solid 100%) ── */
@@ -287,10 +362,10 @@
     --cchat-zone-incoming-text: #e0f2fe;
     --cchat-zone-incoming-time: #22d3ee;
     --cchat-zone-incoming-shadow: 0 0 10px rgba(124, 58, 237, 0.25);
-    --cchat-zone-outgoing-bg: #00e5ff;
-    --cchat-zone-outgoing-border: #0891b2;
-    --cchat-zone-outgoing-text: #020617;
-    --cchat-zone-outgoing-time: #0e7490;
+    --cchat-zone-outgoing-bg: #06b6d4;
+    --cchat-zone-outgoing-border: #0e7490;
+    --cchat-zone-outgoing-text: #041016;
+    --cchat-zone-outgoing-time: #083344;
     --cchat-zone-outgoing-shadow: 0 0 14px rgba(0, 229, 255, 0.45);
     --cchat-zone-host-bg: #ff00aa;
     --cchat-zone-host-border: #db0090;
@@ -364,11 +439,11 @@
     --cchat-zone-incoming-border: #22c55e;
     --cchat-zone-incoming-text: #ecfccb;
     --cchat-zone-incoming-time: #86efac;
-    --cchat-zone-outgoing-bg: #22c55e;
+    --cchat-zone-outgoing-bg: #16a34a;
     --cchat-zone-outgoing-border: #15803d;
-    --cchat-zone-outgoing-text: #052e16;
-    --cchat-zone-outgoing-time: #14532d;
-    --cchat-zone-host-bg: #16a34a;
+    --cchat-zone-outgoing-text: #ffffff;
+    --cchat-zone-outgoing-time: #dcfce7;
+    --cchat-zone-host-bg: #15803d;
     --cchat-zone-host-border: #15803d;
     --cchat-zone-host-text: #ffffff;
     --cchat-zone-composer-bg: #051008;
@@ -488,6 +563,7 @@
 }
 
 /* Solid themes — disable composer glass blur */
+.community-chat-root[data-cchat-zone-theme='default'] .community-main-chat__composer,
 .community-chat-root[data-cchat-zone-theme='warm'] .community-main-chat__composer,
 .community-chat-root[data-cchat-zone-theme='cool'] .community-main-chat__composer,
 .community-chat-root[data-cchat-zone-theme='vivid'] .community-main-chat__composer,
@@ -498,6 +574,7 @@
     -webkit-backdrop-filter: none;
 }
 
+.community-chat-root[data-cchat-zone-theme='default'] .community-host-banner-messages__bubble,
 .community-chat-root[data-cchat-zone-theme='warm'] .community-host-banner-messages__bubble,
 .community-chat-root[data-cchat-zone-theme='cool'] .community-host-banner-messages__bubble,
 .community-chat-root[data-cchat-zone-theme='vivid'] .community-host-banner-messages__bubble,

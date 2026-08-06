@@ -14,6 +14,19 @@ export async function lookupBusinessPhone(standardizedPhone) {
 }
 
 /**
+ * @param {string} placeId Google Place ID
+ */
+export async function lookupBusinessPlace(placeId) {
+    const res = await fetch(resolveApiUrl('/api/business-place-lookup'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placeId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+}
+
+/**
  * @param {object} params
  * @param {string} idToken Firebase ID token after phone (+ email link) auth
  */

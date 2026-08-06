@@ -23,17 +23,22 @@ import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { uploadImage } from '../utils/mediaUtils';
+import { uploadImage, uploadVoiceMessage } from '../utils/mediaUtils';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { createNotification } from '../utils/notificationHelpers';
+import { deleteStorageFileByUrl } from '../utils/storageCleanup';
 import {
     buildBannerImageUpdate,
     buildBannerClearImageUpdate,
     buildBannerYoutubeUpdate,
+    buildBannerVoiceUpdate,
+    buildBannerVoiceClearFields,
+    buildBannerVoiceLoopUpdate,
     buildBannerUpdate,
     mergeBannerPatch,
     normalizeCommunityBanner,
     sanitizeBannerAxis,
+    BANNER_VOICE_MAX_DURATION_SEC,
 } from '../utils/communityChatBanner';
 import { buildReplyFields } from '../utils/communityChatReply';
 import { resolveCommunityBannerDisplay } from '../utils/communityBannerDisplay';
@@ -48,7 +53,6 @@ import {
     resolveCommunityChatGuestFrameBackground,
 } from '../constants/communityChatGuestFrameLook';
 import { sanitizeBannerBgDensity } from '../utils/communityChatBanner';
-import { COMMUNITY_GUEST_FRAME_BACKGROUND_PRESET_IDS } from '../constants/communityGuestFrameBackgrounds';
 import { resolveCommunityChatBannerVisible } from '../constants/communityChatBannerMode';
 import {
     readGuestCommunityBannerVisible,
@@ -67,6 +71,7 @@ import {
 } from '../utils/clientInvitationAiCoverUpload';
 import { AI_IMAGE_GENERATION_CREDITS } from '../utils/aiCreditCosts';
 import { syncMessageReceiptDocs } from '../utils/chatMessageReceipts';
+import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 
 /**
  * Real-time community chat room state (messages + single-slot banner + membership).
@@ -114,6 +119,10 @@ export function useCommunityChatRoom(partnerId) {
         const members = Array.isArray(partner?.communityMembers) ? partner.communityMembers : [];
         return members.includes(uid);
     }, [partnerId, uid, isBlockedFromCommunity, joinedCommunities, partner?.communityMembers, isDisplaySession]);
+
+    /** Group chat stream is Paid-only; membership/join remains available on Free. */
+    const chatEnabled = getBusinessSubscriptionAccess(partner?.subscriptionTier).canUseCommunityGroupChat;
+    const canUseChat = Boolean(isMember && chatEnabled);
 
     useEffect(() => {
         if (!partnerId || !uid) {
@@ -270,7 +279,7 @@ export function useCommunityChatRoom(partnerId) {
 
     // Single-slot banner on communities/{partnerId}
     useEffect(() => {
-        if (!partnerId || !isMember) {
+        if (!partnerId || !canUseChat) {
             setBanner(normalizeCommunityBanner(null));
             return undefined;
         }
@@ -287,11 +296,11 @@ export function useCommunityChatRoom(partnerId) {
         );
 
         return unsub;
-    }, [partnerId, isMember, uid]);
+    }, [partnerId, canUseChat, uid]);
 
     // Messages subcollection — retry on permission-denied (join race / rules lag)
     useEffect(() => {
-        if (!isMember || !partnerId) {
+        if (!canUseChat || !partnerId) {
             setMessages([]);
             return undefined;
         }
@@ -359,14 +368,14 @@ export function useCommunityChatRoom(partnerId) {
                 /* ignore */
             }
         };
-    }, [partnerId, isMember, uid]);
+    }, [partnerId, canUseChat, uid]);
 
     useEffect(() => {
         if (readReceiptTimeoutRef.current) {
             clearTimeout(readReceiptTimeoutRef.current);
             readReceiptTimeoutRef.current = null;
         }
-        if (!isMember || !partnerId || !uid || messages.length === 0 || isDisplaySession) {
+        if (!canUseChat || !partnerId || !uid || messages.length === 0 || isDisplaySession) {
             return undefined;
         }
         if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
@@ -388,13 +397,13 @@ export function useCommunityChatRoom(partnerId) {
                 readReceiptTimeoutRef.current = null;
             }
         };
-    }, [isMember, messages, partnerId, uid, isDisplaySession]);
+    }, [canUseChat, messages, partnerId, uid, isDisplaySession]);
 
     const memberIdsKey = (partner?.communityMembers || []).join(',');
 
     // Community participants — live profile + isOnline from users/{uid}
     useEffect(() => {
-        if (!partnerId || !isMember) {
+        if (!partnerId || !canUseChat) {
             setParticipants([]);
             setParticipantsLoading(false);
             return undefined;
@@ -453,18 +462,18 @@ export function useCommunityChatRoom(partnerId) {
         );
 
         return () => unsubs.forEach((unsub) => unsub());
-    }, [partnerId, isMember, memberIdsKey]);
+    }, [partnerId, canUseChat, memberIdsKey]);
 
     // Mark community as read
     useEffect(() => {
-        if (!isMember || !partnerId || !uid) return undefined;
+        if (!canUseChat || !partnerId || !uid) return undefined;
 
         void updateDoc(doc(db, 'users', uid), {
             [`communityLastRead.${partnerId}`]: serverTimestamp(),
         }).catch(() => {});
 
         return undefined;
-    }, [isMember, partnerId, uid]);
+    }, [canUseChat, partnerId, uid]);
 
     /** Unpin all host messages (banner edits no longer delete chat history). */
     const unpinAllHostMessages = useCallback(async () => {
@@ -492,12 +501,40 @@ export function useCommunityChatRoom(partnerId) {
                 banner_updated_at: serverTimestamp(),
                 ownerId: partnerId,
             };
-            if (Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_id')) {
+            if (
+                Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_id') ||
+                Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_playlist_id')
+            ) {
                 const ytId = String(fields.banner_youtube_id || '').trim();
-                if (/^[a-zA-Z0-9_-]{11}$/.test(ytId)) {
-                    payload.banner_youtube_sync_at = serverTimestamp();
-                } else if (!ytId) {
+                const listId = String(fields.banner_youtube_playlist_id || '').trim();
+                const hasYt =
+                    /^[a-zA-Z0-9_-]{11}$/.test(ytId) ||
+                    (/^[a-zA-Z0-9_-]{10,64}$/.test(listId) &&
+                        !(listId.length === 11 && !/^(PL|UU|RD|OL|LL|FL|WL)/i.test(listId)));
+                if (hasYt) {
+                    // Only stamp a new sync epoch when the caller asks for it
+                    // (new YouTube media / explicit syncYoutubePlayback).
+                    const refreshSync = Object.prototype.hasOwnProperty.call(
+                        fields,
+                        'banner_youtube_sync_client_ms'
+                    );
+                    if (refreshSync) {
+                        payload.banner_youtube_sync_at = serverTimestamp();
+                        if (!Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_paused')) {
+                            payload.banner_youtube_paused = false;
+                        }
+                        if (
+                            !Object.prototype.hasOwnProperty.call(
+                                fields,
+                                'banner_youtube_position_sec'
+                            )
+                        ) {
+                            payload.banner_youtube_position_sec = 0;
+                        }
+                    }
+                } else if (!ytId && !listId) {
                     payload.banner_youtube_sync_at = null;
+                    payload.banner_youtube_sync_client_ms = 0;
                 }
             }
             await setDoc(doc(db, 'communities', partnerId), payload, { merge: true });
@@ -505,21 +542,34 @@ export function useCommunityChatRoom(partnerId) {
         [isHost, partnerId]
     );
 
-    const syncYoutubePlayback = useCallback(async () => {
-        if (!isHost || !partnerId || !banner.youtubeId) return;
-        try {
-            await setDoc(
-                doc(db, 'communities', partnerId),
-                {
+    const syncYoutubePlayback = useCallback(
+        async ({ paused, positionSec } = {}) => {
+            if (!isHost || !partnerId) return;
+            if (!banner.youtubeId && !banner.youtubePlaylistId) return;
+            try {
+                const payload = {
                     banner_youtube_sync_at: serverTimestamp(),
+                    // Instant guest math — avoid waiting for serverTimestamp resolution.
+                    banner_youtube_sync_client_ms: Date.now(),
                     ownerId: partnerId,
-                },
-                { merge: true }
-            );
-        } catch (err) {
-            console.error('[useCommunityChatRoom] youtube sync', err);
-        }
-    }, [isHost, partnerId, banner.youtubeId]);
+                };
+                if (typeof paused === 'boolean') {
+                    payload.banner_youtube_paused = paused;
+                }
+                // Only update position when explicitly provided (0 = hard stop / restart from start).
+                if (positionSec !== undefined && Number.isFinite(Number(positionSec))) {
+                    payload.banner_youtube_position_sec = Math.max(
+                        0,
+                        Math.floor(Number(positionSec))
+                    );
+                }
+                await setDoc(doc(db, 'communities', partnerId), payload, { merge: true });
+            } catch (err) {
+                console.error('[useCommunityChatRoom] youtube sync', err);
+            }
+        },
+        [isHost, partnerId, banner.youtubeId, banner.youtubePlaylistId]
+    );
 
     const setBannerImage = useCallback(
         async (file) => {
@@ -553,14 +603,20 @@ export function useCommunityChatRoom(partnerId) {
     }, [banner.url, isHost, partnerId, replaceBanner, showToast, t]);
 
     const setBannerYoutube = useCallback(
-        async (videoId, { isShort = false } = {}) => {
+        async (
+            videoId,
+            { isShort = false, isLive = false, isMusic = false, playlistId = '' } = {}
+        ) => {
             if (!isHost || !partnerId) return false;
             const id = String(videoId || '').trim();
+            const listId = String(playlistId || '').trim();
             try {
-                if (id) {
+                if (id || listId) {
                     await unpinAllHostMessages();
                 }
-                await replaceBanner(buildBannerYoutubeUpdate(id, { isShort }));
+                await replaceBanner(
+                    buildBannerYoutubeUpdate(id, { isShort, isLive, isMusic, playlistId: listId })
+                );
                 return true;
             } catch (err) {
                 console.error('[useCommunityChatRoom] banner youtube', err);
@@ -569,6 +625,80 @@ export function useCommunityChatRoom(partnerId) {
             }
         },
         [isHost, partnerId, replaceBanner, unpinAllHostMessages, showToast, t]
+    );
+
+    const setBannerVoice = useCallback(
+        async (audioBlob, durationSec = 0) => {
+            if (!audioBlob || !isHost || !partnerId || !uid) return false;
+            setUploadingBanner(true);
+            const previousUrl = String(banner.voiceUrl || '').trim();
+            try {
+                const url = await uploadVoiceMessage(audioBlob, uid);
+                const secs = Math.max(
+                    1,
+                    Math.min(
+                        BANNER_VOICE_MAX_DURATION_SEC,
+                        Math.floor(Number(durationSec) || 0) || 1
+                    )
+                );
+                await replaceBanner({
+                    ...buildBannerVoiceUpdate(url, secs),
+                    banner_voice_updated_at: serverTimestamp(),
+                });
+                if (previousUrl && previousUrl !== url) {
+                    void deleteStorageFileByUrl(previousUrl);
+                }
+                showToast(
+                    t('community_banner_voice_published', 'Voice message published to the banner.'),
+                    'success'
+                );
+                return true;
+            } catch (err) {
+                console.error('[useCommunityChatRoom] banner voice', err);
+                showToast(t('failed_send_voice', 'Could not send voice message.'), 'error');
+                return false;
+            } finally {
+                setUploadingBanner(false);
+            }
+        },
+        [banner.voiceUrl, isHost, partnerId, uid, replaceBanner, showToast, t]
+    );
+
+    const clearBannerVoice = useCallback(async () => {
+        if (!isHost || !partnerId) return false;
+        const previousUrl = String(banner.voiceUrl || '').trim();
+        if (!previousUrl) return false;
+        try {
+            await replaceBanner(buildBannerVoiceClearFields());
+            void deleteStorageFileByUrl(previousUrl);
+            return true;
+        } catch (err) {
+            console.error('[useCommunityChatRoom] clear banner voice', err);
+            showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
+            return false;
+        }
+    }, [banner.voiceUrl, isHost, partnerId, replaceBanner, showToast, t]);
+
+    const setBannerVoiceLoop = useCallback(
+        async (loop) => {
+            if (!isHost || !partnerId) return false;
+            if (!String(banner.voiceUrl || '').trim()) return false;
+            try {
+                await replaceBanner(buildBannerVoiceLoopUpdate(loop));
+                showToast(
+                    loop
+                        ? t('community_banner_voice_loop_on', 'Voice will repeat.')
+                        : t('community_banner_voice_loop_off', 'Voice plays once.'),
+                    'success'
+                );
+                return true;
+            } catch (err) {
+                console.error('[useCommunityChatRoom] banner voice loop', err);
+                showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
+                return false;
+            }
+        },
+        [banner.voiceUrl, isHost, partnerId, replaceBanner, showToast, t]
     );
 
     const updateBanner = useCallback(
@@ -965,22 +1095,17 @@ export function useCommunityChatRoom(partnerId) {
         [isHost, partnerId, showToast, t]
     );
 
-    const uploadCommunityChatGuestFrameBackgroundFile = useCallback(
-        async (file) => {
-            if (!file || !uid) return null;
-            setGuestFrameBackgroundUploading(true);
-            try {
-                return await uploadImage(file, uid);
-            } catch (err) {
-                console.error('[useCommunityChatRoom] uploadCommunityChatGuestFrameBackgroundFile', err);
-                notifyImageUploadError(showToast, err, t);
-                return null;
-            } finally {
-                setGuestFrameBackgroundUploading(false);
-            }
-        },
-        [showToast, t, uid]
-    );
+    /** Device upload removed — guest-frame images are AI-only. */
+    const uploadCommunityChatGuestFrameBackgroundFile = useCallback(async () => {
+        showToast(
+            t(
+                'community_guest_frame_bg_upload_disabled',
+                'Chat backgrounds are AI-generated only.'
+            ),
+            'info'
+        );
+        return null;
+    }, [showToast, t]);
 
     const generateCommunityChatGuestFrameBackgroundImage = useCallback(
         async (userPrompt) => {
@@ -1038,8 +1163,11 @@ export function useCommunityChatRoom(partnerId) {
         async ({ themeId, guestFrame }) => {
             if (!isHost || !partnerId) return false;
             const id = COMMUNITY_CHAT_ZONE_THEME_IDS.includes(themeId) ? themeId : 'stage';
+            // Image backgrounds: AI-generated custom URLs only (no presets / device upload).
             const imageMode = guestFrame?.imageMode || 'none';
-            const hasImage = imageMode === 'preset' || imageMode === 'custom';
+            const customUrl =
+                imageMode === 'custom' ? String(guestFrame?.customUrl || '').trim() : '';
+            const hasImage = Boolean(customUrl);
             const hasColor = guestFrame?.colorOverlayEnabled !== false;
             const intensity = sanitizeBannerBgDensity(guestFrame?.intensity, 100);
             const color1 = normalizeCommunityGuestFrameHexColor(guestFrame?.colorStart);
@@ -1047,33 +1175,18 @@ export function useCommunityChatRoom(partnerId) {
 
             const update = {
                 communityChatZoneTheme: id,
+                communityChatGuestFrameBgPreset: null,
             };
 
             if (!hasImage && !hasColor) {
                 update.communityChatGuestFrameBgMode = 'none';
-                update.communityChatGuestFrameBgPreset = null;
                 update.communityChatGuestFrameBgUrl = null;
                 update.communityChatGuestFrameBgColor1 = null;
                 update.communityChatGuestFrameBgColor2 = null;
                 update.communityChatGuestFrameBgIntensity = null;
             } else if (hasImage) {
-                if (imageMode === 'preset') {
-                    const presetId = COMMUNITY_GUEST_FRAME_BACKGROUND_PRESET_IDS.includes(
-                        guestFrame?.presetId
-                    )
-                        ? guestFrame.presetId
-                        : null;
-                    if (!presetId) return false;
-                    update.communityChatGuestFrameBgMode = 'preset';
-                    update.communityChatGuestFrameBgPreset = presetId;
-                    update.communityChatGuestFrameBgUrl = null;
-                } else {
-                    const url = String(guestFrame?.customUrl || '').trim();
-                    if (!url) return false;
-                    update.communityChatGuestFrameBgMode = 'custom';
-                    update.communityChatGuestFrameBgPreset = null;
-                    update.communityChatGuestFrameBgUrl = url;
-                }
+                update.communityChatGuestFrameBgMode = 'custom';
+                update.communityChatGuestFrameBgUrl = customUrl;
                 if (hasColor) {
                     update.communityChatGuestFrameBgColor1 = color1;
                     update.communityChatGuestFrameBgColor2 = color2;
@@ -1085,7 +1198,6 @@ export function useCommunityChatRoom(partnerId) {
                 }
             } else {
                 update.communityChatGuestFrameBgMode = 'color';
-                update.communityChatGuestFrameBgPreset = null;
                 update.communityChatGuestFrameBgUrl = null;
                 update.communityChatGuestFrameBgIntensity = intensity;
                 update.communityChatGuestFrameBgColor1 = color1;
@@ -1158,6 +1270,7 @@ export function useCommunityChatRoom(partnerId) {
     return {
         loading,
         isMember,
+        chatEnabled,
         isBlockedFromCommunity,
         isHost,
         isDisplaySession,
@@ -1185,6 +1298,9 @@ export function useCommunityChatRoom(partnerId) {
         setBannerImage,
         clearBannerImage,
         setBannerYoutube,
+        setBannerVoice,
+        clearBannerVoice,
+        setBannerVoiceLoop,
         syncYoutubePlayback,
         updateBanner,
         currentUserId: uid,

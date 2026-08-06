@@ -1,12 +1,18 @@
 .user-directory-card {
+    --udc-accent: #2563eb;
+    --udc-accent-soft: rgba(37, 99, 235, 0.55);
+    --udc-frame-white: rgba(255, 255, 255, 0.96);
+    --udc-hex-clip: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0% 50%);
+    --udc-half-hex-clip: polygon(38% 0%, 100% 0%, 100% 100%, 38% 100%, 0% 50%);
+    --udc-half-hex-origin: right center;
     position: relative;
     width: 100%;
     border-radius: 18px;
     overflow: hidden;
     border: 1px solid var(--border-color);
-    background: var(--bg-card);
+    background: #0b1220;
     text-align: start;
-    color: var(--text-main);
+    color: #fff;
     display: block;
     padding: 0;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
@@ -22,11 +28,32 @@
     transform: scale(0.99);
 }
 
+.user-directory-card--hexagon {
+    --udc-accent: #c026d3;
+    --udc-accent-soft: rgba(192, 38, 211, 0.55);
+}
+
+.user-directory-card--tilt {
+    --udc-accent: #ec4899;
+    --udc-accent-soft: rgba(236, 72, 153, 0.5);
+}
+
+.user-directory-card--circle {
+    --udc-accent: #ffffff;
+    --udc-accent-soft: rgba(15, 23, 42, 0.35);
+    --udc-half-hex-clip: none;
+}
+
+.user-directory-card--halfHex {
+    --udc-accent: #2563eb;
+    --udc-accent-soft: rgba(37, 99, 235, 0.55);
+}
+
 .user-directory-card__media {
     position: relative;
     width: 100%;
     aspect-ratio: 16 / 9;
-    min-height: 96px;
+    min-height: 118px;
     isolation: isolate;
     container-type: size;
 }
@@ -57,96 +84,69 @@
     position: absolute;
     inset: 0;
     background: linear-gradient(
-        to top,
-        rgba(0, 0, 0, 0.82) 0%,
-        rgba(0, 0, 0, 0.38) 38%,
-        rgba(0, 0, 0, 0.12) 68%,
-        rgba(0, 0, 0, 0.28) 100%
+        to right,
+        rgba(0, 0, 0, 0.78) 0%,
+        rgba(0, 0, 0, 0.52) 40%,
+        rgba(0, 0, 0, 0.28) 68%,
+        rgba(0, 0, 0, 0.18) 100%
     );
     pointer-events: none;
 }
 
-.user-directory-card__profile-column {
+[dir='rtl'] .user-directory-card__cover-scrim {
+    background: linear-gradient(
+        to left,
+        rgba(0, 0, 0, 0.78) 0%,
+        rgba(0, 0, 0, 0.52) 40%,
+        rgba(0, 0, 0, 0.28) 68%,
+        rgba(0, 0, 0, 0.18) 100%
+    );
+}
+
+/* ---------- Portrait (shared) ---------- */
+.user-directory-card__portrait {
     position: absolute;
-    top: 50%;
-    inset-inline-start: 10px;
-    transform: translateY(-50%);
     z-index: 2;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    width: min(40%, 48cqh);
     pointer-events: none;
 }
 
-.user-directory-card__name-chip {
-    position: relative;
-    z-index: 3;
-    pointer-events: auto;
-    max-width: calc(100% + 8px);
-    padding: 4px 10px;
-    border-radius: 999px;
-    background: rgba(15, 23, 42, 0.62);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.32);
-    box-shadow:
-        0 4px 16px rgba(0, 0, 0, 0.28),
-        inset 0 1px 0 rgba(255, 255, 255, 0.12);
-    text-decoration: none;
-    color: inherit;
-    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+.user-directory-card__portrait-shell,
+.user-directory-card__portrait-ring,
+.user-directory-card__portrait-photo {
+    position: absolute;
+    inset: 0;
 }
 
-.user-directory-card__name-chip:hover {
-    background: rgba(15, 23, 42, 0.78);
-    border-color: rgba(255, 255, 255, 0.42);
-    transform: translateY(-1px);
+.user-directory-card__portrait-shell {
+    background: var(--udc-accent);
+    filter: drop-shadow(-3px 4px 12px var(--udc-accent-soft));
 }
 
-[data-theme='light'] .user-directory-card__name-chip {
-    background: rgba(255, 255, 255, 0.72);
-    border-color: rgba(15, 23, 42, 0.12);
-    box-shadow:
-        0 4px 14px rgba(15, 23, 42, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.85);
+[dir='rtl'] .user-directory-card__portrait-shell {
+    filter: drop-shadow(3px 4px 12px var(--udc-accent-soft));
 }
 
-[data-theme='light'] .user-directory-card__name-chip:hover {
-    background: rgba(255, 255, 255, 0.88);
+.user-directory-card__portrait-ring {
+    background: var(--udc-frame-white);
 }
 
-.user-directory-card__avatar-wrap {
-    position: relative;
-    flex: 0 0 auto;
-    width: 100%;
-    height: 0;
-    padding-bottom: 100%;
-    overflow: visible;
-    pointer-events: none;
+.user-directory-card__portrait-photo {
+    overflow: hidden;
+    background: #374151;
 }
 
 .user-directory-card__avatar-link {
-    position: absolute;
-    inset: 0;
     display: block;
-    border-radius: 50%;
-    overflow: hidden;
+    width: 100%;
+    height: 100%;
     text-decoration: none;
     pointer-events: auto;
     cursor: pointer;
-    box-shadow:
-        0 0 0 3px rgba(255, 255, 255, 0.94),
-        0 4px 16px rgba(0, 0, 0, 0.38);
 }
 
 .user-directory-card__avatar {
-    position: absolute;
-    inset: 0;
     width: 100%;
     height: 100%;
-    border-radius: 50%;
     object-fit: cover;
     object-position: center top;
     display: block;
@@ -155,67 +155,246 @@
     pointer-events: none;
 }
 
-.user-directory-card__avatar-link .user-directory-card__avatar {
-    pointer-events: none;
-    box-shadow: none;
+/* 1) Full hexagon — nearly card-tall, inside the card */
+.user-directory-card--hexagon .user-directory-card__portrait {
+    top: 3%;
+    bottom: 3%;
+    inset-inline-end: 2%;
+    height: 94%;
+    width: auto;
+    aspect-ratio: 1;
+    max-width: 54%;
+    transform: none;
 }
 
-.user-directory-card__avatar-wrap > .user-directory-card__avatar {
-    position: absolute;
-    inset: 0;
+.user-directory-card--hexagon .user-directory-card__portrait-shell,
+.user-directory-card--hexagon .user-directory-card__portrait-ring,
+.user-directory-card--hexagon .user-directory-card__portrait-photo {
+    clip-path: var(--udc-hex-clip);
+}
+
+.user-directory-card--hexagon .user-directory-card__portrait-ring {
+    transform: scale(0.94);
+    transform-origin: center;
+}
+
+.user-directory-card--hexagon .user-directory-card__portrait-photo {
+    transform: scale(0.88);
+    transform-origin: center;
+}
+
+/* 2) Tilted rounded square — larger frame (match mockup scale) */
+.user-directory-card--tilt .user-directory-card__portrait {
+    top: 50%;
+    inset-inline-end: 2%;
+    height: 82%;
+    width: auto;
+    aspect-ratio: 1;
+    max-width: 56%;
+    transform: translateY(-50%) rotate(15deg);
+}
+
+.user-directory-card--tilt .user-directory-card__portrait-shell,
+.user-directory-card--tilt .user-directory-card__portrait-ring,
+.user-directory-card--tilt .user-directory-card__portrait-photo {
+    border-radius: 16%;
+    clip-path: none;
+}
+
+.user-directory-card--tilt .user-directory-card__portrait-ring {
+    inset: 4px;
+}
+
+.user-directory-card--tilt .user-directory-card__portrait-photo {
+    inset: 7px;
+    border-radius: 12%;
+}
+
+.user-directory-card--tilt .user-directory-card__avatar,
+.user-directory-card--tilt .user-directory-card__avatar-link {
+    border-radius: 12%;
+}
+
+.user-directory-card--tilt .user-directory-card__portrait-shell {
+    box-shadow: -5px 7px 18px var(--udc-accent-soft);
+    filter: none;
+}
+
+/* 1 / classic) Original default — round avatar on the start edge */
+.user-directory-card--circle .user-directory-card__cover-scrim {
+    background: linear-gradient(
+        to top,
+        rgba(0, 0, 0, 0.82) 0%,
+        rgba(0, 0, 0, 0.38) 38%,
+        rgba(0, 0, 0, 0.12) 68%,
+        rgba(0, 0, 0, 0.28) 100%
+    );
+}
+
+[dir='rtl'] .user-directory-card--circle .user-directory-card__cover-scrim {
+    background: linear-gradient(
+        to top,
+        rgba(0, 0, 0, 0.82) 0%,
+        rgba(0, 0, 0, 0.38) 38%,
+        rgba(0, 0, 0, 0.12) 68%,
+        rgba(0, 0, 0, 0.28) 100%
+    );
+}
+
+.user-directory-card--circle .user-directory-card__portrait {
+    top: 50%;
+    inset-inline-start: 10px;
+    inset-inline-end: auto;
+    width: min(40%, 48cqh);
+    height: auto;
+    aspect-ratio: 1;
+    max-width: none;
+    transform: translateY(-50%);
+}
+
+.user-directory-card--circle .user-directory-card__portrait-shell,
+.user-directory-card--circle .user-directory-card__portrait-ring,
+.user-directory-card--circle .user-directory-card__portrait-photo {
+    border-radius: 50% !important;
+    clip-path: none !important;
+    transform: none !important;
+}
+
+.user-directory-card--circle .user-directory-card__portrait-shell {
+    background: #374151;
     box-shadow:
         0 0 0 3px rgba(255, 255, 255, 0.94),
         0 4px 16px rgba(0, 0, 0, 0.38);
+    filter: none;
 }
 
-.user-directory-card__private-invite.private-invite-profile-badge {
-    position: absolute;
+.user-directory-card--circle .user-directory-card__portrait-ring {
+    inset: 0;
+    background: transparent;
+}
+
+.user-directory-card--circle .user-directory-card__portrait-photo {
+    inset: 0;
+    border-radius: 50% !important;
+    overflow: hidden;
+}
+
+.user-directory-card--circle .user-directory-card__avatar,
+.user-directory-card--circle .user-directory-card__avatar-link {
+    border-radius: 50% !important;
+}
+
+/* 4) Half-hexagon flush to edge — wider portrait band */
+.user-directory-card--halfHex .user-directory-card__portrait {
+    top: 0;
     bottom: 0;
-    left: 50%;
-    z-index: 4;
-    width: 38%;
-    height: 38%;
+    inset-inline-end: 0;
+    width: min(66%, 78cqh);
+}
+
+[dir='rtl'] .user-directory-card--halfHex {
+    --udc-half-hex-clip: polygon(0% 0%, 62% 0%, 100% 50%, 62% 100%, 0% 100%);
+    --udc-half-hex-origin: left center;
+}
+
+.user-directory-card--halfHex {
+    --udc-half-hex-clip: polygon(38% 0%, 100% 0%, 100% 100%, 38% 100%, 0% 50%);
+}
+
+.user-directory-card--halfHex .user-directory-card__portrait-shell,
+.user-directory-card--halfHex .user-directory-card__portrait-ring,
+.user-directory-card--halfHex .user-directory-card__portrait-photo {
+    clip-path: var(--udc-half-hex-clip);
+}
+
+.user-directory-card--halfHex .user-directory-card__portrait-ring {
+    transform: scale(0.97);
+    transform-origin: var(--udc-half-hex-origin);
+}
+
+.user-directory-card--halfHex .user-directory-card__portrait-photo {
+    transform: scale(0.94);
+    transform-origin: var(--udc-half-hex-origin);
+}
+
+/* Private invite — same action row, gold + ring to stand out */
+.user-directory-card__actions .user-directory-card__private-invite.private-invite-profile-badge,
+.user-directory-card__action--private-invite.private-invite-profile-badge {
+    position: static !important;
+    inset: auto !important;
+    bottom: auto !important;
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    max-width: none;
+    max-height: none;
+    margin: 0;
     padding: 0;
+    transform: none;
     pointer-events: auto;
-    transform: translate(-50%, 50%);
     background: linear-gradient(145deg, #fcd34d 0%, #b45309 100%);
-    border: 2px solid rgba(255, 255, 255, 0.94);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-}
-
-.user-directory-card__private-invite.private-invite-profile-badge:hover {
-    transform: translate(-50%, 50%) scale(1.06);
+    border: 2.5px solid rgba(255, 255, 255, 0.95);
     box-shadow:
-        0 0 0 2px var(--luxury-gold, #d4af37),
-        0 6px 16px rgba(0, 0, 0, 0.4);
+        0 0 0 2px rgba(212, 175, 55, 0.55),
+        0 3px 10px rgba(180, 83, 9, 0.45);
 }
 
-.user-directory-card__private-invite.private-invite-profile-badge:active {
-    transform: translate(-50%, 50%) scale(0.98);
+.user-directory-card__actions .user-directory-card__private-invite.private-invite-profile-badge:hover,
+.user-directory-card__action--private-invite.private-invite-profile-badge:hover {
+    transform: translateY(-1px) scale(1.05);
+    box-shadow:
+        0 0 0 2px rgba(253, 224, 71, 0.85),
+        0 4px 14px rgba(180, 83, 9, 0.55);
 }
 
-.user-directory-card__private-invite.private-invite-profile-badge--disabled:hover {
-    transform: translate(-50%, 50%);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+.user-directory-card__actions .user-directory-card__private-invite.private-invite-profile-badge:active,
+.user-directory-card__action--private-invite.private-invite-profile-badge:active {
+    transform: scale(0.94);
 }
 
-.user-directory-card__private-invite .private-invite-profile-badge__logo {
+.user-directory-card__actions .user-directory-card__private-invite .private-invite-profile-badge__logo,
+.user-directory-card__action--private-invite .private-invite-profile-badge__logo {
     width: 58%;
     height: 58%;
 }
 
+.user-directory-card__actions
+    .user-directory-card__private-invite.private-invite-profile-badge--disabled {
+    opacity: 0.55;
+    filter: grayscale(0.25);
+}
+
+/* ---------- Overlay / copy ---------- */
 .user-directory-card__overlay {
     position: absolute;
     inset: 0;
     z-index: 3;
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
+    justify-content: space-between;
     align-items: stretch;
     min-width: 0;
-    padding: 10px;
+    padding: 12px 14px;
     color: #fff;
     pointer-events: none;
+}
+
+.user-directory-card--hexagon .user-directory-card__overlay {
+    padding-inline-end: calc(min(54%, 94cqh) + 8px);
+}
+
+.user-directory-card--tilt .user-directory-card__overlay {
+    padding-inline-end: calc(min(56%, 82cqh) + 12px);
+}
+
+.user-directory-card--circle .user-directory-card__overlay {
+    /* Text sits beside the start-side circular avatar (original layout). */
+    padding-inline-start: calc(min(40%, 48cqh) + 18px);
+    padding-inline-end: 12px;
+}
+
+.user-directory-card--halfHex .user-directory-card__overlay {
+    padding-inline-end: calc(min(66%, 78cqh) * 0.72 + 8px);
 }
 
 .user-directory-card__overlay a,
@@ -224,29 +403,35 @@
 }
 
 .user-directory-card__top-meta {
-    position: absolute;
-    top: 8px;
-    inset-inline-end: 8px;
+    position: relative;
     z-index: 4;
     display: flex;
     align-items: center;
     gap: 6px;
+    align-self: flex-start;
     pointer-events: none;
 }
 
 .user-directory-card__city {
-    padding: 3px 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
     border-radius: 999px;
-    background: rgba(15, 23, 42, 0.72);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.28);
+    background: rgba(0, 0, 0, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     color: #fff;
-    font-size: 0.68rem;
+    font-size: 0.7rem;
     font-weight: 700;
     line-height: 1.2;
     white-space: nowrap;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.user-directory-card__city-icon {
+    width: 0.72em;
+    height: 0.72em;
+    flex-shrink: 0;
+    opacity: 0.95;
 }
 
 .user-directory-card__online-badge {
@@ -260,26 +445,19 @@
     align-items: stretch;
     margin-top: auto;
     min-width: 0;
-    padding-inline-start: calc(min(40%, 48cqh) + 12px);
+    gap: 5px;
 }
 
-.user-directory-card__bio {
-    margin: 0 0 8px;
-    font-size: 0.72rem;
-    font-weight: 500;
-    line-height: 1.4;
-    color: rgba(255, 255, 255, 0.92);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-align: start;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+.user-directory-card__name-link {
+    text-decoration: none;
+    color: inherit;
+    align-self: flex-start;
+    max-width: 100%;
 }
 
 .user-directory-card__name {
     margin: 0;
-    font-size: 0.78rem;
+    font-size: 1.08rem;
     font-weight: 800;
     line-height: 1.2;
     color: #fff;
@@ -288,27 +466,42 @@
     text-overflow: ellipsis;
     max-width: 100%;
     display: block;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
 
-[data-theme='light'] .user-directory-card__name {
-    color: #0f172a;
+.user-directory-card__age {
+    font-weight: 650;
+    opacity: 0.95;
+}
+
+.user-directory-card__bio {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.94);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-align: start;
+    text-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
 }
 
 .user-directory-card__actions {
     position: relative;
     z-index: 4;
     display: flex;
-    gap: 7px;
+    gap: 9px;
     align-items: center;
-    justify-content: flex-end;
-    padding-top: 0;
+    justify-content: flex-start;
+    padding-top: 6px;
 }
 
 .user-directory-card__action {
     flex: 0 0 auto;
-    width: 36px;
-    height: 36px;
-    border: none;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     padding: 0;
     cursor: pointer;
@@ -316,7 +509,7 @@
     align-items: center;
     justify-content: center;
     border: 1.5px solid transparent;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
     transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
 }
 
@@ -336,27 +529,15 @@
 }
 
 .user-directory-card__action--gift {
-    /* Warm amber — gift */
-    background: linear-gradient(145deg, #fbbf24 0%, #e86e2e 100%);
+    background: linear-gradient(145deg, #fbbf24 0%, #ea580c 100%);
     color: #fff;
-    border-color: rgba(254, 243, 199, 0.5);
-}
-
-.user-directory-card__action--gift:not(:disabled):hover {
-    background: linear-gradient(145deg, #fcd34d 0%, #ea580c 100%);
-    box-shadow: 0 4px 14px rgba(232, 110, 46, 0.45);
+    border-color: rgba(254, 243, 199, 0.45);
 }
 
 .user-directory-card__action--greeting {
-    /* Soft violet — wave */
     background: linear-gradient(145deg, #c4b5fd 0%, #7c3aed 100%);
     color: #fff;
-    border-color: rgba(221, 214, 254, 0.55);
-}
-
-.user-directory-card__action--greeting:not(:disabled):hover {
-    background: linear-gradient(145deg, #ddd6fe 0%, #6d28d9 100%);
-    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.45);
+    border-color: rgba(221, 214, 254, 0.5);
 }
 
 .user-directory-card__action--greeting.user-directory-card__action--greeted {
@@ -365,67 +546,38 @@
 }
 
 .user-directory-card__wave {
-    font-size: 1.05rem;
+    font-size: 1.08rem;
     line-height: 1;
     filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
 }
 
 .user-directory-card__action--like {
-    /* Rose — like */
     background: linear-gradient(145deg, #fda4af 0%, #e11d48 100%);
     color: #fff;
-    border-color: rgba(254, 205, 211, 0.55);
-}
-
-.user-directory-card__action--like-idle .user-directory-card__action-icon {
-    opacity: 0.95;
-}
-
-.user-directory-card__action--like:not(:disabled):hover {
-    box-shadow: 0 4px 14px rgba(225, 29, 72, 0.45);
+    border-color: rgba(254, 205, 211, 0.5);
 }
 
 .user-directory-card__action--like.user-directory-card__action--liked {
     background: linear-gradient(145deg, #fb7185 0%, #be123c 100%);
-    color: #fff;
     border-color: #fda4af;
-    box-shadow: 0 0 0 2px rgba(253, 164, 175, 0.4), 0 4px 14px rgba(190, 18, 60, 0.4);
-}
-
-.user-directory-card__action--like.user-directory-card__action--liked .user-directory-card__action-icon {
-    fill: currentColor;
-    opacity: 1;
+    box-shadow: 0 0 0 2px rgba(253, 164, 175, 0.35), 0 4px 14px rgba(190, 18, 60, 0.4);
 }
 
 .user-directory-card__action--follow {
-    /* Indigo — follow */
-    background: linear-gradient(145deg, #93c5fd 0%, #2563eb 100%);
+    background: linear-gradient(145deg, #60a5fa 0%, #2563eb 100%);
     color: #fff;
-    border-color: rgba(191, 219, 254, 0.55);
-}
-
-.user-directory-card__action--follow:not(:disabled):hover {
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.45);
+    border-color: rgba(191, 219, 254, 0.5);
 }
 
 .user-directory-card__action--follow.user-directory-card__action--following {
-    /* Deeper royal blue when following — not green */
-    background: linear-gradient(145deg, #60a5fa 0%, #1d4ed8 100%);
-    color: #fff;
+    background: linear-gradient(145deg, #3b82f6 0%, #1d4ed8 100%);
     border-color: rgba(147, 197, 253, 0.65);
-    box-shadow: 0 4px 14px rgba(29, 78, 216, 0.4);
 }
 
 .user-directory-card__action--chat {
-    /* Teal — messages (distinct from follow blue) */
     background: linear-gradient(145deg, #5eead4 0%, #0f766e 100%);
     color: #fff;
-    border-color: rgba(153, 246, 228, 0.55);
-}
-
-.user-directory-card__action--chat:not(:disabled):hover {
-    background: linear-gradient(145deg, #99f6e4 0%, #115e59 100%);
-    box-shadow: 0 4px 14px rgba(15, 118, 110, 0.5);
+    border-color: rgba(153, 246, 228, 0.5);
 }
 
 .user-directory-card__action-icon {
@@ -438,22 +590,35 @@
     box-shadow: 0 4px 18px rgba(15, 23, 42, 0.1);
 }
 
-[data-theme='light'] .user-directory-card:hover {
-    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
-}
-
 @media (min-width: 768px) {
     .user-directory-card__name {
-        font-size: 0.85rem;
+        font-size: 1.22rem;
     }
 
     .user-directory-card__bio {
-        font-size: 0.78rem;
+        font-size: 0.88rem;
         -webkit-line-clamp: 3;
     }
 
-    .user-directory-card__action {
-        width: 40px;
-        height: 40px;
+    .user-directory-card__action,
+    .user-directory-card__actions .user-directory-card__private-invite.private-invite-profile-badge {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+@media (max-width: 380px) {
+    .user-directory-card__name {
+        font-size: 0.98rem;
+    }
+
+    .user-directory-card__action,
+    .user-directory-card__actions .user-directory-card__private-invite.private-invite-profile-badge {
+        width: 34px;
+        height: 34px;
+    }
+
+    .user-directory-card__actions {
+        gap: 7px;
     }
 }

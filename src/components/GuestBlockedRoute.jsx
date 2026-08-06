@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { buildLoginPath } from '../utils/goToLogin';
 import { sanitizeNextPath } from '../utils/safeInternalPath';
 import { isAuthBootstrapPending } from '../utils/authBootstrap';
+import AppShellLoading from './AppShellLoading';
 
 function hasPendingBusinessSessionHint() {
     try {
@@ -24,11 +25,8 @@ const GuestBlockedRoute = ({ children }) => {
         isAuthBootstrapPending({ loading, currentUser, isGuest, profileServerSynced }) ||
         (!currentUser && hasPendingBusinessSessionHint())
     ) {
-        return (
-            <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-body)' }}>
-                <div className="spinner" />
-            </div>
-        );
+        // Same shell as AuthRoutingGate — avoid a second distinct spinner flash.
+        return <AppShellLoading variant="session" />;
     }
 
     if (!currentUser || isGuest) {

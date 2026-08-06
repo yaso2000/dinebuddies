@@ -3,7 +3,7 @@
  * Image, gradient background, title, and body text are independent layers.
  */
 
-import { classifyChatLink } from './chatLinkSafety';
+import { resolveYoutubeSyncAtMs } from './videoEmbedUtils';
 
 export const BANNER_BG_TRANSPARENT = 'transparent';
 
@@ -40,6 +40,8 @@ export const BANNER_BODY_MODES = ['text', 'link'];
 export const DEFAULT_BANNER_BODY_MODE = 'text';
 export const DEFAULT_BANNER_BUTTON_BG = '#e86e2e';
 export const BANNER_LINK_URL_MAX = 500;
+/** Host voice broadcast on banner — max record length (seconds). */
+export const BANNER_VOICE_MAX_DURATION_SEC = 120;
 
 export const BANNER_TITLE_FONT_FAMILIES = {
     system: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -288,17 +290,11 @@ export function sanitizeBannerBodyMode(value) {
 }
 
 /**
- * Allow safe http(s) URLs and same-app paths (`/foo`) for the host banner button.
- * Rejects dangerous schemes, credentials, IP hosts, and common URL shorteners.
+ * Banner CTA buttons with external URLs are disabled app-wide (anti-spam).
+ * Always returns empty so link slots never publish, render, or open.
  */
-export function sanitizeBannerLinkUrl(value) {
-    const raw = String(value || '').trim().slice(0, BANNER_LINK_URL_MAX);
-    if (!raw) return '';
-
-    const info = classifyChatLink(raw);
-    if (!info || info.kind === 'blocked' || !info.href) return '';
-
-    return String(info.href).slice(0, BANNER_LINK_URL_MAX);
+export function sanitizeBannerLinkUrl(_value) {
+    return '';
 }
 
 export function isBannerBodyLinkSlot(slot) {
@@ -308,9 +304,8 @@ export function isBannerBodyLinkSlot(slot) {
 export function bannerBodySlotIsVisible(slot) {
     const text = String(slot?.text || '').trim();
     if (!text) return false;
-    if (isBannerBodyLinkSlot(slot)) {
-        return Boolean(sanitizeBannerLinkUrl(slot?.url));
-    }
+    // External link buttons are fully retired — never show them.
+    if (isBannerBodyLinkSlot(slot)) return false;
     return true;
 }
 
@@ -456,42 +451,8 @@ export function normalizeBannerBodySlots(data) {
     const slots = Array.from({ length: BANNER_BODY_SLOT_COUNT }, (_, index) =>
         readBodySlotFromData(data, index)
     );
-
-    // Older design: text slot could be a link. Move it to the button slot when empty.
-    const legacyLinkOnText =
-        sanitizeBannerBodyMode(data?.banner_text_1_mode) === 'link' &&
-        Boolean(sanitizeBannerLinkUrl(data?.banner_text_1_url));
-    if (legacyLinkOnText && !bannerBodySlotIsVisible(slots[BANNER_BODY_BUTTON_INDEX])) {
-        const label = String(data?.banner_text_1 || '').trim();
-        const url = sanitizeBannerLinkUrl(data?.banner_text_1_url);
-        if (label && url) {
-            slots[BANNER_BODY_BUTTON_INDEX] = {
-                ...createDefaultBannerBodySlot(BANNER_BODY_BUTTON_INDEX),
-                text: label,
-                mode: 'link',
-                url,
-                buttonBg: sanitizeBannerTextColor(
-                    data?.banner_text_1_button_bg,
-                    DEFAULT_BANNER_BUTTON_BG
-                ),
-                color: sanitizeBannerTextColor(data?.banner_text_1_color),
-                bold: true,
-                italic: sanitizeBannerBool(data?.banner_text_1_italic),
-                fontSize: sanitizeBannerFontSize(data?.banner_text_1_font_size),
-                maxWidth: sanitizeBannerTextMaxWidth(data?.banner_text_1_max_width),
-                x: sanitizeBannerAxis(
-                    data?.banner_text_1_x,
-                    DEFAULT_BANNER_BODY_SLOT_POS[BANNER_BODY_BUTTON_INDEX].x
-                ),
-                y: sanitizeBannerTextY(
-                    data?.banner_text_1_y,
-                    DEFAULT_BANNER_BODY_SLOT_POS[BANNER_BODY_BUTTON_INDEX].y
-                ),
-            };
-            slots[BANNER_BODY_TEXT_INDEX] = createDefaultBannerBodySlot(BANNER_BODY_TEXT_INDEX);
-        }
-    }
-
+    // Strip any persisted external-link CTA — feature removed for community + stages.
+    slots[BANNER_BODY_BUTTON_INDEX] = createDefaultBannerBodySlot(BANNER_BODY_BUTTON_INDEX);
     return slots;
 }
 
@@ -629,10 +590,33 @@ export function normalizeCommunityBanner(data) {
     const url = data?.banner_url ? String(data.banner_url).trim() : '';
     const youtubeRaw = data?.banner_youtube_id ? String(data.banner_youtube_id).trim() : '';
     const youtubeId = /^[a-zA-Z0-9_-]{11}$/.test(youtubeRaw) ? youtubeRaw : '';
+    const playlistRaw = data?.banner_youtube_playlist_id
+        ? String(data.banner_youtube_playlist_id).trim()
+        : '';
+    const youtubePlaylistId = /^[a-zA-Z0-9_-]{10,64}$/.test(playlistRaw)
+        ? playlistRaw.length === 11 && !/^(PL|UU|RD|OL|LL|FL|WL)/i.test(playlistRaw)
+            ? ''
+            : playlistRaw
+        : '';
     const youtubeShort = data?.banner_youtube_short === true;
-    const youtubeSyncAt = youtubeId
+    const youtubeLive = data?.banner_youtube_live === true;
+    const youtubeMusic = data?.banner_youtube_music === true;
+    const youtubePaused = data?.banner_youtube_paused === true;
+    const youtubePositionSec = Math.max(
+        0,
+        Math.floor(Number(data?.banner_youtube_position_sec) || 0)
+    );
+    const hasYoutube = Boolean(youtubeId || youtubePlaylistId);
+    const youtubeSyncServerAt = hasYoutube
         ? firestoreTimestampToMs(data?.banner_youtube_sync_at) ||
           firestoreTimestampToMs(data?.banner_updated_at)
+        : 0;
+    const youtubeSyncClientAt = hasYoutube
+        ? Math.max(0, Math.floor(Number(data?.banner_youtube_sync_client_ms) || 0))
+        : 0;
+    // Prefer host client wall-clock (no serverTimestamp lag) when close to server time.
+    const youtubeSyncAt = hasYoutube
+        ? resolveYoutubeSyncAtMs(youtubeSyncServerAt, youtubeSyncClientAt)
         : 0;
     const title = String(data?.banner_title || '').trim();
     const texts = normalizeBannerBodySlots(data);
@@ -667,7 +651,12 @@ export function normalizeCommunityBanner(data) {
     return {
         url,
         youtubeId,
+        youtubePlaylistId,
         youtubeShort,
+        youtubeLive,
+        youtubeMusic,
+        youtubePaused,
+        youtubePositionSec,
         youtubeSyncAt,
         title,
         text,
@@ -690,15 +679,71 @@ export function normalizeCommunityBanner(data) {
         transparent,
         hostSpotlightDismissed: data?.host_spotlight_dismissed === true,
         hostSpotlightAuto: data?.host_spotlight_auto === true,
+        voiceUrl: data?.banner_voice_url ? String(data.banner_voice_url).trim() : '',
+        voiceDurationSec: Math.max(
+            0,
+            Math.min(BANNER_VOICE_MAX_DURATION_SEC, Math.floor(Number(data?.banner_voice_duration_sec) || 0))
+        ),
+        voiceUpdatedAt: firestoreTimestampToMs(data?.banner_voice_updated_at) || 0,
+        /** Host opt-in: replay voice after it ends. Default off (play once). */
+        voiceLoop: data?.banner_voice_loop === true,
     };
 }
 
+export function buildBannerVoiceClearFields() {
+    return {
+        banner_voice_url: '',
+        banner_voice_duration_sec: 0,
+        banner_voice_updated_at: null,
+        banner_voice_loop: false,
+    };
+}
+
+/**
+ * Replace the single live host voice broadcast (previous file deleted by caller).
+ * New publishes start with loop off — host can enable after publish.
+ * @param {string} url
+ * @param {number} durationSec
+ */
+export function buildBannerVoiceUpdate(url, durationSec = 0) {
+    const voiceUrl = String(url || '').trim();
+    if (!voiceUrl) return buildBannerVoiceClearFields();
+    const secs = Math.max(
+        1,
+        Math.min(BANNER_VOICE_MAX_DURATION_SEC, Math.floor(Number(durationSec) || 0) || 1)
+    );
+    return {
+        banner_voice_url: voiceUrl,
+        banner_voice_duration_sec: secs,
+        // Caller should overwrite with serverTimestamp() when writing.
+        banner_voice_updated_at: Date.now(),
+        banner_voice_loop: false,
+    };
+}
+
+export function buildBannerVoiceLoopUpdate(loop) {
+    return { banner_voice_loop: Boolean(loop) };
+}
+
 /** Image upload — only replaces the image layer. */
+export function buildBannerYoutubeClearFields() {
+    return {
+        banner_youtube_id: '',
+        banner_youtube_playlist_id: '',
+        banner_youtube_short: false,
+        banner_youtube_live: false,
+        banner_youtube_music: false,
+        banner_youtube_paused: false,
+        banner_youtube_position_sec: 0,
+        banner_youtube_sync_at: null,
+        banner_youtube_sync_client_ms: 0,
+    };
+}
+
 export function buildBannerImageUpdate(url) {
     return {
         banner_url: url,
-        banner_youtube_id: '',
-        banner_youtube_short: false,
+        ...buildBannerYoutubeClearFields(),
     };
 }
 
@@ -707,15 +752,43 @@ export function buildBannerClearImageUpdate() {
     return { banner_url: '' };
 }
 
-/** YouTube background — replaces image/upload layer. */
-export function buildBannerYoutubeUpdate(videoId, { isShort = false } = {}) {
-    const id = String(videoId || '').trim();
-    if (!/^[a-zA-Z0-9_-]{11}$/.test(id)) {
-        return { banner_youtube_id: '', banner_youtube_short: false };
+/**
+ * YouTube background — video, live, playlist, and/or music.youtube links.
+ * Replaces image/upload layer.
+ * @param {string} videoId
+ * @param {{
+ *   isShort?: boolean;
+ *   isLive?: boolean;
+ *   isMusic?: boolean;
+ *   playlistId?: string;
+ * }} [opts]
+ */
+export function buildBannerYoutubeUpdate(
+    videoId,
+    { isShort = false, isLive = false, isMusic = false, playlistId = '' } = {}
+) {
+    const id = /^[a-zA-Z0-9_-]{11}$/.test(String(videoId || '').trim())
+        ? String(videoId).trim()
+        : '';
+    const listRaw = String(playlistId || '').trim();
+    const listId = /^[a-zA-Z0-9_-]{10,64}$/.test(listRaw)
+        ? listRaw.length === 11 && !/^(PL|UU|RD|OL|LL|FL|WL)/i.test(listRaw)
+            ? ''
+            : listRaw
+        : '';
+    if (!id && !listId) {
+        return buildBannerYoutubeClearFields();
     }
     return {
         banner_youtube_id: id,
-        banner_youtube_short: Boolean(isShort),
+        banner_youtube_playlist_id: listId,
+        banner_youtube_short: Boolean(isShort) && !isLive && Boolean(id),
+        banner_youtube_live: Boolean(isLive) && Boolean(id),
+        banner_youtube_music: Boolean(isMusic),
+        banner_youtube_paused: false,
+        banner_youtube_position_sec: 0,
+        // Signals replaceBanner to stamp a fresh sync epoch (new media only).
+        banner_youtube_sync_client_ms: Date.now(),
         banner_url: '',
     };
 }
@@ -733,7 +806,12 @@ export function buildBannerUpdate({
     imageUrl,
     url,
     youtubeId,
+    youtubePlaylistId,
     youtubeShort,
+    youtubeLive,
+    youtubeMusic,
+    youtubePaused,
+    youtubePositionSec,
     titleX,
     titleY,
     textX,
@@ -760,7 +838,14 @@ export function buildBannerUpdate({
     const style = titleStyle || createDefaultBannerTitleStyle();
     const ytRaw = String(youtubeId ?? '').trim();
     const bannerYoutubeId = /^[a-zA-Z0-9_-]{11}$/.test(ytRaw) ? ytRaw : '';
-    const bannerUrl = bannerYoutubeId ? '' : String(imageUrl ?? url ?? '').trim();
+    const listRaw = String(youtubePlaylistId ?? '').trim();
+    const bannerPlaylistId = /^[a-zA-Z0-9_-]{10,64}$/.test(listRaw)
+        ? listRaw.length === 11 && !/^(PL|UU|RD|OL|LL|FL|WL)/i.test(listRaw)
+            ? ''
+            : listRaw
+        : '';
+    const hasYoutube = Boolean(bannerYoutubeId || bannerPlaylistId);
+    const bannerUrl = hasYoutube ? '' : String(imageUrl ?? url ?? '').trim();
     const showBackground = hasBackground ?? (!transparent && Boolean(bgColor));
     const colors = showBackground && !transparent
         ? resolveBannerGradientColors(bgColor || DEFAULT_BANNER_BG, bgColor2)
@@ -768,14 +853,27 @@ export function buildBannerUpdate({
 
     return {
         banner_type: resolveStoredBannerType({
-            url: bannerUrl || (bannerYoutubeId ? `youtube:${bannerYoutubeId}` : ''),
+            url:
+                bannerUrl ||
+                (bannerYoutubeId
+                    ? `youtube:${bannerYoutubeId}`
+                    : bannerPlaylistId
+                      ? `youtube:list:${bannerPlaylistId}`
+                      : ''),
             title: trimmedTitle,
             texts: normalizedTexts,
             hasBackground: showBackground,
         }),
         banner_url: bannerUrl,
         banner_youtube_id: bannerYoutubeId,
+        banner_youtube_playlist_id: bannerPlaylistId,
         banner_youtube_short: bannerYoutubeId ? Boolean(youtubeShort) : false,
+        banner_youtube_live: hasYoutube ? Boolean(youtubeLive) && Boolean(bannerYoutubeId) : false,
+        banner_youtube_music: hasYoutube ? Boolean(youtubeMusic) : false,
+        banner_youtube_paused: hasYoutube ? Boolean(youtubePaused) : false,
+        banner_youtube_position_sec: hasYoutube
+            ? Math.max(0, Math.floor(Number(youtubePositionSec) || 0))
+            : 0,
         banner_title: trimmedTitle,
         ...serializeBodySlotsToFirestore(normalizedTexts, Boolean(trimmedTitle)),
         ...serializeTitleStyleToFirestore(style),
@@ -931,10 +1029,23 @@ export function mergeBannerPatch(current, patch = {}) {
             ? String(patch.youtubeId).trim()
             : '';
     }
+    let youtubePlaylistId = base.youtubePlaylistId || '';
+    if (patch.youtubePlaylistId !== undefined) {
+        const listRaw = String(patch.youtubePlaylistId || '').trim();
+        youtubePlaylistId = /^[a-zA-Z0-9_-]{10,64}$/.test(listRaw)
+            ? listRaw.length === 11 && !/^(PL|UU|RD|OL|LL|FL|WL)/i.test(listRaw)
+                ? ''
+                : listRaw
+            : '';
+    }
     if (patch.imageUrl !== undefined && imageUrl) {
         youtubeId = '';
+        youtubePlaylistId = '';
     }
-    if (patch.youtubeId !== undefined && youtubeId) {
+    if (
+        (patch.youtubeId !== undefined && youtubeId) ||
+        (patch.youtubePlaylistId !== undefined && youtubePlaylistId)
+    ) {
         imageUrl = '';
     }
 
@@ -942,11 +1053,35 @@ export function mergeBannerPatch(current, patch = {}) {
     if (patch.youtubeShort !== undefined) {
         youtubeShort = Boolean(patch.youtubeShort);
     }
-    if (!youtubeId) {
+    let youtubeLive = Boolean(base.youtubeLive);
+    if (patch.youtubeLive !== undefined) {
+        youtubeLive = Boolean(patch.youtubeLive);
+    }
+    let youtubeMusic = Boolean(base.youtubeMusic);
+    if (patch.youtubeMusic !== undefined) {
+        youtubeMusic = Boolean(patch.youtubeMusic);
+    }
+    let youtubePaused = Boolean(base.youtubePaused);
+    if (patch.youtubePaused !== undefined) {
+        youtubePaused = Boolean(patch.youtubePaused);
+    }
+    let youtubePositionSec = Math.max(0, Math.floor(Number(base.youtubePositionSec) || 0));
+    if (patch.youtubePositionSec !== undefined) {
+        youtubePositionSec = Math.max(0, Math.floor(Number(patch.youtubePositionSec) || 0));
+    }
+    if (!youtubeId && !youtubePlaylistId) {
         youtubeShort = false;
+        youtubeLive = false;
+        youtubeMusic = false;
+        youtubePaused = false;
+        youtubePositionSec = 0;
     }
     if (patch.imageUrl !== undefined && imageUrl) {
         youtubeShort = false;
+        youtubeLive = false;
+        youtubeMusic = false;
+        youtubePaused = false;
+        youtubePositionSec = 0;
     }
 
     const gradientColors = hasBackground && !transparent
@@ -979,7 +1114,12 @@ export function mergeBannerPatch(current, patch = {}) {
         fontSize,
         imageUrl,
         youtubeId,
+        youtubePlaylistId,
         youtubeShort,
+        youtubeLive,
+        youtubeMusic,
+        youtubePaused,
+        youtubePositionSec,
         transparent,
     };
 }

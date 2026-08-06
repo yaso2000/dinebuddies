@@ -111,9 +111,9 @@ function likelihoodAtLeast(value, threshold) {
 
 function isSafeSearchAllowed(safe) {
     if (!safe || typeof safe !== 'object') return false;
-    if (likelihoodAtLeast(safe.adult, 'LIKELY')) return false;
+    // Allow suggestive / light clothing (racy). Block only clear sexual/nude content.
+    if (likelihoodAtLeast(safe.adult, 'VERY_LIKELY')) return false;
     if (likelihoodAtLeast(safe.violence, 'LIKELY')) return false;
-    if (likelihoodAtLeast(safe.racy, 'VERY_LIKELY')) return false;
     return true;
 }
 

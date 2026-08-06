@@ -24,7 +24,7 @@ import '../components/community/community-chat-theme.css';
 import '../components/community/CommunityChatSwipePager.css';
 import '../styles/chatReferenceTheme.css';
 import { AppText } from '../components/base';
-import { useChatTheme } from '../hooks/useChatTheme';
+import { APP_HOME_PATH } from '../utils/appRouteShell';
 import app from '../firebase/config';
 
 export default function StageChatRoom() {
@@ -44,15 +44,21 @@ export default function StageChatRoom() {
   const canEnterChat = room.isMember || room.isHost || isBootstrapHost;
   const containerRef = useRef(null);
   const isDesktopShell = useDesktopShell();
-  const { goBack: goBackFromStage } = useAppBackNavigation({ fallback: '/stages' });
+  const { goBack: goBackFromStage } = useAppBackNavigation({
+    fallback: isBusiness ? APP_HOME_PATH : '/stages',
+  });
   const useMobileFullscreen = !isDesktopShell;
-  const { themeId: chatThemeId, setThemeId: setChatThemeId, themeStyle: chatThemeStyle } = useChatTheme();
   const [leaving, setLeaving] = useState(false);
   const [joining, setJoining] = useState(false);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
-  const stageVisibility =
-    String(room.partner?.visibility || 'private').toLowerCase() === 'public'
+  const isBusinessStage =
+    String(room.partner?.hostKind || room.partner?.kind || '').toLowerCase() === 'business' ||
+    String(room.partner?.kind || '').toLowerCase() === 'business_stage' ||
+    String(room.partner?.visibility || '').toLowerCase() === 'community';
+  const stageVisibility = isBusinessStage
+    ? 'community'
+    : String(room.partner?.visibility || 'private').toLowerCase() === 'public'
       ? 'public'
       : 'private';
   const hostId = room.partner?.hostId || room.partner?.ownerId || null;
@@ -61,6 +67,13 @@ export default function StageChatRoom() {
     const following = Array.isArray(userProfile?.following) ? userProfile.following : [];
     return following.includes(hostId);
   }, [hostId, userProfile?.following]);
+  const inBizCommunity = useMemo(() => {
+    if (!hostId) return false;
+    const joined = Array.isArray(userProfile?.joinedCommunities)
+      ? userProfile.joinedCommunities.map(String)
+      : [];
+    return joined.includes(String(hostId));
+  }, [hostId, userProfile?.joinedCommunities]);
   const wasInvited = useMemo(() => {
     const invited = Array.isArray(room.partner?.invitedIds) ? room.partner.invitedIds : [];
     const uid = currentUser?.uid || userProfile?.id || userProfile?.uid;
@@ -71,18 +84,40 @@ export default function StageChatRoom() {
     !room.isBlockedFromCommunity &&
     !isBusiness &&
     !room.isStageClosed &&
-    (stageVisibility === 'public' || followsHost || wasInvited);
+    (isBusinessStage
+      ? inBizCommunity || wasInvited
+      : stageVisibility === 'public' || followsHost || wasInvited);
+
+  const streamHostId = hostId || room.partner?.ownerId || null;
 
   const openGiftToHost = useCallback(() => {
-    if (room.isHost || !hostId) return;
+    // People Stages only: attendees gift the personal host. Never business rooms/hosts.
+    if (isBusiness || isBusinessStage || room.isHost || !streamHostId) return;
     openGiftPicker({
-      id: hostId,
+      id: streamHostId,
       display_name:
+        room.partner?.hostName ||
         room.partner?.display_name ||
         room.partner?.hostDisplayName ||
         t('stage_chat', 'Stage'),
     });
-  }, [hostId, openGiftPicker, room.isHost, room.partner, t]);
+  }, [
+    isBusiness,
+    isBusinessStage,
+    streamHostId,
+    openGiftPicker,
+    room.isHost,
+    room.partner,
+    t,
+  ]);
+
+  const canGiftStreamHost = Boolean(
+    canEnterChat &&
+      !room.isHost &&
+      !isBusiness &&
+      !isBusinessStage &&
+      streamHostId
+  );
 
   const roomWithGifts = useMemo(() => {
     const base =
@@ -104,12 +139,20 @@ export default function StageChatRoom() {
               communityChatBannerVisible: true,
             },
           };
-    if (base.isHost || !canEnterChat) return base;
+    if (!canGiftStreamHost) return base;
     return {
       ...base,
       onSendGiftToHost: openGiftToHost,
     };
-  }, [room, canEnterChat, openGiftToHost, isBootstrapHost, stageId, uid, t]);
+  }, [
+    room,
+    canGiftStreamHost,
+    openGiftToHost,
+    isBootstrapHost,
+    stageId,
+    uid,
+    t,
+  ]);
 
   useEffect(() => {
     if (!useMobileFullscreen) return undefined;
@@ -127,28 +170,63 @@ export default function StageChatRoom() {
 
   const handleLeave = async () => {
     const name = room.partner?.display_name || t('stage_chat', 'Stage');
-    if (
-      !window.confirm(
-        `${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${name}?`
-      )
-    ) {
+    const confirmMsg = room.isHost
+      ? t(
+          'stage_host_leave_confirm',
+          'Leave and permanently delete this Stage for everyone? This cannot be undone.'
+        )
+      : `${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${name}?`;
+    if (!window.confirm(confirmMsg)) {
       return;
     }
     setLeaving(true);
     try {
       await callMembership('leave');
+      if (room.isHost) {
+        showToast(t('stage_deleted_toast', 'Stage deleted.'), 'success');
+      }
       closeChat();
     } catch (err) {
       console.error('[StageChatRoom] leave', err);
-      showToast(t('stage_leave_failed', 'Could not leave Stage.'), 'error');
+      showToast(
+        room.isHost
+          ? t('stage_delete_failed', 'Could not delete Stage.')
+          : t('stage_leave_failed', 'Could not leave Stage.'),
+        'error'
+      );
     } finally {
       setLeaving(false);
     }
   };
 
-  // Host "close" only leaves the screen — the Stage stays live until the 24h TTL.
-  const handleExitStageUi = () => {
-    closeChat();
+  // Back / X only closes the screen — room status unchanged.
+  const handleSoftCloseStage = async () => {
+    if (
+      !window.confirm(
+        t(
+          'stage_close_confirm',
+          'Close the Stage for now? Guests cannot write until you reopen. The room stays available for 24 hours from creation.'
+        )
+      )
+    ) {
+      return;
+    }
+    setLifecycleBusy(true);
+    try {
+      await callMembership('close_stage');
+      showToast(
+        t(
+          'stage_closed_toast',
+          'Stage closed. You can reopen it within 24 hours.'
+        ),
+        'success'
+      );
+    } catch (err) {
+      console.error('[StageChatRoom] close', err);
+      showToast(t('stage_close_failed', 'Could not close Stage.'), 'error');
+    } finally {
+      setLifecycleBusy(false);
+    }
   };
 
   const handleReopenStage = async () => {
@@ -165,39 +243,41 @@ export default function StageChatRoom() {
   };
 
   const headerMenuActions = (() => {
-    if (room.isHost) {
-      // Legacy soft-closed rooms can still be reopened; new UX never soft-closes.
+    const leaveAction = {
+      id: 'leave',
+      label: t('leave_stage', 'Leave Stage'),
+      icon: <FaSignOutAlt size={15} aria-hidden />,
+      danger: true,
+      disabled: leaving || lifecycleBusy,
+      onClick: handleLeave,
+    };
+
+    if (room.isHost || isBootstrapHost) {
       if (room.isStageClosed) {
         return [
           {
             id: 'reopen',
             label: t('stage_reopen', 'Reopen Stage'),
             icon: <FaDoorOpen size={15} aria-hidden />,
-            disabled: lifecycleBusy,
+            disabled: lifecycleBusy || leaving,
             onClick: handleReopenStage,
           },
+          leaveAction,
         ];
       }
       return [
         {
-          id: 'exit',
-          label: t('stage_exit_ui', 'Leave screen'),
+          id: 'soft-close',
+          label: t('stage_close', 'Close Stage'),
           icon: <FaDoorClosed size={15} aria-hidden />,
-          onClick: handleExitStageUi,
+          disabled: lifecycleBusy || leaving,
+          onClick: handleSoftCloseStage,
         },
+        leaveAction,
       ];
     }
-    if (!isBusiness) {
-      return [
-        {
-          id: 'leave',
-          label: t('leave_stage', 'Leave Stage'),
-          icon: <FaSignOutAlt size={15} aria-hidden />,
-          danger: true,
-          disabled: leaving,
-          onClick: handleLeave,
-        },
-      ];
+    if (!isBusiness && canEnterChat) {
+      return [leaveAction];
     }
     return [];
   })();
@@ -231,8 +311,8 @@ export default function StageChatRoom() {
   );
 
   const shellInlineStyle = useMemo(
-    () => ({ ...zoneThemeInlineStyle, ...guestFrameBackgroundStyle, ...chatThemeStyle }),
-    [zoneThemeInlineStyle, guestFrameBackgroundStyle, chatThemeStyle]
+    () => ({ ...zoneThemeInlineStyle, ...guestFrameBackgroundStyle }),
+    [zoneThemeInlineStyle, guestFrameBackgroundStyle]
   );
 
   const handleJoin = async () => {
@@ -255,8 +335,7 @@ export default function StageChatRoom() {
       ref={containerRef}
       className={`${shellClass} community-chat-join-gate`}
       data-cchat-zone-theme={zoneThemeId}
-      data-chat-theme={chatThemeId}
-      style={{ ...zoneThemeInlineStyle, ...chatThemeStyle }}
+      style={zoneThemeInlineStyle}
     >
       <button
         type="button"
@@ -345,18 +424,33 @@ export default function StageChatRoom() {
     } else if (canRequestJoin) {
       shellContent = renderJoinGate(
         room.partner?.display_name || t('stage_chat', 'Stage'),
-        stageVisibility === 'public'
-          ? t('stage_join_public_hint', 'This Stage is public. Join to enter the chat.')
-          : t('stage_join_followers_hint', 'This Stage is for followers of the host. Join to enter.'),
+        isBusinessStage
+          ? t(
+              'stage_join_community_hint',
+              'This business Stage is for community members. Join to enter the chat.'
+            )
+          : stageVisibility === 'public'
+            ? t('stage_join_public_hint', 'This Stage is public. Join to enter the chat.')
+            : t(
+                'stage_join_followers_hint',
+                'This Stage is for followers of the host. Join to enter.'
+              ),
         { showJoin: true }
       );
     } else {
       shellContent = renderJoinGate(
-        t('stage_chat_followers_only', 'Followers only'),
-        t(
-          'stage_chat_followers_only_hint',
-          'Follow the host to join this private Stage, or ask them for an invite.'
-        )
+        isBusinessStage
+          ? t('stage_chat_community_only', 'Community members only')
+          : t('stage_chat_followers_only', 'Followers only'),
+        isBusinessStage
+          ? t(
+              'stage_chat_community_only_hint',
+              'Join this business community first, then you can enter the Stage.'
+            )
+          : t(
+              'stage_chat_followers_only_hint',
+              'Follow the host to join this private Stage, or ask them for an invite.'
+            )
       );
     }
   } else {
@@ -366,7 +460,6 @@ export default function StageChatRoom() {
         dir="ltr"
         className={shellClass}
         data-cchat-zone-theme={zoneThemeId}
-        data-chat-theme={chatThemeId}
         {...guestFrameShellAttrs}
         style={shellInlineStyle}
       >
@@ -453,8 +546,6 @@ export default function StageChatRoom() {
           </div>
           <div className="community-chat-header__actions">
             <CommunityChatHeaderMenu
-              themeId={chatThemeId}
-              onThemeChange={setChatThemeId}
               bannerChecked={room.bannerVisible !== false}
               bannerDisabled={room.bannerVisibleSaving || room.bannerToggleDisabled}
               bannerPersonal={!room.isHost}

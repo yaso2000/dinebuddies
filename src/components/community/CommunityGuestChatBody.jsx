@@ -1,7 +1,8 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import CommunityChatMessages from './CommunityChatMessages';
 import CommunityChatComposer from './CommunityChatComposer';
+import StageHostGuestModerationMenu from './StageHostGuestModerationMenu';
 import { getAppTextDirection } from '../../utils/bidiText';
 
 /**
@@ -16,6 +17,7 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
     isMutedInChat,
     isHost,
     isStageClosed,
+    isStageRoom,
     sendMessage,
     sendImageMessage,
     uploadingChatImage,
@@ -26,6 +28,8 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
     cancelReplyToMessage,
     deleteChatMessage,
     muteMemberInChat,
+    kickMemberFromStage,
+    blockMemberFromStages,
     pinHostMessage,
     unpinHostMessage,
     showMessageOnBanner,
@@ -34,6 +38,8 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
   } = room;
   const composerBlocked = Boolean(isMutedInChat || isStageClosed);
   const canSendGift = !isHost && typeof onSendGiftToHost === 'function';
+  const [modMenu, setModMenu] = useState(null);
+  const [modBusy, setModBusy] = useState(false);
 
   const handleReply = useCallback(
     (message) => {
@@ -51,10 +57,20 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
 
   const handleMute = useCallback(
     (message) => {
-      if (!message?.senderId) return;
+      if (!message?.senderId || message.senderId === partnerId) return;
+      if (isStageRoom) {
+        setModMenu({
+          member: {
+            id: message.senderId,
+            displayName: message.senderName || t('member', 'Member'),
+          },
+          rect: null,
+        });
+        return;
+      }
       void muteMemberInChat(message.senderId);
     },
-    [muteMemberInChat]
+    [isStageRoom, muteMemberInChat, partnerId, t]
   );
 
   const handlePin = useCallback(
@@ -88,6 +104,17 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
     },
     [hideMessageFromBanner]
   );
+
+  const runMod = useCallback(async (runner) => {
+    if (modBusy) return;
+    setModBusy(true);
+    try {
+      await runner();
+    } finally {
+      setModBusy(false);
+      setModMenu(null);
+    }
+  }, [modBusy]);
 
   const rootClass = ['community-guest-chat', 'community-chat-layout__body', className]
     .filter(Boolean)
@@ -143,6 +170,45 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
           />
         </div>
       </section>
+
+      {isHost && isStageRoom ? (
+        <StageHostGuestModerationMenu
+          open={Boolean(modMenu)}
+          anchorRect={modMenu?.rect}
+          member={modMenu?.member}
+          busy={modBusy}
+          onClose={() => setModMenu(null)}
+          onMute={(duration) =>
+            runMod(async () => {
+              await muteMemberInChat?.(modMenu?.member?.id, duration);
+            })
+          }
+          onKick={() =>
+            runMod(async () => {
+              const ok = window.confirm(
+                t(
+                  'stage_remove_member_confirm',
+                  'Remove this member from the Stage? They will lose access to the chat.'
+                )
+              );
+              if (!ok) return;
+              await kickMemberFromStage?.(modMenu?.member?.id);
+            })
+          }
+          onBlock={() =>
+            runMod(async () => {
+              const ok = window.confirm(
+                t(
+                  'stage_block_member_confirm',
+                  'Block this guest from all your future Stages? They will be removed from this broadcast too.'
+                )
+              );
+              if (!ok) return;
+              await blockMemberFromStages?.(modMenu?.member?.id);
+            })
+          }
+        />
+      ) : null}
     </div>
   );
 }

@@ -38,6 +38,19 @@ export function getFirebaseCliLogin(env = process.env) {
     return { email: null, output };
 }
 
+/** login:list can still show an email after the refresh token dies — verify with an API call. */
+export function isFirebaseCliLoginValid(env = process.env) {
+    const result = spawnSync('firebase', ['projects:list', '--non-interactive'], {
+        env: ensureNodeTlsEnv(env),
+        encoding: 'utf8',
+        shell: true,
+    });
+    const output = `${result.stdout || ''}${result.stderr || ''}`;
+    if (result.status !== 0) return false;
+    if (/credentials are no longer valid|Authentication Error/i.test(output)) return false;
+    return true;
+}
+
 export function runFirebase(args, { cwd, env = process.env } = {}) {
     return spawnSync('firebase', args, {
         cwd,
@@ -49,17 +62,17 @@ export function runFirebase(args, { cwd, env = process.env } = {}) {
 
 export function printFirebaseLoginHelp() {
     console.error('');
-    console.error('[firebase] No Firebase CLI session. Log in first (recommended):');
-    console.error('  npm run firebase:login');
-    console.error('  npm run firebase:login:reauth');
+    console.error('[firebase] No valid Firebase CLI session.');
     console.error('');
-    console.error('If login still fails (auth.firebase.tools/attest):');
-    console.error('  - Use: npm run firebase:login   (NOT bare "firebase login")');
-    console.error('  - Disable VPN/proxy temporarily');
-    console.error('  - Try another network (mobile hotspot)');
-    console.error('  - Or use Node 22 LTS: nvm use 22 && npm run firebase:login');
+    console.error('Windows / "Firebase CLI Login Failed" page:');
+    console.error('  1. Open a normal PowerShell / Terminal (not inside Cursor browser)');
+    console.error('  2. cd to the repo, then:');
+    console.error('       npm run firebase:login');
+    console.error('  3. Open the printed URL in Chrome/Edge, sign in, paste the code back');
     console.error('');
-    console.error('Or deploy with service account (needs IAM Service Account User on appspot SA):');
-    console.error('  npm run deploy:firebase-functions:sa');
+    console.error('If attest / SSL still fails:');
+    console.error('  - Disable VPN/proxy, or try a mobile hotspot');
+    console.error('  - Or skip login and deploy via service account:');
+    console.error('       npm run deploy:firebase-functions:sa -- --only "functions:moderateImage,functions:enforceApprovedImageUpload"');
     console.error('');
 }

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import SimpleMap from './SimpleMap';
 import { geocodeAddress } from '../utils/locationUtils';
 import { AppText } from "./base";
+import { openExternalUrl } from '../platform/externalLinks';
 
 function buildAddressLine(address, city, country) {
   return [address, city, country].filter(Boolean).join(', ');
@@ -142,19 +143,28 @@ export default function BusinessLocationMap({
                 {t('map_preview_unavailable', 'Map preview unavailable')}
             </AppText>
             {fullAddress && allowExternalLinks &&
-      <a
-        href={`https://www.google.com/maps/search/?api=1&query=${mapsQuery}`}
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        type="button"
+        onClick={() =>
+          openExternalUrl(
+            `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`,
+            { allow: 'business_maps' }
+          )
+        }
         style={{
           color: 'var(--brand-primary, var(--primary))',
           fontWeight: 800,
           fontSize: '0.95rem',
-          textDecoration: 'none'
+          textDecoration: 'none',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          padding: 0,
         }}>
 
                     {t('open_in_maps', 'Open in Maps')}
-                </a>
+                </button>
       }
         </div>);
 

@@ -1,9 +1,15 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import {
+    browserLocalPersistence,
+    getAuth,
+    indexedDBLocalPersistence,
+    initializeAuth,
+} from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
 import { getMessaging, isSupported } from 'firebase/messaging';
+import { Capacitor } from '@capacitor/core';
 
 const firebaseProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'dinebuddies';
 const FIREBASE_DEFAULT_AUTH_DOMAIN = `${firebaseProjectId}.firebaseapp.com`;
@@ -69,7 +75,22 @@ if (import.meta.env.DEV) {
 
 const app = initializeApp(firebaseConfig);
 
-export const auth = getAuth(app);
+function createFirebaseAuth() {
+    // Capacitor WebViews need an explicit persistence chain so Google sessions
+    // survive process death after native credential sign-in.
+    try {
+        if (typeof window !== 'undefined' && Capacitor?.isNativePlatform?.()) {
+            return initializeAuth(app, {
+                persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+            });
+        }
+    } catch {
+        // Auth already initialized (HMR / duplicate import) — fall through.
+    }
+    return getAuth(app);
+}
+
+export const auth = createFirebaseAuth();
 
 export const db = initializeFirestore(app, {
     experimentalAutoDetectLongPolling: true,

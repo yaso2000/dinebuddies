@@ -3474,7 +3474,7 @@
   "savings_wallet_desc": "Gifts you receive are saved here at {{percent}}% of the amount sent — separate from your purchase wallet.",
   "savings_wallet_gift_rule": "Example: a gift of 50 credits adds 25 to your savings wallet.",
   "savings_wallet_lifetime": "Total received from gifts",
-  "savings_wallet_separate": "Savings and purchase wallets never mix — you cannot spend savings on invites or AI.",
+  "savings_wallet_separate": "You can spend savings on private/social invites, AI, and gifts. Purchase is used first, then savings.",
   "savings_wallet_title": "Savings wallet",
   "say_hello": "ہیلو کہو!",
   "search": "تلاش کریں...",

@@ -66,13 +66,20 @@ import {
 } from '../utils/oauthRedirectFinish';
 import { createGoogleAuthProvider } from '../utils/googleAuthProvider';
 import { getFirebaseRedirectResultOnce, resetFirebaseRedirectBootstrap } from '../firebase/authBootstrap';
-import { getFirebaseOAuthHandlerUrl } from '../firebase/config';
+import app, { getFirebaseOAuthHandlerUrl, auth, db } from '../firebase/config';
 import { needsOAuthRedirectProfileFinish, shouldRunOAuthRedirectBootstrap } from '../utils/oauthRedirectState';
-import { adminSecurityService } from '../services/adminSecurityService';
 import {
-    auth,
-    db
-} from '../firebase/config';
+    isNativeGoogleSignInAvailable,
+    reauthenticateWithNativeGoogle,
+    signInWithNativeGoogleCredential,
+} from '../platform/nativeGoogleAuth';
+import {
+    isNativeFacebookSignInAvailable,
+    reauthenticateWithNativeFacebook,
+    signInWithNativeFacebookCredential,
+} from '../platform/nativeFacebookAuth';
+import { adminSecurityService } from '../services/adminSecurityService';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
     OAuthProvider,
     signInWithCredential,
@@ -879,10 +886,16 @@ export const AuthProvider = ({ children }) => {
             return null;
         }
         try {
-            const provider = createGoogleAuthProvider();
-            const oauth = await firebaseOAuthPopupOrRedirect(provider);
-            if (oauth?.__oauthRedirect) return { __oauthRedirect: true };
-            const result = oauth?.result;
+            let result;
+            if (isNativeGoogleSignInAvailable()) {
+                // Android Capacitor: native Google → Firebase credential (WebView OAuth is blocked/unreliable).
+                result = await signInWithNativeGoogleCredential(auth);
+            } else {
+                const provider = createGoogleAuthProvider();
+                const oauth = await firebaseOAuthPopupOrRedirect(provider);
+                if (oauth?.__oauthRedirect) return { __oauthRedirect: true };
+                result = oauth?.result;
+            }
             if (!result?.user?.uid) {
                 const err = new Error('Google sign-in did not return a user');
                 err.code = 'auth/no-user';
@@ -963,6 +976,13 @@ export const AuthProvider = ({ children }) => {
             return null;
         }
         try {
+            if (isNativeFacebookSignInAvailable()) {
+                // Capacitor Android: native Facebook Login → Firebase credential.
+                // Meta JS SDK fails here (host is https://localhost / not in app domain list).
+                const result = await signInWithNativeFacebookCredential(auth);
+                return finishFacebookOAuthResult(result);
+            }
+
             if (shouldUseFacebookIosSdk()) {
                 clearOAuthRedirectPending();
                 const returnToken = await completeFacebookIosRedirectReturn();
@@ -1482,8 +1502,8 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Delete User Account
-    // Pass { password } for email users when re-auth is required (auth/requires-recent-login).
+    // Delete User Account — server cascade (invites, posts, chats, storage, Auth).
+    // Pass { password } for email users to confirm identity before the destructive call.
     const deleteUserAccount = async (options = {}) => {
         const { password } = options;
         if (!currentUser) return false;
@@ -1491,36 +1511,54 @@ export const AuthProvider = ({ children }) => {
         const user = auth.currentUser;
         if (!user) return false;
 
-        const uid = user.uid;
-
-        const doFirestoreDelete = async () => {
-            await deleteDoc(doc(db, 'users', uid));
+        const reauthenticateIfNeeded = async () => {
+            if (password && user.email) {
+                const cred = EmailAuthProvider.credential(user.email, password);
+                await reauthenticateWithCredential(user, cred);
+                return;
+            }
+            // Optional step-up for passwordless sessions when Settings already asked for confirmation only.
         };
 
-        const doAuthDelete = async () => {
-            localStorage.removeItem('guestMode');
-            await user.delete();
-        };
-
-        const performDelete = async () => {
-            await doFirestoreDelete();
-            await doAuthDelete();
+        const runServerCascade = async () => {
+            const deleteMyAccount = httpsCallable(
+                getFunctions(app, 'us-central1'),
+                'deleteMyAccount',
+                { timeout: 540000 }
+            );
+            await deleteMyAccount({});
+            try {
+                localStorage.removeItem('guestMode');
+            } catch {
+                /* ignore */
+            }
             return true;
         };
 
         isDeletingAccountRef.current = true;
         try {
-            return await performDelete();
+            await reauthenticateIfNeeded();
+            return await runServerCascade();
         } catch (error) {
-            const isRequiresRecentLogin = error?.code === 'auth/requires-recent-login';
+            const code = error?.code || error?.message;
+            const isRequiresRecentLogin =
+                code === 'auth/requires-recent-login' ||
+                String(code || '').includes('requires-recent-login');
             if (isRequiresRecentLogin) {
-                if (password) {
+                if (password && user.email) {
                     const cred = EmailAuthProvider.credential(user.email, password);
                     await reauthenticateWithCredential(user, cred);
-                    await doAuthDelete();
-                    return true;
+                    return await runServerCascade();
                 }
                 const providerIds = (user.providerData || []).map((p) => p.providerId);
+                if (providerIds.includes('google.com') && isNativeGoogleSignInAvailable()) {
+                    await reauthenticateWithNativeGoogle(user);
+                    return await runServerCascade();
+                }
+                if (providerIds.includes('facebook.com') && isNativeFacebookSignInAvailable()) {
+                    await reauthenticateWithNativeFacebook(user);
+                    return await runServerCascade();
+                }
                 let provider = null;
                 if (providerIds.includes('google.com')) provider = createGoogleAuthProvider();
                 else if (providerIds.includes('apple.com')) provider = new OAuthProvider('apple.com');
@@ -1528,8 +1566,7 @@ export const AuthProvider = ({ children }) => {
                 else if (providerIds.includes('twitter.com')) provider = new TwitterAuthProvider();
                 if (provider) {
                     await reauthenticateWithPopup(user, provider);
-                    await doAuthDelete();
-                    return true;
+                    return await runServerCascade();
                 }
                 const err = new Error('Re-authentication required');
                 err.code = 'auth/requires-recent-login';

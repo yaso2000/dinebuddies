@@ -12,7 +12,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { PROFILE_GIFTS } from '../../constants/profileGifts';
-import { getPurchaseCredits, computeGiftSavedAmount } from '../../utils/walletCredits';
+import { getSpendableCredits, computeGiftSavedAmount } from '../../utils/walletCredits';
 import { sendProfileGift, createGiftIdempotencyKey } from '../../utils/sendProfileGift';
 import { goToLogin } from '../../utils/goToLogin';
 import { AppText } from '../base';
@@ -23,7 +23,7 @@ export default function ProfileGiftPickerModal({ recipient, onClose }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { currentUser, userProfile, isGuest } = useAuth();
+  const { currentUser, userProfile, isGuest, isBusiness } = useAuth();
 
   const [confirmGiftId, setConfirmGiftId] = useState(null);
   const [sending, setSending] = useState(false);
@@ -33,7 +33,7 @@ export default function ProfileGiftPickerModal({ recipient, onClose }) {
   const dragY = useMotionValue(0);
   const [dragConstraints, setDragConstraints] = useState({ top: 0, bottom: 0 });
 
-  const balance = getPurchaseCredits(userProfile);
+  const balance = getSpendableCredits(userProfile);
 
   const confirmGift = useMemo(
     () => (confirmGiftId ? PROFILE_GIFTS.find((g) => g.id === confirmGiftId) : null),
@@ -76,12 +76,20 @@ export default function ProfileGiftPickerModal({ recipient, onClose }) {
       goToLogin({ returnPath: window.location.pathname });
       return;
     }
+    if (isBusiness) {
+      showToast(
+        t('gift_business_cannot_send', 'Business accounts cannot send gifts.'),
+        'error'
+      );
+      return;
+    }
     if (!recipient?.id || !confirmGift || sending) return;
+    // Defense in depth — server also rejects business recipients.
 
     const canAfford = balance >= confirmGift.credits;
     if (!canAfford) {
       showToast(
-        t('gift_insufficient_balance', 'Not enough credits in your purchase wallet.'),
+        t('gift_insufficient_balance', 'Not enough credits to send this gift.'),
         'error'
       );
       return;
@@ -121,7 +129,7 @@ export default function ProfileGiftPickerModal({ recipient, onClose }) {
       const code = String(err?.code || err?.details?.code || err?.message || '');
       if (code.includes('INSUFFICIENT') || String(err?.message).includes('INSUFFICIENT')) {
         showToast(
-          t('gift_insufficient_balance', 'Not enough credits in your purchase wallet.'),
+          t('gift_insufficient_balance', 'Not enough credits to send this gift.'),
           'error'
         );
       } else if (String(code).includes('unauthenticated')) {
@@ -408,7 +416,7 @@ export default function ProfileGiftPickerModal({ recipient, onClose }) {
                   </AppText>
                 ) : !confirmCanAfford ? (
                   <AppText as="span" className="profile-gift-confirm__warn">
-                    {t('gift_insufficient_balance', 'Not enough credits in your purchase wallet.')}
+                    {t('gift_insufficient_balance', 'Not enough credits to send this gift.')}
                   </AppText>
                 ) : null}
               </motion.div>

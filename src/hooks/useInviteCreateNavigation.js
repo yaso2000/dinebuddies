@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
-import { useJoinedStages } from './useJoinedStages';
+import { useMyLiveStage } from './useMyLiveStage';
 import { blockPublicInviteFromBusinessVenue } from '../utils/publicInviteVenueGate';
 import {
   resolveHostInvitationNavigationState,
@@ -24,16 +24,16 @@ export function useInviteCreateNavigation({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { cannotCreateInvitations, currentUser } = useAuth();
+  const { cannotCreateInvitations, currentUser, isBusiness } = useAuth();
   const { canCreateSocialInvitation, restaurants: restaurantsFromContext } = useInvitations();
-  const { stages: joinedStages } = useJoinedStages();
+  const { stageId: liveStageId, hasLiveStage, loading: liveStageLoading } = useMyLiveStage();
   const [publicGateChecking, setPublicGateChecking] = useState(false);
 
   const restaurants = restaurantsProp ?? restaurantsFromContext;
 
   const activeHostedStage = useMemo(
-    () => joinedStages.find((s) => s.isHost && s.id) || null,
-    [joinedStages]
+    () => (liveStageId ? { id: liveStageId } : null),
+    [liveStageId]
   );
 
   const resolvedState = useMemo(
@@ -51,12 +51,33 @@ export function useInviteCreateNavigation({
 
   const goCreate = useCallback(
     async (kind) => {
-      if (cannotCreateInvitations) {
+      if (!kind) return;
+
+      // Business accounts may open/enter a Stage; invitation types stay blocked.
+      if (kind === 'stage') {
+        if (hasLiveStage && liveStageId) {
+          navigate(`/stage/${liveStageId}`, {
+            state: {
+              stageHostId: currentUser?.uid || null,
+            },
+          });
+          onAfterNavigate?.();
+          return;
+        }
+        if (liveStageLoading) {
+          showToast(t('loading_stages', 'Loading stages…'), 'info');
+          return;
+        }
+        navigate('/create-stage', { state: { ...resolvedState } });
+        onAfterNavigate?.();
+        return;
+      }
+
+      if (cannotCreateInvitations || isBusiness) {
         showToast(t('business_cannot_create_invitation'), 'error');
         onAfterNavigate?.();
         return;
       }
-      if (!kind) return;
 
       const state = { ...resolvedState };
 
@@ -115,30 +136,17 @@ export function useInviteCreateNavigation({
         }
         navigate(withBusinessIdInPath('/create-private', businessId), { state });
         onAfterNavigate?.();
-        return;
-      }
-
-      if (kind === 'stage') {
-        // One live Stage per host for 24h — enter it instead of creating another.
-        if (activeHostedStage?.id) {
-          navigate(`/stage/${activeHostedStage.id}`, {
-            state: {
-              stageHostId: currentUser?.uid || null,
-            },
-          });
-          onAfterNavigate?.();
-          return;
-        }
-        navigate('/create-stage', { state });
-        onAfterNavigate?.();
       }
     },
     [
-      activeHostedStage,
       businessId,
       canCreateSocialInvitation,
       cannotCreateInvitations,
       currentUser?.uid,
+      hasLiveStage,
+      isBusiness,
+      liveStageId,
+      liveStageLoading,
       navigate,
       onAfterNavigate,
       publicGateChecking,
@@ -155,5 +163,6 @@ export function useInviteCreateNavigation({
     businessId,
     cannotCreateInvitations,
     activeHostedStage,
+    liveStageLoading,
   };
 }

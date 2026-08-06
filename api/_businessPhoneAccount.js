@@ -5,11 +5,13 @@ import { lookupBusinessPhone } from './_businessPhoneRegistry.js';
 import {
     claimRestaurantOwnershipTransaction,
     buildUserProfileFromClaimedRestaurant,
+    restaurantDocIsUnclaimed,
 } from './_restaurantClaim.js';
 import {
     loadGoogleBusinessClaimSession,
 } from './_googleBusinessClaimSessions.js';
 import { userManagesGooglePlace } from './_googleBusinessProfileLocations.js';
+import { loadExistingRestaurantForImport } from './_virtualBusinessIngest.js';
 
 /**
  * @param {string | null | undefined} phone
@@ -276,6 +278,26 @@ export async function completeBusinessEmailSignup(input) {
     }
 
     const mergedBusinessInfo = { ...(input.businessInfo || {}) };
+    const placeId = String(mergedBusinessInfo.placeId || mergedBusinessInfo.googlePlaceId || '').trim();
+    if (!placeId) {
+        throw Object.assign(new Error('PLACE_REQUIRED'), { code: 'place-required' });
+    }
+
+    // Avoid duplicate profiles when the venue is already listed (claimed or not).
+    const existingRestaurant = await loadExistingRestaurantForImport(placeId);
+    if (existingRestaurant) {
+        if (restaurantDocIsUnclaimed(existingRestaurant.data)) {
+            throw Object.assign(new Error('PLACE_CLAIM_REQUIRED'), {
+                code: 'place-claim-required',
+                restaurantId: existingRestaurant.docId,
+            });
+        }
+        throw Object.assign(new Error('PLACE_ALREADY_CLAIMED'), {
+            code: 'place-already-claimed',
+            restaurantId: existingRestaurant.docId,
+        });
+    }
+
     mergedBusinessInfo.isClaimed = true;
     mergedBusinessInfo.phone_verified = false;
     mergedBusinessInfo.phone_claimed = false;

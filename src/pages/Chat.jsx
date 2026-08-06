@@ -38,6 +38,7 @@ import {
   formatChatDaySeparator,
 } from '../utils/chatMessageGrouping';
 import { getMessageReceiptDisplay, syncMessageReceiptDocs } from '../utils/chatMessageReceipts';
+import { openExternalUrl } from '../platform/externalLinks';
 import { formatAppTime } from '../utils/localeFormat';
 import { useChatTheme } from '../hooks/useChatTheme';
 import ChatThemePicker from '../components/chat/ChatThemePicker';
@@ -758,7 +759,31 @@ const Chat = () => {
                                                 <AppText as="p" className="file-name">{msg.fileName || t('file_default')}</AppText>
                                                 <AppText as="p" className="file-size">{formatFileSize(msg.fileSize || 0)}</AppText>
                                             </div>
-                                            <a href={msg.text} download target="_blank" rel="noreferrer"><FaDownload /></a>
+                                            <button
+                                              type="button"
+                                              aria-label={t('download', 'Download')}
+                                              onClick={() => {
+                                                const ok = openExternalUrl(msg.text, { allow: 'app_media' });
+                                                if (!ok) {
+                                                  showToast?.(
+                                                    t(
+                                                      'external_link_blocked',
+                                                      'External links are disabled in the app to prevent spam.'
+                                                    ),
+                                                    'error'
+                                                  );
+                                                }
+                                              }}
+                                              style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                color: 'inherit',
+                                                cursor: 'pointer',
+                                                padding: 0,
+                                              }}
+                                            >
+                                              <FaDownload />
+                                            </button>
                                         </div>
                     }
 

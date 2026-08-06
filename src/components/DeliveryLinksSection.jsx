@@ -9,6 +9,7 @@ import {
   deliveryLinksReadyToSave } from
 '../utils/deliveryLinkMeta';
 import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
+import { openExternalUrl } from '../platform/externalLinks';
 import { AppText, AppTextInput } from "./base";
 
 const cardStyle = {
@@ -482,12 +483,11 @@ const DeliveryLinksSection = ({
 
             if (isPaid) {
               return (
-                <a
+                <button
                   key={link.id}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={commonStyles}
+                  type="button"
+                  style={{ ...commonStyles, border: 'none', width: '100%', fontFamily: 'inherit' }}
+                  onClick={() => openExternalUrl(href, { allow: 'business_delivery' })}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-2px)';
                   }}
@@ -497,7 +497,7 @@ const DeliveryLinksSection = ({
                   
                                             {inner}
                                             <FaExternalLinkAlt style={{ fontSize: '0.75rem', opacity: 0.85 }} />
-                                        </a>);
+                                        </button>);
 
             }
 

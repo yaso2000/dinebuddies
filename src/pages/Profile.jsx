@@ -25,6 +25,7 @@ import { asUidArray } from '../utils/userSocialLists';
 import { getInvitationListThumbSrc } from '../utils/privateInvitationCoverImage';
 import PrivateProfileFields from '../components/profile/PrivateProfileFields';
 import ProfileGalleryEditor from '../components/profile/ProfileGalleryEditor';
+import ProfileDirectoryCardStyleSection from '../components/profile/ProfileDirectoryCardStyleSection';
 import {
   normalizeProfileGallery,
   normalizeDirectoryCoverIndex,
@@ -35,6 +36,10 @@ import {
   mergeProfileMedia,
   resolveProfileCoverUrl } from
 '../utils/profileGallery';
+import {
+  DEFAULT_DIRECTORY_CARD_STYLE,
+  normalizeDirectoryCardStyleId,
+} from '../constants/directoryCardStyles';
 import {
   normalizeDiningPersona,
   normalizeInvitePreference,
@@ -77,20 +82,20 @@ const InvitationListItem = ({ inv, navigate, t, showToast }) => {
     : `/invitation/${inv.id}`;
 
   const handleClick = () => {
-    // Active history (and archives that still have a live doc id) open details.
-    if (!isArchived || inv.id) {
-      navigate(targetPath);
+    // Archived invites are title+date only — never open full details.
+    if (isArchived) {
+      if (!showToast) return;
+      const dates = formatArchiveDateRange(inv, t);
+      const roleLabel = isGuestArchive
+        ? t('invitation_archive_guest_badge', 'Joined as guest')
+        : t('invitation_archive_host_badge', 'Hosted');
+      showToast(
+        `${inv.title || t('invitation', 'Invitation')}\n${dates}\n${roleLabel}`,
+        'info'
+      );
       return;
     }
-    if (!showToast) return;
-    const dates = formatArchiveDateRange(inv, t);
-    const roleLabel = isGuestArchive
-      ? t('invitation_archive_guest_badge', 'Joined as guest')
-      : t('invitation_archive_host_badge', 'Hosted');
-    showToast(
-      `${inv.title || t('invitation', 'Invitation')}\n${dates}\n${roleLabel}`,
-      'info'
-    );
+    navigate(targetPath);
   };
 
   return (
@@ -225,6 +230,7 @@ const Profile = () => {
         openToDating: isUserOpenToDating(currentData),
         profileGallery: media.profileGallery,
         directoryCoverIndex: media.directoryCoverIndex,
+        directoryCardStyle: normalizeDirectoryCardStyleId(currentData.directoryCardStyle),
         cover_photo: media.cover_photo || ''
       });
     }
@@ -281,6 +287,7 @@ const Profile = () => {
     openToDating: isUserOpenToDating(userProfile),
     profileGallery: normalizeProfileGallery(userProfile?.profileGallery),
     directoryCoverIndex: normalizeDirectoryCoverIndex(userProfile?.directoryCoverIndex),
+    directoryCardStyle: normalizeDirectoryCardStyleId(userProfile?.directoryCardStyle),
     cover_photo: userProfile?.cover_photo || ''
   });
 
@@ -325,7 +332,11 @@ const Profile = () => {
   };
 
   const publicPosted = useMemo(() => {
-    const active = myPostedInvitations.filter((inv) => inv.privacy !== 'private');
+    const now = new Date();
+    // Expired live docs must not appear as openable details — archive row is title+date only.
+    const active = myPostedInvitations.filter(
+      (inv) => inv.privacy !== 'private' && !isPublicInvitationExpiredForArchive(inv, now)
+    );
     return mergeWithHostArchives(active, (inv) => inv.kind === 'public' || inv.privacy === 'public');
   }, [myPostedInvitations, hostArchives]);
 
@@ -373,7 +384,11 @@ const Profile = () => {
   }, [receivedPrivateActive, guestArchives]);
 
   const myJoinedInvitations = useMemo(() => {
-    const active = invitations.filter((inv) => inv.joined?.includes(profileUid));
+    const now = new Date();
+    const active = invitations.filter(
+      (inv) =>
+        inv.joined?.includes(profileUid) && !isPublicInvitationExpiredForArchive(inv, now)
+    );
     const activeIds = new Set(active.map((inv) => inv.id));
     const archivedGuest = guestArchives.filter(
       (inv) => !activeIds.has(inv.id) && (inv.kind === 'public' || inv.privacy === 'public')
@@ -607,6 +622,7 @@ const Profile = () => {
       );
       payload.profileGallery = gallerySave.profileGallery;
       payload.directoryCoverIndex = gallerySave.directoryCoverIndex;
+      payload.directoryCardStyle = normalizeDirectoryCardStyleId(formData.directoryCardStyle);
 
       const mediaPatch = buildDefaultProfileMediaPatch({
         uid: currentUser?.uid,
@@ -898,6 +914,41 @@ const Profile = () => {
                   }} /> :
 
                 null}
+                                {currentUser?.uid ? (
+                                  <ProfileDirectoryCardStyleSection
+                                    styleId={formData.directoryCardStyle || DEFAULT_DIRECTORY_CARD_STYLE}
+                                    currentUser={currentUser}
+                                    previewUser={{
+                                      ...(realtimeUser || userProfile || {}),
+                                      id: currentUser.uid,
+                                      uid: currentUser.uid,
+                                      bio: formData.bio,
+                                      city: realtimeUser?.city || userProfile?.city || '',
+                                      age: formData.age,
+                                      ageCategory: formData.ageCategory,
+                                      cover_photo: formData.cover_photo || profileMedia.cover_photo,
+                                      photoURL: formData.avatar,
+                                      photo_url: formData.avatar,
+                                      displayName: formData.name,
+                                      display_name: formData.name,
+                                    }}
+                                    onStyleChange={async (nextStyle) => {
+                                      const directoryCardStyle = normalizeDirectoryCardStyleId(nextStyle);
+                                      setFormData((prev) => ({ ...prev, directoryCardStyle }));
+                                      setRealtimeUser((prev) => ({ ...(prev || {}), directoryCardStyle }));
+                                      try {
+                                        await updateProfile({ directoryCardStyle });
+                                        showToast(
+                                          t('profile_directory_card_style_saved', 'Card style saved'),
+                                          'success'
+                                        );
+                                      } catch (err) {
+                                        console.error('Directory card style save failed:', err);
+                                        showToast(t('failed_save_profile', 'Failed to save profile'), 'error');
+                                      }
+                                    }}
+                                  />
+                                ) : null}
                             </div> :
 
               <>
@@ -984,6 +1035,54 @@ const Profile = () => {
                   editable={false} /> :
 
                 null}
+                                {isOwnProfile && profileUid ? (
+                                  <ProfileDirectoryCardStyleSection
+                                    styleId={normalizeDirectoryCardStyleId(
+                                      formData.directoryCardStyle ||
+                                        realtimeUser?.directoryCardStyle ||
+                                        userProfile?.directoryCardStyle
+                                    )}
+                                    currentUser={currentUser}
+                                    previewUser={{
+                                      ...(realtimeUser || userProfile || {}),
+                                      id: profileUid,
+                                      uid: profileUid,
+                                      bio: realtimeUser?.bio || userProfile?.bio || formData.bio,
+                                      city: realtimeUser?.city || userProfile?.city || '',
+                                      age: realtimeUser?.age || formData.age,
+                                      ageCategory: realtimeUser?.ageCategory || formData.ageCategory,
+                                      cover_photo:
+                                        profileMedia.cover_photo ||
+                                        realtimeUser?.cover_photo ||
+                                        userProfile?.cover_photo,
+                                      photoURL: getSafeAvatar(realtimeUser || userProfile),
+                                      photo_url: getSafeAvatar(realtimeUser || userProfile),
+                                      displayName:
+                                        realtimeUser?.displayName ||
+                                        realtimeUser?.name ||
+                                        formData.name,
+                                      display_name:
+                                        realtimeUser?.display_name ||
+                                        realtimeUser?.name ||
+                                        formData.name,
+                                    }}
+                                    onStyleChange={async (nextStyle) => {
+                                      const directoryCardStyle = normalizeDirectoryCardStyleId(nextStyle);
+                                      setFormData((prev) => ({ ...prev, directoryCardStyle }));
+                                      setRealtimeUser((prev) => ({ ...(prev || {}), directoryCardStyle }));
+                                      try {
+                                        await updateProfile({ directoryCardStyle });
+                                        showToast(
+                                          t('profile_directory_card_style_saved', 'Card style saved'),
+                                          'success'
+                                        );
+                                      } catch (err) {
+                                        console.error('Directory card style save failed:', err);
+                                        showToast(t('failed_save_profile', 'Failed to save profile'), 'error');
+                                      }
+                                    }}
+                                  />
+                                ) : null}
                                 {/* Display Gender and Age */}
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '1rem' }}>
                                     <div style={{

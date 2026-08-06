@@ -423,6 +423,8 @@ registerAdminSearchUsers(exports, { db, admin, assertAdminContext });
 registerAdminBrowseUsers(exports, { db, admin, assertAdminContext });
 registerAdminDashboard(exports, { db, admin, assertAdminContext });
 registerProfileGiftCallables(exports);
+const { registerCashoutCallables } = require('./cashout');
+registerCashoutCallables(exports, { assertAdminContext });
 registerAdminMassMessaging(exports, { db, admin, assertAdminContext });
 registerDirectorySearch(exports, { db, admin });
 registerConsumerAccountSearch(exports, { db });
@@ -430,6 +432,8 @@ const { registerBusinessPostNotify } = require('./businessPostNotify');
 registerBusinessPostNotify(exports, { db, admin, enforceCallableRateLimit });
 const { registerStageRooms } = require('./stageRooms');
 registerStageRooms(exports, { db, admin, enforceCallableRateLimit });
+const { registerAccountDeletion } = require('./accountDeletion');
+registerAccountDeletion(exports, { admin, enforceCallableRateLimit });
 const { registerCommunityChatDisplay } = require('./communityChatDisplay');
 registerCommunityChatDisplay(exports, { db, admin, enforceCallableRateLimit });
 const { registerConnectMatchNotifications } = require('./connectMatchNotifications');
@@ -1236,6 +1240,7 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
                             ? 'private_invitation_publish'
                             : 'social_invitation_publish',
                         relatedId: invitationId,
+                        allowSavedCredits: true,
                     });
                     chargedSource = 'dine_credits';
                 } catch (spendErr) {
@@ -1762,22 +1767,40 @@ exports.setCommunityMembership = functions.https.onCall(async (data, context) =>
     const restaurantPartnerRef = db.collection('restaurants').doc(partnerId);
 
     const membership = await db.runTransaction(async (tx) => {
-        const [userSnap, userPartnerSnap] = await Promise.all([
+        const [userSnap, userPartnerSnap, restaurantPartnerSnap] = await Promise.all([
             tx.get(userRef),
             tx.get(userPartnerRef),
+            tx.get(restaurantPartnerRef),
         ]);
 
-        let partnerRef = userPartnerRef;
-        let partnerSnap = userPartnerSnap;
-        if (!partnerSnap.exists) {
+        // Prefer a real business owner doc (users business OR restaurants listing).
+        // Avoid failing join when users/{id} exists but is not a business while restaurants/{id} is.
+        let partnerRef = null;
+        let partnerSnap = null;
+        const userOwnerCandidate = userPartnerSnap.exists
+            ? { source: 'users', data: userPartnerSnap.data() || {} }
+            : null;
+        const restaurantOwnerCandidate = restaurantPartnerSnap.exists
+            ? { source: 'restaurants', data: restaurantPartnerSnap.data() || {} }
+            : null;
+        if (userOwnerCandidate && isCommunityOwnerBusiness(userOwnerCandidate)) {
+            partnerRef = userPartnerRef;
+            partnerSnap = userPartnerSnap;
+        } else if (restaurantOwnerCandidate && isCommunityOwnerBusiness(restaurantOwnerCandidate)) {
             partnerRef = restaurantPartnerRef;
-            partnerSnap = await tx.get(partnerRef);
+            partnerSnap = restaurantPartnerSnap;
+        } else if (userPartnerSnap.exists) {
+            partnerRef = userPartnerRef;
+            partnerSnap = userPartnerSnap;
+        } else if (restaurantPartnerSnap.exists) {
+            partnerRef = restaurantPartnerRef;
+            partnerSnap = restaurantPartnerSnap;
         }
 
         if (!userSnap.exists && action !== 'unblockMember') {
             throw new functions.https.HttpsError('not-found', 'User profile not found.');
         }
-        if (!partnerSnap.exists) {
+        if (!partnerSnap || !partnerRef) {
             throw new functions.https.HttpsError('not-found', 'Community owner not found.');
         }
 
@@ -2804,62 +2827,10 @@ exports.adminBackfillPublicProfiles = functions.https.onCall(async (data, contex
 });
 
 async function adminDeleteUserCascade(targetUid) {
-    const userRef = db.collection('users').doc(targetUid);
-    const userSnap = await userRef.get();
-    if (!userSnap.exists) return { deletedItems: 0 };
-
-    let deletedItems = 0;
-    const relatedCollections = ['communityPosts', 'stories', 'invitations', 'social_invitations', 'notifications', 'partner_notifications'];
-
-    for (const colName of relatedCollections) {
-        const snap = await db.collection(colName).get();
-        const batch = db.batch();
-        let batchDeletes = 0;
-
-        snap.docs.forEach((d) => {
-            const data = d.data() || {};
-            const authorId = data.partnerId || data.authorId || data.userId || data.uid || data.fromUserId || data.senderId || data.reporterId || data.restaurantId || data.author?.id;
-            if (authorId === targetUid || data.userId === targetUid) {
-                batch.delete(d.ref);
-                batchDeletes++;
-                deletedItems++;
-            }
-        });
-
-        if (batchDeletes > 0) await batch.commit();
-    }
-
-    await userRef.delete();
-    deletedItems++;
-
-    let storageObjectsDeleted = 0;
-    try {
-        const bucket = admin.storage().bucket();
-        const prefixes = [
-            `users/${targetUid}/`,
-            `chat_images/${targetUid}/`,
-            `chat_files/${targetUid}/`,
-            `voice_messages/${targetUid}/`,
-        ];
-        for (const prefix of prefixes) {
-            try {
-                await bucket.deleteFiles({ prefix, force: true });
-                storageObjectsDeleted += 1;
-            } catch (e) {
-                functions.logger.warn('adminDeleteUserCascade storage prefix', prefix, e.message);
-            }
-        }
-    } catch (e) {
-        functions.logger.warn('adminDeleteUserCascade storage', e.message);
-    }
-
-    try {
-        await admin.auth().deleteUser(targetUid);
-    } catch (e) {
-        // Firestore deletion is primary; auth user may already be removed.
-    }
-
-    return { deletedItems, storageObjectsDeleted };
+    const { purgeUserAccountData } = require('./accountDeletionCore');
+    const stats = await purgeUserAccountData(admin, targetUid, { deleteAuthUser: true });
+    const deletedItems = Object.values(stats).reduce((sum, n) => sum + (Number(n) || 0), 0);
+    return { deletedItems, storageObjectsDeleted: stats.storagePrefixes || 0, stats };
 }
 
 // ─── Trusted admin callable: delete user (destructive) ──────────────────────

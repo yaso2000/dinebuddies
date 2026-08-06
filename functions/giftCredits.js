@@ -74,6 +74,20 @@ function mapGiftError(err) {
     if (code === 'IDEMPOTENCY_KEY_REQUIRED') {
         return new functions.https.HttpsError('invalid-argument', 'idempotencyKey is required.');
     }
+    if (code === 'BUSINESS_CANNOT_SEND_GIFT') {
+        return new functions.https.HttpsError(
+            'failed-precondition',
+            'Business accounts cannot send gifts.',
+            { code: 'BUSINESS_CANNOT_SEND_GIFT' }
+        );
+    }
+    if (code === 'BUSINESS_CANNOT_RECEIVE_GIFT') {
+        return new functions.https.HttpsError(
+            'failed-precondition',
+            'Business accounts cannot receive gifts.',
+            { code: 'BUSINESS_CANNOT_RECEIVE_GIFT' }
+        );
+    }
     return err;
 }
 
@@ -173,6 +187,18 @@ function registerProfileGiftCallables(exportsObj) {
                 const senderRole = isBusinessUserDoc(sender) ? 'business' : 'user';
                 const recipientRole = isBusinessUserDoc(recipient) ? 'business' : 'user';
 
+                // Personal ↔ personal only. Business accounts never send or receive gifts.
+                if (senderRole === 'business') {
+                    const err = new Error('BUSINESS_CANNOT_SEND_GIFT');
+                    err.code = 'BUSINESS_CANNOT_SEND_GIFT';
+                    throw err;
+                }
+                if (recipientRole === 'business') {
+                    const err = new Error('BUSINESS_CANNOT_RECEIVE_GIFT');
+                    err.code = 'BUSINESS_CANNOT_RECEIVE_GIFT';
+                    throw err;
+                }
+
                 // Delivery first, then payment — both commit atomically or neither does.
                 grantSavedCreditsInTransaction(tx, recipientRef, recipient, {
                     uid: recipientId,
@@ -191,6 +217,8 @@ function registerProfileGiftCallables(exportsObj) {
                     type: 'profile_gift_send',
                     reason: 'profile_gift_send',
                     relatedId: giftRef.id,
+                    // Same two-wallet rules: paid first, then saved.
+                    allowSavedCredits: true,
                 });
 
                 tx.set(giftRef, {

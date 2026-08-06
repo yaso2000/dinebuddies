@@ -22,6 +22,7 @@ import '../components/MapStyles.css';
 import { goToLogin } from '../utils/goToLogin';
 import {
   handleBusinessCommunityJoinClick,
+  isBusinessCommunityChatEnabled,
   isJoinedToBusinessCommunity,
   resolveBusinessCommunityId,
 } from '../utils/businessCommunityJoin';
@@ -33,8 +34,9 @@ import { detectUserLocationContext } from '../utils/locationUtils';
 import {
   buildViewerGeoContext,
   canApplyBusinessLocationFilter,
-  matchesBusinessLocationFilter } from
-'../utils/businessDirectoryGeoFilter';
+  matchesBusinessLocationFilter,
+  parseBusinessLatLng,
+} from '../utils/businessDirectoryGeoFilter';
 import { formatBiDiText, escapeHtmlText } from '../utils/formatBiDiText';
 import { AppText, AppTextInput } from "../components/base";
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
@@ -45,6 +47,32 @@ import {
 
 const popupText = (value) =>
   `<span dir="auto" style="unicode-bidi:isolate;text-align:start">${escapeHtmlText(formatBiDiText(value))}</span>`;
+
+// Haversine distance in km
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+function formatBusinessDistanceLabel(t, distanceKm) {
+  if (distanceKm == null || !Number.isFinite(distanceKm)) return null;
+  if (distanceKm < 1) {
+    return t('stage_distance_m', '{{m}} m away', {
+      m: Math.max(1, Math.round(distanceKm * 1000)),
+    });
+  }
+  const km = distanceKm < 10 ? distanceKm.toFixed(1) : String(Math.round(distanceKm));
+  return t('stage_distance_km', '{{km}} km away', { km });
+}
 
 const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, title }) => {
   if (!members) return null;
@@ -286,6 +314,8 @@ const BusinessDirectoryGridCard = React.memo(({ res, onHostInvitation }) => {
     ]
   );
   const effectiveJoined = isJoined;
+  const chatEnabled = isBusinessCommunityChatEnabled(res.subscriptionTier);
+  const distanceLabel = formatBusinessDistanceLabel(t, res.distanceKm);
 
   const [cardLiked, setCardLiked] = useState(false);
   const [optimisticLiked, setOptimisticLiked] = useState(null);
@@ -324,17 +354,37 @@ const BusinessDirectoryGridCard = React.memo(({ res, onHostInvitation }) => {
     onHostInvitation?.(res);
   };
 
-  const handleJoinOrChat = (e) => {
-    handleBusinessCommunityJoinClick({
-      event: e,
-      navigate,
-      goToLogin,
-      currentUser,
-      communityId,
-      isJoined: effectiveJoined,
-      joinCommunity,
-      returnPath: `/business/${res.id}`,
-    });
+  const [joinInProgress, setJoinInProgress] = useState(false);
+
+  const handleJoinOrChat = async (e) => {
+    if (joinInProgress) return;
+    setJoinInProgress(true);
+    try {
+      const result = await handleBusinessCommunityJoinClick({
+        event: e,
+        navigate,
+        goToLogin,
+        currentUser,
+        communityId,
+        isJoined: effectiveJoined,
+        joinCommunity,
+        returnPath: `/business/${res.id}`,
+        chatEnabled,
+      });
+      if (result?.reason === 'missing_community') {
+        showToast(t('community_join_failed', 'Could not join the community. Try again.'), 'error');
+      } else if (result?.reason === 'chat_disabled') {
+        showToast(
+          t(
+            'community_chat_paid_only_member_hint',
+            'Group chat is available when this business has a Paid plan.'
+          ),
+          'info'
+        );
+      }
+    } finally {
+      setJoinInProgress(false);
+    }
   };
 
   const handleToggleLike = async (e) => {
@@ -433,52 +483,6 @@ const BusinessDirectoryGridCard = React.memo(({ res, onHostInvitation }) => {
           <AppText as="span" className="restaurant-grid-card__owner-badge">
             {t('owner', 'Owner')}
           </AppText>
-        ) : !isBusinessAccount ? (
-          <div className="restaurant-grid-card__actions">
-            {effectiveJoined ? (
-              <button
-                type="button"
-                className="restaurant-grid-card__action restaurant-grid-card__action--chat"
-                onClick={handleJoinOrChat}
-                title={t('business_grid_join_chat', 'Join chat')}
-                aria-label={t('business_grid_join_chat', 'Join chat')}
-              >
-                <FaComments className="restaurant-grid-card__action-icon" aria-hidden />
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="restaurant-grid-card__action restaurant-grid-card__action--join"
-                onClick={handleJoinOrChat}
-                title={t('join_plus', '+ Join')}
-                aria-label={t('join_plus', '+ Join')}
-              >
-                <span className="restaurant-grid-card__join-icon-wrap" aria-hidden>
-                  <FaBuilding className="restaurant-grid-card__join-icon" />
-                  <FaPlus className="restaurant-grid-card__join-plus" />
-                </span>
-              </button>
-            )}
-            <button
-              type="button"
-              className={`restaurant-grid-card__action restaurant-grid-card__action--like${effectiveLiked ? ' restaurant-grid-card__action--liked' : ''}`}
-              onClick={handleToggleLike}
-              disabled={likeInProgress}
-              title={effectiveLiked ? t('unlike', 'Unlike') : t('like', 'Like')}
-              aria-label={effectiveLiked ? t('unlike', 'Unlike') : t('like', 'Like')}
-              aria-pressed={effectiveLiked}
-            >
-              {likeInProgress ? (
-                <AppText as="span" className="restaurant-grid-card__action-busy" aria-hidden>
-                  ⋯
-                </AppText>
-              ) : effectiveLiked ? (
-                <FaHeart className="restaurant-grid-card__action-icon" aria-hidden />
-              ) : (
-                <FaRegHeart className="restaurant-grid-card__action-icon" aria-hidden />
-              )}
-            </button>
-          </div>
         ) : null}
       </div>
 
@@ -489,17 +493,88 @@ const BusinessDirectoryGridCard = React.memo(({ res, onHostInvitation }) => {
           </AppText>
           <AppText as="p" className="restaurant-grid-card__city">
             {getBusinessCardCity(res) || t('unknown_city', 'Unknown City')}
+            {distanceLabel ? (
+              <AppText as="span" className="restaurant-grid-card__distance">
+                {' · '}
+                {distanceLabel}
+              </AppText>
+            ) : null}
           </AppText>
         </button>
-        {!isOwner && !isBusinessAccount && !isGuest ? (
-          <button
-            type="button"
-            className="restaurant-grid-card__host-btn"
-            onClick={handleHostInvitation}
-          >
-            <FaStore aria-hidden />
-            <AppText as="span">{t('host_invitation_here')}</AppText>
-          </button>
+
+        {!isOwner && !isBusinessAccount ? (
+          <div className="restaurant-grid-card__footer-actions">
+            {effectiveJoined ? (
+              <button
+                type="button"
+                className={`restaurant-grid-card__footer-btn restaurant-grid-card__footer-btn--chat${chatEnabled ? '' : ' is-joined-only'}`}
+                onClick={handleJoinOrChat}
+                disabled={joinInProgress}
+                title={
+                  chatEnabled
+                    ? t('business_grid_join_chat', 'Join chat')
+                    : t('joined', 'Joined')
+                }
+                aria-label={
+                  chatEnabled
+                    ? t('business_grid_join_chat', 'Join chat')
+                    : t('joined', 'Joined')
+                }
+              >
+                <FaComments aria-hidden />
+                <AppText as="span">
+                  {chatEnabled
+                    ? t('business_grid_join_chat', 'Join chat')
+                    : t('joined', 'Joined')}
+                </AppText>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="restaurant-grid-card__footer-btn restaurant-grid-card__footer-btn--join"
+                onClick={handleJoinOrChat}
+                disabled={joinInProgress}
+                title={t('join_plus', '+ Join')}
+                aria-label={t('join_plus', '+ Join')}
+              >
+                <span className="restaurant-grid-card__join-icon-wrap" aria-hidden>
+                  <FaBuilding className="restaurant-grid-card__join-icon" />
+                  <FaPlus className="restaurant-grid-card__join-plus" />
+                </span>
+                <AppText as="span">{joinInProgress ? '…' : t('join_plus', '+ Join')}</AppText>
+              </button>
+            )}
+            <button
+              type="button"
+              className={`restaurant-grid-card__footer-btn restaurant-grid-card__footer-btn--like${effectiveLiked ? ' is-liked' : ''}`}
+              onClick={handleToggleLike}
+              disabled={likeInProgress}
+              title={effectiveLiked ? t('unlike', 'Unlike') : t('like', 'Like')}
+              aria-label={effectiveLiked ? t('unlike', 'Unlike') : t('like', 'Like')}
+              aria-pressed={effectiveLiked}
+            >
+              {likeInProgress ? (
+                <AppText as="span" aria-hidden>
+                  ⋯
+                </AppText>
+              ) : effectiveLiked ? (
+                <FaHeart aria-hidden />
+              ) : (
+                <FaRegHeart aria-hidden />
+              )}
+            </button>
+            {!isGuest ? (
+              <button
+                type="button"
+                className="restaurant-grid-card__footer-btn restaurant-grid-card__footer-btn--host"
+                onClick={handleHostInvitation}
+                title={t('host_invitation_here')}
+                aria-label={t('host_invitation_here')}
+              >
+                <FaStore aria-hidden />
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </article>
@@ -561,6 +636,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
   const isOwner = currentUser?.id === res.ownerId || (currentUser?.ownedRestaurants || []).includes(res.id);
   const isBusinessAccount = userProfile?.isBusiness || false;
   const isOnline = useUserPresence(res.ownerId || res.id, { fallback: Boolean(res.isOnline) });
+  const distanceLabel = formatBusinessDistanceLabel(t, res.distanceKm);
   const isOpenNow = useMemo(
     () =>
       resolveBusinessOpenNow({
@@ -600,6 +676,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
   const [cardLiked, setCardLiked] = useState(false);
   const [optimisticLiked, setOptimisticLiked] = useState(null);
   const [likeInProgress, setLikeInProgress] = useState(false);
+  const [joinInProgress, setJoinInProgress] = useState(false);
   useEffect(() => {
     if (!res.id || !likeUser?.uid) {
       setCardLiked(false);
@@ -648,18 +725,37 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
   };
 
   const effectiveJoined = isJoined;
+  const chatEnabled = isBusinessCommunityChatEnabled(res.subscriptionTier);
 
-  const handleJoinOrChat = (e) => {
-    handleBusinessCommunityJoinClick({
-      event: e,
-      navigate,
-      goToLogin,
-      currentUser,
-      communityId,
-      isJoined: effectiveJoined,
-      joinCommunity,
-      returnPath: `/business/${res.id}`,
-    });
+  const handleJoinOrChat = async (e) => {
+    if (joinInProgress) return;
+    setJoinInProgress(true);
+    try {
+      const result = await handleBusinessCommunityJoinClick({
+        event: e,
+        navigate,
+        goToLogin,
+        currentUser,
+        communityId,
+        isJoined: effectiveJoined,
+        joinCommunity,
+        returnPath: `/business/${res.id}`,
+        chatEnabled,
+      });
+      if (result?.reason === 'missing_community') {
+        showToast(t('community_join_failed', 'Could not join the community. Try again.'), 'error');
+      } else if (result?.reason === 'chat_disabled') {
+        showToast(
+          t(
+            'community_chat_paid_only_member_hint',
+            'Group chat is available when this business has a Paid plan.'
+          ),
+          'info'
+        );
+      }
+    } finally {
+      setJoinInProgress(false);
+    }
   };
 
   const handleShare = async (e) => {
@@ -707,7 +803,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
         display: 'flex',
         flexDirection: 'column',
         width: '100%',
-        aspectRatio: '4 / 6'
+        aspectRatio: '1 / 1'
       }}>
       
             {/* Top Section: Full Image Background with Overlay Content */}
@@ -880,67 +976,82 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
             }}>
                             <FaMapMarkedAlt size={14} style={{ color: '#fbbf24' }} />{' '}
                             {getBusinessCardCity(res) || t('unknown_city', 'Unknown City')}
+                            {distanceLabel ? ` · ${distanceLabel}` : ''}
                         </AppText>
                     </div>
 
-                    {/* Host Invitation Button */}
-                    {!isOwner && !isBusinessAccount && !isGuest &&
-          <button
-            type="button"
-            onClick={handleCreateInvite}
-            style={{
-              width: '100%',
-              padding: '14px',
-              background: 'rgba(40, 40, 45, 0.85)',
-              backdropFilter: 'blur(10px)',
-              color: '#d8b4fe',
-              border: '1px solid rgba(216, 180, 254, 0.2)',
-              borderRadius: '16px',
-              fontSize: '1rem',
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-              cursor: 'pointer',
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
-              transition: 'all 0.2s',
-              position: 'relative',
-              zIndex: 30
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(40, 40, 45, 1)';
-              e.currentTarget.style.transform = 'scale(1.02)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(40, 40, 45, 0.85)';
-              e.currentTarget.style.transform = 'scale(1)';
-            }}>
-            
-                            <FaStore style={{ fontSize: '1.1rem' }} />
-                            {t('host_invitation_here')}
-                        </button>
-          }
                 </div>
             </div>
 
-            {/* Bottom Section: Footer (Community) */}
-            <div style={{
-        padding: '12px 16px',
+            {/* Bottom Section: adjacent action buttons */}
+            <div className="restaurant-list-card__footer-bar" style={{
+        padding: '10px 12px',
         background: tc?.footerBg || 'var(--premium-orange)',
         borderTop: 'none',
         position: 'relative',
         zIndex: 20,
         flexShrink: 0
       }}>
-                <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          color: 'white'
-        }}>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <button
+                <div className="restaurant-list-card__footer-actions">
+                    {isOwner ?
+          <AppText as="span" style={{
+            background: tc ? 'rgba(255,255,255,0.92)' : 'var(--bg-input)',
+            color: tc ? tc.accent : 'var(--luxury-gold)',
+            padding: '6px 12px',
+            borderRadius: '8px',
+            fontSize: '0.75rem',
+            fontWeight: 'bold',
+            border: tc ? `1px solid ${tc.border || tc.accent}` : '1px solid var(--border-color)'
+          }}>
+                            {t('owner')}
+                        </AppText> :
+          !isBusinessAccount ? (
+            <>
+              <button
+                type="button"
+                className={`community-join-btn restaurant-list-card__footer-btn${effectiveJoined ? ' community-join-btn--chat' : ''}`}
+                onClick={handleJoinOrChat}
+                disabled={joinInProgress}
+                title={
+                  effectiveJoined
+                    ? chatEnabled
+                      ? t('business_grid_join_chat', 'Join chat')
+                      : t('joined', 'Joined')
+                    : t('join_plus', '+ Join')
+                }
+                aria-label={
+                  effectiveJoined
+                    ? chatEnabled
+                      ? t('business_grid_join_chat', 'Join chat')
+                      : t('joined', 'Joined')
+                    : t('join_plus', '+ Join')
+                }>
+                {effectiveJoined ? (
+                  <>
+                    <FaComments aria-hidden />
+                    {chatEnabled
+                      ? t('business_grid_join_chat', 'Join chat')
+                      : t('joined', 'Joined')}
+                  </>
+                ) : (
+                  joinInProgress ? '…' : t('join_plus', '+ Join')
+                )}
+              </button>
+              {!isGuest ? (
+                <button
+                  type="button"
+                  className="restaurant-list-card__footer-btn restaurant-list-card__footer-btn--host"
+                  onClick={handleCreateInvite}
+                  title={t('host_invitation_here')}
+                  aria-label={t('host_invitation_here')}
+                >
+                  <FaStore aria-hidden />
+                  <AppText as="span">{t('host_invitation_here')}</AppText>
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
@@ -956,65 +1067,14 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
                 fontWeight: 600,
                 cursor: onViewMembers ? 'pointer' : 'default'
               }}>
-              
-                                {t('restaurant_community')}
-                            </button>
-                    </div>
-
-                    {isOwner ?
-          <AppText as="span" style={{
-            background: tc ? 'rgba(255,255,255,0.92)' : 'var(--bg-input)',
-            color: tc ? tc.accent : 'var(--luxury-gold)',
-            padding: '4px 12px',
-            borderRadius: '8px',
-            fontSize: '0.75rem',
-            fontWeight: 'bold',
-            border: tc ? `1px solid ${tc.border || tc.accent}` : '1px solid var(--border-color)'
-          }}>
-                            {t('owner')}
-                        </AppText> :
-          !isBusinessAccount &&
-          <button
-            type="button"
-            className={`community-join-btn${effectiveJoined ? ' community-join-btn--chat' : ''}`}
-            onClick={handleJoinOrChat}
-            title={
-              effectiveJoined
-                ? t('business_grid_join_chat', 'Join chat')
-                : t('join_plus', '+ Join')
-            }
-            aria-label={
-              effectiveJoined
-                ? t('business_grid_join_chat', 'Join chat')
-                : t('join_plus', '+ Join')
-            }>
-            {effectiveJoined ? (
-              <>
-                <FaComments aria-hidden />
-                {t('business_grid_join_chat', 'Join chat')}
-              </>
-            ) : (
-              t('join_plus', '+ Join')
-            )}
-          </button>
-          }
+              {t('restaurant_community')}
+            </button>
+          )}
                 </div>
             </div>
         </div>);
 
 });
-
-// Calculate distance between two points (Haversine formula)
-const calculateDistance = (lat1, lon1, lat2, lon2) => {
-  const R = 6371; // Earth's radius in km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-  Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // Distance in km
-};
 
 const BusinessesDirectory = () => {
   const { t, i18n } = useTranslation();
@@ -1029,13 +1089,14 @@ const BusinessesDirectory = () => {
   const restaurants = context?.restaurants || [];
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [locationFilter, setLocationFilter] = useState('All');
+  const [locationFilter, setLocationFilter] = useState('city');
   const [activeFilter, setActiveFilter] = useState(() => searchParams.get('category') || 'All'); // Category filter
   const [showFilters, setShowFilters] = useState(false); // Controls filter visibility
   const [viewMode, setViewMode] = useState('list');
   const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode for map
   const [userLocation, setUserLocation] = useState(null);
   const [detectedLocationContext, setDetectedLocationContext] = useState(null);
+  const defaultLocationAppliedRef = useRef(false);
   const [selectedCommunityId, setSelectedCommunityId] = useState(null);
   const [selectedCommunityMembers, setSelectedCommunityMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -1139,13 +1200,31 @@ const BusinessesDirectory = () => {
     [userLocation, userProfile, detectedLocationContext]
   );
 
-
+  // Default to the user's area (city/region). Fall back when geo context is ready.
+  useEffect(() => {
+    if (defaultLocationAppliedRef.current) return;
+    const isStaff = ['admin', 'moderator', 'support'].includes(userProfile?.role);
+    if (isStaff) {
+      setLocationFilter('All');
+      defaultLocationAppliedRef.current = true;
+      return;
+    }
+    if (canApplyBusinessLocationFilter('city', viewerGeoContext, false)) {
+      setLocationFilter('city');
+      defaultLocationAppliedRef.current = true;
+      return;
+    }
+    if (canApplyBusinessLocationFilter('country', viewerGeoContext, false)) {
+      setLocationFilter('country');
+      defaultLocationAppliedRef.current = true;
+    }
+  }, [viewerGeoContext, userProfile?.role]);
 
   // Helper functions and constants moved outside or used directly
   const locationFilters = [
   { id: 'All', label: t('all'), icon: '🌍' },
   { id: 'nearby', label: t('near_me'), icon: '📍' },
-  { id: 'city', label: t('my_city', 'My city'), icon: '🏙️' },
+  { id: 'city', label: t('my_city', 'My area'), icon: '🏙️' },
   { id: 'country', label: t('my_country', 'My country'), icon: '🗺️' }];
 
 
@@ -1186,10 +1265,36 @@ const BusinessesDirectory = () => {
           calculateDistance
         )
         );
+      } else if (
+        locationFilter === 'city' &&
+        !canApplyBusinessLocationFilter('city', viewerGeoContext, isStaff)
+      ) {
+        // Keep listing until location resolves; avoid empty flash on first paint.
       } else {
         filtered = [];
       }
     }
+
+    const viewerLat = viewerGeoContext?.lat;
+    const viewerLng = viewerGeoContext?.lng;
+    const hasViewerCoords = viewerLat != null && viewerLng != null;
+
+    filtered = filtered.map((res) => {
+      if (!hasViewerCoords) return { ...res, distanceKm: null };
+      const bizLatLng = parseBusinessLatLng(res);
+      if (!bizLatLng) return { ...res, distanceKm: null };
+      return {
+        ...res,
+        distanceKm: calculateDistance(viewerLat, viewerLng, bizLatLng.lat, bizLatLng.lng),
+      };
+    });
+
+    filtered.sort((a, b) => {
+      if (a.distanceKm == null && b.distanceKm == null) return 0;
+      if (a.distanceKm == null) return 1;
+      if (b.distanceKm == null) return -1;
+      return a.distanceKm - b.distanceKm;
+    });
 
     return filtered;
   }, [restaurants, searchQuery, locationFilter, activeFilter, viewerGeoContext, userProfile?.role]);

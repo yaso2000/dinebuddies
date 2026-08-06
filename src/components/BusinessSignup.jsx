@@ -41,7 +41,7 @@ import {
   firebasePhoneAuthErrorMessage,
   BUSINESS_PHONE_RECAPTCHA_ID } from
 '../services/businessPhoneFirebaseAuth';
-import { lookupBusinessPhone, finalizeBusinessSignup } from '../services/businessPhoneSignupApi';
+import { lookupBusinessPhone, lookupBusinessPlace, finalizeBusinessSignup } from '../services/businessPhoneSignupApi';
 import { FaPhone } from 'react-icons/fa';
 import './BusinessSignup.css';
 import { AppText, AppTextInput } from "./base";
@@ -486,44 +486,95 @@ const BusinessSignup = () => {
     setStep(STEPS.AUTH);
   };
 
-  /** LocationAutocomplete selection payload (Google minimal in business flow). */
-  const handlePlaceSelect = useCallback((place) => {
-    const fullAddress = (place.fullAddress || '').trim();
-    const lat = place.lat ?? null;
-    const lng = place.lng ?? null;
-    let city = '';
-    let country = '';
-    let countryCode = '';
-    if (place.addressComponents) {
-      const p = parseGoogleAddressComponents(place.addressComponents);
-      city = p.city;
-      country = p.country;
-      countryCode = p.countryCode || '';
-    }
-    const suggestedName = (place.name || '').trim();
+  const redirectToExistingBusinessClaim = useCallback(
+    (restaurantId, businessName = '') => {
+      const id = String(restaurantId || '').trim();
+      if (!id) return;
+      showToast(
+        t(
+          'business_signup_redirect_claim',
+          'This business is already listed. Continue on the claim page to take ownership.'
+        ) + (businessName ? ` (${businessName})` : ''),
+        'info'
+      );
+      navigate(`/business/${id}?claim=1`, { replace: true });
+    },
+    [navigate, showToast, t]
+  );
 
-    setBusinessData((prev) => ({
-      ...prev,
-      businessName: prev.businessName.trim() ? prev.businessName : suggestedName || prev.businessName,
-      location: fullAddress,
-      city: city || prev.city,
-      country: country || prev.country,
-      countryCode: countryCode || prev.countryCode,
-      lat,
-      lng,
-      placeId: place.placeId || null,
-      phone: (place.phone || '').trim(),
-      website: (place.website || '').trim(),
-      openingHours: place.openingHours ?? null,
-      photos: [],
-      rating: place.rating ?? null,
-      userRatingsTotal: place.userRatingsTotal ?? null,
-      priceLevel: place.priceLevel ?? null,
-      businessStatus: place.businessStatus ?? null,
-      editorialSummary: (place.editorialSummary || '').trim()
-    }));
-    setSearchQuery(fullAddress || suggestedName);
-  }, []);
+  /** LocationAutocomplete selection payload (Google minimal in business flow). */
+  const handlePlaceSelect = useCallback(
+    async (place) => {
+      const fullAddress = (place.fullAddress || '').trim();
+      const lat = place.lat ?? null;
+      const lng = place.lng ?? null;
+      let city = '';
+      let country = '';
+      let countryCode = '';
+      if (place.addressComponents) {
+        const p = parseGoogleAddressComponents(place.addressComponents);
+        city = p.city;
+        country = p.country;
+        countryCode = p.countryCode || '';
+      }
+      const suggestedName = (place.name || '').trim();
+      const placeId = String(place.placeId || '').trim() || null;
+
+      setBusinessData((prev) => ({
+        ...prev,
+        businessName: prev.businessName.trim() ? prev.businessName : suggestedName || prev.businessName,
+        location: fullAddress,
+        city: city || prev.city,
+        country: country || prev.country,
+        countryCode: countryCode || prev.countryCode,
+        lat,
+        lng,
+        placeId,
+        phone: (place.phone || '').trim(),
+        website: (place.website || '').trim(),
+        openingHours: place.openingHours ?? null,
+        photos: [],
+        rating: place.rating ?? null,
+        userRatingsTotal: place.userRatingsTotal ?? null,
+        priceLevel: place.priceLevel ?? null,
+        businessStatus: place.businessStatus ?? null,
+        editorialSummary: (place.editorialSummary || '').trim(),
+      }));
+      setSearchQuery(fullAddress || suggestedName);
+
+      if (!placeId) {
+        showToast(
+          t(
+            'business_signup_err_place_required',
+            'Select your business from Google results (Google Business listing is required).'
+          ),
+          'error'
+        );
+        return;
+      }
+
+      try {
+        const { ok, data } = await lookupBusinessPlace(placeId);
+        if (!ok) return;
+        if (data?.status === 'claim_flow' && data?.restaurantId) {
+          redirectToExistingBusinessClaim(data.restaurantId, data.businessName);
+          return;
+        }
+        if (data?.status === 'already_claimed') {
+          showToast(
+            t(
+              'business_signup_err_place_claimed',
+              'This Google Business listing is already claimed on DineBuddies. Sign in with the owner account.'
+            ),
+            'error'
+          );
+        }
+      } catch (err) {
+        console.warn('[BusinessSignup] place lookup failed', err);
+      }
+    },
+    [redirectToExistingBusinessClaim, showToast, t]
+  );
 
   const handleBusinessNameChange = (e) => {
     setBusinessData((prev) => ({ ...prev, businessName: e.target.value }));
@@ -546,9 +597,39 @@ const BusinessSignup = () => {
       showToast(t('business_signup_err_details', 'Please search and select your business first.'), 'error');
       return;
     }
+    const selectedPlaceId = String(businessData.placeId || '').trim();
+    if (!selectedPlaceId) {
+      showToast(
+        t(
+          'business_signup_err_place_required',
+          'Select your business from Google results (Google Business listing is required).'
+        ),
+        'error'
+      );
+      return;
+    }
     setLoading(true);
 
     try {
+      const placeLookup = await lookupBusinessPlace(selectedPlaceId);
+      if (placeLookup.data?.status === 'claim_flow' && placeLookup.data?.restaurantId) {
+        redirectToExistingBusinessClaim(
+          placeLookup.data.restaurantId,
+          placeLookup.data.businessName
+        );
+        return;
+      }
+      if (placeLookup.data?.status === 'already_claimed') {
+        showToast(
+          t(
+            'business_signup_err_place_claimed',
+            'This Google Business listing is already claimed on DineBuddies. Sign in with the owner account.'
+          ),
+          'error'
+        );
+        return;
+      }
+
       const idToken = await auth.currentUser?.getIdToken(true);
       if (!idToken) {
         showToast(t('business_signup_err_create', 'Failed to create account.'), 'error');
@@ -569,7 +650,7 @@ const BusinessSignup = () => {
         address: businessData.location,
         lat: businessData.lat,
         lng: businessData.lng,
-        placeId: businessData.placeId,
+        placeId: selectedPlaceId,
         hours: businessData.openingHours,
         coverImage: null,
         galleryEnhanced: [],
@@ -592,6 +673,30 @@ const BusinessSignup = () => {
       );
 
       if (!ok) {
+        if (data?.code === 'place-claim-required' && data?.restaurantId) {
+          redirectToExistingBusinessClaim(data.restaurantId);
+          return;
+        }
+        if (data?.code === 'place-already-claimed') {
+          showToast(
+            t(
+              'business_signup_err_place_claimed',
+              'This Google Business listing is already claimed on DineBuddies. Sign in with the owner account.'
+            ),
+            'error'
+          );
+          return;
+        }
+        if (data?.code === 'place-required') {
+          showToast(
+            t(
+              'business_signup_err_place_required',
+              'Select your business from Google results (Google Business listing is required).'
+            ),
+            'error'
+          );
+          return;
+        }
         const msg = data?.message || t('business_signup_err_create', 'Failed to create account.');
         if (data?.code === 'auth/email-already-in-use') {
           showToast(t('auth_email_in_use', 'This email is already registered'), 'error');
@@ -751,7 +856,12 @@ const BusinessSignup = () => {
                     </div>
 
                     <div className="venue-search-stack" style={{ marginBottom: '1.25rem' }}>
-                        <label style={labelStyle}>{t('business_signup_google_search_label', 'Find your business on Google Maps')}</label>
+                        <label style={labelStyle}>
+                          {t(
+                            'business_signup_google_search_label',
+                            'Google Business listing (required)'
+                          )}
+                        </label>
                         <LocationAutocomplete
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

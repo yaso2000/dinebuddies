@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
-import { FaComments, FaGift, FaHeart, FaUserCheck, FaUserPlus } from 'react-icons/fa';
+import { FaComments, FaGift, FaHeart, FaMapMarkerAlt, FaUserCheck, FaUserPlus } from 'react-icons/fa';
 import { db } from '../../firebase/config';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../../utils/avatarUtils';
 import { getPrivateInviteeDisplayName } from '../../utils/privateInviteAvailability';
@@ -34,11 +34,25 @@ import { useMatchCelebration } from '../../context/MatchCelebrationContext';
 import OnlineStatusBadge from '../profile/OnlineStatusBadge';
 import PrivateInviteProfileBadge from '../PrivateInviteProfileBadge';
 import { useUserPresence } from '../../hooks/usePresence';
+import {
+  DEFAULT_DIRECTORY_CARD_STYLE,
+  normalizeDirectoryCardStyleId,
+} from '../../constants/directoryCardStyles';
 import './UserDirectoryCard.css';
 import { AppText } from '../base';
 
-/** Directory card — name, cover, avatar, quick actions. */
-function UserDirectoryCard({ user, currentUser, onGift }) {
+function resolveAgeLabel(user) {
+  if (typeof user?.age === 'number' && user.age > 0) return String(user.age);
+  const category = String(user?.ageCategory || user?.age_category || user?.ageRange || '').trim();
+  if (/^\d{1,3}$/.test(category)) return category;
+  return null;
+}
+
+/** Directory card — cover + left copy + geometric portrait (style owned by the profile). */
+function UserDirectoryCard({ user, currentUser, onGift, cardStyle }) {
+  const styleId = normalizeDirectoryCardStyleId(
+    cardStyle ?? user?.directoryCardStyle ?? DEFAULT_DIRECTORY_CARD_STYLE
+  );
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { showToast, showPersistentWarning } = useToast();
@@ -101,6 +115,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
   }, [profileUid, viewerFollowing, viewerUid, userProfile, invitationUser, currentUser, user]);
 
   const displayName = getPrivateInviteeDisplayName(user) || t('user', 'User');
+  const ageLabel = resolveAgeLabel(user);
   const avatarUrl = getSafeAvatar(user);
   const coverUrl =
     pickSafeDisplayImageUrl(
@@ -108,7 +123,6 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
       resolveProfileCoverUrl(user),
       user?.coverPhotoUrl
     ) || USER_DIRECTORY_DEFAULT_COVER;
-  const headline = displayName;
   const bioText = String(user?.bio || user?.shortBio || '').trim();
   const cityLabel = String(user?.city || '').trim() || null;
   const isSelf =
@@ -332,20 +346,47 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
     [navigate, profileUid]
   );
 
-  const profileInfo = (
-    <AppText as="span" className="user-directory-card__name">{headline}</AppText>
-  );
-
-  const nameChip = profilePath ? (
-    <Link to={profilePath} className="user-directory-card__name-chip" draggable={false}>
-      {profileInfo}
-    </Link>
-  ) : (
-    <div className="user-directory-card__name-chip">{profileInfo}</div>
+  const portrait = (
+    <div className="user-directory-card__portrait" aria-hidden={!profilePath}>
+      <div className="user-directory-card__portrait-shell">
+        <div className="user-directory-card__portrait-ring">
+          <div className="user-directory-card__portrait-photo">
+            {profilePath ? (
+              <Link
+                to={profilePath}
+                className="user-directory-card__avatar-link"
+                aria-label={displayName}
+                draggable={false}
+              >
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  className="user-directory-card__avatar"
+                  loading="lazy"
+                  draggable={false}
+                />
+              </Link>
+            ) : (
+              <img
+                src={avatarUrl}
+                alt=""
+                className="user-directory-card__avatar"
+                loading="lazy"
+                draggable={false}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 
   return (
-    <article className="user-directory-card" aria-label={displayName}>
+    <article
+      className={`user-directory-card user-directory-card--${styleId}`}
+      aria-label={displayName}
+      data-card-style={styleId}
+    >
       <div className="user-directory-card__media">
         <div className="user-directory-card__cover-bg" aria-hidden>
           {profilePath ? (
@@ -376,48 +417,13 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
           <div className="user-directory-card__cover-scrim" />
         </div>
 
-        <div className="user-directory-card__profile-column">
-          {nameChip}
-          <div className="user-directory-card__avatar-wrap">
-            {profilePath ? (
-              <Link
-                to={profilePath}
-                className="user-directory-card__avatar-link"
-                aria-label={displayName}
-                draggable={false}
-              >
-                <img
-                  src={avatarUrl}
-                  alt=""
-                  className="user-directory-card__avatar"
-                  loading="lazy"
-                  draggable={false}
-                />
-              </Link>
-            ) : (
-              <img
-                src={avatarUrl}
-                alt=""
-                className="user-directory-card__avatar"
-                loading="lazy"
-                draggable={false}
-              />
-            )}
-            {showPrivateInviteBadge ? (
-              <PrivateInviteProfileBadge
-                user={user}
-                currentUser={viewerProfile}
-                logoSrc="/db-logo-white.svg"
-                className="user-directory-card__private-invite"
-              />
-            ) : null}
-          </div>
-        </div>
+        {portrait}
 
         <div className="user-directory-card__overlay">
           <div className="user-directory-card__top-meta">
             {cityLabel ? (
               <AppText as="span" className="user-directory-card__city">
+                <FaMapMarkerAlt className="user-directory-card__city-icon" aria-hidden />
                 {cityLabel}
               </AppText>
             ) : null}
@@ -428,72 +434,98 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
               showLabel={false}
             />
           </div>
+
           <div className="user-directory-card__footer">
+            {profilePath ? (
+              <Link to={profilePath} className="user-directory-card__name-link" draggable={false}>
+                <AppText as="span" className="user-directory-card__name">
+                  {displayName}
+                  {ageLabel ? <span className="user-directory-card__age"> {ageLabel}</span> : null}
+                </AppText>
+              </Link>
+            ) : (
+              <AppText as="span" className="user-directory-card__name">
+                {displayName}
+                {ageLabel ? <span className="user-directory-card__age"> {ageLabel}</span> : null}
+              </AppText>
+            )}
+
             {bioText ? (
               <AppText as="p" className="user-directory-card__bio">{bioText}</AppText>
             ) : null}
+
             {!isSelf ? (
               <div className="user-directory-card__actions">
-              <button
-                type="button"
-                className="user-directory-card__action user-directory-card__action--gift"
-                onClick={handleGift}
-                title={t('user_directory_send_gift', 'Send gift')}
-                aria-label={t('user_directory_send_gift', 'Send gift')}
-              >
-                <FaGift className="user-directory-card__action-icon" aria-hidden />
-              </button>
-              <button
-                type="button"
-                className={`user-directory-card__action user-directory-card__action--greeting${greetedToday ? ' user-directory-card__action--greeted' : ''}`}
-                onClick={handleGreeting}
-                disabled={greetingBusy || greetedToday}
-                title={t('user_directory_greeting', 'Wave hi')}
-                aria-label={t('user_directory_greeting', 'Wave hi')}
-              >
-                <AppText as="span" className="user-directory-card__wave" aria-hidden>👋</AppText>
-              </button>
-              {useDatingLike ? (
+                {useDatingLike ? (
+                  <button
+                    type="button"
+                    className={`user-directory-card__action user-directory-card__action--like${liked ? ' user-directory-card__action--liked' : ' user-directory-card__action--like-idle'}`}
+                    onClick={handleToggleLike}
+                    disabled={likeBusy}
+                    title={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
+                    aria-label={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
+                    aria-pressed={liked}
+                  >
+                    <FaHeart className="user-directory-card__action-icon" aria-hidden />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={`user-directory-card__action user-directory-card__action--follow${isFollowingUser ? ' user-directory-card__action--following' : ''}`}
+                    onClick={handleFollow}
+                    disabled={followBusy}
+                    title={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
+                    aria-label={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
+                    aria-pressed={isFollowingUser}
+                  >
+                    {isFollowingUser ? (
+                      <FaUserCheck className="user-directory-card__action-icon" aria-hidden />
+                    ) : (
+                      <FaUserPlus className="user-directory-card__action-icon" aria-hidden />
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
-                  className={`user-directory-card__action user-directory-card__action--like${liked ? ' user-directory-card__action--liked' : ' user-directory-card__action--like-idle'}`}
-                  onClick={handleToggleLike}
-                  disabled={likeBusy}
-                  title={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
-                  aria-label={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
-                  aria-pressed={liked}
+                  className={`user-directory-card__action user-directory-card__action--greeting${greetedToday ? ' user-directory-card__action--greeted' : ''}`}
+                  onClick={handleGreeting}
+                  disabled={greetingBusy || greetedToday}
+                  title={t('user_directory_greeting', 'Wave hi')}
+                  aria-label={t('user_directory_greeting', 'Wave hi')}
                 >
-                  <FaHeart className="user-directory-card__action-icon" aria-hidden />
+                  <AppText as="span" className="user-directory-card__wave" aria-hidden>
+                    👋
+                  </AppText>
                 </button>
-              ) : (
                 <button
                   type="button"
-                  className={`user-directory-card__action user-directory-card__action--follow${isFollowingUser ? ' user-directory-card__action--following' : ''}`}
-                  onClick={handleFollow}
-                  disabled={followBusy}
-                  title={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
-                  aria-label={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
-                  aria-pressed={isFollowingUser}
+                  className="user-directory-card__action user-directory-card__action--gift"
+                  onClick={handleGift}
+                  title={t('user_directory_send_gift', 'Send gift')}
+                  aria-label={t('user_directory_send_gift', 'Send gift')}
                 >
-                  {isFollowingUser ? (
-                    <FaUserCheck className="user-directory-card__action-icon" aria-hidden />
-                  ) : (
-                    <FaUserPlus className="user-directory-card__action-icon" aria-hidden />
-                  )}
+                  <FaGift className="user-directory-card__action-icon" aria-hidden />
                 </button>
-              )}
-              {canChat ? (
-                <button
-                  type="button"
-                  className="user-directory-card__action user-directory-card__action--chat"
-                  onClick={handleOpenChat}
-                  title={t('chat', 'Chat')}
-                  aria-label={t('chat', 'Chat')}
-                >
-                  <FaComments className="user-directory-card__action-icon" aria-hidden />
-                </button>
-              ) : null}
-            </div>
+                {showPrivateInviteBadge ? (
+                  <PrivateInviteProfileBadge
+                    user={user}
+                    currentUser={viewerProfile}
+                    logoSrc="/db-logo-white.svg"
+                    className="user-directory-card__action user-directory-card__action--private-invite user-directory-card__private-invite"
+                  />
+                ) : null}
+                {canChat ? (
+                  <button
+                    type="button"
+                    className="user-directory-card__action user-directory-card__action--chat"
+                    onClick={handleOpenChat}
+                    title={t('chat', 'Chat')}
+                    aria-label={t('chat', 'Chat')}
+                  >
+                    <FaComments className="user-directory-card__action-icon" aria-hidden />
+                  </button>
+                ) : null}
+              </div>
             ) : null}
           </div>
         </div>

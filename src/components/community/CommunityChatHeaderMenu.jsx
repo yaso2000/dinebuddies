@@ -1,18 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaCheck, FaEllipsisV, FaPalette } from 'react-icons/fa';
+import { FaEllipsisV } from 'react-icons/fa';
 import { AppText } from '../base';
-import { CHAT_THEME_IDS, CHAT_THEMES } from '../../constants/chatThemes';
 import CommunityChatBannerToggle from './CommunityChatBannerToggle';
 import './CommunityChatHeaderMenu.css';
 
 /**
  * Overflow menu for community / stage chat header.
- * Keeps close + identity visible; themes, banner, and room actions live here.
+ * Keeps close + identity visible; banner and room actions live here.
+ * Bubble colors are controlled by the host Chat look tool, not this menu.
  */
 export default function CommunityChatHeaderMenu({
-  themeId,
-  onThemeChange,
   bannerChecked,
   bannerDisabled = false,
   bannerPersonal = false,
@@ -21,12 +19,10 @@ export default function CommunityChatHeaderMenu({
 }) {
   const { t, i18n } = useTranslation();
   const isRtl = i18n.dir() === 'rtl';
-  const isArabic = i18n.language?.toLowerCase().startsWith('ar');
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
 
   const menuLabel = t('community_chat_header_menu', 'Chat options');
-  const themesTitle = t('chat_theme_menu', isArabic ? 'اختر ثيم المحادثة' : 'Choose a chat theme');
 
   useEffect(() => {
     if (!open) return undefined;
@@ -82,47 +78,6 @@ export default function CommunityChatHeaderMenu({
               personal={bannerPersonal}
               onChange={onBannerChange}
             />
-          </div>
-
-          <div className="community-chat-header-menu__section">
-            <div className="community-chat-header-menu__section-title">
-              <FaPalette size={12} aria-hidden />
-              <AppText as="span" dir="auto">
-                {themesTitle}
-              </AppText>
-            </div>
-            <div className="community-chat-header-menu__theme-grid">
-              {CHAT_THEME_IDS.map((id) => {
-                const theme = CHAT_THEMES[id];
-                const selected = id === themeId;
-                const label = isArabic
-                  ? theme.labelAr || theme.labelDefault
-                  : t(theme.labelKey, theme.labelDefault);
-
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={selected}
-                    className={`community-chat-header-menu__theme${selected ? ' community-chat-header-menu__theme--active' : ''}`}
-                    onClick={() => onThemeChange?.(id)}
-                  >
-                    <span
-                      className="community-chat-header-menu__swatch"
-                      style={{ background: theme.swatch }}
-                      aria-hidden
-                    />
-                    <AppText as="span" className="community-chat-header-menu__theme-label" dir="auto">
-                      {label}
-                    </AppText>
-                    {selected ? (
-                      <FaCheck size={11} className="community-chat-header-menu__check" aria-hidden />
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
           </div>
 
           {visibleActions.length ? (

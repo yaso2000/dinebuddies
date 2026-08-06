@@ -8,10 +8,6 @@ import {
   resolveBannerGradientColors,
   sanitizeBannerBgDensity,
 } from '../utils/communityChatBanner';
-import {
-  COMMUNITY_GUEST_FRAME_BACKGROUND_PRESET_IDS,
-  getCommunityGuestFramePresetUrl,
-} from './communityGuestFrameBackgrounds';
 
 export {
   COMMUNITY_GUEST_FRAME_BACKGROUND_PRESETS,
@@ -59,7 +55,9 @@ export function resolveCommunityChatGuestFrameBgIntensity(partner) {
 
 function normalizeGuestFrameBackgroundMode(raw) {
   const mode = String(raw || 'color').trim().toLowerCase();
-  if (mode === 'none' || mode === 'preset' || mode === 'custom') return mode;
+  // Preset textures are retired — treat legacy `preset` as no image.
+  if (mode === 'preset') return 'none';
+  if (mode === 'none' || mode === 'custom') return mode;
   return 'color';
 }
 
@@ -70,17 +68,11 @@ export function getCommunityGuestFramePickerColorDefaults() {
   };
 }
 
-function resolveGuestFrameImageUrl(presetId, customUrl) {
-  if (presetId) return getCommunityGuestFramePresetUrl(presetId);
-  if (customUrl) return customUrl;
-  return null;
-}
-
 /**
  * @returns {{
- *   imageMode: 'none' | 'preset' | 'custom',
+ *   imageMode: 'none' | 'custom',
  *   colorOverlayEnabled: boolean,
- *   presetId: string | null,
+ *   presetId: null,
  *   customUrl: string | null,
  *   colorStart: string | null,
  *   colorEnd: string | null,
@@ -96,12 +88,7 @@ export function resolveCommunityChatGuestFrameBackground(partner) {
     readPartnerGuestFrameField(partner, 'communityChatGuestFrameBgMode')
   );
 
-  const presetRaw = readPartnerGuestFrameField(partner, 'communityChatGuestFrameBgPreset');
-  const presetId = String(presetRaw || '').trim().toLowerCase();
-  const safePresetId = COMMUNITY_GUEST_FRAME_BACKGROUND_PRESET_IDS.includes(presetId)
-    ? presetId
-    : null;
-
+  // AI / Storage URL only — never surface retired preset textures.
   const customRaw = readPartnerGuestFrameField(partner, 'communityChatGuestFrameBgUrl');
   const customUrl =
     typeof customRaw === 'string' && customRaw.trim() ? customRaw.trim() : null;
@@ -110,16 +97,8 @@ export function resolveCommunityChatGuestFrameBackground(partner) {
   const colorEnd = resolveCommunityChatGuestFrameBgColorEnd(partner);
   const intensity = resolveCommunityChatGuestFrameBgIntensity(partner);
 
-  let imageMode = 'none';
-  let imageUrl = null;
-
-  if (safePresetId) {
-    imageMode = 'preset';
-    imageUrl = resolveGuestFrameImageUrl(safePresetId, null);
-  } else if (customUrl) {
-    imageMode = 'custom';
-    imageUrl = customUrl;
-  }
+  const imageMode = customUrl ? 'custom' : 'none';
+  const imageUrl = customUrl;
 
   const colorOverlayEnabled =
     storedMode !== 'none' && Boolean(colorStart && colorEnd);
@@ -142,7 +121,7 @@ export function resolveCommunityChatGuestFrameBackground(partner) {
   return {
     imageMode,
     colorOverlayEnabled,
-    presetId: safePresetId,
+    presetId: null,
     customUrl,
     colorStart,
     colorEnd,
@@ -213,39 +192,32 @@ export function buildCommunityGuestFrameBackgroundStyle(background) {
 export function buildGuestFrameBackgroundFromDraft(guestFrame) {
   const gf = guestFrame || {};
   const defaults = getCommunityGuestFramePickerColorDefaults();
-  const imageMode = gf.imageMode || 'none';
-  let imageUrl = null;
-
-  if (imageMode === 'preset' && gf.presetId) {
-    imageUrl = getCommunityGuestFramePresetUrl(gf.presetId);
-  } else if (imageMode === 'custom' && gf.customUrl) {
-    imageUrl = gf.customUrl;
-  }
-
+  const customUrl =
+    gf.imageMode === 'custom' && gf.customUrl
+      ? String(gf.customUrl).trim()
+      : '';
+  const imageMode = customUrl ? 'custom' : 'none';
   const colorOverlayEnabled = gf.colorOverlayEnabled !== false;
 
   return {
     imageMode,
     colorOverlayEnabled,
-    presetId: gf.presetId || null,
-    customUrl: gf.customUrl || null,
+    presetId: null,
+    customUrl: customUrl || null,
     colorStart: gf.colorStart,
     colorEnd: gf.colorEnd,
     pickerColorStart: gf.colorStart || defaults.colorStart,
     pickerColorEnd: gf.colorEnd || defaults.colorEnd,
     intensity: gf.intensity ?? DEFAULT_INTENSITY,
-    imageUrl,
+    imageUrl: customUrl || null,
   };
 }
 
 export function createGuestFrameDraftFromResolved(resolved) {
   const gb = resolved || {};
-  let imageMode = gb.imageMode || 'none';
-  if (!gb.imageMode) {
-    if (gb.mode === 'preset' || gb.presetId) imageMode = 'preset';
-    else if (gb.mode === 'custom' || gb.customUrl || gb.imageUrl) imageMode = 'custom';
-    else imageMode = 'none';
-  }
+  const customUrl = String(gb.customUrl || gb.imageUrl || '').trim();
+  // Ignore legacy presets — AI / custom URL only.
+  const imageMode = customUrl ? 'custom' : 'none';
 
   const colorOverlayEnabled =
     gb.colorOverlayEnabled ??
@@ -254,11 +226,8 @@ export function createGuestFrameDraftFromResolved(resolved) {
   return {
     imageMode,
     colorOverlayEnabled,
-    presetId: gb.presetId || null,
-    customUrl:
-      imageMode === 'custom'
-        ? String(gb.customUrl || gb.imageUrl || '').trim() || null
-        : null,
+    presetId: null,
+    customUrl: imageMode === 'custom' ? customUrl : null,
     colorStart: gb.pickerColorStart || gb.colorStart || DEFAULT_COLOR_START,
     colorEnd: gb.pickerColorEnd || gb.colorEnd || DEFAULT_COLOR_END,
     intensity: gb.intensity ?? DEFAULT_INTENSITY,

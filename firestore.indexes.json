@@ -1,53 +1,39 @@
 {
     "indexes": [
         {
-            "collectionGroup": "conversations",
+            "collectionGroup": "business_motion_posts",
             "queryScope": "COLLECTION",
             "fields": [
                 {
-                    "fieldPath": "participants",
-                    "arrayConfig": "CONTAINS"
+                    "fieldPath": "ownerId",
+                    "order": "ASCENDING"
                 },
                 {
-                    "fieldPath": "lastMessageTime",
+                    "fieldPath": "businessId",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "business_motion_posts",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "publishedAt",
                     "order": "DESCENDING"
                 }
             ]
         },
         {
-            "collectionGroup": "conversations",
+            "collectionGroup": "cashout_requests",
             "queryScope": "COLLECTION",
             "fields": [
                 {
-                    "fieldPath": "participants",
-                    "arrayConfig": "CONTAINS"
-                },
-                {
-                    "fieldPath": "lastMessageAt",
-                    "order": "DESCENDING"
-                }
-            ]
-        },
-        {
-            "collectionGroup": "private_invitations",
-            "queryScope": "COLLECTION",
-            "fields": [
-                {
-                    "fieldPath": "invitedFriends",
-                    "arrayConfig": "CONTAINS"
-                },
-                {
-                    "fieldPath": "createdAt",
-                    "order": "DESCENDING"
-                }
-            ]
-        },
-        {
-            "collectionGroup": "private_invitations",
-            "queryScope": "COLLECTION",
-            "fields": [
-                {
-                    "fieldPath": "authorId",
+                    "fieldPath": "status",
                     "order": "ASCENDING"
                 },
                 {
@@ -57,21 +43,7 @@
             ]
         },
         {
-            "collectionGroup": "messages",
-            "queryScope": "COLLECTION_GROUP",
-            "fields": [
-                {
-                    "fieldPath": "read",
-                    "order": "ASCENDING"
-                },
-                {
-                    "fieldPath": "senderId",
-                    "order": "ASCENDING"
-                }
-            ]
-        },
-        {
-            "collectionGroup": "notifications",
+            "collectionGroup": "cashout_requests",
             "queryScope": "COLLECTION",
             "fields": [
                 {
@@ -113,67 +85,39 @@
             ]
         },
         {
-            "collectionGroup": "invitations",
+            "collectionGroup": "conversations",
             "queryScope": "COLLECTION",
             "fields": [
                 {
-                    "fieldPath": "author.id",
-                    "order": "ASCENDING"
+                    "fieldPath": "participants",
+                    "arrayConfig": "CONTAINS"
                 },
                 {
-                    "fieldPath": "date",
-                    "order": "ASCENDING"
-                }
-            ]
-        },
-        {
-            "collectionGroup": "invitations",
-            "queryScope": "COLLECTION",
-            "fields": [
-                {
-                    "fieldPath": "author.id",
-                    "order": "ASCENDING"
-                },
-                {
-                    "fieldPath": "createdAt",
-                    "order": "ASCENDING"
-                }
-            ]
-        },
-        {
-            "collectionGroup": "invitations",
-            "queryScope": "COLLECTION",
-            "fields": [
-                {
-                    "fieldPath": "inviteCategory",
-                    "order": "ASCENDING"
-                },
-                {
-                    "fieldPath": "status",
-                    "order": "ASCENDING"
-                }
-            ]
-        },
-        {
-            "collectionGroup": "invitation_archives",
-            "queryScope": "COLLECTION",
-            "fields": [
-                {
-                    "fieldPath": "hostId",
-                    "order": "ASCENDING"
-                },
-                {
-                    "fieldPath": "archivedAt",
+                    "fieldPath": "lastMessageAt",
                     "order": "DESCENDING"
                 }
             ]
         },
         {
-            "collectionGroup": "reviews",
+            "collectionGroup": "conversations",
             "queryScope": "COLLECTION",
             "fields": [
                 {
-                    "fieldPath": "partnerId",
+                    "fieldPath": "participants",
+                    "arrayConfig": "CONTAINS"
+                },
+                {
+                    "fieldPath": "lastMessageTime",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "credit_transactions",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "userId",
                     "order": "ASCENDING"
                 },
                 {
@@ -211,6 +155,104 @@
             ]
         },
         {
+            "collectionGroup": "invitation_archives",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "hostId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "archivedAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "invitations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "author.id",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "invitations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "author.id",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "date",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "invitations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "inviteCategory",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "messages",
+            "queryScope": "COLLECTION_GROUP",
+            "fields": [
+                {
+                    "fieldPath": "read",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "senderId",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "messages",
+            "queryScope": "COLLECTION_GROUP",
+            "fields": [
+                {
+                    "fieldPath": "retentionScope",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "expiresAt",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "notifications",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "userId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
             "collectionGroup": "partnerStories",
             "queryScope": "COLLECTION",
             "fields": [
@@ -229,6 +271,194 @@
             ]
         },
         {
+            "collectionGroup": "payout_requests",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "agentUid",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "private_invitations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "authorId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "private_invitations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "invitedFriends",
+                    "arrayConfig": "CONTAINS"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "profile_gifts",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "recipientId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "public_profiles",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "profileType",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "businessPublic.isPublished",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "search.displayNameLower",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "public_profiles",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "profileType",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "businessPublic.isPublished",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "updatedAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "public_profiles",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "profileType",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "search.displayNameLower",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "public_profiles",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "profileType",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "searchable",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "accountRole",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "updatedAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "public_profiles",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "profileType",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "updatedAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "reviews",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "partnerId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "social_invitations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "authorId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "social_invitations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "invitedFriends",
+                    "arrayConfig": "CONTAINS"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
             "collectionGroup": "users",
             "queryScope": "COLLECTION",
             "fields": [
@@ -239,10 +469,6 @@
                 {
                     "fieldPath": "banned",
                     "order": "ASCENDING"
-                },
-                {
-                    "fieldPath": "__name__",
-                    "order": "ASCENDING"
                 }
             ]
         },
@@ -250,93 +476,28 @@
             "collectionGroup": "users",
             "queryScope": "COLLECTION",
             "fields": [
-                { "fieldPath": "role", "order": "ASCENDING" },
-                { "fieldPath": "lastSeen", "order": "DESCENDING" }
+                {
+                    "fieldPath": "role",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "created_time",
+                    "order": "DESCENDING"
+                }
             ]
         },
         {
             "collectionGroup": "users",
             "queryScope": "COLLECTION",
             "fields": [
-                { "fieldPath": "role", "order": "ASCENDING" },
-                { "fieldPath": "created_time", "order": "DESCENDING" }
-            ]
-        },
-        {
-            "collectionGroup": "public_profiles",
-            "queryScope": "COLLECTION",
-            "fields": [
-                { "fieldPath": "profileType", "order": "ASCENDING" },
-                { "fieldPath": "searchable", "order": "ASCENDING" },
-                { "fieldPath": "accountRole", "order": "ASCENDING" },
-                { "fieldPath": "updatedAt", "order": "DESCENDING" }
-            ]
-        },
-        {
-            "collectionGroup": "public_profiles",
-            "queryScope": "COLLECTION",
-            "fields": [
-                { "fieldPath": "profileType", "order": "ASCENDING" },
-                { "fieldPath": "updatedAt", "order": "DESCENDING" }
-            ]
-        },
-        {
-            "collectionGroup": "public_profiles",
-            "queryScope": "COLLECTION",
-            "fields": [
-                { "fieldPath": "profileType", "order": "ASCENDING" },
-                { "fieldPath": "businessPublic.isPublished", "order": "ASCENDING" },
-                { "fieldPath": "updatedAt", "order": "DESCENDING" }
-            ]
-        },
-        {
-            "collectionGroup": "public_profiles",
-            "queryScope": "COLLECTION",
-            "fields": [
-                { "fieldPath": "profileType", "order": "ASCENDING" },
-                { "fieldPath": "search.displayNameLower", "order": "ASCENDING" }
-            ]
-        },
-        {
-            "collectionGroup": "public_profiles",
-            "queryScope": "COLLECTION",
-            "fields": [
-                { "fieldPath": "profileType", "order": "ASCENDING" },
-                { "fieldPath": "businessPublic.isPublished", "order": "ASCENDING" },
-                { "fieldPath": "search.displayNameLower", "order": "ASCENDING" }
-            ]
-        },
-        {
-            "collectionGroup": "payout_requests",
-            "queryScope": "COLLECTION",
-            "fields": [
-                { "fieldPath": "agentUid", "order": "ASCENDING" },
-                { "fieldPath": "createdAt", "order": "DESCENDING" }
-            ]
-        },
-        {
-            "collectionGroup": "business_motion_posts",
-            "queryScope": "COLLECTION",
-            "fields": [
-                { "fieldPath": "ownerId", "order": "ASCENDING" },
-                { "fieldPath": "businessId", "order": "ASCENDING" }
-            ]
-        },
-        {
-            "collectionGroup": "business_motion_posts",
-            "queryScope": "COLLECTION",
-            "fields": [
-                { "fieldPath": "status", "order": "ASCENDING" },
-                { "fieldPath": "publishedAt", "order": "DESCENDING" }
-            ]
-        },
-        {
-            "collectionGroup": "profile_gifts",
-            "queryScope": "COLLECTION",
-            "fields": [
-                { "fieldPath": "recipientId", "order": "ASCENDING" },
-                { "fieldPath": "status", "order": "ASCENDING" },
-                { "fieldPath": "createdAt", "order": "DESCENDING" }
+                {
+                    "fieldPath": "role",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "lastSeen",
+                    "order": "DESCENDING"
+                }
             ]
         }
     ],

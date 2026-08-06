@@ -2566,7 +2566,7 @@ select.input-field {
   display: flex;
   flex-direction: column;
   width: 100%;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 1 / 1;
   margin-bottom: 16px;
   border-radius: 18px;
   overflow: hidden;
@@ -2581,6 +2581,44 @@ select.input-field {
   transform: translateY(-2px);
   box-shadow: 0 14px 34px rgba(2, 6, 23, 0.42);
   border-color: rgba(232, 110, 46, 0.35);
+}
+
+.directory-page .restaurant-list-card__footer-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+
+.directory-page .restaurant-list-card__footer-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(15, 23, 42, 0.28);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.directory-page .restaurant-list-card__footer-btn--host {
+  background: rgba(15, 23, 42, 0.45);
+  border-color: rgba(255, 237, 213, 0.45);
+  color: #ffedd5;
+}
+
+.directory-page .restaurant-list-card__footer-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .directory-page .restaurant-list-card:focus-visible {
@@ -2966,7 +3004,7 @@ select.input-field {
 }
 
 .directory-page .restaurant-grid-card__footer {
-  padding: 10px 8px 12px;
+  padding: 8px 8px 10px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -2974,27 +3012,72 @@ select.input-field {
   gap: 8px;
 }
 
-.directory-page .restaurant-grid-card__host-btn {
+.directory-page .restaurant-grid-card__footer-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+}
+
+.directory-page .restaurant-grid-card__footer-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  width: 100%;
+  gap: 5px;
   min-height: 34px;
   padding: 6px 8px;
   border-radius: 11px;
-  border: 1px solid rgba(253, 186, 116, 0.38);
-  background: rgba(15, 23, 42, 0.88);
-  color: #ffedd5;
-  font-size: 0.72rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.92);
+  color: #f1f5f9;
+  font-size: 0.68rem;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
-.directory-page .restaurant-grid-card__host-btn:hover {
-  background: rgba(232, 110, 46, 0.22);
-  border-color: rgba(253, 186, 116, 0.55);
+.directory-page .restaurant-grid-card__footer-btn:hover:not(:disabled) {
+  background: rgba(30, 41, 59, 0.98);
+  border-color: rgba(232, 110, 46, 0.45);
+}
+
+.directory-page .restaurant-grid-card__footer-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.directory-page .restaurant-grid-card__footer-btn--join,
+.directory-page .restaurant-grid-card__footer-btn--chat {
+  color: #fdba74;
+  border-color: rgba(253, 186, 116, 0.4);
+}
+
+.directory-page .restaurant-grid-card__footer-btn--like {
+  flex: 0 0 38px;
+  padding: 6px;
+  color: #fff;
+}
+
+.directory-page .restaurant-grid-card__footer-btn--like.is-liked {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.directory-page .restaurant-grid-card__footer-btn--host {
+  flex: 0 0 38px;
+  padding: 6px;
+  color: #ffedd5;
+  border-color: rgba(253, 186, 116, 0.45);
+  background: rgba(232, 110, 46, 0.18);
+}
+
+.directory-page .restaurant-grid-card__footer-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .directory-page .restaurant-grid-card__name-btn {
@@ -3256,30 +3339,38 @@ select.input-field {
 }
 
 @media (min-width: 1024px) {
+  /* Partners directory: fill the full center column (no side gutters) */
+  .directory-page {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
   .directory-page .restaurant-list--grid {
     gap: 16px;
-    max-width: 720px;
-    margin-inline: auto;
+    width: 100%;
+    max-width: 100%;
+    margin-inline: 0;
   }
-}
 
-/* Partners directory + feed business cards: ~25% smaller on desktop */
-@media (min-width: 1024px) {
   .directory-page .restaurant-list--list {
-    align-items: center !important;
+    align-items: stretch !important;
     gap: 18px !important;
+    width: 100%;
+    max-width: 100%;
   }
 
   .directory-page .restaurant-list--list .restaurant-card {
-    width: 75% !important;
-    max-width: 75% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-inline: 0 !important;
     margin-bottom: 0 !important;
   }
 
   .home-page .feed-list .business-ad-card.smart-invitation-card {
-    width: 75% !important;
-    max-width: 75% !important;
-    margin-inline: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-inline: 0 !important;
   }
 }
 
@@ -6080,7 +6171,8 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     border-right: 1px solid var(--border-color);
     display: flex !important;
     flex-direction: column !important;
-    align-items: center !important;
+    /* Stretch to fill the grid track — no empty gutters beside sidebars */
+    align-items: stretch !important;
   }
 
   /* Center column width comes from grid; children fill it (no second max-width stack) */
@@ -6090,6 +6182,7 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     min-width: 0 !important;
     box-sizing: border-box !important;
     flex: 0 0 auto !important;
+    align-self: stretch !important;
   }
 
   .app-main--admin > * {
@@ -6137,27 +6230,32 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     max-width: 100% !important;
   }
 
-  /* Undo page-container mobile width constraint */
+  /* Undo page-container mobile width constraint — fill center column edge-to-edge */
   .app-main .page-container {
     padding: 1rem !important;
     max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
 
-  /* Public invitations on desktop: 100px side gutters */
+  /* Invitations / home feed: same full-width as other desktop pages (no side gutters) */
+  .home-page,
   .home-page .feed-list {
-    padding-inline: 100px;
+    width: 100%;
+    max-width: 100%;
     box-sizing: border-box;
   }
 
-  .app-main .page-container.details-page {
-    padding-inline: 100px !important;
-    box-sizing: border-box;
+  .home-page .feed-list {
+    padding-inline: 0.75rem;
   }
 
+  .app-main .page-container.details-page,
   .app-main .page-container.invitation-preview-page {
-    padding-inline: 100px !important;
+    padding-inline: 1rem !important;
     max-width: 100% !important;
-    box-sizing: border-box;
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
 
   /* ── Column 3: Right widgets (scrolls independently) ── */
@@ -6299,6 +6397,66 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
+  }
+
+  .ds-featured-biz-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .ds-featured-biz-thumb {
+    position: relative;
+    aspect-ratio: 1;
+    padding: 0;
+    border: none;
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--bg-input);
+    transition: opacity 0.15s, transform 0.15s;
+  }
+
+  .ds-featured-biz-thumb:hover {
+    opacity: 0.88;
+    transform: scale(1.02);
+  }
+
+  .ds-featured-biz-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .ds-featured-biz-thumb--skeleton {
+    cursor: default;
+    animation: ds-widget-shimmer 1.2s ease-in-out infinite;
+    background: linear-gradient(
+      90deg,
+      var(--bg-input) 0%,
+      var(--hover-overlay) 50%,
+      var(--bg-input) 100%
+    );
+    background-size: 200% 100%;
+  }
+
+  .ds-featured-biz-thumb--paid {
+    box-shadow: inset 0 0 0 1px rgba(234, 179, 8, 0.45);
+  }
+
+  .ds-featured-biz-thumb__badge {
+    position: absolute;
+    top: 6px;
+    inset-inline-start: 6px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: #1c1917;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
   }
 
   .ds-invitation-thumb {
@@ -6532,6 +6690,10 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
 
 .business-create-option__icon--dating {
   background: linear-gradient(145deg, #be185d 0%, #ec4899 55%, #fb7185 100%);
+}
+
+.business-create-option__icon--stage {
+  background: linear-gradient(145deg, #0e7490 0%, #0891b2 55%, #22d3ee 100%);
 }
 
 .business-create-option__text {

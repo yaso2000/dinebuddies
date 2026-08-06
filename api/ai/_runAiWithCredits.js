@@ -1,5 +1,6 @@
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { spendCreditsInTransaction, isBusinessUserDoc } from '../_dineCredits.js';
+import { planAiCreditRefund } from '../_dineCreditsSpendMath.js';
 import { ensureFirebaseAdmin } from '../_firebaseAdmin.js';
 import { resolveCreditCost, resolveLedgerAiType } from './aiCredits.js';
 
@@ -32,11 +33,13 @@ export async function spendAiCredits(uid, opts) {
                 amount: creditCost,
                 type: aiType,
                 reason: `ai_generate_${opts.reasonSuffix || opts.postType || opts.generationPackage || 'text'}`,
+                allowSavedCredits: true,
             });
             return {
                 ok: true,
                 freeUsed: spent.freeUsed,
                 paidUsed: spent.paidUsed,
+                savedUsed: spent.savedUsed,
                 userData,
                 creditCost,
             };
@@ -54,15 +57,25 @@ export async function spendAiCredits(uid, opts) {
 /**
  * @param {import('firebase-admin/firestore').Firestore} db
  * @param {import('firebase-admin/firestore').DocumentReference} userRef
- * @param {{ freeUsed: number, paidUsed: number } | null} charged
+ * @param {{ freeUsed?: number, paidUsed?: number, savedUsed?: number } | null} charged
  */
 export async function refundAiCredits(db, userRef, charged) {
-    if (!charged || charged.paidUsed <= 0) {
+    const planned = planAiCreditRefund(charged);
+    if (!planned.shouldRefund) {
         return;
     }
 
-    await userRef.update({
-        paidCredits: FieldValue.increment(charged.paidUsed),
+    /** @type {Record<string, unknown>} */
+    const patch = {
         updatedAt: FieldValue.serverTimestamp(),
-    });
+    };
+    // Failsafe: restore exact wallets used. Never touch totalSavedCreditsEarned.
+    if (planned.paidUsed > 0) {
+        patch.paidCredits = FieldValue.increment(planned.paidUsed);
+    }
+    if (planned.savedUsed > 0) {
+        patch.savedCredits = FieldValue.increment(planned.savedUsed);
+    }
+
+    await userRef.update(patch);
 }

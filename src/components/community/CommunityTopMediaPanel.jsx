@@ -1,6 +1,6 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaGift, FaImage, FaTimes } from 'react-icons/fa';
+import { FaGift, FaImage, FaSync, FaTimes } from 'react-icons/fa';
 import { AppText } from '../base';
 import CommunityHostBannerComposerTools from './CommunityHostBannerComposerTools';
 import CommunityBannerDraggableTitle from './CommunityBannerDraggableTitle';
@@ -10,7 +10,16 @@ import CommunityBannerYoutubeBackground from './CommunityBannerYoutubeBackground
 import CommunityBannerYoutubeMemberSound from './CommunityBannerYoutubeMemberSound';
 import CommunityBannerYoutubeHostControls from './CommunityBannerYoutubeHostControls';
 import CommunityHostBannerMessages from './CommunityHostBannerMessages';
+import CommunityBannerVoiceBroadcast from './CommunityBannerVoiceBroadcast';
 import { buildBannerSpotlightViews } from '../../utils/communityHostSpotlightPins';
+import {
+  computeYoutubeMemberStartSec,
+  hasYoutubeBannerMedia,
+  postYoutubeEmbedListening,
+  syncMemberYoutubeToHost,
+  syncYoutubeEmbedPlayback,
+} from '../../utils/videoEmbedUtils';
+import { BANNER_VOICE_AUDIO_PRIORITY_EVENT } from '../../utils/bannerVoiceAudioPriority';
 
 /** Top media strip — 16:9 banner + host tools. */
 export default function CommunityTopMediaPanel({ room, bannerExpanded = false, bannerMediaActive = true }) {
@@ -26,6 +35,8 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
     pendingReplyTo,
     setBannerYoutube,
     clearBannerImage,
+    clearBannerVoice,
+    setBannerVoiceLoop,
     unpinHostMessage,
     hideMessageFromBanner,
     updateHostSpotlightPosition,
@@ -60,24 +71,78 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
   const memberYtIframeRef = useRef(null);
   const hostYtIframeRef = useRef(null);
   const [memberYtReady, setMemberYtReady] = useState(false);
+  const bannerRef = useRef(banner);
+  bannerRef.current = banner;
 
-  const hasCustomBannerImage = Boolean(String(banner.url || '').trim()) && !banner.youtubeId;
+  const hasYoutube = hasYoutubeBannerMedia(banner);
+  const hasCustomBannerImage = Boolean(String(banner.url || '').trim()) && !hasYoutube;
   const showCornerDelete =
-    isHost && bannerMediaActive && (Boolean(banner.youtubeId) || hasCustomBannerImage);
+    isHost && bannerMediaActive && (hasYoutube || hasCustomBannerImage);
+
+  // Voice recording/playback auto-pauses YouTube for host + guests; host resumes manually (Sync).
+  useEffect(() => {
+    if (!isHost || typeof room.syncYoutubePlayback !== 'function') return undefined;
+
+    const onVoicePriority = (event) => {
+      const active = Boolean(event?.detail?.active);
+      if (!active) return;
+      const current = bannerRef.current;
+      if (!hasYoutubeBannerMedia(current)) return;
+
+      const at = current.youtubeLive
+        ? 0
+        : computeYoutubeMemberStartSec(current.youtubeSyncAt, {
+            positionSec: current.youtubePositionSec,
+            paused: Boolean(current.youtubePaused),
+            isLive: Boolean(current.youtubeLive),
+          });
+
+      // Pause host iframe immediately (don't wait for Firestore round-trip).
+      const iframe = hostYtIframeRef.current;
+      if (iframe) {
+        postYoutubeEmbedListening(iframe);
+        syncYoutubeEmbedPlayback(iframe, at, { paused: true });
+      }
+
+      if (!current.youtubePaused || Number(current.youtubePositionSec) !== at) {
+        void room.syncYoutubePlayback({ paused: true, positionSec: at });
+      }
+    };
+
+    window.addEventListener(BANNER_VOICE_AUDIO_PRIORITY_EVENT, onVoicePriority);
+    return () => {
+      window.removeEventListener(BANNER_VOICE_AUDIO_PRIORITY_EVENT, onVoicePriority);
+    };
+  }, [isHost, room]);
 
   const handleMemberVideoReady = useCallback((ready) => {
     setMemberYtReady(Boolean(ready));
   }, []);
 
+  const handleGuestYoutubeSync = useCallback(
+    (event) => {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      const iframe = memberYtIframeRef.current;
+      if (!iframe || !hasYoutubeBannerMedia(banner)) return;
+      syncMemberYoutubeToHost(iframe, banner.youtubeSyncAt, {
+        positionSec: banner.youtubePositionSec,
+        paused: Boolean(banner.youtubePaused),
+        isLive: Boolean(banner.youtubeLive),
+      });
+    },
+    [banner]
+  );
+
   const handleDeleteBannerMedia = useCallback(() => {
-    if (banner.youtubeId) {
+    if (hasYoutube) {
       void setBannerYoutube('');
       return;
     }
     if (hasCustomBannerImage) {
       void clearBannerImage();
     }
-  }, [banner.youtubeId, clearBannerImage, hasCustomBannerImage, setBannerYoutube]);
+  }, [clearBannerImage, hasCustomBannerImage, hasYoutube, setBannerYoutube]);
 
   const handleTitleMove = useCallback(
     (x, y) => updateBanner({ titleX: x, titleY: y }),
@@ -140,7 +205,11 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
           isYoutube ? (
             <CommunityBannerYoutubeBackground
               videoId={bannerDisplay.youtubeId}
+              playlistId={bannerDisplay.youtubePlaylistId}
               isShort={bannerDisplay.youtubeShort}
+              isLive={bannerDisplay.youtubeLive}
+              paused={banner.youtubePaused}
+              positionSec={banner.youtubePositionSec}
               isHost={isHost}
               syncAtMs={banner.youtubeSyncAt}
               playbackEnabled={bannerMediaActive}
@@ -198,12 +267,12 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
             type="button"
             className="community-banner-corner-delete"
             aria-label={
-              banner.youtubeId
+              hasYoutube
                 ? t('community_banner_delete_youtube', 'Remove video')
                 : t('community_banner_delete_image', 'Remove banner image')
             }
             title={
-              banner.youtubeId
+              hasYoutube
                 ? t('community_banner_delete_youtube', 'Remove video')
                 : t('community_banner_delete_image', 'Remove banner image')
             }
@@ -261,6 +330,23 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
           />
         ) : null}
 
+        {banner.voiceUrl || isHost ? (
+          <CommunityBannerVoiceBroadcast
+            voiceUrl={banner.voiceUrl}
+            voiceUpdatedAt={banner.voiceUpdatedAt}
+            voiceDurationSec={banner.voiceDurationSec}
+            voiceLoop={Boolean(banner.voiceLoop)}
+            isHost={isHost}
+            playbackEnabled={bannerMediaActive}
+            onClear={isHost ? () => clearBannerVoice?.() : undefined}
+            onToggleLoop={
+              isHost && typeof setBannerVoiceLoop === 'function'
+                ? (loop) => setBannerVoiceLoop(loop)
+                : undefined
+            }
+          />
+        ) : null}
+
         {isHost && bannerMediaActive ? (
           <CommunityHostBannerComposerTools room={room} layout="banner-rail" />
         ) : null}
@@ -268,17 +354,37 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
           <CommunityBannerYoutubeHostControls
             iframeRef={hostYtIframeRef}
             syncAtMs={banner.youtubeSyncAt}
+            positionSec={banner.youtubePositionSec}
+            paused={banner.youtubePaused}
+            isLive={banner.youtubeLive}
             onPlaybackSync={room.syncYoutubePlayback}
             visible
           />
         ) : null}
         {!isHost && isYoutube && bannerMediaActive ? (
-          <CommunityBannerYoutubeMemberSound
-            iframeRef={memberYtIframeRef}
-            videoId={bannerDisplay.youtubeId}
-            syncAtMs={banner.youtubeSyncAt}
-            visible={memberYtReady}
-          />
+          <>
+            <CommunityBannerYoutubeMemberSound
+              iframeRef={memberYtIframeRef}
+              videoId={bannerDisplay.youtubeId}
+              playlistId={bannerDisplay.youtubePlaylistId}
+              syncAtMs={banner.youtubeSyncAt}
+              positionSec={banner.youtubePositionSec}
+              paused={banner.youtubePaused}
+              isLive={banner.youtubeLive}
+              visible={memberYtReady || hasYoutube}
+            />
+            <button
+              type="button"
+              className="community-main-chat__banner-youtube-guest-sync-btn"
+              onClick={handleGuestYoutubeSync}
+              onPointerDown={(event) => event.stopPropagation()}
+              aria-label={t('community_banner_youtube_guest_sync', 'Tap to sync with the host')}
+              title={t('community_banner_youtube_guest_sync', 'Tap to sync with the host')}
+            >
+              <FaSync size={14} aria-hidden />
+              <AppText as="span">{t('community_banner_youtube_guest_sync_short', 'Sync')}</AppText>
+            </button>
+          </>
         ) : null}
         {canGiftHost ? (
           <button

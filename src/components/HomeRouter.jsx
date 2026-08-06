@@ -4,37 +4,29 @@ import AppShellLoading from '../components/AppShellLoading';
 import AppEntryIntro, { hasCompletedAppEntryIntro } from '../pages/AppEntryIntro';
 import { useAuth } from '../context/AuthContext';
 import { resolveSignedInHomePath } from '../utils/accountKind';
-import { canConsumerEnterApp } from '../utils/consumerProfileComplete';
 import { peekPostLogoutRedirect } from '../utils/localDevAuth';
 
-function isDesktopShell() {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(min-width: 1024px)').matches;
-}
-
-/** `/` — entry intro for guests; signed-in users go to their home path. */
+/** `/` — entry intro for guests; signed-in users go to their home path once. */
 const HomeRouter = () => {
-    const { currentUser, userProfile, profileServerSynced, isGuest } = useAuth();
+    const { currentUser, userProfile, profileServerSynced, isGuest, loading } = useAuth();
 
     if (peekPostLogoutRedirect()) {
         return <Navigate to="/login" replace />;
     }
 
-    if (currentUser && userProfile && !isGuest) {
-        // Partial cache often looks incomplete; don't bounce to /complete-profile yet.
-        if (!canConsumerEnterApp(userProfile) && !profileServerSynced) {
-            if (!isDesktopShell()) {
-                return <Navigate to="/posts-feed" replace />;
-            }
+    // Single settle — never soft-hop to /posts-feed before identity is known
+    // (that caused business sessions to flash the consumer feed then bounce).
+    if (currentUser && !isGuest) {
+        if (loading || !profileServerSynced) {
             return <AppShellLoading variant="profile" />;
         }
-        return <Navigate to={resolveSignedInHomePath(currentUser, userProfile, { isGuest })} replace />;
-    }
-
-    // Never park mobile on a full-viewport black loading screen while profile hydrates.
-    if (currentUser && !userProfile && !isGuest) {
-        if (!isDesktopShell()) {
-            return <Navigate to="/posts-feed" replace />;
+        if (userProfile) {
+            return (
+                <Navigate
+                    to={resolveSignedInHomePath(currentUser, userProfile, { isGuest })}
+                    replace
+                />
+            );
         }
         return <AppShellLoading variant="profile" />;
     }

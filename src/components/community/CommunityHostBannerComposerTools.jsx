@@ -1,32 +1,48 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { FaAlignLeft, FaBold, FaBullhorn, FaHeading, FaImage, FaItalic, FaLink, FaPalette, FaTh, FaTimes, FaTrash, FaYoutube } from 'react-icons/fa';
+import {
+  FaBold,
+  FaBullhorn,
+  FaEye,
+  FaEyeSlash,
+  FaFont,
+  FaHeading,
+  FaImage,
+  FaItalic,
+  FaMicrophone,
+  FaPalette,
+  FaStop,
+  FaTimes,
+  FaTrash,
+  FaYoutube,
+} from 'react-icons/fa';
+import { formatDuration, startRecording } from '../../utils/mediaUtils';
+import { dispatchBannerVoiceLocalPlay } from '../../utils/bannerVoiceLocalPlay';
+import { setBannerVoiceAudioPriority } from '../../utils/bannerVoiceAudioPriority';
+import { useToast } from '../../context/ToastContext';
 import { AppText, AppTextInput } from '../base';
 import UnifiedCamera from '../UnifiedCamera';
 import {
   BANNER_BG_PRESETS,
   BANNER_BG_TRANSPARENT,
-  BANNER_BODY_BUTTON_INDEX,
   BANNER_BODY_SLOT_COUNT,
   BANNER_BODY_TEXT_INDEX,
   BANNER_TEXT_MAX_TOTAL,
   BANNER_TITLE_FONT_FAMILIES,
+  BANNER_VOICE_MAX_DURATION_SEC,
   DEFAULT_BANNER_BG,
   DEFAULT_BANNER_BG2,
   DEFAULT_BANNER_BG_DENSITY,
-  DEFAULT_BANNER_BUTTON_BG,
   DEFAULT_BANNER_FONT_SIZE,
   DEFAULT_BANNER_TITLE_FONT_SIZE,
   clampBannerBodySlotText,
   createDefaultBannerBodySlot,
   createDefaultBannerTitleStyle,
-  hasBannerBodyButton,
   hasBannerBodyPlainText,
   isBannerBgTransparent,
   resolveBannerBackgroundStyle,
   resolveBannerBodyInlineStyle,
-  resolveBannerButtonInlineStyle,
   resolveBannerFontFamilyCss,
   resolveBannerFontSizeCss,
   resolveBannerTitleFontSizeCss,
@@ -35,7 +51,6 @@ import {
   sanitizeBannerBorderWidth,
   sanitizeBannerFontFamily,
   sanitizeBannerHexColor,
-  sanitizeBannerLinkUrl,
   sanitizeBannerTextColor,
   sanitizeBannerTextMaxWidth,
   sumBannerBodyChars,
@@ -133,6 +148,19 @@ const KEYBOARD_OPEN_THRESHOLD_PX = 100;
 function BannerToolModal({ title, titleId, onClose, children, footer, headerActions }) {
   const overlayRef = useRef(null);
   const bodyRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const handleClose = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    // Blur focused inputs so iOS keyboard does not trap the next tap.
+    const active = document.activeElement;
+    if (active && typeof active.blur === 'function' && overlayRef.current?.contains(active)) {
+      active.blur();
+    }
+    onCloseRef.current?.();
+  };
 
   // Keep the sheet inside the visible viewport above the iOS/Android keyboard
   useEffect(() => {
@@ -207,6 +235,17 @@ function BannerToolModal({ title, titleId, onClose, children, footer, headerActi
     return () => body.removeEventListener('focusin', onFocusIn);
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        handleClose(event);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   if (typeof document === 'undefined') return null;
 
   return createPortal(
@@ -216,9 +255,18 @@ function BannerToolModal({ title, titleId, onClose, children, footer, headerActi
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      onClick={onClose}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) handleClose(event);
+      }}
+      onTouchStart={(event) => {
+        if (event.target === event.currentTarget) handleClose(event);
+      }}
     >
-      <div className="community-banner-modal__panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="community-banner-modal__panel"
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
         <div className="community-banner-modal__head">
           <AppText as="h2" id={titleId} className="community-banner-modal__title">
             {title}
@@ -227,11 +275,11 @@ function BannerToolModal({ title, titleId, onClose, children, footer, headerActi
             {headerActions}
             <button
               type="button"
-              className="community-main-chat__attach-btn"
+              className="community-banner-modal__close"
               aria-label="Close"
-              onClick={onClose}
+              onClick={handleClose}
             >
-              <FaTimes size={16} />
+              <FaTimes size={16} aria-hidden />
             </button>
           </div>
         </div>
@@ -348,7 +396,24 @@ function BannerPreviewStrip({
 /** Host-only banner tools — image + title + body + background + templates (vertical rail on banner). */
 export default function CommunityHostBannerComposerTools({ room, layout = 'banner-rail' }) {
   const { t } = useTranslation();
-  const { banner, bannerDisplay, uploadingBanner, setBannerImage, setBannerYoutube, updateBanner, setHostSpotlightAuto, zoneThemeId, saveCommunityChatZoneThemeSettings, zoneThemeSaving, guestFrameBackground, uploadCommunityChatGuestFrameBackgroundFile, generateCommunityChatGuestFrameBackgroundImage, guestFrameBackgroundUploading, guestFrameBackgroundGenerating } = room;
+  const { showToast } = useToast();
+  const {
+    banner,
+    bannerDisplay,
+    uploadingBanner,
+    setBannerImage,
+    clearBannerImage,
+    setBannerYoutube,
+    setBannerVoice,
+    updateBanner,
+    setHostSpotlightAuto,
+    zoneThemeId,
+    saveCommunityChatZoneThemeSettings,
+    zoneThemeSaving,
+    guestFrameBackground,
+    generateCommunityChatGuestFrameBackgroundImage,
+    guestFrameBackgroundGenerating,
+  } = room;
 
   const bannerForPreview = {
     ...banner,
@@ -371,15 +436,36 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
   const [zoneThemeDraft, setZoneThemeDraft] = useState(null);
   const [zoneThemeSavedSnapshot, setZoneThemeSavedSnapshot] = useState(null);
   const [zoneThemeLeaveOpen, setZoneThemeLeaveOpen] = useState(false);
+  const [voiceRecording, setVoiceRecording] = useState(false);
+  const [voiceRecordingSec, setVoiceRecordingSec] = useState(0);
+  const [voicePublishing, setVoicePublishing] = useState(false);
+  const [hostToolsVisible, setHostToolsVisible] = useState(() => {
+    try {
+      return localStorage.getItem('db-host-banner-tools-visible') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const voiceStopRef = useRef(null);
+  const voiceTimerRef = useRef(null);
+  const voiceDurationRef = useRef(0);
+  const voiceAutoStopRef = useRef(false);
+  const stopVoiceRecordingRef = useRef(async () => {});
 
   const parsedYoutubeDraft = parseYoutubeLink(youtubeDraft);
   const youtubePreviewId =
     parsedYoutubeDraft?.id ||
     sanitizeYoutubeVideoId(youtubeDraft) ||
     sanitizeYoutubeVideoId(banner.youtubeId);
+  const youtubePreviewPlaylistId =
+    parsedYoutubeDraft?.playlistId || banner.youtubePlaylistId || '';
+  const youtubePreviewReady = Boolean(youtubePreviewId || youtubePreviewPlaylistId);
 
   const isTransparentBg = isBannerBgTransparent(bgColorDraft);
-  const hasCustomBannerImage = Boolean(String(banner.url || '').trim()) && !banner.youtubeId;
+  const hasYoutubeBanner = Boolean(banner.youtubeId || banner.youtubePlaylistId);
+  const hasCustomBannerImage = Boolean(String(banner.url || '').trim()) && !hasYoutubeBanner;
+  const hasBannerBackgroundTool =
+    hasCustomBannerImage || Boolean(banner.hasBackground && !banner.transparent);
 
   const readBgFromBanner = () => {
     if (banner.transparent) {
@@ -419,19 +505,6 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
     setActiveModal('bodyText');
   };
 
-  const openButtonModal = () => {
-    const slotIndex = BANNER_BODY_BUTTON_INDEX;
-    const slot = (banner.texts || [])[slotIndex] || createDefaultBannerBodySlot(slotIndex);
-    setEditingBodySlot(slotIndex);
-    setBodySlotDraft({
-      ...createDefaultBannerBodySlot(slotIndex),
-      ...slot,
-      mode: 'link',
-      buttonBg: sanitizeBannerTextColor(slot.buttonBg, DEFAULT_BANNER_BUTTON_BG),
-    });
-    setActiveModal('bodyButton');
-  };
-
   const openBackgroundModal = () => {
     setTitleDraft(banner.title || '');
     const bg = readBgFromBanner();
@@ -450,8 +523,140 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
     setActiveModal('zoneTheme');
   };
 
+  // Live-preview bubble colors on the room shell while the Chat look draft is open.
+  useEffect(() => {
+    if (activeModal !== 'zoneTheme' || !zoneThemeDraft?.themeId) return undefined;
+    const root = document.querySelector('.community-chat-root');
+    if (!root) return undefined;
+    const previewId = String(zoneThemeDraft.themeId);
+    root.setAttribute('data-cchat-zone-theme', previewId);
+    return () => {
+      root.setAttribute('data-cchat-zone-theme', zoneThemeId || 'stage');
+    };
+  }, [activeModal, zoneThemeDraft?.themeId, zoneThemeId]);
+
+  const clearVoiceTimer = () => {
+    if (voiceTimerRef.current) {
+      clearInterval(voiceTimerRef.current);
+      voiceTimerRef.current = null;
+    }
+  };
+
+  const stopVoiceRecording = async (shouldPublish = true) => {
+    if (!voiceStopRef.current) return;
+    clearVoiceTimer();
+    const stop = voiceStopRef.current;
+    voiceStopRef.current = null;
+    const durationSec = voiceDurationRef.current;
+    setVoiceRecording(false);
+    setVoiceRecordingSec(0);
+    voiceDurationRef.current = 0;
+
+    let blob = null;
+    try {
+      blob = await stop();
+    } catch (err) {
+      console.error('[CommunityHostBannerComposerTools] stop voice', err);
+      showToast(t('failed_send_voice', 'Could not send voice message.'), 'error');
+      voiceAutoStopRef.current = false;
+      return;
+    }
+
+    if (!shouldPublish || !blob || !setBannerVoice) {
+      setBannerVoiceAudioPriority('recording', false);
+      voiceAutoStopRef.current = false;
+      return;
+    }
+    if (durationSec < 1 && blob.size < 800) {
+      showToast(t('community_banner_voice_too_short', 'Recording is too short.'), 'error');
+      setBannerVoiceAudioPriority('recording', false);
+      voiceAutoStopRef.current = false;
+      return;
+    }
+
+    // Play for the host immediately (still inside the stop-tap gesture), then upload.
+    // Local play claims playback priority before recording priority is released.
+    try {
+      const previewUrl = URL.createObjectURL(blob);
+      dispatchBannerVoiceLocalPlay(previewUrl, durationSec || 1);
+    } catch (err) {
+      console.warn('[CommunityHostBannerComposerTools] local voice preview', err);
+    }
+    setBannerVoiceAudioPriority('recording', false);
+
+    setVoicePublishing(true);
+    try {
+      await setBannerVoice(blob, durationSec || 1);
+    } finally {
+      setVoicePublishing(false);
+      voiceAutoStopRef.current = false;
+    }
+  };
+
+  stopVoiceRecordingRef.current = stopVoiceRecording;
+
+  const startVoiceRecording = async () => {
+    if (voiceRecording || voicePublishing || uploadingBanner || !setBannerVoice) return;
+    try {
+      // Voice recording is allowed with YouTube present; pause YT for audio priority.
+      setBannerVoiceAudioPriority('recording', true);
+      const started = await startRecording();
+      voiceStopRef.current = started.stop;
+      voiceDurationRef.current = 0;
+      voiceAutoStopRef.current = false;
+      setVoiceRecording(true);
+      setVoiceRecordingSec(0);
+      clearVoiceTimer();
+      voiceTimerRef.current = setInterval(() => {
+        voiceDurationRef.current += 1;
+        const next = voiceDurationRef.current;
+        setVoiceRecordingSec(next);
+        if (next >= BANNER_VOICE_MAX_DURATION_SEC && !voiceAutoStopRef.current) {
+          voiceAutoStopRef.current = true;
+          void stopVoiceRecordingRef.current(true);
+        }
+      }, 1000);
+    } catch (err) {
+      setBannerVoiceAudioPriority('recording', false);
+      console.error('[CommunityHostBannerComposerTools] mic', err);
+      showToast(t('no_mic_access', 'Microphone access is required.'), 'error');
+    }
+  };
+
+  const toggleVoiceRecording = () => {
+    if (voiceRecording) {
+      void stopVoiceRecording(true);
+      return;
+    }
+    void startVoiceRecording();
+  };
+
+  useEffect(
+    () => () => {
+      clearVoiceTimer();
+      setBannerVoiceAudioPriority('recording', false);
+      if (voiceStopRef.current) {
+        void voiceStopRef.current().catch(() => {});
+        voiceStopRef.current = null;
+      }
+    },
+    []
+  );
+
   const openYoutubeModal = () => {
-    setYoutubeDraft(banner.youtubeId ? `https://youtu.be/${banner.youtubeId}` : '');
+    if (banner.youtubeId && banner.youtubePlaylistId) {
+      setYoutubeDraft(
+        `https://www.youtube.com/watch?v=${banner.youtubeId}&list=${banner.youtubePlaylistId}`
+      );
+    } else if (banner.youtubePlaylistId) {
+      setYoutubeDraft(`https://www.youtube.com/playlist?list=${banner.youtubePlaylistId}`);
+    } else if (banner.youtubeLive && banner.youtubeId) {
+      setYoutubeDraft(`https://www.youtube.com/live/${banner.youtubeId}`);
+    } else if (banner.youtubeMusic && banner.youtubeId) {
+      setYoutubeDraft(`https://music.youtube.com/watch?v=${banner.youtubeId}`);
+    } else {
+      setYoutubeDraft(banner.youtubeId ? `https://youtu.be/${banner.youtubeId}` : '');
+    }
     setActiveModal('youtube');
   };
 
@@ -462,8 +667,7 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
     zoneThemeSavedSnapshot &&
     !zoneThemeDraftsEqual(zoneThemeDraft, zoneThemeSavedSnapshot);
 
-  const zoneThemeDraftBusy =
-    zoneThemeSaving || guestFrameBackgroundUploading || guestFrameBackgroundGenerating;
+  const zoneThemeDraftBusy = zoneThemeSaving || guestFrameBackgroundGenerating;
 
   const updateZoneThemeDraft = (patch) => {
     setZoneThemeDraft((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -495,7 +699,7 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
   };
 
   const requestCloseZoneThemeModal = () => {
-    if (zoneThemeDraftBusy) return;
+    // Always allow close — never trap the host behind a busy AI/generate state.
     if (isZoneThemeDraftDirty) {
       setZoneThemeLeaveOpen(true);
       return;
@@ -541,11 +745,8 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
   };
 
   const publishBody = async () => {
-    const isButton = editingBodySlot === BANNER_BODY_BUTTON_INDEX;
     const label = String(bodySlotDraft.text || '').trim();
-    const url = isButton ? sanitizeBannerLinkUrl(bodySlotDraft.url) : '';
     if (!label) return;
-    if (isButton && !url) return;
 
     const texts = (
       banner.texts ||
@@ -558,11 +759,8 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
             ...slot,
             ...bodySlotDraft,
             text: label,
-            mode: isButton ? 'link' : 'text',
-            url,
-            buttonBg: isButton
-              ? sanitizeBannerTextColor(bodySlotDraft.buttonBg, DEFAULT_BANNER_BUTTON_BG)
-              : DEFAULT_BANNER_BUTTON_BG,
+            mode: 'text',
+            url: '',
           }
         : slot
     );
@@ -613,10 +811,7 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
   const bannerBodySlotHasText = Boolean(
     String((banner.texts || [])[editingBodySlot]?.text || '').trim()
   );
-  const editingButton = editingBodySlot === BANNER_BODY_BUTTON_INDEX;
-  const bodyDraftUrlValid = !editingButton || Boolean(sanitizeBannerLinkUrl(bodySlotDraft.url));
-  const bodyPublishDisabled =
-    !String(bodySlotDraft.text || '').trim() || (editingButton && !bodyDraftUrlValid);
+  const bodyPublishDisabled = !String(bodySlotDraft.text || '').trim();
 
   const publishBackground = async () => {
     const transparent = isBannerBgTransparent(bgColorDraft);
@@ -633,10 +828,26 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
     if (ok) closeModal();
   };
 
+  const openBannerImagePicker = () => {
+    // Keep the unified background modal open underneath the camera sheet.
+    setShowCamera(true);
+  };
+
+  const removeBannerBackgroundImage = async () => {
+    if (!hasCustomBannerImage || uploadingBanner) return;
+    await clearBannerImage();
+  };
+
   const publishYoutube = async () => {
     const id = parsedYoutubeDraft?.id || sanitizeYoutubeVideoId(youtubeDraft);
-    if (!id) return;
-    const ok = await setBannerYoutube(id, { isShort: Boolean(parsedYoutubeDraft?.isShort) });
+    const playlistId = parsedYoutubeDraft?.playlistId || '';
+    if (!id && !playlistId) return;
+    const ok = await setBannerYoutube(id, {
+      isShort: Boolean(parsedYoutubeDraft?.isShort),
+      isLive: Boolean(parsedYoutubeDraft?.isLive),
+      isMusic: Boolean(parsedYoutubeDraft?.isMusic),
+      playlistId,
+    });
     if (ok) closeModal();
   };
 
@@ -883,139 +1094,6 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
       </BannerToolModal>
     ) : null;
 
-  const bodyButtonModal =
-    activeModal === 'bodyButton' ? (
-      <BannerToolModal
-        title={t('community_banner_button_tool', 'Banner button')}
-        titleId="community-banner-body-button-modal"
-        onClose={closeModal}
-        footer={modalFooter(
-          t('community_banner_publish_body_link', 'Publish button'),
-          bodyPublishDisabled,
-          publishBody,
-          bannerBodySlotHasText,
-          t('community_banner_delete_button', 'Delete button'),
-          deleteBody,
-          true
-        )}
-      >
-        <div className="community-banner-modal__section community-banner-modal__section--compact">
-          <AppText as="span" className="community-banner-modal__label">
-            {t('community_banner_body_link_url', 'Link URL')}
-          </AppText>
-          <AppTextInput
-            type="text"
-            inputMode="url"
-            autoComplete="url"
-            enterKeyHint="done"
-            className="community-banner-modal__textarea community-banner-modal__textarea--compact community-banner-modal__input--single-line"
-            placeholder={t(
-              'community_banner_body_link_url_placeholder',
-              'https://… or /path'
-            )}
-            value={bodySlotDraft.url || ''}
-            onChange={(e) => updateBodySlotDraft({ url: e.target.value })}
-            dir="ltr"
-          />
-          {String(bodySlotDraft.url || '').trim() && !bodyDraftUrlValid ? (
-            <AppText as="span" className="community-banner-modal__hint community-banner-modal__hint--error">
-              {t(
-                'community_banner_body_link_url_unsafe',
-                'This link is not allowed (unsafe scheme, shortener, or hidden destination).'
-              )}
-            </AppText>
-          ) : null}
-        </div>
-
-        <div className="community-banner-modal__section community-banner-modal__section--compact">
-          <AppText as="span" className="community-banner-modal__label">
-            {t('community_banner_body_link_label_placeholder', 'Button label…')} ({bodyCharUsed}/
-            {BANNER_TEXT_MAX_TOTAL})
-          </AppText>
-          <AppTextInput
-            type="text"
-            className="community-banner-modal__textarea community-banner-modal__textarea--body community-banner-modal__textarea--compact community-banner-modal__input--single-line"
-            style={resolveBannerButtonInlineStyle(bodySlotDraft)}
-            placeholder={t('community_banner_body_link_label_placeholder', 'Button label…')}
-            value={bodySlotDraft.text || ''}
-            onChange={(e) => updateBodySlotDraft({ text: e.target.value })}
-          />
-        </div>
-
-        <BannerToggleRow label={t('community_banner_button_style', 'Button style')}>
-          <div className="community-banner-modal__icon-toolbar">
-            <label
-              className="community-banner-modal__icon-btn community-banner-modal__icon-btn--color"
-              title={t('community_banner_button_bg_color', 'Button color')}
-            >
-              <input
-                type="color"
-                value={sanitizeBannerTextColor(bodySlotDraft.buttonBg, DEFAULT_BANNER_BUTTON_BG)}
-                onChange={(e) => updateBodySlotDraft({ buttonBg: e.target.value })}
-                aria-label={t('community_banner_button_bg_color', 'Button color')}
-              />
-              <i
-                className="community-banner-modal__color-swatch"
-                aria-hidden
-                style={{
-                  background: sanitizeBannerTextColor(
-                    bodySlotDraft.buttonBg,
-                    DEFAULT_BANNER_BUTTON_BG
-                  ),
-                }}
-              />
-            </label>
-            <label
-              className="community-banner-modal__icon-btn community-banner-modal__icon-btn--color"
-              title={t('community_banner_button_text_color', 'Label color')}
-            >
-              <input
-                type="color"
-                value={sanitizeBannerTextColor(bodySlotDraft.color)}
-                onChange={(e) => updateBodySlotDraft({ color: e.target.value })}
-                aria-label={t('community_banner_button_text_color', 'Label color')}
-              />
-              <FaPalette size={14} aria-hidden />
-            </label>
-            {FONT_SIZE_OPTIONS.map(({ key, labelKey, fallback }) => (
-              <BannerIconBtn
-                key={key}
-                active={bodySlotDraft.fontSize === key}
-                ariaLabel={t(labelKey, fallback)}
-                onClick={() => updateBodySlotDraft({ fontSize: key })}
-              >
-                {t(labelKey, fallback)}
-              </BannerIconBtn>
-            ))}
-            <BannerIconBtn
-              active={bodySlotDraft.bold}
-              ariaLabel={t('community_banner_body_bold', 'Bold')}
-              onClick={() => updateBodySlotDraft({ bold: !bodySlotDraft.bold })}
-            >
-              <FaBold size={14} aria-hidden />
-            </BannerIconBtn>
-          </div>
-        </BannerToggleRow>
-
-        <div className="community-banner-modal__section community-banner-modal__section--compact community-banner-modal__button-preview-wrap">
-          <AppText as="span" className="community-banner-modal__hint">
-            {t(
-              'community_banner_button_preview_hint',
-              'Guests can tap the button to open the link.'
-            )}
-          </AppText>
-          <AppText
-            as="span"
-            className="community-banner-draggable-body__link-btn community-banner-modal__button-preview"
-            style={resolveBannerButtonInlineStyle(bodySlotDraft)}
-          >
-            {bodySlotDraft.text ||
-              t('community_banner_body_link_label_placeholder', 'Button label…')}
-          </AppText>
-        </div>
-      </BannerToolModal>
-    ) : null;
-
   const backgroundModal =
     activeModal === 'background' ? (
       <BannerToolModal
@@ -1024,13 +1102,13 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
         onClose={closeModal}
         footer={publishBtn(
           t('community_banner_publish_bg', 'Apply background'),
-          false,
+          uploadingBanner,
           publishBackground
         )}
       >
         <BannerPreviewStrip
           banner={bannerForPreview}
-          title={titleDraft}
+          title={titleDraft || banner.title || ''}
           body={(banner.texts || []).map((slot) => slot.text).filter(Boolean).join(' · ')}
           bgColor={bgColorDraft}
           bgColor2={bgColor2Draft}
@@ -1039,9 +1117,62 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
           mode="background"
           t={t}
         />
+
         <div className="community-banner-modal__section">
           <AppText as="span" className="community-banner-modal__label">
-            {t('community_banner_bg_gradient', 'Gradient background')}
+            {t('community_banner_bg_image', 'Banner image')}
+          </AppText>
+          <AppText as="span" className="community-banner-modal__hint">
+            {t(
+              'community_banner_bg_image_hint',
+              'Optional photo. Add a color overlay below, or choose Transparent to show the photo alone.'
+            )}
+          </AppText>
+          <div className="community-banner-modal__media-actions">
+            <button
+              type="button"
+              className="community-banner-modal__media-btn"
+              onClick={openBannerImagePicker}
+              disabled={uploadingBanner}
+            >
+              <FaImage size={14} aria-hidden />
+              {uploadingBanner
+                ? t('community_chat_uploading_image', 'Uploading…')
+                : hasCustomBannerImage
+                  ? t('community_banner_bg_change_image', 'Change photo')
+                  : t('community_banner_bg_add_image', 'Add photo')}
+            </button>
+            {hasCustomBannerImage ? (
+              <button
+                type="button"
+                className="community-banner-modal__media-btn community-banner-modal__media-btn--danger"
+                onClick={() => void removeBannerBackgroundImage()}
+                disabled={uploadingBanner}
+              >
+                <FaTrash size={14} aria-hidden />
+                {t('community_banner_bg_remove_image', 'Remove photo')}
+              </button>
+            ) : null}
+          </div>
+          {hasYoutubeBanner && !hasCustomBannerImage ? (
+            <AppText as="span" className="community-banner-modal__hint">
+              {t(
+                'community_banner_bg_image_replaces_youtube',
+                'Adding a photo replaces the current YouTube / Music banner.'
+              )}
+            </AppText>
+          ) : null}
+        </div>
+
+        <div className="community-banner-modal__section">
+          <AppText as="span" className="community-banner-modal__label">
+            {t('community_banner_bg_gradient_optional', 'Color overlay')}
+          </AppText>
+          <AppText as="span" className="community-banner-modal__hint">
+            {t(
+              'community_banner_bg_gradient_optional_hint',
+              'Pick a gradient over the photo, use gradient alone with no photo, or Transparent for no color.'
+            )}
           </AppText>
           <BannerGradientPresetCarousel
             colorStart={bgColorDraft}
@@ -1053,7 +1184,7 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
               setBgColorDraft(sanitizeBannerHexColor(start, DEFAULT_BANNER_BG));
               setBgColor2Draft(sanitizeBannerHexColor(end, DEFAULT_BANNER_BG2));
             }}
-            ariaLabel={t('community_banner_bg_gradient', 'Gradient background')}
+            ariaLabel={t('community_banner_bg_gradient_optional', 'Color overlay')}
           />
           {!isTransparentBg ? (
             <div className="community-banner-modal__density">
@@ -1078,7 +1209,7 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
               <AppText as="span" className="community-banner-modal__hint">
                 {t(
                   'community_banner_bg_density_hint',
-                  '0 = fully transparent · 100 = full color over the banner image'
+                  '0 = no color overlay · 100 = full color over the banner image'
                 )}
               </AppText>
             </div>
@@ -1090,21 +1221,21 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
   const youtubeModal =
     activeModal === 'youtube' ? (
       <BannerToolModal
-        title={t('community_banner_youtube_tool', 'YouTube background')}
+        title={t('community_banner_youtube_tool', 'YouTube / Music / Live')}
         titleId="community-banner-youtube-modal"
         onClose={closeModal}
         footer={modalFooter(
-          t('community_banner_publish_youtube', 'Apply video'),
-          !youtubePreviewId,
+          t('community_banner_publish_youtube', 'Apply media'),
+          !youtubePreviewReady,
           publishYoutube,
-          Boolean(banner.youtubeId),
-          t('community_banner_delete_youtube', 'Remove video'),
+          hasYoutubeBanner,
+          t('community_banner_delete_youtube', 'Remove media'),
           deleteYoutube
         )}
       >
         <div className="community-banner-modal__section">
           <label className="community-banner-modal__label" htmlFor="community-banner-youtube-url">
-            {t('community_banner_youtube_url_label', 'YouTube link')}
+            {t('community_banner_youtube_url_label', 'YouTube / Music / playlist / live link')}
           </label>
           <AppTextInput
             id="community-banner-youtube-url"
@@ -1112,7 +1243,7 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
             className="community-banner-modal__textarea"
             placeholder={t(
               'community_banner_youtube_url_placeholder',
-              'https://youtube.com/watch?v=… or youtu.be/…'
+              'Video, live, playlist, or music.youtube.com link'
             )}
             value={youtubeDraft}
             onChange={(e) => setYoutubeDraft(e.target.value)}
@@ -1121,21 +1252,34 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
           <AppText as="p" className="community-banner-modal__hint">
             {t(
               'community_banner_youtube_host_hint',
-              'You control the video with YouTube player buttons (play, pause, sound). Members only see it playing silently with no controls.'
+              'Supports videos, live streams, playlists, and YouTube Music. You control playback; guests stay muted until they tap sound.'
             )}
           </AppText>
           <AppText as="p" className="community-banner-modal__hint community-banner-modal__hint--warn">
             {t(
               'community_banner_youtube_embed_hint',
-              'The video must allow embedding. If playback fails, a cover image is shown instead. Avoid videos blocked on other devices or Premium limits.'
+              'The media must allow embedding. Live joins at the live edge. Playlists advance for everyone when you sync.'
             )}
           </AppText>
+          {parsedYoutubeDraft?.kind ? (
+            <AppText as="p" className="community-banner-modal__hint">
+              {parsedYoutubeDraft.kind === 'live'
+                ? t('community_banner_youtube_kind_live', 'Detected: live stream')
+                : parsedYoutubeDraft.kind === 'playlist'
+                  ? t('community_banner_youtube_kind_playlist', 'Detected: playlist')
+                  : parsedYoutubeDraft.kind === 'music'
+                    ? t('community_banner_youtube_kind_music', 'Detected: YouTube Music')
+                    : t('community_banner_youtube_kind_video', 'Detected: video')}
+            </AppText>
+          ) : null}
         </div>
-        {youtubePreviewId ? (
+        {youtubePreviewReady ? (
           <div className="community-banner-modal__banner-strip community-banner-modal__banner-strip--youtube">
             <CommunityBannerYoutubeBackground
               videoId={youtubePreviewId}
+              playlistId={youtubePreviewPlaylistId}
               isShort={Boolean(parsedYoutubeDraft?.isShort || banner.youtubeShort)}
+              isLive={Boolean(parsedYoutubeDraft?.isLive || banner.youtubeLive)}
               preview
               isHost
             />
@@ -1148,7 +1292,7 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
     activeModal === 'zoneTheme' && zoneThemeDraft ? (
       <>
         <BannerToolModal
-          title={t('community_guest_frame_bg_tool', 'Chat background')}
+          title={t('community_guest_frame_bg_tool', 'Chat look')}
           titleId="community-chat-zone-theme-modal"
           onClose={requestCloseZoneThemeModal}
           headerActions={
@@ -1171,9 +1315,10 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
           }
         >
           <CommunityChatZoneThemePicker
+            themeId={zoneThemeDraft.themeId}
+            onSelectTheme={(nextThemeId) => updateZoneThemeDraft({ themeId: nextThemeId })}
             guestFrameBackground={buildGuestFrameBackgroundFromDraft(zoneThemeDraft.guestFrame)}
             saving={zoneThemeSaving}
-            guestFrameBackgroundUploading={guestFrameBackgroundUploading}
             guestFrameBackgroundGenerating={guestFrameBackgroundGenerating}
             onSelectTransparent={() => {
               updateZoneThemeGuestFrameDraft({ colorOverlayEnabled: false });
@@ -1204,23 +1349,6 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
                 presetId: null,
                 customUrl: null,
               });
-            }}
-            onSelectGuestFramePreset={(presetId) =>
-              updateZoneThemeGuestFrameDraft({
-                imageMode: 'preset',
-                presetId,
-                customUrl: null,
-              })
-            }
-            onUploadGuestFrameBackground={async (file) => {
-              const url = await uploadCommunityChatGuestFrameBackgroundFile(file);
-              if (url) {
-                updateZoneThemeGuestFrameDraft({
-                  imageMode: 'custom',
-                  customUrl: url,
-                  presetId: null,
-                });
-              }
             }}
             onGenerateGuestFrameBackgroundAi={async (prompt) => {
               const url = await generateCommunityChatGuestFrameBackgroundImage(prompt);
@@ -1309,102 +1437,139 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
       </BannerToolModal>
     ) : null;
 
+  const toggleHostToolsVisible = () => {
+    setHostToolsVisible((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('db-host-banner-tools-visible', next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
   const railClass =
     layout === 'banner-rail'
-      ? 'community-banner-host-tools'
+      ? 'community-banner-host-tools community-banner-host-tools--bar community-banner-host-tools--side'
       : 'community-banner-host-tools community-banner-host-tools--inline';
 
-  const mediaRail =
-    layout === 'banner-rail' ? (
-      <div
-        className={`${railClass} community-banner-host-tools--start`}
-        role="toolbar"
-        aria-label={t('community_banner_media_tools', 'Banner media')}
-      >
-        <button
-          type="button"
-          className={`community-banner-host-tools__btn${hasCustomBannerImage ? ' community-banner-host-tools__btn--active' : ''}`}
-          aria-label={t('community_banner_add_media', 'Add banner image from camera or gallery')}
-          title={t('community_banner_add_media', 'Add banner image from camera or gallery')}
-          onClick={() => setShowCamera(true)}
-          disabled={uploadingBanner}
-        >
-          <FaImage size={16} />
-        </button>
-        <button
-          type="button"
-          className={`community-banner-host-tools__btn community-banner-host-tools__btn--youtube${banner.youtubeId ? ' community-banner-host-tools__btn--active' : ''}`}
-          aria-label={t('community_banner_youtube_tool', 'YouTube background')}
-          title={t('community_banner_youtube_tool', 'YouTube background')}
-          onClick={openYoutubeModal}
-          disabled={uploadingBanner}
-        >
-          <FaYoutube size={16} />
-        </button>
-        <button
-          type="button"
-          className={`community-banner-host-tools__btn${zoneThemeId && zoneThemeId !== 'default' ? ' community-banner-host-tools__btn--active' : ''}`}
-          aria-label={t('community_guest_frame_bg_tool', 'Chat background')}
-          title={t('community_guest_frame_bg_tool', 'Chat background')}
-          onClick={openZoneThemeModal}
-          disabled={uploadingBanner || zoneThemeSaving}
-        >
-          <FaTh size={16} />
-        </button>
-        <button
-          type="button"
-          className={`community-banner-host-tools__btn community-banner-host-tools__btn--spotlight${banner.hostSpotlightAuto ? ' community-banner-host-tools__btn--active' : ''}`}
-          aria-label={t('community_host_spotlight_auto', 'Auto-show messages on banner')}
-          aria-pressed={banner.hostSpotlightAuto}
-          title={t('community_host_spotlight_auto', 'Auto-show messages on banner')}
-          onClick={() => void setHostSpotlightAuto(!banner.hostSpotlightAuto)}
-          disabled={uploadingBanner}
-        >
-          <FaBullhorn size={16} />
-        </button>
-      </div>
-    ) : null;
-
-  const textRail = (
-    <div
-      className={`${railClass}${layout === 'banner-rail' ? ' community-banner-host-tools--end' : ''}`}
-      role="toolbar"
-      aria-label={t('community_banner_text_tools', 'Banner text & style')}
+  const toolsVisibilityToggle = (
+    <button
+      type="button"
+      className={`community-banner-tools-toggle${hostToolsVisible ? '' : ' community-banner-tools-toggle--hidden-mode'}`}
+      aria-label={
+        hostToolsVisible
+          ? t('community_banner_tools_hide', 'Hide banner tools')
+          : t('community_banner_tools_show', 'Show banner tools')
+      }
+      title={
+        hostToolsVisible
+          ? t('community_banner_tools_hide', 'Hide banner tools')
+          : t('community_banner_tools_show', 'Show banner tools')
+      }
+      aria-pressed={!hostToolsVisible}
+      onClick={toggleHostToolsVisible}
     >
-      {layout !== 'banner-rail' ? (
-        <>
-          <button
-            type="button"
-            className={`community-banner-host-tools__btn${hasCustomBannerImage ? ' community-banner-host-tools__btn--active' : ''}`}
-            aria-label={t('community_banner_add_media', 'Add banner image from camera or gallery')}
-            title={t('community_banner_add_media', 'Add banner image from camera or gallery')}
-            onClick={() => setShowCamera(true)}
-            disabled={uploadingBanner}
-          >
-            <FaImage size={16} />
-          </button>
-          <button
-            type="button"
-            className={`community-banner-host-tools__btn community-banner-host-tools__btn--youtube${banner.youtubeId ? ' community-banner-host-tools__btn--active' : ''}`}
-            aria-label={t('community_banner_youtube_tool', 'YouTube background')}
-            title={t('community_banner_youtube_tool', 'YouTube background')}
-            onClick={openYoutubeModal}
-            disabled={uploadingBanner}
-          >
-            <FaYoutube size={16} />
-          </button>
-        </>
-      ) : null}
+      {hostToolsVisible ? <FaEyeSlash size={14} aria-hidden /> : <FaEye size={14} aria-hidden />}
+    </button>
+  );
+
+  const voiceBroadcastControl = (
+    <div
+      className={`community-banner-voice-fab${layout === 'banner-rail' ? ' community-banner-voice-fab--rail' : ' community-banner-voice-fab--inline'}${voiceRecording ? ' community-banner-voice-fab--recording' : ''}${banner.voiceUrl ? ' community-banner-voice-fab--live' : ''}${voicePublishing ? ' community-banner-voice-fab--publishing' : ''}`}
+      data-banner-voice-control="record"
+    >
       <button
         type="button"
-        className="community-banner-host-tools__btn"
+        className="community-banner-voice-fab__btn"
+        aria-label={
+          voiceRecording
+            ? t('community_banner_voice_stop', 'Stop and publish ({{time}})', {
+                time: formatDuration(voiceRecordingSec),
+              })
+            : t('community_banner_voice_record', 'Record voice for banner (max 2 min)')
+        }
+        title={
+          voiceRecording
+            ? t('community_banner_voice_stop_title', 'Stop & publish · {{time}} / 2:00', {
+                time: formatDuration(voiceRecordingSec),
+              })
+            : t('community_banner_voice_record', 'Record voice for banner (max 2 min)')
+        }
+        aria-pressed={voiceRecording}
+        onClick={toggleVoiceRecording}
+        disabled={uploadingBanner || voicePublishing || !setBannerVoice}
+      >
+        <span className="community-banner-voice-fab__glow" aria-hidden />
+        {voiceRecording ? <FaStop size={18} aria-hidden /> : <FaMicrophone size={24} aria-hidden />}
+        <AppText as="span" className="community-banner-voice-fab__btn-label">
+          {voiceRecording
+            ? t('community_banner_voice_stop_short', 'Stop')
+            : t('community_banner_voice_rec_short', 'Rec')}
+        </AppText>
+        {voiceRecording ? (
+          <AppText as="span" className="community-banner-voice-fab__timer" aria-live="polite">
+            {formatDuration(voiceRecordingSec)}
+          </AppText>
+        ) : null}
+        {voicePublishing && !voiceRecording ? (
+          <AppText as="span" className="community-banner-voice-fab__btn-label">
+            {t('community_banner_voice_publishing', 'Publishing…')}
+          </AppText>
+        ) : null}
+      </button>
+    </div>
+  );
+
+  /* 7 controls: 3 left + 3 right + voice (bottom center) */
+  const toolsLeftRail = (
+    <div
+      className={`${railClass} community-banner-host-tools--start`}
+      role="toolbar"
+      aria-label={t('community_banner_host_tools_left', 'Banner tools left')}
+      data-banner-tools="side-start"
+    >
+      <button
+        type="button"
+        className={`community-banner-host-tools__btn community-banner-host-tools__btn--bg${hasBannerBackgroundTool ? ' community-banner-host-tools__btn--active' : ''}`}
+        aria-label={t('community_banner_bg_tool', 'Banner background')}
+        title={t('community_banner_bg_tool', 'Banner background')}
+        onClick={openBackgroundModal}
+        disabled={uploadingBanner}
+      >
+        <FaImage size={17} aria-hidden />
+      </button>
+      <button
+        type="button"
+        className={`community-banner-host-tools__btn community-banner-host-tools__btn--youtube${hasYoutubeBanner ? ' community-banner-host-tools__btn--active' : ''}`}
+        aria-label={t('community_banner_youtube_tool', 'YouTube / Music / Live')}
+        title={t('community_banner_youtube_tool', 'YouTube / Music / Live')}
+        onClick={openYoutubeModal}
+        disabled={uploadingBanner || voiceRecording || voicePublishing}
+      >
+        <FaYoutube size={18} aria-hidden />
+      </button>
+      <button
+        type="button"
+        className="community-banner-host-tools__btn community-banner-host-tools__btn--title"
         aria-label={t('community_banner_title_tool', 'Banner title')}
         title={t('community_banner_title_tool', 'Banner title')}
         onClick={openTitleModal}
         disabled={uploadingBanner}
       >
-        <FaHeading size={16} />
+        <FaHeading size={16} aria-hidden />
       </button>
+    </div>
+  );
+
+  const toolsRightRail = (
+    <div
+      className={`${railClass} community-banner-host-tools--end`}
+      role="toolbar"
+      aria-label={t('community_banner_host_tools_right', 'Banner tools right')}
+      data-banner-tools="side-end"
+    >
       <button
         type="button"
         className={`community-banner-host-tools__btn community-banner-host-tools__btn--body${hasBannerBodyPlainText(banner.texts) ? ' community-banner-host-tools__btn--active' : ''}`}
@@ -1413,64 +1578,45 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
         onClick={openTextModal}
         disabled={uploadingBanner}
       >
-        <FaAlignLeft size={16} />
+        <FaFont size={16} aria-hidden />
       </button>
       <button
         type="button"
-        className={`community-banner-host-tools__btn community-banner-host-tools__btn--button${hasBannerBodyButton(banner.texts) ? ' community-banner-host-tools__btn--active' : ''}`}
-        aria-label={t('community_banner_button_tool', 'Banner button')}
-        title={t('community_banner_button_tool', 'Banner button')}
-        onClick={openButtonModal}
-        disabled={uploadingBanner}
+        className={`community-banner-host-tools__btn community-banner-host-tools__btn--look${zoneThemeId && zoneThemeId !== 'default' ? ' community-banner-host-tools__btn--active' : ''}`}
+        aria-label={t('community_guest_frame_bg_tool', 'Chat look')}
+        title={t('community_guest_frame_bg_tool', 'Chat look')}
+        onClick={openZoneThemeModal}
+        disabled={uploadingBanner || zoneThemeSaving}
       >
-        <FaLink size={16} />
+        <FaPalette size={16} aria-hidden />
       </button>
       <button
         type="button"
-        className="community-banner-host-tools__btn"
-        aria-label={t('community_banner_bg_tool', 'Banner background')}
-        title={t('community_banner_bg_tool', 'Banner background')}
-        onClick={openBackgroundModal}
+        className={`community-banner-host-tools__btn community-banner-host-tools__btn--spotlight${banner.hostSpotlightAuto ? ' community-banner-host-tools__btn--active' : ''}`}
+        aria-label={t('community_host_spotlight_auto', 'Auto-show messages on banner')}
+        aria-pressed={banner.hostSpotlightAuto}
+        title={t('community_host_spotlight_auto', 'Auto-show messages on banner')}
+        onClick={() => void setHostSpotlightAuto(!banner.hostSpotlightAuto)}
         disabled={uploadingBanner}
       >
-        <FaPalette size={16} />
+        <FaBullhorn size={16} aria-hidden />
       </button>
-      {layout !== 'banner-rail' ? (
-        <>
-          <button
-            type="button"
-            className={`community-banner-host-tools__btn community-banner-host-tools__btn--spotlight${banner.hostSpotlightAuto ? ' community-banner-host-tools__btn--active' : ''}`}
-            aria-label={t('community_host_spotlight_auto', 'Auto-show messages on banner')}
-            aria-pressed={banner.hostSpotlightAuto}
-            title={t('community_host_spotlight_auto', 'Auto-show messages on banner')}
-            onClick={() => void setHostSpotlightAuto(!banner.hostSpotlightAuto)}
-            disabled={uploadingBanner}
-          >
-            <FaBullhorn size={16} />
-          </button>
-          <button
-            type="button"
-            className={`community-banner-host-tools__btn${zoneThemeId && zoneThemeId !== 'default' ? ' community-banner-host-tools__btn--active' : ''}`}
-            aria-label={t('community_guest_frame_bg_tool', 'Chat background')}
-            title={t('community_guest_frame_bg_tool', 'Chat background')}
-            onClick={openZoneThemeModal}
-            disabled={uploadingBanner || zoneThemeSaving}
-          >
-            <FaTh size={16} />
-          </button>
-        </>
-      ) : null}
     </div>
   );
 
   return (
     <>
-      {mediaRail}
-      {textRail}
+      {toolsVisibilityToggle}
+      {hostToolsVisible || voiceRecording || voicePublishing ? (
+        <>
+          {hostToolsVisible ? toolsLeftRail : null}
+          {hostToolsVisible ? toolsRightRail : null}
+          {voiceBroadcastControl}
+        </>
+      ) : null}
 
       {titleModal}
       {bodyTextModal}
-      {bodyButtonModal}
       {backgroundModal}
       {youtubeModal}
       {zoneThemeModal}

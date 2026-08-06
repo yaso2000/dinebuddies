@@ -1,4 +1,5 @@
 import { dismissFacebookSdkOverlay } from './facebookSdkCleanup';
+import { isNativeAndroid } from '../platform/runtime';
 import {
     clearOAuthRedirectPending,
     isAndroidTouchDevice,
@@ -117,12 +118,13 @@ export function clearFacebookMobileLoginPending() {
 }
 
 /**
- * Meta JS SDK path — Android only.
- * iPhone Safari blocks FB.login after any await (lost user gesture), so iOS uses
- * Firebase Facebook redirect instead (same-origin www authDomain).
+ * Meta JS SDK path — Android Chrome/WebView browsers only (not Capacitor native).
+ * Capacitor Android uses native Facebook Login (`nativeFacebookAuth.js`) because
+ * the JS SDK rejects non-listed hosts (e.g. https://localhost).
+ * iPhone Safari blocks FB.login after any await, so iOS uses Firebase redirect.
  */
 export function shouldUseFacebookMobileSdk() {
-    return isAndroidTouchDevice();
+    return isAndroidTouchDevice() && !isNativeAndroid();
 }
 
 /** @deprecated Name kept for callers; now means “use Meta mobile SDK” (Android). */

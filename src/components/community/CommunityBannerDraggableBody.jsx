@@ -7,26 +7,12 @@ import {
   clampBannerDraggablePosition,
   isBannerBodyLinkSlot,
   resolveBannerBodyInlineStyle,
-  resolveBannerButtonInlineStyle,
-  sanitizeBannerLinkUrl,
   sanitizeBannerTextMaxWidth,
 } from '../../utils/communityChatBanner';
-import { useExternalLinkGuard } from '../../context/ExternalLinkGuardContext';
-import { classifyChatLink } from '../../utils/chatLinkSafety';
 
 const DRAG_THRESHOLD_PX = 8;
 
-/** Absolute href for native fallback / accessibility. */
-function toAbsoluteHref(url) {
-  if (!url || typeof window === 'undefined') return url;
-  try {
-    return new URL(url, window.location.origin).href;
-  } catch {
-    return url;
-  }
-}
-
-/** Draggable banner body text or link-button — host can drag within the body zone. */
+/** Draggable banner body text — host can drag within the body zone. */
 export default function CommunityBannerDraggableBody({
   text,
   slotStyle,
@@ -38,7 +24,6 @@ export default function CommunityBannerDraggableBody({
   onDelete,
 }) {
   const { t } = useTranslation();
-  const { requestOpenLink } = useExternalLinkGuard();
   const rootRef = useRef(null);
   const bannerRef = useRef(null);
   const posRef = useRef({
@@ -58,12 +43,6 @@ export default function CommunityBannerDraggableBody({
   const [localPos, setLocalPos] = useState(posRef.current);
   const [selected, setSelected] = useState(false);
   const [dragging, setDragging] = useState(false);
-
-  const rawLinkUrl = isBannerBodyLinkSlot(slotStyle) ? sanitizeBannerLinkUrl(slotStyle?.url) : '';
-  const linkInfo = rawLinkUrl ? classifyChatLink(rawLinkUrl) : null;
-  const linkUrl = linkInfo && linkInfo.kind !== 'blocked' ? rawLinkUrl : '';
-  const isLink = Boolean(linkUrl);
-  const absoluteHref = isLink ? toAbsoluteHref(linkUrl) : '';
 
   useEffect(() => {
     const next = {
@@ -139,11 +118,6 @@ export default function CommunityBannerDraggableBody({
     return () => document.removeEventListener('pointerdown', onOutside);
   }, [editable, selected]);
 
-  const openLink = useCallback(() => {
-    if (!linkUrl) return;
-    requestOpenLink(linkUrl);
-  }, [linkUrl, requestOpenLink]);
-
   const handlePointerDown = useCallback(
     (event) => {
       if (!editable) return;
@@ -203,25 +177,12 @@ export default function CommunityBannerDraggableBody({
         return;
       }
 
-      // Host tap opens in a new tab (drag still repositions).
-      if (isLink) {
-        openLink();
-        return;
-      }
-
       if (editable) {
         setSelected((prev) => !prev);
       }
     },
-    [editable, isLink, onPositionChange, openLink]
+    [editable, onPositionChange]
   );
-
-  const handleLinkClick = (event) => {
-    event.preventDefault();
-    // Host already opens via pointerup — avoid a second navigation.
-    if (editable) return;
-    openLink();
-  };
 
   const handleDelete = (event) => {
     event.stopPropagation();
@@ -230,17 +191,16 @@ export default function CommunityBannerDraggableBody({
   };
 
   if (!text) return null;
-  if (isBannerBodyLinkSlot(slotStyle) && !linkUrl) return null;
+  // External link CTA buttons are disabled — never render them.
+  if (isBannerBodyLinkSlot(slotStyle)) return null;
 
   const maxWidthPct = sanitizeBannerTextMaxWidth(slotStyle?.maxWidth);
-  const labelStyle = isLink
-    ? resolveBannerButtonInlineStyle(slotStyle)
-    : resolveBannerBodyInlineStyle(slotStyle);
+  const labelStyle = resolveBannerBodyInlineStyle(slotStyle);
 
   return (
     <div
       ref={rootRef}
-      className={`community-banner-draggable-body${editable ? ' community-banner-draggable-body--editable' : ''}${selected ? ' community-banner-draggable-body--selected' : ''}${dragging ? ' community-banner-draggable-body--dragging' : ''}${isLink ? ' community-banner-draggable-body--link' : ''}`}
+      className={`community-banner-draggable-body${editable ? ' community-banner-draggable-body--editable' : ''}${selected ? ' community-banner-draggable-body--selected' : ''}${dragging ? ' community-banner-draggable-body--dragging' : ''}`}
       style={{
         left: `${localPos.x}%`,
         top: `${localPos.y}%`,
@@ -250,28 +210,14 @@ export default function CommunityBannerDraggableBody({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      role={editable && !isLink ? 'button' : undefined}
-      tabIndex={editable && !isLink ? 0 : undefined}
-      aria-label={isLink ? undefined : t('community_banner_body_tool', 'Banner text')}
+      role={editable ? 'button' : undefined}
+      tabIndex={editable ? 0 : undefined}
+      aria-label={t('community_banner_body_tool', 'Banner text')}
     >
-      {isLink ? (
-        <a
-          className="community-banner-draggable-body__link-btn"
-          href={absoluteHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={labelStyle}
-          onClick={handleLinkClick}
-          aria-label={t('community_banner_body_link_open', 'Open link: {{label}}', { label: text })}
-        >
-          {text}
-        </a>
-      ) : (
-        <AppText as="p" className="community-banner-draggable-body__text" style={labelStyle}>
-          {text}
-        </AppText>
-      )}
-      {editable && selected && !isLink ? (
+      <AppText as="p" className="community-banner-draggable-body__text" style={labelStyle}>
+        {text}
+      </AppText>
+      {editable && selected ? (
         <button
           type="button"
           className="community-banner-draggable-body__delete"

@@ -6,7 +6,6 @@ import { isAdminIdentity } from '../utils/adminAccess';
 import { resolveSignedInHomePath } from '../utils/accountKind';
 import { isAuthBootstrapPending } from '../utils/authBootstrap';
 import {
-    canConsumerEnterApp,
     hasConsumerEntryOk,
     shouldForceCompleteProfileRedirect,
     shouldSkipConsumerProfileCompletion,
@@ -14,9 +13,8 @@ import {
 import { needsConsumerEmailVerification } from '../utils/emailVerification';
 
 /**
- * Blocks app routes only while Firebase Auth resolves.
- * Never paint /complete-profile from a stale/partial cache before profileServerSynced —
- * that flash is what completed users see on every cold start.
+ * One bootstrap shell for signed-in users until profileServerSynced.
+ * Avoids Layout/Suspense/page-loader triple swap on first entry.
  */
 export default function AuthRoutingGate() {
     const location = useLocation();
@@ -25,12 +23,28 @@ export default function AuthRoutingGate() {
     const pathNorm = (location.pathname || '/').replace(/\/$/, '') || '/';
     const onCompleteProfile = pathNorm === '/complete-profile';
 
-    if (isAuthBootstrapPending({ loading })) {
-        return <AppShellLoading variant="session" />;
+    // Guests / logged-out: only wait on Firebase session resolve.
+    if (!currentUser || isGuest) {
+        if (loading) {
+            return <AppShellLoading variant="session" />;
+        }
+        return <Outlet />;
     }
 
-    if (!currentUser || isGuest) {
-        return <Outlet />;
+    // Signed-in: hold one shell until users/{uid} server sync finishes.
+    if (
+        isAuthBootstrapPending({
+            loading,
+            currentUser,
+            isGuest,
+            profileServerSynced,
+        })
+    ) {
+        // Returning completed consumers stuck on /complete-profile — escape without flash.
+        if (onCompleteProfile && hasConsumerEntryOk(currentUser.uid)) {
+            return <Navigate to="/posts-feed" replace />;
+        }
+        return <AppShellLoading variant="session" />;
     }
 
     // Returning completed consumers: leave /complete-profile before profile hydrates.
@@ -54,28 +68,6 @@ export default function AuthRoutingGate() {
                     replace
                 />
             );
-        }
-        return <Outlet />;
-    }
-
-    // Profile still hydrating: never force incomplete → /complete-profile.
-    // Firestore cache often has OAuth displayName but missing gender/age.
-    if (!profileServerSynced) {
-        if (userProfile && canConsumerEnterApp(userProfile)) {
-            if (onCompleteProfile) {
-                return (
-                    <Navigate
-                        to={resolveSignedInHomePath(currentUser, userProfile, { isGuest })}
-                        replace
-                    />
-                );
-            }
-            return <Outlet />;
-        }
-        // Never park on a loading shell at /complete-profile — that looked like a hang
-        // after Google account pick. Soft-defer by staying in the app shell instead.
-        if (onCompleteProfile) {
-            return <Navigate to="/posts-feed" replace />;
         }
         return <Outlet />;
     }

@@ -8,10 +8,13 @@ import InstagramStoryTemplate from './InstagramStoryTemplate';
 import InternalShareModal from './InternalShareModal';
 import { FaCommentDots } from 'react-icons/fa';
 import { AppText } from "./base";
+import { openExternalUrl } from '../platform/externalLinks';
+import { useExternalLinkGuard } from '../context/ExternalLinkGuardContext';
 
 const ShareButtons = ({ title, description, url, storyData, type = 'invitation', sharedData = null }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { requestOpenLink } = useExternalLinkGuard();
   const [generatingCard, setGeneratingCard] = useState(false);
   const [generatingStory, setGeneratingStory] = useState(false);
   const [sharingImage, setSharingImage] = useState(false);
@@ -38,7 +41,9 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation',
   };
 
   const openTextOnlyWhatsApp = () => {
-    window.open(`https://wa.me/?text=${encodedText}%0A%0A${encodedUrl}`, '_blank', 'noopener,noreferrer');
+    openExternalUrl(`https://wa.me/?text=${encodedText}%0A%0A${encodedUrl}`, {
+      allow: 'product_share',
+    });
   };
 
   /** Share post photo + caption via OS sheet (WhatsApp attaches image on mobile). */
@@ -193,13 +198,25 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation',
             display: 'flex', alignItems: 'center', justifyContent: 'center'
           }}>
           <FaTimes size={11} /></button>
-                    <a href={url} target="_blank" rel="noopener noreferrer" title="Open">
+                    <button
+                      type="button"
+                      title="Open"
+                      onClick={() => requestOpenLink(url)}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        padding: 0,
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
                         <img
             src={cardPreviewUrl}
             alt="Share Card"
             style={{ width: '100%', borderRadius: 10, display: 'block', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }} />
           
-                    </a>
+                    </button>
                     <a
           href={cardPreviewUrl}
           download="invitation-card.png"
@@ -225,7 +242,14 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation',
                     {platforms.filter((p) => p.show).map((p) =>
         <div key={p.name} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
                             <button
-            onClick={() => {if (!p.disabled) {p.action ? p.action() : window.open(p.url, '_blank');}}}
+            onClick={() => {
+              if (p.disabled) return;
+              if (p.action) {
+                p.action();
+                return;
+              }
+              openExternalUrl(p.url, { allow: 'product_share' });
+            }}
             title={p.name}
             aria-label={p.name}
             style={{

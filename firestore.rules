@@ -83,8 +83,20 @@ service cloud.firestore {
       return request.auth.uid in muted;
     }
 
+    // Community group chat is Paid Business only. Membership/join stays allowed on Free.
+    function communityOwnerHasPaidPlan(partnerId) {
+      let partner = communityOwnerDoc(partnerId).data;
+      let tier = partner.get('subscriptionTier', 'free');
+      return tier == 'paid' ||
+             tier == 'elite' ||
+             tier == 'professional' ||
+             tier == 'pro' ||
+             tier == 'business';
+    }
+
     function canWriteCommunityChat(partnerId) {
-      return (isCommunityMember(partnerId) || isAdmin()) &&
+      return communityOwnerHasPaidPlan(partnerId) &&
+             (isCommunityMember(partnerId) || isAdmin()) &&
              (request.auth.uid == partnerId || !isCommunityChatMuted(partnerId));
     }
 
@@ -96,10 +108,11 @@ service cloud.firestore {
 
     function canReadCommunityChat(partnerId) {
       return isAdmin() ||
-             isCommunityChatDisplay(partnerId) ||
-             (isSignedIn() &&
-              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-              isCommunityMember(partnerId));
+             (communityOwnerHasPaidPlan(partnerId) &&
+              (isCommunityChatDisplay(partnerId) ||
+               (isSignedIn() &&
+                exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                isCommunityMember(partnerId))));
     }
 
     // Consumer Stage rooms (event chat; host picks mutual follows)
@@ -131,8 +144,15 @@ service cloud.firestore {
     }
 
     function isStageChatMuted(stageId) {
+      let stage = stageDoc(stageId);
+      let me = request.auth.uid;
+      let muted = stage.get('communityMutedUserIds', []);
+      let untilMap = stage.get('communityMutedUntil', {});
+      // Timed mute: still listed but until timestamp passed → not muted.
+      // Session mute: until ≈ stage expiry (set by callable).
       return stageExists(stageId) &&
-             request.auth.uid in stageDoc(stageId).get('communityMutedUserIds', []);
+             me in muted &&
+             (!(me in untilMap) || untilMap[me] > request.time);
     }
 
     function canWriteStageChat(stageId) {
@@ -997,7 +1017,7 @@ service cloud.firestore {
                          request.resource.data.hostId == resource.data.hostId &&
                          request.resource.data.get('ownerId', resource.data.hostId) == resource.data.hostId &&
                          !request.resource.data.diff(resource.data).affectedKeys()
-                           .hasAny(['memberIds', 'invitedIds', 'communityMembers', 'status', 'createdAt', 'kind', 'endedAt', 'visibility', 'expiresAt', 'isFree', 'durationHours', 'hostId', 'ownerId'])));
+                           .hasAny(['memberIds', 'invitedIds', 'communityMembers', 'status', 'createdAt', 'kind', 'hostKind', 'endedAt', 'visibility', 'expiresAt', 'isFree', 'durationHours', 'hostId', 'ownerId'])));
       allow delete: if isAdmin();
 
       match /messages/{messageId} {
@@ -1105,6 +1125,13 @@ service cloud.firestore {
     match /payout_requests/{id} {
       allow read: if isSignedIn() &&
                      (resource.data.agentUid == request.auth.uid || isAdminOrPanelStaff());
+      allow create, update, delete: if false;
+    }
+
+    // Shield cash-out requests (Cloud Functions only; user/admin read)
+    match /cashout_requests/{id} {
+      allow read: if isSignedIn() &&
+        (resource.data.userId == request.auth.uid || isAdminOrPanelStaff());
       allow create, update, delete: if false;
     }
 

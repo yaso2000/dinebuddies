@@ -28,9 +28,9 @@ import NotFound from './pages/NotFound';
 import AuthActionHandler from './pages/AuthActionHandler';
 import VerifyEmail from './pages/VerifyEmail';
 import InviteReceivedPage from './pages/InviteReceivedPage';
-import DiscoveryPage from './pages/DiscoveryPage';
 import DiscoveryInboxPage from './pages/DiscoveryInboxPage';
 import UsersDirectory from './pages/UsersDirectory';
+import { isCashoutFeatureEnabled } from './config/cashoutFeature';
 
 // Lazy Pages (Loaded on demand to improve startup speed)
 const PostsFeed = lazy(() => import('./pages/PostsFeed'));
@@ -44,6 +44,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const AdminShell = lazy(() => import('./admin/shell/AdminShell'));
 const AdminUsersPage = lazy(() => import('./admin/pages/UsersPage'));
 const AdminCreditsPage = lazy(() => import('./admin/pages/CreditsPage'));
+const AdminCashoutsPage = lazy(() => import('./admin/pages/CashoutsPage'));
 const AdminInvitationsPage = lazy(() => import('./admin/pages/InvitationsPage'));
 const AdminPostsPage = lazy(() => import('./admin/pages/PostsPage'));
 const AdminBusinessesPage = lazy(() => import('./admin/pages/BusinessesPage'));
@@ -261,11 +262,19 @@ function App() {
                                                         path="/search"
                                                         element={
                                                             <GuestBlockedRoute>
+<<<<<<< HEAD
                                                                 <DiscoveryPage />
                                                             </GuestBlockedRoute>
                                                         }
                                                     />
                                                     <Route path="/search/list" element={<UsersDirectory />} />
+=======
+                                                                <UsersDirectory />
+                                                            </GuestBlockedRoute>
+                                                        }
+                                                    />
+                                                    <Route path="/search/list" element={<Navigate to="/search" replace />} />
+>>>>>>> ac703671 (Restore local Stage and chat changes)
                                                     <Route path="/restaurants" element={<BusinessesDirectory />} />
                                                     <Route path="/rankings" element={<BusinessRankings />} />
                                                     <Route path="/restaurant/:id" element={<RestaurantDetails />} />
@@ -347,6 +356,9 @@ function App() {
                                                         <Route path="businesses" element={<AdminBusinessesPage />} />
                                                         <Route path="posts" element={<AdminPostsPage />} />
                                                         <Route path="credits" element={<AdminCreditsPage />} />
+                                                        {isCashoutFeatureEnabled() ? (
+                                                          <Route path="cashouts" element={<AdminCashoutsPage />} />
+                                                        ) : null}
                                                         <Route path="messaging" element={<AdminSmartSenderPage />} />
                                                         <Route path="invitations" element={<AdminInvitationsPage />} />
                                                         <Route path="reports" element={<AdminReportsPage />} />

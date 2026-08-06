@@ -16,6 +16,19 @@
   --chat-ref-overlay: rgba(7, 12, 23, 0.74);
 }
 
+/* Stage / community: bubble colors come from data-cchat-zone-theme, not the 1:1 chat gradient. */
+:where(.community-chat-root.chat-room-container, .community-chat-fullscreen.community-chat-root) {
+  --chat-ref-outgoing-bg: var(--cchat-zone-outgoing-bg);
+  --chat-ref-outgoing-shadow: var(--cchat-zone-outgoing-shadow);
+  --chat-ref-host-bg: var(--cchat-zone-host-bg, var(--cchat-zone-outgoing-bg));
+  --chat-ref-host-shadow: var(--cchat-zone-outgoing-shadow);
+  --chat-ref-incoming-bg: var(--cchat-zone-incoming-bg);
+  --chat-ref-incoming-text: var(--cchat-zone-incoming-text);
+  --chat-ref-incoming-border: var(--cchat-zone-incoming-border);
+  --chat-ref-incoming-shadow: var(--cchat-zone-incoming-shadow);
+  --chat-ref-incoming-time: var(--cchat-zone-incoming-time, var(--chat-ref-muted-soft));
+}
+
 .chat-root.chat-container,
 .invitation-chat-root.chat-screen,
 .community-chat-root.chat-room-container,
@@ -160,12 +173,18 @@
   padding: 10px 14px 8px !important;
 }
 
-.chat-root .message-wrapper.other .message-bubble,
-.community-chat-root .community-main-chat__bubble {
+.chat-root .message-wrapper.other .message-bubble {
   background: linear-gradient(180deg, var(--chat-ref-card-strong), var(--chat-ref-card)) !important;
   color: var(--chat-ref-text) !important;
   border: 1px solid var(--chat-ref-card-border) !important;
   box-shadow: var(--chat-ref-card-shadow) !important;
+}
+
+.community-chat-root .community-main-chat__bubble:not(.community-main-chat__bubble--outgoing):not(.community-main-chat__bubble--host) {
+  background: var(--chat-ref-incoming-bg) !important;
+  color: var(--chat-ref-incoming-text) !important;
+  border: 1px solid var(--chat-ref-incoming-border) !important;
+  box-shadow: var(--chat-ref-incoming-shadow) !important;
 }
 
 /* Stack wrapper stays transparent — color lives on each segment bubble */
@@ -179,37 +198,43 @@
   color: inherit !important;
 }
 
-.community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) .community-main-chat__bubble-segment {
-  background: linear-gradient(180deg, var(--chat-ref-card-strong), var(--chat-ref-card)) !important;
-  color: var(--chat-ref-text) !important;
-  border: 1px solid var(--chat-ref-card-border) !important;
-  box-shadow: var(--chat-ref-card-shadow) !important;
-}
-
+.community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) .community-main-chat__bubble-segment,
 .community-chat-root .community-main-chat__bubble-segment--incoming {
-  background: linear-gradient(180deg, var(--chat-ref-card-strong), var(--chat-ref-card)) !important;
-  color: var(--chat-ref-text) !important;
-  border: 1px solid var(--chat-ref-card-border) !important;
-  box-shadow: var(--chat-ref-card-shadow) !important;
+  background: var(--chat-ref-incoming-bg) !important;
+  color: var(--chat-ref-incoming-text) !important;
+  border: 1px solid var(--chat-ref-incoming-border) !important;
+  box-shadow: var(--chat-ref-incoming-shadow) !important;
 }
 
 .chat-root .message-wrapper.own .message-bubble,
-.community-chat-root .community-main-chat__bubble--outgoing,
-.community-chat-root .community-main-chat__bubble--host {
+.community-chat-root .community-main-chat__bubble--outgoing {
   background: var(--chat-ref-outgoing-bg) !important;
-  color: #fff !important;
-  border: none !important;
+  color: var(--cchat-zone-outgoing-text, #fff) !important;
+  border: 1px solid var(--cchat-zone-outgoing-border, transparent) !important;
   box-shadow: var(--chat-ref-outgoing-shadow) !important;
 }
 
+.community-chat-root .community-main-chat__bubble--host {
+  background: var(--chat-ref-host-bg) !important;
+  color: var(--cchat-zone-host-text, #fff) !important;
+  border: 1px solid var(--cchat-zone-host-border, transparent) !important;
+  box-shadow: var(--chat-ref-host-shadow) !important;
+}
+
 .community-chat-root .community-main-chat__bubble-stack--outgoing .community-main-chat__bubble-segment,
-.community-chat-root .community-main-chat__bubble-stack--host .community-main-chat__bubble-segment,
-.community-chat-root .community-main-chat__bubble-segment--outgoing,
-.community-chat-root .community-main-chat__bubble-segment--host {
+.community-chat-root .community-main-chat__bubble-segment--outgoing {
   background: var(--chat-ref-outgoing-bg) !important;
-  color: #fff !important;
-  border: none !important;
+  color: var(--cchat-zone-outgoing-text, #fff) !important;
+  border: 1px solid var(--cchat-zone-outgoing-border, transparent) !important;
   box-shadow: var(--chat-ref-outgoing-shadow) !important;
+}
+
+.community-chat-root .community-main-chat__bubble-stack--host .community-main-chat__bubble-segment,
+.community-chat-root .community-main-chat__bubble-segment--host {
+  background: var(--chat-ref-host-bg) !important;
+  color: var(--cchat-zone-host-text, #fff) !important;
+  border: 1px solid var(--cchat-zone-host-border, transparent) !important;
+  box-shadow: var(--chat-ref-host-shadow) !important;
 }
 
 .chat-root .message-wrapper.other.message-group-single .message-bubble,
@@ -239,12 +264,33 @@
 }
 
 .chat-root .message-text,
-.chat-root .reply-text,
-.community-chat-root .community-main-chat__bubble-text {
+.chat-root .reply-text {
   font-size: 1rem !important;
   line-height: 1.6 !important;
   text-align: start;
   unicode-bidi: plaintext;
+}
+
+/* Community bubbles: match compact outgoing height on both sides */
+.community-chat-root .community-main-chat__bubble-text {
+  display: inline !important;
+  margin: 0 !important;
+  font-size: 0.9375rem !important;
+  line-height: 1.35 !important;
+  text-align: start;
+  unicode-bidi: plaintext;
+}
+
+.community-chat-root .community-main-chat__bubble-inner {
+  display: block !important;
+  line-height: 1.35 !important;
+}
+
+.community-chat-root .community-main-chat__bubble-meta {
+  display: inline-flex !important;
+  margin-inline-start: 0.45rem !important;
+  vertical-align: bottom;
+  white-space: nowrap;
 }
 
 .chat-root .message-time,
@@ -270,7 +316,7 @@
 .community-chat-root .community-main-chat__bubble-segment--incoming .community-main-chat__bubble-time,
 .community-chat-root .community-main-chat__bubble--incoming .community-main-chat__bubble-time,
 .community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) .community-main-chat__bubble-time {
-  color: var(--chat-ref-muted-soft) !important;
+  color: var(--chat-ref-incoming-time) !important;
 }
 
 .chat-root .message-status,
@@ -439,21 +485,30 @@
   }
 
   /* Heavy shadows read as extra vertical gaps on narrow screens */
-  .chat-root .message-wrapper.other .message-bubble,
-  .community-chat-root .community-main-chat__bubble,
-  .community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) .community-main-chat__bubble-segment,
-  .community-chat-root .community-main-chat__bubble-segment--incoming {
+  .chat-root .message-wrapper.other .message-bubble {
     box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12) !important;
   }
 
-  .chat-root .message-wrapper.own .message-bubble,
-  .community-chat-root .community-main-chat__bubble--outgoing,
-  .community-chat-root .community-main-chat__bubble--host,
-  .community-chat-root .community-main-chat__bubble-stack--outgoing .community-main-chat__bubble-segment,
-  .community-chat-root .community-main-chat__bubble-stack--host .community-main-chat__bubble-segment,
-  .community-chat-root .community-main-chat__bubble-segment--outgoing,
-  .community-chat-root .community-main-chat__bubble-segment--host {
+  .community-chat-root .community-main-chat__bubble:not(.community-main-chat__bubble--outgoing):not(.community-main-chat__bubble--host),
+  .community-chat-root .community-main-chat__bubble-stack--incoming:not(.community-main-chat__bubble-stack--host) .community-main-chat__bubble-segment,
+  .community-chat-root .community-main-chat__bubble-segment--incoming {
+    box-shadow: var(--chat-ref-incoming-shadow) !important;
+  }
+
+  .chat-root .message-wrapper.own .message-bubble {
     box-shadow: 0 2px 8px rgba(255, 95, 125, 0.18) !important;
+  }
+
+  .community-chat-root .community-main-chat__bubble--outgoing,
+  .community-chat-root .community-main-chat__bubble-stack--outgoing .community-main-chat__bubble-segment,
+  .community-chat-root .community-main-chat__bubble-segment--outgoing {
+    box-shadow: var(--chat-ref-outgoing-shadow) !important;
+  }
+
+  .community-chat-root .community-main-chat__bubble--host,
+  .community-chat-root .community-main-chat__bubble-stack--host .community-main-chat__bubble-segment,
+  .community-chat-root .community-main-chat__bubble-segment--host {
+    box-shadow: var(--chat-ref-host-shadow) !important;
   }
 
   .chat-root .message-bubble {
@@ -658,8 +713,10 @@
   gap: 3px !important;
 }
 
-.community-chat-root .community-main-chat__bubble-segment {
-  padding: 0.4rem 0.7rem !important;
+.community-chat-root .community-main-chat__bubble-segment,
+.community-chat-root .community-main-chat__bubble:not(.community-main-chat__bubble--emoji):not(.community-main-chat__bubble--image):not(.community-main-chat__bubble--audio) {
+  padding: 0.28rem 0.55rem 0.22rem !important;
+  line-height: 1.35 !important;
 }
 
 .community-chat-root .community-main-chat__bubble-stack--incoming .community-main-chat__bubble-segment--single,

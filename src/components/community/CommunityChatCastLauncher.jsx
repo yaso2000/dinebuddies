@@ -111,7 +111,19 @@ export default function CommunityChatCastLauncher({ partnerId, disabled = false 
 
   const openDisplayWindow = () => {
     if (!displayUrl) return;
-    window.open(displayUrl, `community-cast-${partnerId}`, castWindowFeatures);
+    // Cast display URLs are first-party only (same origin / dinebuddies paths).
+    try {
+      const parsed = new URL(displayUrl, window.location.origin);
+      const host = parsed.hostname.toLowerCase();
+      const okHost =
+        host === window.location.hostname.toLowerCase() ||
+        host === 'dinebuddies.com' ||
+        host.endsWith('.dinebuddies.com');
+      if (!okHost) return;
+      window.open(parsed.href, `community-cast-${partnerId}`, castWindowFeatures);
+    } catch {
+      /* ignore */
+    }
   };
 
   const revokeLink = async () => {

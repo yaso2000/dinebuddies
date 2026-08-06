@@ -1,23 +1,87 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, limit, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import StoryCircle from './StoryCircle';
+import LiveStageCircle from './LiveStageCircle';
+import BusinessCommunityCircle from './BusinessCommunityCircle';
 import UserAvatar from './UserAvatar';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
+import { useLiveStagesDiscover } from '../hooks/useLiveStagesDiscover';
 import { FaPlus, FaCamera } from 'react-icons/fa';
 import { AppText } from "./base";
+
+/** Keep "create / your story" as the first visible rail item after content loads. */
+function scrollStoriesRailToStart(el) {
+  if (!el) return;
+  el.scrollLeft = 0;
+  if (typeof el.scrollTo === 'function') {
+    el.scrollTo({ left: 0, top: 0, behavior: 'auto' });
+  }
+}
+
+function isBusinessHostKind(stage) {
+  return String(stage?.hostKind || 'people').toLowerCase() === 'business';
+}
+
+function sortHostFirst(list) {
+  return [...list].sort((a, b) => {
+    if (Boolean(a.isHost) !== Boolean(b.isHost)) return a.isHost ? -1 : 1;
+    return 0;
+  });
+}
 
 const StoriesBar = ({ onStoryClick }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser, userProfile, isBusiness } = useAuth();
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [myStoryData, setMyStoryData] = useState(null);
+  const railRef = useRef(null);
+  // Business accounts do not browse live rooms — only consumers see the rail.
+  const { stages: liveStages } = useLiveStagesDiscover({
+    filter: 'all',
+    search: '',
+    enabled: !isBusiness,
+  });
+
+  const { activeLiveStages, businessRooms } = useMemo(() => {
+    if (isBusiness) {
+      return { activeLiveStages: [], businessRooms: [] };
+    }
+    const live = (liveStages || []).filter(
+      (s) => String(s?.status || 'active').toLowerCase() === 'active'
+    );
+    const people = [];
+    const business = [];
+    live.forEach((s) => {
+      if (isBusinessHostKind(s)) business.push(s);
+      else people.push(s);
+    });
+    return {
+      activeLiveStages: sortHostFirst(people),
+      businessRooms: sortHostFirst(business),
+    };
+  }, [liveStages, isBusiness]);
+
+  // RTL + scroll-snap otherwise opens on the last circle and hides create/your story.
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el || loading) return undefined;
+    scrollStoriesRailToStart(el);
+    const id = window.requestAnimationFrame(() => scrollStoriesRailToStart(el));
+    return () => window.cancelAnimationFrame(id);
+  }, [
+    loading,
+    myStoryData?.userId,
+    activeLiveStages.length,
+    businessRooms.length,
+    stories.length,
+  ]);
 
   // Robust user photo retrieval
   const userPhoto = getSafeAvatar(userProfile || currentUser);
@@ -202,7 +266,8 @@ const StoriesBar = ({ onStoryClick }) => {
     return () => unsubscribe();
   }, [currentUser, userPhoto]);
 
-  if (loading) return null;
+  // Keep the rail visible when rooms exist even if stories are still loading.
+  if (loading && activeLiveStages.length === 0 && businessRooms.length === 0 && stories.length === 0) return null;
 
   return (
     <div style={{
@@ -214,27 +279,41 @@ const StoriesBar = ({ onStoryClick }) => {
       position: 'relative',
       zIndex: 10
     }}>
-            <div style={{
-        display: 'flex',
-        gap: '12px',
-        overflowX: 'auto',
-        padding: '0 16px'
-      }}
-      className="hide-scrollbar">
+            <div
+        ref={railRef}
+        dir="ltr"
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          gap: '12px',
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          WebkitOverflowScrolling: 'touch',
+          scrollSnapType: 'x proximity',
+          scrollPaddingInline: '16px',
+          /* Extra bottom padding so LIVE badges on stage circles are not clipped */
+          padding: '4px 16px 12px',
+          touchAction: 'pan-x',
+        }}
+        className="hide-scrollbar stories-bar__rail"
+        role="list"
+        aria-label={t('stories_and_live_rail', 'Stories and live rooms')}
+      >
         
-                {/* 
-             LOGIC:
-             If I have stories -> Show "Add" Button + "Your Story" (View only)
-             If I DON'T have stories -> Show "Your Story" (Create mode)
+                {/*
+             Order (always start of rail): Create/Your Story → Live Stages → Business Stages → Other stories
+             dir=ltr keeps create first visible; RTL page dir otherwise scrolls to the end.
           */}
 
                 {myStoryData ?
         <>
-                        {/* 1. Add Story Button */}
+                        {/* 1. Add Story Button — first snap / first visible */}
                         <div
+            role="listitem"
             onClick={() => navigate('/create-story')}
             style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', cursor: 'pointer', flexShrink: 0
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', cursor: 'pointer', flexShrink: 0,
+              scrollSnapAlign: 'start',
             }}>
             
                             <div style={{
@@ -254,12 +333,14 @@ const StoriesBar = ({ onStoryClick }) => {
 
                         {/* 2. My Story (View) */}
                         <div
+            role="listitem"
             onClick={() => onStoryClick({
               allUserStories: [myStoryData, ...stories],
               initialUserIndex: 0
             })}
             style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', cursor: 'pointer', flexShrink: 0
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', cursor: 'pointer', flexShrink: 0,
+              scrollSnapAlign: 'start',
             }}>
             
                             <div className="avatar-story-ring avatar-story-ring--own">
@@ -276,11 +357,13 @@ const StoriesBar = ({ onStoryClick }) => {
                         </div>
                     </> : (
 
-        /* 3. My Story (Create Mode) */
+        /* Create Mode — first item */
         <div
+          role="listitem"
           onClick={() => navigate('/create-story')}
           style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', cursor: 'pointer', flexShrink: 0, position: 'relative'
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', cursor: 'pointer', flexShrink: 0, position: 'relative',
+            scrollSnapAlign: 'start',
           }}>
           
                         <div style={{ position: 'relative', lineHeight: 0 }}>
@@ -306,10 +389,39 @@ const StoriesBar = ({ onStoryClick }) => {
                     </div>)
         }
 
+                {/* Live consumer Stages (active only) */}
+                {activeLiveStages.map((stage) => (
+                  <div key={`live-${stage.id}`} role="listitem" style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
+                    <LiveStageCircle
+                      stage={stage}
+                      onClick={() => navigate(`/stage/${stage.id}`)}
+                    />
+                  </div>
+                ))}
+
+                {/* Live business Stages (24h, then purged — same as people) */}
+                {businessRooms.map((stage) => (
+                  <div
+                    key={`biz-${stage.id}`}
+                    role="listitem"
+                    style={{ scrollSnapAlign: 'start', flexShrink: 0 }}
+                  >
+                    <BusinessCommunityCircle
+                      community={{
+                        id: stage.id,
+                        name: stage.title || stage.hostName,
+                        logo: stage.hostAvatar,
+                      }}
+                      live
+                      onClick={() => navigate(`/stage/${stage.id}`)}
+                    />
+                  </div>
+                ))}
+
                 {/* Other Users' Stories */}
                 {stories.map((user, index) =>
+        <div key={user.userId} role="listitem" style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
         <StoryCircle
-          key={user.userId}
           partner={{
             id: user.userId,
             name: user.partnerName,
@@ -321,6 +433,7 @@ const StoriesBar = ({ onStoryClick }) => {
             allUserStories: myStoryData ? [myStoryData, ...stories] : stories,
             initialUserIndex: myStoryData ? index + 1 : index
           })} />
+        </div>
 
         )}
             </div>
@@ -328,6 +441,10 @@ const StoriesBar = ({ onStoryClick }) => {
             <style>{`
                 .hide-scrollbar::-webkit-scrollbar {
                     display: none;
+                }
+                .hide-scrollbar {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
                 }
             `}</style>
         </div>);

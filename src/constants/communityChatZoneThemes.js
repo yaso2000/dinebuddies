@@ -1,72 +1,91 @@
-/** Preset zone themes for business community chat (six visual regions). */
-export const COMMUNITY_CHAT_ZONE_THEME_IDS = ['default', 'stage', 'warm', 'cool', 'vivid', 'neon', 'spring', 'romantic'];
+/** Preset zone themes for community / stage chat bubble colors. */
+export const COMMUNITY_CHAT_ZONE_THEME_IDS = [
+  'default',
+  'stage',
+  'warm',
+  'cool',
+  'vivid',
+  'neon',
+  'spring',
+  'romantic',
+];
 
-export const COMMUNITY_CHAT_ZONE_THEME_LIST = ['default', 'stage', 'warm', 'cool', 'vivid', 'neon', 'spring', 'romantic'];
+/** Distinct primary hues shown in the Chat look picker (no near-duplicate oranges). */
+export const COMMUNITY_CHAT_ZONE_THEME_LIST = [
+  'default',
+  'stage',
+  'cool',
+  'vivid',
+  'neon',
+  'spring',
+  'romantic',
+  'warm',
+];
 
 export const COMMUNITY_CHAT_ZONE_THEMES = {
   default: {
     id: 'default',
     labelKey: 'community_chat_zone_theme_default',
-    labelDefault: 'Classic',
+    labelDefault: 'Slate',
     descriptionKey: 'community_chat_zone_theme_default_desc',
-    descriptionDefault: 'Follows the app light/dark theme.',
-    swatchColor: '#94a3b8',
+    descriptionDefault: 'Neutral gray bubbles.',
+    swatchColor: '#64748b',
   },
   stage: {
     id: 'stage',
     labelKey: 'community_chat_zone_theme_stage',
-    labelDefault: 'Stage (soft)',
+    labelDefault: 'Orange',
     descriptionKey: 'community_chat_zone_theme_stage_desc',
-    descriptionDefault: 'Layered look with light transparency.',
+    descriptionDefault: 'Brand orange bubbles.',
     swatchColor: '#e86e2e',
-  },
-  warm: {
-    id: 'warm',
-    labelKey: 'community_chat_zone_theme_warm',
-    labelDefault: 'Warm (solid)',
-    descriptionKey: 'community_chat_zone_theme_warm_desc',
-    descriptionDefault: 'Full-strength amber and orange — no wash.',
-    swatchColor: '#ea580c',
   },
   cool: {
     id: 'cool',
     labelKey: 'community_chat_zone_theme_cool',
-    labelDefault: 'Cool (solid)',
+    labelDefault: 'Blue',
     descriptionKey: 'community_chat_zone_theme_cool_desc',
-    descriptionDefault: 'Solid slate and sky blue surfaces.',
+    descriptionDefault: 'Sky blue bubbles.',
     swatchColor: '#0284c7',
   },
   vivid: {
     id: 'vivid',
     labelKey: 'community_chat_zone_theme_vivid',
-    labelDefault: 'Vivid',
+    labelDefault: 'Purple',
     descriptionKey: 'community_chat_zone_theme_vivid_desc',
-    descriptionDefault: 'Maximum contrast — 100% opaque colors.',
-    swatchColor: '#f97316',
+    descriptionDefault: 'Violet purple bubbles.',
+    swatchColor: '#7c3aed',
   },
   neon: {
     id: 'neon',
     labelKey: 'community_chat_zone_theme_neon',
-    labelDefault: 'Neon lights',
+    labelDefault: 'Cyan',
     descriptionKey: 'community_chat_zone_theme_neon_desc',
-    descriptionDefault: 'Electric cyan, magenta, and lime on deep black.',
-    swatchColor: '#00e5ff',
+    descriptionDefault: 'Electric cyan bubbles.',
+    swatchColor: '#06b6d4',
   },
   spring: {
     id: 'spring',
     labelKey: 'community_chat_zone_theme_spring',
-    labelDefault: 'Spring green',
+    labelDefault: 'Green',
     descriptionKey: 'community_chat_zone_theme_spring_desc',
-    descriptionDefault: 'Vivid fresh greens — bold and natural.',
-    swatchColor: '#22c55e',
+    descriptionDefault: 'Fresh green bubbles.',
+    swatchColor: '#16a34a',
   },
   romantic: {
     id: 'romantic',
     labelKey: 'community_chat_zone_theme_romantic',
-    labelDefault: 'Romantic red',
+    labelDefault: 'Rose',
     descriptionKey: 'community_chat_zone_theme_romantic_desc',
-    descriptionDefault: 'Deep burgundy and rose — intimate and rich.',
-    swatchColor: '#be123c',
+    descriptionDefault: 'Deep rose bubbles.',
+    swatchColor: '#e11d48',
+  },
+  warm: {
+    id: 'warm',
+    labelKey: 'community_chat_zone_theme_warm',
+    labelDefault: 'Gold',
+    descriptionKey: 'community_chat_zone_theme_warm_desc',
+    descriptionDefault: 'Warm gold bubbles.',
+    swatchColor: '#ca8a04',
   },
 };
 

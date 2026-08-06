@@ -1,140 +1,164 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaExclamationTriangle } from 'react-icons/fa';
-import { AppText } from '../components/base';
 import { useToast } from './ToastContext';
 import { classifyChatLink } from '../utils/chatLinkSafety';
+import { openExternalUrl } from '../platform/externalLinks';
 import './ExternalLinkGuard.css';
 
 const ExternalLinkGuardContext = createContext(null);
 
-function ExternalLinkConfirmDialog({ open, url, onStay, onLeave }) {
-  const { t } = useTranslation();
+const EXPLICIT_ALLOWS = new Set([
+    'business_maps',
+    'business_delivery',
+    'product_share',
+    'app_media',
+    'system',
+]);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') onStay?.();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onStay]);
-
-  if (!open) return null;
-
-  return (
-    <div
-      className="external-link-guard"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="external-link-guard-title"
-      aria-describedby="external-link-guard-message"
-      onClick={onStay}
-    >
-      <div className="external-link-guard__card" onClick={(event) => event.stopPropagation()}>
-        <div className="external-link-guard__icon" aria-hidden>
-          <FaExclamationTriangle />
-        </div>
-        <AppText as="h2" id="external-link-guard-title" className="external-link-guard__title">
-          {t('external_link_leave_title', 'You are leaving DineBuddies')}
-        </AppText>
-        <AppText as="p" id="external-link-guard-message" className="external-link-guard__message">
-          {t(
-            'external_link_leave_message',
-            'This link opens outside the app. Only continue if you trust the sender and the destination.'
-          )}
-        </AppText>
-        {url ? (
-          <AppText as="p" className="external-link-guard__url" dir="ltr">
-            {url}
-          </AppText>
-        ) : null}
-        <div className="external-link-guard__actions">
-          <button type="button" className="external-link-guard__btn external-link-guard__btn--stay" onClick={onStay} autoFocus>
-            {t('external_link_stay', 'Stay in app')}
-          </button>
-          <button type="button" className="external-link-guard__btn external-link-guard__btn--leave" onClick={onLeave}>
-            {t('external_link_continue', 'Open link')}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+/**
+ * App-wide link policy:
+ * - Internal DineBuddies paths → in-app navigate
+ * - External URLs → blocked (anti-spam), unless caller uses openExternalUrl with an allow mode
+ * - Document-level capture blocks leftover `<a target="_blank">` spam links
+ */
 export function ExternalLinkGuardProvider({ children }) {
-  const navigate = useNavigate();
-  const { t } = useTranslation();
-  const { showToast } = useToast();
-  const [pendingHref, setPendingHref] = useState(null);
+    const navigate = useNavigate();
+    const { t } = useTranslation();
+    const { showToast } = useToast();
 
-  const openExternal = useCallback((href) => {
-    if (!href || typeof window === 'undefined') return;
-    window.open(href, '_blank', 'noopener,noreferrer');
-  }, []);
-
-  const requestOpenLink = useCallback(
-    (rawUrl) => {
-      const info = classifyChatLink(rawUrl);
-      if (!info) return { handled: false };
-
-      if (info.kind === 'blocked') {
+    const notifyBlocked = useCallback(() => {
         showToast?.(
-          t(
-            'external_link_blocked',
-            'This link was blocked for safety (unsafe or hidden destination).'
-          ),
-          'error'
+            t(
+                'external_link_blocked',
+                'External links are disabled in the app to prevent spam.'
+            ),
+            'error'
         );
-        return { handled: true, kind: 'blocked' };
-      }
+    }, [showToast, t]);
 
-      if (info.kind === 'internal') {
-        navigate(info.href);
-        return { handled: true, kind: 'internal' };
-      }
+    const requestOpenLink = useCallback(
+        (rawUrl, options = null) => {
+            const allow =
+                options && typeof options === 'object' ? options.allow || null : null;
 
-      setPendingHref(info.href);
-      return { handled: true, kind: 'external' };
-    },
-    [navigate, showToast, t]
-  );
+            if (allow && EXPLICIT_ALLOWS.has(allow)) {
+                const ok = openExternalUrl(rawUrl, { allow });
+                if (!ok) notifyBlocked();
+                return { handled: true, kind: ok ? allow : 'blocked' };
+            }
 
-  const stay = useCallback(() => setPendingHref(null), []);
-  const leave = useCallback(() => {
-    const href = pendingHref;
-    setPendingHref(null);
-    openExternal(href);
-  }, [openExternal, pendingHref]);
+            const info = classifyChatLink(rawUrl);
+            if (!info) return { handled: false };
 
-  const value = useMemo(() => ({ requestOpenLink }), [requestOpenLink]);
+            if (info.kind === 'internal') {
+                navigate(info.href);
+                return { handled: true, kind: 'internal' };
+            }
 
-  return (
-    <ExternalLinkGuardContext.Provider value={value}>
-      {children}
-      <ExternalLinkConfirmDialog open={Boolean(pendingHref)} url={pendingHref} onStay={stay} onLeave={leave} />
-    </ExternalLinkGuardContext.Provider>
-  );
+            notifyBlocked();
+            return { handled: true, kind: 'blocked' };
+        },
+        [navigate, notifyBlocked]
+    );
+
+    useEffect(() => {
+        const onClickCapture = (event) => {
+            if (event.defaultPrevented) return;
+            const anchor = event.target?.closest?.('a[href]');
+            if (!anchor) return;
+
+            const rawHref = String(anchor.getAttribute('href') || '').trim();
+            if (!rawHref || rawHref === '#') return;
+
+            const lower = rawHref.toLowerCase();
+            if (
+                lower.startsWith('mailto:') ||
+                lower.startsWith('tel:') ||
+                lower.startsWith('blob:') ||
+                lower.startsWith('data:')
+            ) {
+                return;
+            }
+
+            if (lower.startsWith('javascript:') || lower.startsWith('vbscript:')) {
+                event.preventDefault();
+                event.stopPropagation();
+                notifyBlocked();
+                return;
+            }
+
+            const allowAttr = String(anchor.getAttribute('data-external-allow') || '').trim();
+            if (allowAttr && EXPLICIT_ALLOWS.has(allowAttr)) {
+                event.preventDefault();
+                event.stopPropagation();
+                const ok = openExternalUrl(rawHref, { allow: allowAttr });
+                if (!ok) notifyBlocked();
+                return;
+            }
+
+            // Same-document / relative downloads of blob previews already handled above.
+            const info = classifyChatLink(rawHref);
+            if (!info) {
+                // Relative paths that classifyChatLink rejects — let the browser handle
+                // only if clearly in-app (starts with /).
+                if (rawHref.startsWith('/') && !rawHref.startsWith('//')) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                notifyBlocked();
+                return;
+            }
+
+            if (info.kind === 'internal') {
+                // Keep first-party navigation inside the SPA when possible.
+                if (anchor.getAttribute('target') === '_blank' || event.metaKey || event.ctrlKey) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    navigate(info.href);
+                }
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            notifyBlocked();
+        };
+
+        document.addEventListener('click', onClickCapture, true);
+        return () => document.removeEventListener('click', onClickCapture, true);
+    }, [navigate, notifyBlocked]);
+
+    const value = useMemo(() => ({ requestOpenLink }), [requestOpenLink]);
+
+    return (
+        <ExternalLinkGuardContext.Provider value={value}>
+            {children}
+        </ExternalLinkGuardContext.Provider>
+    );
 }
 
 export function useExternalLinkGuard() {
-  const ctx = useContext(ExternalLinkGuardContext);
-  if (!ctx) {
-    return {
-      requestOpenLink: (rawUrl) => {
-        const info = classifyChatLink(rawUrl);
-        if (!info || info.kind === 'blocked') return { handled: true, kind: 'blocked' };
-        if (info.kind === 'internal' && typeof window !== 'undefined') {
-          window.location.assign(info.href);
-          return { handled: true, kind: 'internal' };
-        }
-        if (typeof window !== 'undefined' && info.href) {
-          window.open(info.href, '_blank', 'noopener,noreferrer');
-        }
-        return { handled: true, kind: info.kind };
-      },
-    };
-  }
-  return ctx;
+    const ctx = useContext(ExternalLinkGuardContext);
+    if (!ctx) {
+        return {
+            requestOpenLink: (rawUrl, options = null) => {
+                const allow =
+                    options && typeof options === 'object' ? options.allow || null : null;
+                if (allow && EXPLICIT_ALLOWS.has(allow)) {
+                    const ok = openExternalUrl(rawUrl, { allow });
+                    return { handled: true, kind: ok ? allow : 'blocked' };
+                }
+                const info = classifyChatLink(rawUrl);
+                if (!info) return { handled: false };
+                if (info.kind === 'internal' && typeof window !== 'undefined') {
+                    window.location.assign(info.href);
+                    return { handled: true, kind: 'internal' };
+                }
+                return { handled: true, kind: 'blocked' };
+            },
+        };
+    }
+    return ctx;
 }

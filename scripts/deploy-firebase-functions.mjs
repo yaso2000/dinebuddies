@@ -7,13 +7,14 @@
  *   node scripts/deploy-firebase-functions.mjs --sa         # force service account from .env
  */
 import dotenv from 'dotenv';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     ensureNodeTlsEnv,
     getFirebaseCliLogin,
+    isFirebaseCliLoginValid,
     printFirebaseLoginHelp,
     runFirebase,
 } from './_firebaseCliAuth.mjs';
@@ -35,6 +36,10 @@ const onlyArg =
         : filterArg ||
           'functions:publishPrivateInvitationDraft,functions:ensurePrivateInvitationShareToken,functions:getPrivateInvitationSharePreview,functions:claimPrivateInvitationShare';
 
+/**
+ * Build ADC env from .env, and isolate Firebase CLI from stale user tokens.
+ * Without isolation, `firebase deploy` prefers an expired CLI login over the SA key.
+ */
 function buildServiceAccountEnv() {
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
     const privateKey = String(process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
@@ -47,6 +52,12 @@ function buildServiceAccountEnv() {
 
     const tmpDir = mkdtempSync(join(tmpdir(), 'dinebuddies-sa-'));
     const keyPath = join(tmpDir, 'service-account.json');
+    const isolatedHome = join(tmpDir, 'home');
+    const isolatedAppData = join(tmpDir, 'AppData', 'Roaming');
+    const isolatedConfig = join(isolatedHome, '.config');
+    mkdirSync(isolatedAppData, { recursive: true });
+    mkdirSync(isolatedConfig, { recursive: true });
+
     writeFileSync(
         keyPath,
         JSON.stringify(
@@ -65,14 +76,41 @@ function buildServiceAccountEnv() {
         )
     );
 
+    const next = { ...process.env };
+    delete next.FIREBASE_TOKEN;
+
     return {
         tmpDir,
         env: ensureNodeTlsEnv({
-            ...process.env,
+            ...next,
             GOOGLE_APPLICATION_CREDENTIALS: keyPath,
             GCLOUD_PROJECT: projectId,
             GOOGLE_CLOUD_PROJECT: projectId,
+            // Keep CLI from reading expired tokens in the real user profile.
+            HOME: isolatedHome,
+            USERPROFILE: isolatedHome,
+            APPDATA: isolatedAppData,
+            XDG_CONFIG_HOME: isolatedConfig,
         }),
+    };
+}
+
+function useServiceAccount(reason) {
+    const sa = buildServiceAccountEnv();
+    if (!sa) {
+        printFirebaseLoginHelp();
+        process.exit(1);
+    }
+    console.log(`[deploy-functions] ${reason}`);
+    return {
+        deployEnv: sa.env,
+        cleanup: () => {
+            try {
+                rmSync(sa.tmpDir, { recursive: true, force: true });
+            } catch {
+                /* ignore */
+            }
+        },
     };
 }
 
@@ -82,39 +120,25 @@ console.log(`[deploy-functions] Deploying: ${onlyArg}`);
 let deployEnv = ensureNodeTlsEnv(process.env);
 let cleanup = () => {};
 
-if (!forceServiceAccount) {
+if (forceServiceAccount) {
+    ({ deployEnv, cleanup } = useServiceAccount('Forced service account from .env (isolated from CLI login)'));
+} else {
     const login = getFirebaseCliLogin();
-    if (login.email) {
+    if (login.email && isFirebaseCliLoginValid()) {
         console.log(`[deploy-functions] Using Firebase CLI login: ${login.email}`);
+    } else if (login.email) {
+        console.warn(
+            `[deploy-functions] CLI login ${login.email} is expired/invalid — falling back to service account…`
+        );
+        ({ deployEnv, cleanup } = useServiceAccount(
+            'Using service account from .env (needs IAM ActAs on appspot SA)'
+        ));
     } else {
         console.warn('[deploy-functions] No Firebase CLI login — trying service account fallback…');
-        const sa = buildServiceAccountEnv();
-        if (!sa) {
-            printFirebaseLoginHelp();
-            process.exit(1);
-        }
-        deployEnv = sa.env;
-        cleanup = () => {
-            try {
-                rmSync(sa.tmpDir, { recursive: true, force: true });
-            } catch {
-                /* ignore */
-            }
-        };
-        console.log('[deploy-functions] Using service account from .env (needs IAM ActAs on appspot SA)');
+        ({ deployEnv, cleanup } = useServiceAccount(
+            'Using service account from .env (needs IAM ActAs on appspot SA)'
+        ));
     }
-} else {
-    const sa = buildServiceAccountEnv();
-    if (!sa) process.exit(1);
-    deployEnv = sa.env;
-    cleanup = () => {
-        try {
-            rmSync(sa.tmpDir, { recursive: true, force: true });
-        } catch {
-            /* ignore */
-        }
-    };
-    console.log('[deploy-functions] Forced service account from .env');
 }
 
 const forceDeleteOrphans = argv.includes('--force') || filterArg === 'all';

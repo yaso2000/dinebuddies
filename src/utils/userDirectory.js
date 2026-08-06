@@ -18,6 +18,7 @@ import { resolveProfileAvatarUrl, resolveProfileCoverUrl, resolveSwipeProfilePho
 import { getUserDocLatLng } from './userDocCoords';
 
 import { DEFAULT_PROFILE_COVER_FALLBACK } from '../constants/defaultProfileMedia';
+import { normalizeDirectoryCardStyleId } from '../constants/directoryCardStyles';
 
 export const USER_DIRECTORY_DEFAULT_COVER = DEFAULT_PROFILE_COVER_FALLBACK;
 
@@ -49,7 +50,9 @@ export function mapDirectoryUser(publicDoc, userDoc = null) {
             USER_DIRECTORY_DEFAULT_SWIPE_PHOTO,
         profileGallery: Array.isArray(u.profileGallery) ? u.profileGallery.slice(0, 3) : [],
         directoryCoverIndex: u.directoryCoverIndex ?? 0,
+        directoryCardStyle: normalizeDirectoryCardStyleId(u.directoryCardStyle),
         bio: String(u.bio || u.shortBio || '').slice(0, 120),
+        age: typeof u.age === 'number' && u.age > 0 ? u.age : null,
         ageRange: u.ageRange || u.ageCategory || '',
         ageCategory: u.ageCategory || u.ageRange || '',
         favoritePlaces: [],

@@ -672,22 +672,22 @@ export const SocialLinks = ({ userId }) => {
 
         <div className="links-list">
                             {links.instagram &&
-          <a href={`https://instagram.com/${links.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="social-link">
+          <span className="social-link" style={{ cursor: 'default', pointerEvents: 'none' }}>
                                     <FaInstagram style={{ color: '#e4405f' }} />
                                     <AppText as="span">{links.instagram}</AppText>
-                                </a>
+                                </span>
           }
                             {links.twitter &&
-          <a href={`https://twitter.com/${links.twitter.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="social-link">
+          <span className="social-link" style={{ cursor: 'default', pointerEvents: 'none' }}>
                                     <FaTwitter style={{ color: '#1da1f2' }} />
                                     <AppText as="span">{links.twitter}</AppText>
-                                </a>
+                                </span>
           }
                             {links.website &&
-          <a href={links.website.startsWith('http') ? links.website : `https://${links.website}`} target="_blank" rel="noopener noreferrer" className="social-link">
+          <span className="social-link" style={{ cursor: 'default', pointerEvents: 'none' }}>
                                     <FaGlobe style={{ color: '#3b82f6' }} />
                                     <AppText as="span">{links.website}</AppText>
-                                </a>
+                                </span>
           }
                         </div>
         }

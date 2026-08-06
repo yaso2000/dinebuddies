@@ -1,8 +1,11 @@
 /**
  * Shared business community join UX:
- * - 1st click: join only (button becomes "Join chat")
- * - 2nd click (already joined): navigate to community chat
+ * - 1st click: join only (membership; works on Free + Paid)
+ * - 2nd click (already joined): open community chat only when Paid
+ * Business Stage open is separate and disabled for business accounts.
  */
+
+import { getBusinessSubscriptionAccess } from './businessSubscription';
 
 /**
  * Resolve the Firestore community owner id for join / chat navigation.
@@ -27,6 +30,11 @@ export function isJoinedToBusinessCommunity(joinedCommunities = [], communityId)
   return Boolean(communityId && (joinedCommunities || []).includes(communityId));
 }
 
+/** Whether this business listing may open permanent community group chat. */
+export function isBusinessCommunityChatEnabled(subscriptionTier) {
+  return getBusinessSubscriptionAccess(subscriptionTier).canUseCommunityGroupChat === true;
+}
+
 /**
  * @param {object} opts
  * @param {Event} [opts.event]
@@ -37,8 +45,10 @@ export function isJoinedToBusinessCommunity(joinedCommunities = [], communityId)
  * @param {boolean} opts.isJoined
  * @param {(communityId: string) => Promise<unknown>} opts.joinCommunity
  * @param {string} [opts.returnPath]
+ * @param {boolean} [opts.chatEnabled] — default true for backward compat; pass false for Free
+ * @returns {Promise<{ ok: boolean, navigated?: boolean, reason?: string }>}
  */
-export function handleBusinessCommunityJoinClick({
+export async function handleBusinessCommunityJoinClick({
   event,
   navigate,
   goToLogin,
@@ -47,6 +57,7 @@ export function handleBusinessCommunityJoinClick({
   isJoined,
   joinCommunity,
   returnPath,
+  chatEnabled = true,
 }) {
   event?.stopPropagation?.();
   event?.preventDefault?.();
@@ -54,14 +65,23 @@ export function handleBusinessCommunityJoinClick({
   const uid = currentUser?.uid || currentUser?.id;
   if (!uid || currentUser?.isGuest || currentUser?.id === 'guest') {
     goToLogin(returnPath ? { returnPath } : undefined);
-    return;
+    return { ok: false, reason: 'login' };
   }
-  if (!communityId) return;
+  if (!communityId) return { ok: false, reason: 'missing_community' };
+  if (typeof joinCommunity !== 'function') return { ok: false, reason: 'unavailable' };
 
   if (isJoined) {
+    if (!chatEnabled) {
+      return { ok: true, reason: 'chat_disabled' };
+    }
     navigate(`/community/${communityId}`);
-    return;
+    return { ok: true, navigated: true };
   }
 
-  void joinCommunity(communityId).catch(() => {});
+  try {
+    const ok = await joinCommunity(communityId);
+    return { ok: Boolean(ok), reason: ok ? undefined : 'join_failed' };
+  } catch {
+    return { ok: false, reason: 'join_failed' };
+  }
 }

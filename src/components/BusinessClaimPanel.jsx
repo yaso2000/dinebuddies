@@ -283,6 +283,19 @@ export default function BusinessClaimPanel({
     t,
   ]);
 
+  // Open claim modal when arriving from signup with ?claim=1
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('claim') !== '1') return;
+    setOpen(true);
+    params.delete('claim');
+    const next = params.toString();
+    navigate(
+      { pathname: location.pathname, search: next ? `?${next}` : '' },
+      { replace: true, state: location.state }
+    );
+  }, [location.pathname, location.search, location.state, navigate]);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const callback = readGoogleBusinessClaimCallback(params);

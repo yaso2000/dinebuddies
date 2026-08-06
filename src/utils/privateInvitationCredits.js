@@ -3,7 +3,7 @@
  * Spending uses the purchase wallet (`paidCredits`) only.
  * Public invitations (`invitations` collection) = 0 credits (not listed here).
  */
-export { getTotalDineCredits, getPurchaseCredits } from './walletCredits';
+export { getTotalDineCredits, getPurchaseCredits, getSpendableCredits } from './walletCredits';
 
 export const SOCIAL_INVITATION_PUBLISH_CREDITS = 90;
 export const PRIVATE_INVITATION_PUBLISH_CREDITS = 185;

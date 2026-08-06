@@ -12,10 +12,8 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getAuthErrorMessage } from '../../utils/errorMessages';
-import { isAffiliateAgent, isBusinessUser, hasBusinessSessionHint } from '../../utils/accountRole';
-import { accountKindFromProfileData, AUTH_PORTAL } from '../../utils/authPortalGate';
-import { resolveBusinessPostLoginPath } from '../../utils/postAuthRedirect';
-import { resolveSignedInHomePath } from '../../utils/accountKind';
+import { isAffiliateAgent } from '../../utils/accountRole';
+import { AUTH_PORTAL } from '../../utils/authPortalGate';
 import { clearPostLogoutRedirect } from '../../utils/localDevAuth';
 
 /**
@@ -58,21 +56,11 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
     }
   }, [location.search, showToast, t]);
 
-  const goBusinessHome = () => {
-    const fromVerify = new URLSearchParams(location.search).get('fromVerify') === '1';
-    const verified = new URLSearchParams(location.search).get('verified') === '1';
-    if (fromVerify || verified) {
-      navigate(resolveSignedInHomePath(currentUser, userProfile) || '/business-dashboard', { replace: true });
-      return;
-    }
-    navigate(resolveBusinessPostLoginPath(location.search), { replace: true });
-  };
-
+  // Leave /login via LoginHub <Navigate> once profileServerSynced — avoid a second navigate race.
   useEffect(() => {
-    if (authLoading || !currentUser || !profileServerSynced) return;
+    if (authLoading || !currentUser || !profileServerSynced || !justLoggedIn) return;
 
     if (userProfile && isAffiliateAgent(userProfile)) {
-      if (!justLoggedIn) return;
       setError(
         t(
           'auth_affiliate_portal_only',
@@ -81,26 +69,8 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
       );
       setJustLoggedIn(false);
       signOut('/affiliate/login').catch(() => {});
-      return;
     }
-
-    const profileIsBusiness = Boolean(
-      userProfile &&
-        (isBusinessUser(userProfile) ||
-          accountKindFromProfileData(userProfile) === AUTH_PORTAL.BUSINESS)
-    );
-    const businessSession =
-      justLoggedIn || profileIsBusiness || hasBusinessSessionHint(currentUser.uid);
-
-    if (
-      businessSession &&
-      (justLoggedIn ||
-        location.pathname === '/login' ||
-        location.pathname.startsWith('/business/login'))
-    ) {
-      goBusinessHome();
-    }
-  }, [justLoggedIn, currentUser, userProfile, authLoading, profileServerSynced, location.pathname, location.search, navigate, signOut, t]);
+  }, [justLoggedIn, currentUser, userProfile, authLoading, profileServerSynced, signOut, t]);
 
   const invalidLoginMsg = t('business_login_invalid_credentials', BUSINESS_LOGIN_INVALID_MSG_EN);
 

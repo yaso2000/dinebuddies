@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import { FaMapMarkerAlt, FaTimes } from 'react-icons/fa';
-import { LuSparkles } from 'react-icons/lu';
 import InboxHubLink from '../components/discovery/InboxHubLink';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { useAuth } from '../context/AuthContext';
@@ -164,7 +162,7 @@ export default function UsersDirectory() {
             <button
               type="button"
               className="users-directory-load-more-btn"
-              onClick={() => goToLogin({ returnPath: '/search/list' })}>
+              onClick={() => goToLogin({ returnPath: '/search' })}>
               {t('login_signup', 'Login / Sign Up')}
             </button>
           </div>
@@ -227,6 +225,7 @@ export default function UsersDirectory() {
               genderFilter={genderFilter}
               onGenderFilterChange={setGenderFilter}
             />
+<<<<<<< HEAD
             <Link
               to="/search"
               className="users-directory-feed-link"
@@ -236,6 +235,8 @@ export default function UsersDirectory() {
                 {t('user_directory_feed_view', 'Card view')}
               </AppText>
             </Link>
+=======
+>>>>>>> ac703671 (Restore local Stage and chat changes)
             <InboxHubLink
               className="users-directory-inbox-link inbox-hub-link"
               tab="activity"

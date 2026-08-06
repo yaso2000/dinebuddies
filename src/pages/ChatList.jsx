@@ -113,10 +113,14 @@ const ChatList = () => {
     totalUnread: stageUnread,
     leaveStage,
   } = useJoinedStages();
-  const { userProfile } = useAuth();
+  const { userProfile, isBusiness } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
 
-  const messagesBadge = chatUnreadCount + communityUnread + stageUnread + unreadMessageCount;
+  const messagesBadge =
+    chatUnreadCount +
+    communityUnread +
+    (isBusiness ? 0 : stageUnread) +
+    unreadMessageCount;
   const notificationsBadge = unreadBellCount;
 
   useEffect(() => {
@@ -126,17 +130,21 @@ const ChatList = () => {
   }, [userProfile, navigate]);
 
   useEffect(() => {
-    if (searchParams.get('tab') === TAB_STAGES) {
-      navigate('/stages', { replace: true });
+    if (searchParams.get('tab') !== TAB_STAGES) return;
+    // Business accounts do not browse Stages — strip the tab.
+    if (isBusiness) {
+      setSearchParams({}, { replace: true });
+      return;
     }
-  }, [searchParams, navigate]);
+    navigate('/stages', { replace: true });
+  }, [searchParams, navigate, isBusiness, setSearchParams]);
 
   const setActivePanel = (panel) => {
     if (panel === PANEL_NOTIFICATIONS) {
       setSearchParams({ panel: PANEL_NOTIFICATIONS }, { replace: true });
     } else {
       const tab = searchParams.get('tab');
-      if (tab === TAB_COMMUNITIES || tab === TAB_STAGES) {
+      if (tab === TAB_COMMUNITIES || (!isBusiness && tab === TAB_STAGES)) {
         setSearchParams({ tab }, { replace: true });
       } else {
         setSearchParams({}, { replace: true });
@@ -147,6 +155,7 @@ const ChatList = () => {
 
   const setActiveTab = (tab) => {
     if (tab === TAB_STAGES) {
+      if (isBusiness) return;
       navigate('/stages');
       return;
     }
@@ -211,7 +220,7 @@ const ChatList = () => {
             'Connect with members from their profile — like, follow, or send a greeting to open a chat.'
           )}
           ctaLabel={t('messages_empty_cta', 'Browse members')}
-          ctaTo="/search/list"
+          ctaTo="/search"
         />
       ) : (
         <div className="messages-page__list">
@@ -226,7 +235,7 @@ const ChatList = () => {
           ))}
         </div>
       );
-  } else if (activeTab === TAB_STAGES) {
+  } else if (!isBusiness && activeTab === TAB_STAGES) {
     messagesBody = (
       <StagesChatPanel
         stages={stages}
@@ -313,25 +322,27 @@ const ChatList = () => {
                 </AppText>
               ) : null}
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === TAB_STAGES}
-              className={`messages-page__tab${activeTab === TAB_STAGES ? ' active' : ''}`}
-              onClick={() => setActiveTab(TAB_STAGES)}>
-              {t('messages_tab_stages', 'Stages')}
-              {stageUnread > 0 || stages.length > 0 ? (
-                <AppText as="span" className="messages-page__tab-badge">
-                  {stageUnread > 0
-                    ? stageUnread > 99
-                      ? '99+'
-                      : stageUnread
-                    : stages.length > 99
-                      ? '99+'
-                      : stages.length}
-                </AppText>
-              ) : null}
-            </button>
+            {!isBusiness ? (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === TAB_STAGES}
+                className={`messages-page__tab${activeTab === TAB_STAGES ? ' active' : ''}`}
+                onClick={() => setActiveTab(TAB_STAGES)}>
+                {t('messages_tab_stages', 'Stages')}
+                {stageUnread > 0 || stages.length > 0 ? (
+                  <AppText as="span" className="messages-page__tab-badge">
+                    {stageUnread > 0
+                      ? stageUnread > 99
+                        ? '99+'
+                        : stageUnread
+                      : stages.length > 99
+                        ? '99+'
+                        : stages.length}
+                  </AppText>
+                ) : null}
+              </button>
+            ) : null}
           </div>
 
           <div className="messages-page__search-wrap">

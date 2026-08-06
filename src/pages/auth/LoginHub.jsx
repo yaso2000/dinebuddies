@@ -16,6 +16,7 @@ import { isAffiliateAgent, isBusinessUser, hasBusinessSessionHint } from '../../
 import { shouldLandOnAdminDashboard } from '../../utils/adminAccess';
 import { canConsumerEnterApp } from '../../utils/consumerProfileComplete';
 import { AppText } from '../../components/base';
+import AppShellLoading from '../../components/AppShellLoading';
 
 function readLoginTabFromLocation(location) {
     const q = new URLSearchParams(location.search || '');
@@ -49,19 +50,19 @@ export default function LoginHub() {
 
     const postLogout = peekPostLogoutRedirect();
 
-    // Leave as soon as a profile uid is present (or after server sync). Waiting only on
-    // profileServerSynced / canConsumerEnterApp hung Google redirect returns on /login.
+    // Leave only after server sync so AuthRoutingGate does not flash a second shell.
     const signedInConsumerReady =
         Boolean(currentUser) &&
         !isGuest &&
         !postLogout &&
+        profileServerSynced &&
         Boolean(userProfile) &&
         userProfile?.isGuest !== true &&
         userProfile?.role !== 'guest' &&
-        (profileServerSynced || Boolean(userProfile?.uid || userProfile?.id)) &&
         !shouldLandOnAdminDashboard(currentUser, userProfile) &&
         !isAffiliateAgent(userProfile) &&
-        !isBusinessUser(userProfile);
+        !isBusinessUser(userProfile) &&
+        !hasBusinessSessionHint(currentUser.uid);
 
     const signedInBusinessReady =
         Boolean(currentUser) &&
@@ -76,6 +77,12 @@ export default function LoginHub() {
             clearPostLogoutRedirect();
         }
     }, [currentUser]);
+
+    // Warm first-home chunks while the user is on /login (kills Suspense flash after leave).
+    useEffect(() => {
+        void import('../../pages/PostsFeed');
+        void import('../../pages/BusinessDashboard');
+    }, []);
 
     useEffect(() => {
         const next = sanitizeNextPath(searchParams.get('next'));
@@ -104,18 +111,22 @@ export default function LoginHub() {
         !profileServerSynced &&
         (hasFirebaseAuthReturnInUrl() || peekOAuthRedirectPending() || peekOAuthRedirectProvider());
 
-    // OAuth returned a session but profile doc not hydrated yet — leave login (do not hang).
+    // OAuth / sign-in in flight — one shell on /login (no hop to feed before sync).
     if (
         currentUser &&
         !isGuest &&
         !postLogout &&
-        !userProfile &&
-        (finishingOAuth || hasFirebaseAuthReturnInUrl() || peekOAuthRedirectPending())
+        !profileServerSynced &&
+        (finishingOAuth ||
+            hasFirebaseAuthReturnInUrl() ||
+            peekOAuthRedirectPending() ||
+            Boolean(userProfile) ||
+            tab === 'business')
     ) {
-        return <Navigate to="/posts-feed" replace />;
+        return <AppShellLoading variant="session" />;
     }
 
-    if (signedInBusinessReady && tab === 'business') {
+    if (signedInBusinessReady) {
         return <Navigate to={resolveBusinessPostLoginPath(location.search)} replace />;
     }
 

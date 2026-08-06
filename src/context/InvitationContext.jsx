@@ -340,6 +340,7 @@ export const InvitationProvider = ({ children }) => {
                     ownerId: doc.id,
                     name: data.displayName || 'Business',
                     type: info.businessType || 'Restaurant',
+                    subscriptionTier: data.subscriptionTier || 'free',
                     isVirtual: data.isVirtual === true,
                     createdBy: data.createdBy || null,
                     sourceCollection: data.sourceCollection || null,
@@ -1020,7 +1021,7 @@ export const InvitationProvider = ({ children }) => {
         }
     };
 
-    // ── Private / social drafts: Dine Credits from purchase wallet (`paidCredits`); admins bypass. ──
+    // ── Private / social drafts: spendable = paidCredits + savedCredits; admins bypass. ──
 
     const canCreateSocialInvitation = (kind = 'social') => {
         if (!currentUser || isGuest) return { canCreate: false, reason: 'guest' };
@@ -1838,8 +1839,17 @@ export const InvitationProvider = ({ children }) => {
         } catch (error) {
             console.error('Error joining community:', error);
             const msg = String(error?.message || '');
-            if (msg.includes('blocked') || error?.code === 'functions/permission-denied') {
+            const code = String(error?.code || '');
+            if (msg.includes('blocked') || code === 'functions/permission-denied') {
                 addNotification('🚫', 'You are blocked from joining this community.', 'error');
+            } else if (msg.includes('not a community owner') || code === 'functions/failed-precondition') {
+                addNotification(
+                    '⚠️',
+                    'This business cannot accept community members right now.',
+                    'error'
+                );
+            } else {
+                addNotification('⚠️', 'Could not join the community. Try again.', 'error');
             }
             return false;
         }

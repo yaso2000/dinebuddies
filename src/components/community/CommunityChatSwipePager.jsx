@@ -32,6 +32,11 @@ function renderPagePanel(page, room, pageIndex, activePageIndex) {
         participants={room.participants}
         loading={room.participantsLoading}
         partnerId={room.partnerId}
+        isHost={Boolean(room.isHost)}
+        isStageRoom={Boolean(room.isStageRoom)}
+        onMuteMember={room.muteMemberInChat}
+        onKickMember={room.kickMemberFromStage}
+        onBlockMember={room.blockMemberFromStages}
       />
     );
   }

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useLayoutEffect, useState, useCallback } from 'react';
 import {
     applyDocumentTheme,
+    readBootAccountTheme,
     readStoredThemeMode,
     THEME_STORAGE_KEY,
 } from '../theme/bootDocumentTheme';
@@ -18,7 +19,8 @@ export const useTheme = () => {
 export const ThemeProvider = ({ children }) => {
     const [themeMode, setThemeMode] = useState(readStoredThemeMode);
     const [brandColor, setBrandColor] = useState(null);
-    const [accountTheme, setAccountThemeState] = useState('personal');
+    // Match bootDocumentTheme so React does not flash personal → business on entry.
+    const [accountTheme, setAccountThemeState] = useState(readBootAccountTheme);
 
     const isDark = themeMode === 'dark';
     const isBusinessTheme = accountTheme === 'business';
