@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { LuSparkles } from 'react-icons/lu';
 import InvitationCard from '../components/InvitationCard';
 import InvitationSkeleton from '../components/InvitationSkeleton';
 import { useInvitations } from '../context/InvitationContext';
@@ -747,6 +748,16 @@ const Home = () => {
                     <button type="button" onClick={() => setViewMode('list')} className={viewMode === 'list' ? 'active' : ''}>{t('list_view')}</button>
                     <button type="button" onClick={() => setViewMode('map')} className={viewMode === 'map' ? 'active' : ''}>{t('map_view')}</button>
                 </div>
+                <Link
+                  to="/invitations"
+                  className="users-directory-feed-link home-invitations-card-view"
+                  title={t('user_directory_feed_view', 'Card view')}
+                >
+                  <LuSparkles aria-hidden />
+                  <AppText as="span" className="users-directory-feed-link__label">
+                    {t('user_directory_feed_view', 'Card view')}
+                  </AppText>
+                </Link>
             </div>
 
 

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaMapMarkerAlt, FaTimes } from 'react-icons/fa';
+import { LuSparkles } from 'react-icons/lu';
 import InboxHubLink from '../components/discovery/InboxHubLink';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { useAuth } from '../context/AuthContext';

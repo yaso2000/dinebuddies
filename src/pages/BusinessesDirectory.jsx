@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { LuSparkles } from 'react-icons/lu';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -1599,6 +1600,29 @@ const BusinessesDirectory = () => {
                             <FaTrophy style={{ fontSize: '1.25rem' }} />
                         </button>
                     </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Link
+                      to="/restaurants"
+                      className="users-directory-feed-link"
+                      title={t('user_directory_feed_view', 'Card view')}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        minHeight: 34,
+                        padding: '6px 10px',
+                        borderRadius: 999,
+                        border: '1px solid var(--border-color)',
+                        background: 'rgba(232, 110, 46, 0.12)',
+                        color: 'var(--primary)',
+                        textDecoration: 'none',
+                        fontSize: '0.76rem',
+                        fontWeight: 700,
+                      }}
+                    >
+                      <LuSparkles aria-hidden />
+                      <AppText as="span">{t('user_directory_feed_view', 'Card view')}</AppText>
+                    </Link>
                     <div style={{ background: 'var(--bg-card)', padding: '4px', borderRadius: '50px', display: 'flex', border: '1px solid var(--border-color)' }}>
                         <button
               onClick={() => setViewMode('grid')}
@@ -1642,6 +1666,7 @@ const BusinessesDirectory = () => {
               
                             {t('map')}
                         </button>
+                    </div>
                     </div>
                 </div>
 

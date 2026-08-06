@@ -31,6 +31,8 @@ import InviteReceivedPage from './pages/InviteReceivedPage';
 import DiscoveryInboxPage from './pages/DiscoveryInboxPage';
 import DiscoveryPage from './pages/DiscoveryPage';
 import UsersDirectory from './pages/UsersDirectory';
+import InvitationsSwipePage from './pages/InvitationsSwipePage';
+import BusinessesSwipePage from './pages/BusinessesSwipePage';
 import { isCashoutFeatureEnabled } from './config/cashoutFeature';
 
 // Lazy Pages (Loaded on demand to improve startup speed)
@@ -268,7 +270,8 @@ function App() {
                                                         }
                                                     />
                                                     <Route path="/search/list" element={<UsersDirectory />} />
-                                                    <Route path="/restaurants" element={<BusinessesDirectory />} />
+                                                    <Route path="/restaurants" element={<BusinessesSwipePage />} />
+                                                    <Route path="/restaurants/list" element={<BusinessesDirectory />} />
                                                     <Route path="/rankings" element={<BusinessRankings />} />
                                                     <Route path="/restaurant/:id" element={<RestaurantDetails />} />
 
@@ -340,7 +343,8 @@ function App() {
                                                     <Route path="/community/:partnerId" element={<GuestBlockedRoute><CommunityChatRoom /></GuestBlockedRoute>} />
                                                     <Route path="/stage/:stageId" element={<GuestBlockedRoute><StageChatRoom /></GuestBlockedRoute>} />
                                                     <Route path="/posts-feed" element={<PostsFeed />} />
-                                                    <Route path="/invitations" element={<HomeInvitations />} />
+                                                    <Route path="/invitations" element={<InvitationsSwipePage />} />
+                                                    <Route path="/invitations/list" element={<HomeInvitations />} />
 
                                                     <Route path="/admin/*" element={<AdminRoute><AdminShell /></AdminRoute>}>
                                                         <Route path="google-places" element={<AdminGooglePlacesImportPage />} />

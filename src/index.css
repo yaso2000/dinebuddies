@@ -2203,10 +2203,44 @@ select.input-field {
 
 .home-invitations-toolbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
+  gap: 8px;
   padding: 0 4px 4px;
   margin: 0;
+}
+
+.home-invitations-card-view {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  background: rgba(232, 110, 46, 0.12);
+  color: var(--primary);
+}
+
+.home-invitations-card-view svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.home-invitations-card-view .users-directory-feed-link__label {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .home-invitations-card-view .users-directory-feed-link__label {
+    display: inline;
+  }
 }
 
 .home-invitations-toolbar .view-mode-toggle button {

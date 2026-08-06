@@ -312,10 +312,23 @@ const Layout = ({ children }) => {
   location.pathname === '/search' ||
   location.pathname === '/search/list' ||
   location.pathname.startsWith('/search/');
+  const isInvitationsNavActive =
+  location.pathname === '/invitations' ||
+  location.pathname === '/invitations/' ||
+  location.pathname.startsWith('/invitations/');
+  const isRestaurantsNavActive =
+  location.pathname === '/restaurants' ||
+  location.pathname === '/restaurants/' ||
+  location.pathname.startsWith('/restaurants/');
   const isSearchListRoute =
   location.pathname === '/search/list' || location.pathname.startsWith('/search/list/');
   const isConnectMagneticRoute =
-  location.pathname === '/search' || location.pathname === '/search/';
+  location.pathname === '/search' ||
+  location.pathname === '/search/' ||
+  location.pathname === '/invitations' ||
+  location.pathname === '/invitations/' ||
+  location.pathname === '/restaurants' ||
+  location.pathname === '/restaurants/';
   const isInboxMessagesActive = isMessagesHub && !isNotificationsRoute;
   const isAdminRoute = location.pathname.startsWith('/admin');
 
@@ -627,10 +640,10 @@ const Layout = ({ children }) => {
           }
 
                         <DesktopNavGroup title={t('nav_group_discover', 'Discover')} variant="discover">
-                        <Link to="/invitations" className={`ds-nav-item ${isActive('/invitations') ? 'active' : ''}`}>
+                        <Link to="/invitations" className={`ds-nav-item ${isInvitationsNavActive ? 'active' : ''}`}>
                             <FaEnvelope /><AppText as="span">{t('nav_invitations', 'Invitations')}</AppText>
                         </Link>
-                        <Link to="/restaurants" className={`ds-nav-item ${isActive('/restaurants') ? 'active' : ''}`}>
+                        <Link to="/restaurants" className={`ds-nav-item ${isRestaurantsNavActive ? 'active' : ''}`}>
                             <FaStore /><AppText as="span">{t('nav_partners', 'Businesses')}</AppText>
                         </Link>
                         {!isBusinessAccount && !isGuest && userProfile?.role !== 'guest' &&
@@ -739,7 +752,7 @@ const Layout = ({ children }) => {
                         <FaHome className="nav-icon" />
                         <AppText as="span">{t('nav_home')}</AppText>
                     </Link>
-                    <Link to="/invitations" className={`nav-item ${isActive('/invitations') ? 'active' : ''}`}>
+                    <Link to="/invitations" className={`nav-item ${isInvitationsNavActive ? 'active' : ''}`}>
                         <FaEnvelope className="nav-icon" />
                         <AppText as="span">{t('nav_invitations', 'Invitations')}</AppText>
                     </Link>
@@ -772,7 +785,7 @@ const Layout = ({ children }) => {
                             <div className="fab-container"><FaPlusCircle className="nav-icon fab" /></div>
                         </button>
         }
-                    <Link to="/restaurants" className={`nav-item ${isActive('/restaurants') ? 'active' : ''}`}>
+                    <Link to="/restaurants" className={`nav-item ${isRestaurantsNavActive ? 'active' : ''}`}>
                         <FaStore className="nav-icon" />
                         <AppText as="span">{t('nav_partners', 'Businesses')}</AppText>
                     </Link>
