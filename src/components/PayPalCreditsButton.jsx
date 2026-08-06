@@ -126,16 +126,15 @@ export default function PayPalCreditsButton({ pack, disabled = false }) {
         onError={(error) => {
           console.error('[PayPalCreditsButton/onError]', error);
           setBusy(false);
-          // createOrder already toasted the actionable Functions/PayPal message.
+          // createOrder / onApprove already show the actionable toast.
           if (createOrderFailedRef.current) {
             createOrderFailedRef.current = false;
             return;
           }
+          const msg = paypalCallableErrorMessage(error, '');
+          if (!msg || /Buttons is undefined|unable to render/i.test(msg)) return;
           showToast(
-            paypalCallableErrorMessage(
-              error,
-              t('paypal_checkout_error', 'Something went wrong with PayPal checkout.')
-            ),
+            msg || t('paypal_checkout_error', 'Something went wrong with PayPal checkout.'),
             'error'
           );
         }}
