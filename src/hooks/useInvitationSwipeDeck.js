@@ -6,7 +6,7 @@ import { isVisibleInPublicFeed } from '../utils/invitationRules';
 import { isPublicInvitationExpiredForArchive } from '../utils/invitationExpiry';
 import { getInvitationLatLng } from '../utils/invitationCoords';
 import { pickSafeDisplayImageUrl } from '../utils/avatarUtils';
-import { calculateDistance } from '../utils/locationVerification';
+import { haversineKm } from '../utils/postsFeedScope';
 import { fetchIpLocation } from '../utils/locationUtils';
 
 const FALLBACK_IMAGE =
@@ -42,32 +42,48 @@ export function useInvitationSwipeDeck() {
 
   useEffect(() => {
     let cancelled = false;
-    const profileLat = Number(userProfile?.lat ?? userProfile?.location?.lat);
-    const profileLng = Number(userProfile?.lng ?? userProfile?.location?.lng);
-    if (Number.isFinite(profileLat) && Number.isFinite(profileLng)) {
-      setDeviceLocation({ lat: profileLat, lng: profileLng });
-      return undefined;
+
+    const applyCoords = (lat, lng) => {
+      const latN = Number(lat);
+      const lngN = Number(lng);
+      if (cancelled || !Number.isFinite(latN) || !Number.isFinite(lngN)) return;
+      setDeviceLocation({ lat: latN, lng: lngN });
+    };
+
+    const applyIpOrProfileFallback = async () => {
+      try {
+        const ip = await fetchIpLocation();
+        if (cancelled) return;
+        if (ip?.latitude != null && ip?.longitude != null) {
+          applyCoords(ip.latitude, ip.longitude);
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+      const profileLat = Number(userProfile?.lat ?? userProfile?.location?.lat);
+      const profileLng = Number(userProfile?.lng ?? userProfile?.location?.lng);
+      if (Number.isFinite(profileLat) && Number.isFinite(profileLng)) {
+        applyCoords(profileLat, profileLng);
+      }
+    };
+
+    // Prefer live GPS (same as invitations list), then IP, then profile coords.
+    if (!navigator.geolocation) {
+      void applyIpOrProfileFallback();
+      return () => {
+        cancelled = true;
+      };
     }
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          if (!cancelled) {
-            setDeviceLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-          }
-        },
-        async () => {
-          try {
-            const ip = await fetchIpLocation();
-            if (!cancelled && ip?.lat != null && ip?.lng != null) {
-              setDeviceLocation({ lat: Number(ip.lat), lng: Number(ip.lng) });
-            }
-          } catch {
-            /* ignore */
-          }
-        },
-        { maximumAge: 120000, timeout: 8000 }
-      );
-    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => applyCoords(pos.coords.latitude, pos.coords.longitude),
+      () => {
+        void applyIpOrProfileFallback();
+      },
+      { maximumAge: 60000, timeout: 8000 }
+    );
+
     return () => {
       cancelled = true;
     };
@@ -123,7 +139,7 @@ export function useInvitationSwipeDeck() {
       const coords = getInvitationLatLng(inv);
       const distanceKm =
         userLocation && coords
-          ? calculateDistance(userLocation.lat, userLocation.lng, coords.lat, coords.lng)
+          ? haversineKm(userLocation.lat, userLocation.lng, coords.lat, coords.lng)
           : null;
       const hostName = inv.author?.name || inv.author?.displayName || '';
       const locationLabel = [inv.location, inv.city].filter(Boolean).join(' · ') || inv.location || '';
