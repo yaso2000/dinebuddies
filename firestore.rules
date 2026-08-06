@@ -539,10 +539,8 @@ service cloud.firestore {
     
     match /offers/{offerId} {
       allow read: if true;
-      
-      // Create: Must be partner, and partnerId must match their UID
-      allow create: if isPartner() && 
-                       request.resource.data.partnerId == request.auth.uid;
+      // Creates are server-only via publishPremiumOffer (atomic credit spend).
+      allow create: if false;
       
       // Update: Must be partner, own the offer, and cannot modify protected fields
       allow update: if isPartner() && 
@@ -556,16 +554,24 @@ service cloud.firestore {
 
     match /active_offers/{offerId} {
       allow read: if true;
-      allow create: if isPartner() && request.resource.data.partnerId == request.auth.uid;
+      // Republish only: must reference an existing owned offers/{offerId} doc.
+      allow create: if isPartner() &&
+                       request.resource.data.partnerId == request.auth.uid &&
+                       exists(/databases/$(database)/documents/offers/$(offerId)) &&
+                       get(/databases/$(database)/documents/offers/$(offerId)).data.partnerId == request.auth.uid;
       allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
       allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
     }
 
     match /special_offers/{offerId} {
       allow read: if true;
-      // Security: bind created special offer to authenticated partner owner
-      allow create: if isPartner() && request.resource.data.partnerId == request.auth.uid;
-      allow update: if isPartner() && resource.data.partnerId == request.auth.uid;
+      // Creates are server-only via publishSpecialOffer (atomic credit spend + ownership bind).
+      allow create: if false;
+      allow update: if isPartner() &&
+                       resource.data.partnerId == request.auth.uid &&
+                       resource.data.restaurantId == request.auth.uid &&
+                       request.resource.data.partnerId == resource.data.partnerId &&
+                       request.resource.data.restaurantId == resource.data.restaurantId;
       allow delete: if (isPartner() && resource.data.partnerId == request.auth.uid) || isAdmin();
     }
     
@@ -607,6 +613,36 @@ service cloud.firestore {
         allow delete: if isSignedIn() &&
                          (resource.data.senderId == request.auth.uid || isAdmin());
       }
+    }
+
+    // ============================================
+    // BUSINESS MOTION POSTS (drafts client-writable; publish via CF)
+    // ============================================
+    match /business_motion_posts/{postId} {
+      // Published posts are public; owners can read their drafts/archives
+      allow read: if resource.data.status == 'published' ||
+                     (isSignedIn() && (
+                       resource.data.ownerId == request.auth.uid ||
+                       resource.data.businessId == request.auth.uid ||
+                       isAdmin()
+                     ));
+
+      allow create: if isSignedIn() &&
+                       request.resource.data.ownerId == request.auth.uid &&
+                       request.resource.data.businessId == request.auth.uid &&
+                       request.resource.data.status == 'draft';
+
+      // Owners may edit drafts / unpublish / archive, but cannot self-publish
+      // (status 'published' is set only by publishBusinessMotionPost Admin SDK).
+      allow update: if isSignedIn() &&
+                       resource.data.ownerId == request.auth.uid &&
+                       resource.data.businessId == request.auth.uid &&
+                       request.resource.data.ownerId == resource.data.ownerId &&
+                       request.resource.data.businessId == resource.data.businessId &&
+                       request.resource.data.status in ['draft', 'archived'];
+
+      allow delete: if isSignedIn() &&
+                       (resource.data.ownerId == request.auth.uid || isAdmin());
     }
 
     // ============================================
