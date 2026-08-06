@@ -93,18 +93,28 @@ function paypalClientSecret() {
     return String(process.env.PAYPAL_CLIENT_SECRET || '').trim();
 }
 
+function paypalAllowUsd() {
+    const raw = String(process.env.PAYPAL_ALLOW_USD || '').trim().toLowerCase();
+    return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
+function normalizePayPalCurrency(value) {
+    const currency = String(value || '')
+        .trim()
+        .toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) return '';
+    // Legacy env often still says USD while the AU merchant only receives AUD.
+    if (currency === 'USD' && !paypalAllowUsd()) return 'AUD';
+    return currency;
+}
+
 function paypalCurrency() {
-    // AU PayPal business accounts often cannot receive USD until enabled.
-    return String(process.env.PAYPAL_CURRENCY || 'AUD').trim().toUpperCase();
+    return normalizePayPalCurrency(process.env.PAYPAL_CURRENCY) || 'AUD';
 }
 
 /** Prefer the currency the frontend SDK loaded with so order + buttons stay aligned. */
 function resolveOrderCurrency(clientCurrency) {
-    const fromClient = String(clientCurrency || '')
-        .trim()
-        .toUpperCase();
-    if (/^[A-Z]{3}$/.test(fromClient)) return fromClient;
-    return paypalCurrency();
+    return normalizePayPalCurrency(clientCurrency) || paypalCurrency();
 }
 
 function enhancePayPalCreateFailure(data, currency) {
