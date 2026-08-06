@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "save": "node scripts/save-local-and-cloud.mjs",
     "dev:fresh": "node scripts/kill-vite-dev-ports.mjs && vite",
     "dev:dist": "npx --yes serve dist -p 4173",
     "dev:src": "vite",
