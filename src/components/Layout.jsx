@@ -313,15 +313,9 @@ const Layout = ({ children }) => {
   location.pathname === '/search/list' ||
   location.pathname.startsWith('/search/');
   const isSearchListRoute =
-<<<<<<< HEAD
   location.pathname === '/search/list' || location.pathname.startsWith('/search/list/');
   const isConnectMagneticRoute =
   location.pathname === '/search' || location.pathname === '/search/';
-=======
-  location.pathname === '/search' ||
-  location.pathname === '/search/list' ||
-  location.pathname.startsWith('/search/list/');
->>>>>>> ac703671 (Restore local Stage and chat changes)
   const isInboxMessagesActive = isMessagesHub && !isNotificationsRoute;
   const isAdminRoute = location.pathname.startsWith('/admin');
 

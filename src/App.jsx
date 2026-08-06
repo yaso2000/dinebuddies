@@ -262,19 +262,11 @@ function App() {
                                                         path="/search"
                                                         element={
                                                             <GuestBlockedRoute>
-<<<<<<< HEAD
                                                                 <DiscoveryPage />
                                                             </GuestBlockedRoute>
                                                         }
                                                     />
                                                     <Route path="/search/list" element={<UsersDirectory />} />
-=======
-                                                                <UsersDirectory />
-                                                            </GuestBlockedRoute>
-                                                        }
-                                                    />
-                                                    <Route path="/search/list" element={<Navigate to="/search" replace />} />
->>>>>>> ac703671 (Restore local Stage and chat changes)
                                                     <Route path="/restaurants" element={<BusinessesDirectory />} />
                                                     <Route path="/rankings" element={<BusinessRankings />} />
                                                     <Route path="/restaurant/:id" element={<RestaurantDetails />} />

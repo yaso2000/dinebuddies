@@ -225,7 +225,6 @@ export default function UsersDirectory() {
               genderFilter={genderFilter}
               onGenderFilterChange={setGenderFilter}
             />
-<<<<<<< HEAD
             <Link
               to="/search"
               className="users-directory-feed-link"
@@ -235,8 +234,6 @@ export default function UsersDirectory() {
                 {t('user_directory_feed_view', 'Card view')}
               </AppText>
             </Link>
-=======
->>>>>>> ac703671 (Restore local Stage and chat changes)
             <InboxHubLink
               className="users-directory-inbox-link inbox-hub-link"
               tab="activity"
