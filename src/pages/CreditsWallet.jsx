@@ -87,10 +87,8 @@ export default function CreditsWallet() {
       currency: PAYPAL_CURRENCY,
       intent: 'capture',
       components: 'buttons',
-      // Card / Pay Later need extra PayPal merchant enablement; wallet PayPal is enough.
+      // Hide card/credit rails that need extra merchant enablement; keep PayPal wallet visible.
       disableFunding: 'card,credit,paylater',
-      // Prefer wallet button; PayPalCreditsButton also sets fundingSource="paypal".
-      enableFunding: 'paypal',
       'data-namespace': 'dinebuddies_paypal_credits',
     }),
     []

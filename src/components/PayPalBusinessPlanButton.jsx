@@ -18,15 +18,16 @@ export default function PayPalBusinessPlanButton({ disabled = false, onSuccess }
   return (
     <div style={{ width: '100%', opacity: disabled ? 0.7 : 1 }}>
       <PayPalButtons
-        fundingSource="paypal"
+        // Do not set fundingSource — if that source is ineligible PayPal renders nothing.
         disabled={disabled || busy}
         forceReRender={[disabled, PAYPAL_CURRENCY]}
         style={{
           layout: 'vertical',
-          shape: 'pill',
+          shape: 'rect',
           label: 'paypal',
-          height: 42,
+          height: 45,
           color: 'gold',
+          tagline: false,
         }}
         createOrder={async () => {
           setBusy(true);

@@ -18,16 +18,16 @@ export default function PayPalCreditsButton({ pack, disabled = false }) {
   return (
     <div style={{ width: '100%', opacity: disabled ? 0.7 : 1 }}>
       <PayPalButtons
-        // Wallet PayPal only — card/guest checkout needs extra merchant enablement.
-        fundingSource="paypal"
+        // Do not set fundingSource — if that source is ineligible PayPal renders nothing.
         disabled={disabled || busy}
         forceReRender={[pack.id, disabled, PAYPAL_CURRENCY]}
         style={{
           layout: 'vertical',
-          shape: 'pill',
+          shape: 'rect',
           label: 'paypal',
-          height: 42,
+          height: 45,
           color: 'gold',
+          tagline: false,
         }}
         createOrder={async () => {
           setBusy(true);
