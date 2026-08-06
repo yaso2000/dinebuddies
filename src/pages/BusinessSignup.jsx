@@ -4,7 +4,8 @@ import { FaEnvelope, FaLock, FaCheck, FaStore, FaChevronRight, FaChevronLeft } f
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../firebase/config';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app, { auth, db } from '../firebase/config';
 import { sendVerificationEmailResend, verificationEmailErrorMessage } from '../services/verificationEmailService';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
@@ -212,6 +213,26 @@ const BusinessSignup = () => {
             const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
             const user = userCredential.user;
 
+            let placeId = businessData.placeId || null;
+            if (placeId) {
+                try {
+                    const lookup = httpsCallable(getFunctions(app, 'us-central1'), 'lookupBusinessByPlaceId');
+                    const result = await lookup({ placeId });
+                    if (result?.data?.found && result?.data?.businessId && result.data.businessId !== user.uid) {
+                        placeId = null;
+                        showToast(
+                            t(
+                                'place_id_already_claimed',
+                                'This venue is already linked to another DineBuddies business account. Continue without venue linking, or contact support.'
+                            ),
+                            'error'
+                        );
+                    }
+                } catch (lookupErr) {
+                    console.warn('placeId uniqueness check skipped:', lookupErr?.message || lookupErr);
+                }
+            }
+
             /** Do not copy Google Places photos into the profile gallery at signup — owner adds images manually in EnhancedGallery. */
             const businessInfo = {
                 businessName: businessData.businessName.trim(),
@@ -224,7 +245,7 @@ const BusinessSignup = () => {
                 address: businessData.location,
                 lat: businessData.lat,
                 lng: businessData.lng,
-                placeId: businessData.placeId,
+                placeId,
                 hours: businessData.openingHours,
                 coverImage: null,
                 galleryEnhanced: [],

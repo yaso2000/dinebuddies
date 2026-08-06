@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useTranslation } from 'react-i18next';
 import { FaStore, FaPhone, FaMapMarkerAlt, FaGlobe, FaEye, FaClock } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { db } from '../firebase/config';
+import app, { db } from '../firebase/config';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import LocalhostAppPreviewHint from '../components/LocalhostAppPreviewHint';
 import {
@@ -233,7 +234,21 @@ export default function BusinessOnboarding() {
                 'businessInfo.description': (formData.description || '').trim().slice(0, 300),
                 'businessInfo.website': (formData.website || '').trim(),
             };
-            if (formData.placeId) updates['businessInfo.placeId'] = formData.placeId;
+            if (formData.placeId) {
+                // Prevent venue attribution hijack via non-unique businessInfo.placeId
+                const lookup = httpsCallable(getFunctions(app, 'us-central1'), 'lookupBusinessByPlaceId');
+                const result = await lookup({ placeId: formData.placeId });
+                const existingId = result?.data?.businessId || null;
+                if (existingId && existingId !== currentUser.uid) {
+                    throw new Error(
+                        t(
+                            'place_id_already_claimed',
+                            'This venue is already linked to another DineBuddies business account.'
+                        )
+                    );
+                }
+                updates['businessInfo.placeId'] = formData.placeId;
+            }
             if (hoursModel) updates['businessInfo.hours'] = hoursModel;
 
             await updateDoc(doc(db, 'users', currentUser.uid), updates);
