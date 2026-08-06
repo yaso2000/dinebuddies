@@ -10,6 +10,7 @@ export const createNotification = async ({
     title,
     message,
     actionUrl = null,
+    invitationId = null,
     metadata = {}
 }) => {
     if (!userId) {
@@ -18,14 +19,16 @@ export const createNotification = async ({
     }
 
     try {
-        await adminSecurityService.createNotification({
+        const payload = {
             userId,
             type,
             title,
             message,
             actionUrl,
             metadata
-        });
+        };
+        if (invitationId) payload.invitationId = invitationId;
+        await adminSecurityService.createNotification(payload);
     } catch (error) {
         console.error('Error creating notification:', error);
     }
@@ -59,6 +62,7 @@ export const notifyInvitationAccepted = async (hostUserId, guestUser, invitation
         title: 'Invitation Accepted',
         message: `${guestUser.name || 'Someone'} accepted your invitation`,
         actionUrl: `/invitation/${invitationId}`,
+        invitationId,
         metadata: { invitationId }
     });
 };
@@ -73,6 +77,7 @@ export const notifyInvitationRejected = async (hostUserId, guestUser, invitation
         title: 'Invitation Declined',
         message: `${guestUser.name || 'Someone'} declined your invitation`,
         actionUrl: `/invitation/${invitationId}`,
+        invitationId,
         metadata: { invitationId }
     });
 };
@@ -100,6 +105,7 @@ export const notifyInvitationReminder = async (userId, invitation) => {
         title: 'Upcoming Invitation',
         message: `Your invitation at ${invitation.restaurantName} is tomorrow at ${invitation.time}`,
         actionUrl: `/invitation/${invitation.id}`,
+        invitationId: invitation.id,
         metadata: { invitationId: invitation.id }
     });
 };
@@ -114,6 +120,7 @@ export const notifyInvitationLiked = async (invitationOwnerId, likerUser, invita
         title: 'Invitation Liked',
         message: `${likerUser.name || 'Someone'} liked your invitation`,
         actionUrl: `/invitation/${invitationId}`,
+        invitationId,
         metadata: { invitationId }
     });
 };
@@ -128,6 +135,7 @@ export const notifyNewComment = async (invitationOwnerId, commenterUser, invitat
         title: 'New Comment',
         message: `${commenterUser.name || 'Someone'} commented: ${comment.substring(0, 50)}...`,
         actionUrl: `/invitation/${invitationId}`,
+        invitationId,
         metadata: { invitationId, commentId: comment.id }
     });
 };

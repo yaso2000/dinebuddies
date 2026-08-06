@@ -346,7 +346,8 @@ const CommunityChatRoom = () => {
                     type: 'message',
                     title: userProfile?.display_name || 'New message in your community',
                     message: newMessage.trim().slice(0, 80),
-                    actionUrl: `/community/${partnerId}/chat`
+                    actionUrl: `/community/${partnerId}/chat`,
+                    metadata: { partnerId }
                 }).catch(() => { });
             }
         } catch (error) {
