@@ -4,6 +4,7 @@ import { PayPalButtons } from '@paypal/react-paypal-js';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../firebase/config';
 import { useToast } from '../context/ToastContext';
+import { PAYPAL_MODE } from '../config/paypalCommerce';
 import { paypalCallableErrorMessage } from '../utils/paypalCallableError';
 
 const FUNCTIONS_REGION = 'us-central1';
@@ -32,7 +33,7 @@ export default function PayPalBusinessPlanButton({ disabled = false, onSuccess }
               getFunctions(app, FUNCTIONS_REGION),
               'createPayPalBusinessPlanOrder'
             );
-            const result = await fn({ planId: 'paid' });
+            const result = await fn({ planId: 'paid', clientMode: PAYPAL_MODE });
             const orderId = result.data?.orderId;
             if (!orderId) {
               throw new Error(
@@ -60,7 +61,7 @@ export default function PayPalBusinessPlanButton({ disabled = false, onSuccess }
               'capturePayPalBusinessPlanOrder'
             );
             const orderId = data?.orderID || data?.orderId;
-            await fn({ orderId });
+            await fn({ orderId, clientMode: PAYPAL_MODE });
             showToast(
               t('biz_plan_paypal_upgraded', 'Paid Business plan activated via PayPal.'),
               'success'

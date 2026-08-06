@@ -42,6 +42,7 @@ const ProSubscription = () => {
       currency: PAYPAL_CURRENCY,
       intent: 'capture',
       components: 'buttons',
+      disableFunding: 'card,credit,paylater',
     }),
     []
   );

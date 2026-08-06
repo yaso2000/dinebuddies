@@ -39,12 +39,19 @@ async function assertCallerIsBusinessUser(userId) {
     }
 }
 
-/** When set, overrides PAYPAL_MODE after OAuth auto-detect finds working credentials. */
+/** Request-scoped API host override (must match frontend Client ID environment). */
 let paypalApiBaseOverride = null;
 
 function paypalMode() {
     const mode = String(process.env.PAYPAL_MODE || 'sandbox').trim().toLowerCase();
     return mode === 'live' ? 'live' : 'sandbox';
+}
+
+function normalizePayPalMode(value) {
+    const mode = String(value || '').trim().toLowerCase();
+    if (mode === 'live') return 'live';
+    if (mode === 'sandbox') return 'sandbox';
+    return null;
 }
 
 function isPayPalSandbox() {
@@ -54,11 +61,28 @@ function isPayPalSandbox() {
     return paypalMode() !== 'live';
 }
 
+function paypalApiBaseForMode(mode) {
+    return mode === 'live'
+        ? 'https://api-m.paypal.com'
+        : 'https://api-m.sandbox.paypal.com';
+}
+
 function paypalApiBase() {
     if (paypalApiBaseOverride) return paypalApiBaseOverride;
-    return isPayPalSandbox()
-        ? 'https://api-m.sandbox.paypal.com'
-        : 'https://api-m.paypal.com';
+    return paypalApiBaseForMode(paypalMode());
+}
+
+function formatPayPalApiFailure(data, fallback = 'Could not complete PayPal request.') {
+    if (!data || typeof data !== 'object') return fallback;
+    const detail = Array.isArray(data.details) ? data.details[0] : null;
+    const issue = detail?.issue ? String(detail.issue) : '';
+    const description = detail?.description ? String(detail.description) : '';
+    const message = data.message ? String(data.message) : '';
+    const debugId = data.debug_id ? String(data.debug_id) : '';
+    const parts = [issue, description || message, debugId ? `debug_id=${debugId}` : '']
+        .map((p) => String(p || '').trim())
+        .filter(Boolean);
+    return parts.length ? parts.join(' — ') : fallback;
 }
 
 function paypalClientId() {
@@ -158,39 +182,56 @@ function buildPayPalAuthErrorMessage(data, configuredMode) {
     return `${base} Check PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET for the ${configuredMode} environment.`;
 }
 
-async function getPayPalAccessToken() {
-    const configuredBase = paypalApiBase();
-    const result = await probePayPalOAuth(configuredBase);
-    if (result.accessToken) return result.accessToken;
-
-    console.error('PayPal token error:', result.data);
-
-    // Common production footgun: Vercel has Live Client ID while Functions still use
-    // PAYPAL_MODE=sandbox (or the opposite). Auto-switch to whichever environment
-    // accepts these Client ID/Secret so checkout can complete.
-    const otherBase = configuredBase.includes('sandbox')
-        ? 'https://api-m.paypal.com'
-        : 'https://api-m.sandbox.paypal.com';
-    const other = await probePayPalOAuth(otherBase);
-    if (other.accessToken) {
-        paypalApiBaseOverride = otherBase;
-        console.warn(
-            `[PayPal] OAuth failed for configured mode (${paypalMode()}); ` +
-                `auto-using ${otherBase.includes('sandbox') ? 'sandbox' : 'live'} API to match credentials.`
-        );
-        return other.accessToken;
+/**
+ * Pick API host that matches the frontend Client ID environment.
+ * Never create a sandbox order for a live frontend SDK (or the reverse).
+ */
+async function resolvePayPalApiMode(clientMode) {
+    const preferred = normalizePayPalMode(clientMode) || paypalMode();
+    const preferredBase = paypalApiBaseForMode(preferred);
+    const preferredAuth = await probePayPalOAuth(preferredBase);
+    if (preferredAuth.accessToken) {
+        paypalApiBaseOverride = preferredBase;
+        return { mode: preferred, accessToken: preferredAuth.accessToken };
     }
 
     const detected = await detectPayPalCredentialEnvironment();
-    let message = buildPayPalAuthErrorMessage(result.data, paypalMode());
-    if (detected && detected !== paypalMode()) {
-        message = `${message} Detected working credentials for "${detected}" — set PAYPAL_MODE=${detected} or replace with ${paypalMode()} credentials.`;
+    console.error('PayPal token error:', preferredAuth.data, {
+        preferred,
+        configured: paypalMode(),
+        detected,
+    });
+
+    if (detected && detected !== preferred) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            `PayPal frontend is "${preferred}" but Functions credentials only work on "${detected}". ` +
+                `In functions/.env set PAYPAL_MODE=${preferred} and use the ${preferred} Client ID + Secret ` +
+                `from PayPal Developer Dashboard (${preferred} tab), then redeploy functions.`
+        );
     }
-    throw new functions.https.HttpsError('failed-precondition', message);
+
+    throw new functions.https.HttpsError(
+        'failed-precondition',
+        buildPayPalAuthErrorMessage(preferredAuth.data, preferred)
+    );
 }
 
-async function paypalApiRequest(path, { method = 'GET', body = null, headers = {} } = {}) {
-    const token = await getPayPalAccessToken();
+async function getPayPalAccessToken(clientMode = null) {
+    if (paypalApiBaseOverride) {
+        const cached = await probePayPalOAuth(paypalApiBaseOverride);
+        if (cached.accessToken) return cached.accessToken;
+        paypalApiBaseOverride = null;
+    }
+    const resolved = await resolvePayPalApiMode(clientMode);
+    return resolved.accessToken;
+}
+
+async function paypalApiRequest(
+    path,
+    { method = 'GET', body = null, headers = {}, clientMode = null } = {}
+) {
+    const token = await getPayPalAccessToken(clientMode);
     const res = await fetch(`${paypalApiBase()}${path}`, {
         method,
         headers: {
@@ -277,8 +318,8 @@ async function resolveCreditsOrderMeta(orderId, orderData, authUid) {
     return { userId: '', packageId: '', credits: 0, kind: '', planId: '' };
 }
 
-async function fetchPayPalOrder(orderId) {
-    return paypalApiRequest(`/v2/checkout/orders/${orderId}`);
+async function fetchPayPalOrder(orderId, clientMode = null) {
+    return paypalApiRequest(`/v2/checkout/orders/${orderId}`, { clientMode });
 }
 
 function isPayPalOrderCompleted(orderData, capture) {
@@ -287,13 +328,14 @@ function isPayPalOrderCompleted(orderData, capture) {
     return captureStatus === 'COMPLETED' || orderStatus === 'COMPLETED';
 }
 
-async function captureOrLoadCompletedPayPalOrder(orderId) {
+async function captureOrLoadCompletedPayPalOrder(orderId, clientMode = null) {
     const captureAttempt = await paypalApiRequest(`/v2/checkout/orders/${orderId}/capture`, {
         method: 'POST',
         headers: {
             'PayPal-Request-Id': `capture-${orderId}`,
         },
         body: {},
+        clientMode,
     });
 
     if (captureAttempt.ok && captureAttempt.data) {
@@ -301,14 +343,15 @@ async function captureOrLoadCompletedPayPalOrder(orderId) {
     }
 
     const issue = captureAttempt.data?.details?.[0]?.issue;
-    const fetched = await fetchPayPalOrder(orderId);
+    const fetched = await fetchPayPalOrder(orderId, clientMode);
     if (!fetched.ok || !fetched.data) {
         console.error('PayPal capture error:', captureAttempt.status, captureAttempt.data);
         throw new functions.https.HttpsError(
-            'internal',
-            captureAttempt.data?.message ||
-                fetched.data?.message ||
+            'failed-precondition',
+            formatPayPalApiFailure(
+                captureAttempt.data || fetched.data,
                 'Could not capture PayPal order.'
+            )
         );
     }
 
@@ -322,16 +365,16 @@ async function captureOrLoadCompletedPayPalOrder(orderId) {
         }
         console.error('PayPal capture error:', captureAttempt.status, captureAttempt.data);
         throw new functions.https.HttpsError(
-            'internal',
-            captureAttempt.data?.message || 'Could not capture PayPal order.'
+            'failed-precondition',
+            formatPayPalApiFailure(captureAttempt.data, 'Could not capture PayPal order.')
         );
     }
 
     return fetched.data;
 }
 
-async function fulfillPayPalCreditsOrder(orderId, authUid) {
-    const orderData = await captureOrLoadCompletedPayPalOrder(orderId);
+async function fulfillPayPalCreditsOrder(orderId, authUid, clientMode = null) {
+    const orderData = await captureOrLoadCompletedPayPalOrder(orderId, clientMode);
     const { purchaseUnit, capture } = extractPayPalCapture(orderData);
     const meta = await resolveCreditsOrderMeta(orderId, orderData, authUid);
 
@@ -468,6 +511,8 @@ exports.createPayPalCreditsOrder = functions.https.onCall(async (data, context) 
     }
 
     assertPayPalConfigured();
+    // Fresh resolve per callable invocation (warm instances must not reuse wrong host).
+    paypalApiBaseOverride = null;
 
     const packageId = String(data?.packageId || '').trim();
     const def = CREDIT_PACKAGES[packageId];
@@ -476,6 +521,7 @@ exports.createPayPalCreditsOrder = functions.https.onCall(async (data, context) 
     }
 
     const userId = context.auth.uid;
+    const clientMode = normalizePayPalMode(data?.clientMode);
     const orderPayload = {
         intent: 'CAPTURE',
         purchase_units: [
@@ -496,24 +542,21 @@ exports.createPayPalCreditsOrder = functions.https.onCall(async (data, context) 
         application_context: {
             shipping_preference: 'NO_SHIPPING',
             user_action: 'PAY_NOW',
+            brand_name: 'DineBuddies',
         },
     };
 
     const result = await paypalApiRequest('/v2/checkout/orders', {
         method: 'POST',
         body: orderPayload,
+        clientMode,
     });
 
     if (!result.ok || !result.data?.id) {
         console.error('PayPal order create error:', result.status, result.data);
-        const detail = Array.isArray(result.data?.details) ? result.data.details[0] : null;
-        const detailMsg =
-            (detail?.description && String(detail.description)) ||
-            (detail?.issue && String(detail.issue)) ||
-            '';
         throw new functions.https.HttpsError(
-            'internal',
-            detailMsg || result.data?.message || 'Could not create PayPal order.'
+            'failed-precondition',
+            formatPayPalApiFailure(result.data, 'Could not create PayPal order.')
         );
     }
 
@@ -538,14 +581,16 @@ exports.capturePayPalCreditsOrder = functions.https.onCall(async (data, context)
     }
 
     assertPayPalConfigured();
+    paypalApiBaseOverride = null;
 
     const orderId = String(data?.orderId || data?.orderID || '').trim();
     if (!orderId) {
         throw new functions.https.HttpsError('invalid-argument', 'orderId is required');
     }
+    const clientMode = normalizePayPalMode(data?.clientMode);
 
     try {
-        return await fulfillPayPalCreditsOrder(orderId, context.auth.uid);
+        return await fulfillPayPalCreditsOrder(orderId, context.auth.uid, clientMode);
     } catch (error) {
         if (error instanceof functions.https.HttpsError) throw error;
         console.error('capturePayPalCreditsOrder:', error);
@@ -563,14 +608,16 @@ exports.reconcilePayPalCreditsOrder = functions.https.onCall(async (data, contex
     }
 
     assertPayPalConfigured();
+    paypalApiBaseOverride = null;
 
     const orderId = String(data?.orderId || data?.orderID || '').trim();
     if (!orderId) {
         throw new functions.https.HttpsError('invalid-argument', 'orderId is required');
     }
+    const clientMode = normalizePayPalMode(data?.clientMode);
 
     try {
-        return await fulfillPayPalCreditsOrder(orderId, context.auth.uid);
+        return await fulfillPayPalCreditsOrder(orderId, context.auth.uid, clientMode);
     } catch (error) {
         if (error instanceof functions.https.HttpsError) throw error;
         console.error('reconcilePayPalCreditsOrder:', error);
@@ -587,10 +634,12 @@ exports.createPayPalBusinessPlanOrder = functions.https.onCall(async (data, cont
     }
 
     assertPayPalConfigured();
+    paypalApiBaseOverride = null;
     const userId = context.auth.uid;
     await assertCallerIsBusinessUser(userId);
 
     const planId = String(data?.planId || 'paid').trim();
+    const clientMode = normalizePayPalMode(data?.clientMode);
     const orderPayload = {
         intent: 'CAPTURE',
         purchase_units: [
@@ -607,24 +656,21 @@ exports.createPayPalBusinessPlanOrder = functions.https.onCall(async (data, cont
         application_context: {
             shipping_preference: 'NO_SHIPPING',
             user_action: 'PAY_NOW',
+            brand_name: 'DineBuddies',
         },
     };
 
     const result = await paypalApiRequest('/v2/checkout/orders', {
         method: 'POST',
         body: orderPayload,
+        clientMode,
     });
 
     if (!result.ok || !result.data?.id) {
         console.error('PayPal business plan order create error:', result.status, result.data);
-        const detail = Array.isArray(result.data?.details) ? result.data.details[0] : null;
-        const detailMsg =
-            (detail?.description && String(detail.description)) ||
-            (detail?.issue && String(detail.issue)) ||
-            '';
         throw new functions.https.HttpsError(
-            'internal',
-            detailMsg || result.data?.message || 'Could not create PayPal order.'
+            'failed-precondition',
+            formatPayPalApiFailure(result.data, 'Could not create PayPal order.')
         );
     }
 
@@ -651,12 +697,14 @@ exports.capturePayPalBusinessPlanOrder = functions.https.onCall(async (data, con
     }
 
     assertPayPalConfigured();
+    paypalApiBaseOverride = null;
     await assertCallerIsBusinessUser(context.auth.uid);
 
     const orderId = String(data?.orderId || data?.orderID || '').trim();
     if (!orderId) {
         throw new functions.https.HttpsError('invalid-argument', 'orderId is required');
     }
+    const clientMode = normalizePayPalMode(data?.clientMode);
 
     let result = await paypalApiRequest(`/v2/checkout/orders/${orderId}/capture`, {
         method: 'POST',
@@ -664,20 +712,21 @@ exports.capturePayPalBusinessPlanOrder = functions.https.onCall(async (data, con
             'PayPal-Request-Id': `capture-business-${orderId}`,
         },
         body: {},
+        clientMode,
     });
 
     if (!result.ok && result.status === 422) {
         const issue = result.data?.details?.[0]?.issue;
         if (issue === 'ORDER_ALREADY_CAPTURED') {
-            result = await paypalApiRequest(`/v2/checkout/orders/${orderId}`);
+            result = await paypalApiRequest(`/v2/checkout/orders/${orderId}`, { clientMode });
         }
     }
 
     if (!result.ok) {
         console.error('PayPal business plan capture error:', result.status, result.data);
         throw new functions.https.HttpsError(
-            'internal',
-            result.data?.message || 'Could not capture PayPal order.'
+            'failed-precondition',
+            formatPayPalApiFailure(result.data, 'Could not capture PayPal order.')
         );
     }
 
@@ -715,30 +764,34 @@ exports.capturePayPalBusinessPlanOrder = functions.https.onCall(async (data, con
     };
 });
 
-exports.getPayPalCommerceStatus = functions.https.onCall(async () => {
+exports.getPayPalCommerceStatus = functions.https.onCall(async (data) => {
+    paypalApiBaseOverride = null;
     const mode = paypalMode();
+    const clientMode = normalizePayPalMode(data?.clientMode);
     const detectedEnvironment = await detectPayPalCredentialEnvironment();
-    // Warm OAuth + auto-switch so status reflects the API host that will actually be used.
     let activeMode = mode;
     let oauthOk = false;
+    let modeError = null;
     try {
-        await getPayPalAccessToken();
+        await getPayPalAccessToken(clientMode || mode);
         activeMode = isPayPalSandbox() ? 'sandbox' : 'live';
         oauthOk = true;
-    } catch {
+    } catch (error) {
         oauthOk = false;
+        modeError = error?.message || 'PayPal OAuth failed';
     }
     return {
         mode,
+        clientMode: clientMode || null,
         activeMode,
         sandbox: activeMode === 'sandbox',
         clientIdPresent: Boolean(paypalClientId()),
         clientSecretPresent: Boolean(paypalClientSecret()),
         currency: paypalCurrency(),
         oauthOk,
+        modeError,
         detectedCredentialEnvironment: detectedEnvironment,
-        modeMatchesCredentials: !detectedEnvironment || detectedEnvironment === mode,
-        autoSwitched: Boolean(paypalApiBaseOverride) && activeMode !== mode,
+        modeMatchesCredentials: !detectedEnvironment || detectedEnvironment === (clientMode || mode),
         businessPlanPrice: getBusinessPlanPrice(),
         businessPlanCurrency: paypalCurrency(),
     };

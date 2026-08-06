@@ -86,7 +86,10 @@ export default function CreditsWallet() {
       clientId: PAYPAL_CLIENT_ID,
       currency: PAYPAL_CURRENCY,
       intent: 'capture',
-      components: 'buttons'
+      components: 'buttons',
+      // Card / Pay Later need extra PayPal merchant enablement; wallet PayPal is enough.
+      disableFunding: 'card,credit,paylater',
+      'data-namespace': 'dinebuddies_paypal_credits',
     }),
     []
   );

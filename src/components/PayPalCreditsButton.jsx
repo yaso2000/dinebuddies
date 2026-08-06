@@ -4,6 +4,7 @@ import { PayPalButtons } from '@paypal/react-paypal-js';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../firebase/config';
 import { useToast } from '../context/ToastContext';
+import { PAYPAL_MODE } from '../config/paypalCommerce';
 import { paypalCallableErrorMessage } from '../utils/paypalCallableError';
 
 const FUNCTIONS_REGION = 'us-central1';
@@ -32,7 +33,7 @@ export default function PayPalCreditsButton({ pack, disabled = false }) {
               getFunctions(app, FUNCTIONS_REGION),
               'createPayPalCreditsOrder'
             );
-            const result = await fn({ packageId: pack.id });
+            const result = await fn({ packageId: pack.id, clientMode: PAYPAL_MODE });
             const orderId = result.data?.orderId;
             if (!orderId) {
               throw new Error(
@@ -60,7 +61,7 @@ export default function PayPalCreditsButton({ pack, disabled = false }) {
               getFunctions(app, FUNCTIONS_REGION),
               'capturePayPalCreditsOrder'
             );
-            const result = await fn({ orderId });
+            const result = await fn({ orderId, clientMode: PAYPAL_MODE });
             const credits = Number(result.data?.credits || pack.credits || 0);
             showToast(
               t('paypal_credits_added', '{{count}} credits added to your wallet.', {
@@ -75,7 +76,7 @@ export default function PayPalCreditsButton({ pack, disabled = false }) {
                 getFunctions(app, FUNCTIONS_REGION),
                 'reconcilePayPalCreditsOrder'
               );
-              const recovered = await reconcile({ orderId });
+              const recovered = await reconcile({ orderId, clientMode: PAYPAL_MODE });
               const credits = Number(recovered.data?.credits || pack.credits || 0);
               showToast(
                 t('paypal_credits_added', '{{count}} credits added to your wallet.', {
@@ -115,7 +116,10 @@ export default function PayPalCreditsButton({ pack, disabled = false }) {
           console.error('[PayPalCreditsButton/onError]', error);
           setBusy(false);
           showToast(
-            t('paypal_checkout_error', 'Something went wrong with PayPal checkout.'),
+            paypalCallableErrorMessage(
+              error,
+              t('paypal_checkout_error', 'Something went wrong with PayPal checkout.')
+            ),
             'error'
           );
         }}

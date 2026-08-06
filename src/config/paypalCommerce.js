@@ -10,3 +10,6 @@ export const PAYPAL_TEST_MODE =
   import.meta.env.VITE_PAYPAL_TEST_MODE === 'true' ||
   import.meta.env.VITE_PAYPAL_TEST_MODE === '1' ||
   String(import.meta.env.VITE_PAYPAL_MODE || '').trim().toLowerCase() === 'sandbox';
+
+/** Must match the PayPal Client ID environment (sandbox vs live). */
+export const PAYPAL_MODE = PAYPAL_TEST_MODE ? 'sandbox' : 'live';
