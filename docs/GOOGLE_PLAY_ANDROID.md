@@ -55,7 +55,7 @@ Local Capacitor plugin registered as **`GooglePlayBilling`**:
 
 | Piece | Path |
 |-------|------|
-| Native | `android/app/src/main/java/com/dinebuddies/app/GooglePlayBillingPlugin.java` |
+| Native | `android/app/src/main/java/com/dinebuddies/mobile/GooglePlayBillingPlugin.java` |
 | Registration | `MainActivity.java` → `registerPlugin(GooglePlayBillingPlugin.class)` |
 | Billing Library | `com.android.billingclient:billing:8.0.0` in `android/app/build.gradle` |
 | Web bridge | `src/utils/googlePlayBillingClient.js` → `launchBillingFlow({ productId })` → `{ purchaseToken }` |
