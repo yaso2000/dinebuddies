@@ -30,6 +30,11 @@ import { DEFAULT_FRAME_COLOR_ID } from '../components/Invitations/privateCard/pr
 import { DEFAULT_FONT_ID } from '../components/Invitations/privateCard/privateCardFonts';
 import { resolveOccasionCategoryId } from '../components/Invitations/privateCard/privateCardOccasionMap';
 import { getCardBackgroundOptions } from '../components/Invitations/privateCard/privateCardBackgrounds';
+import {
+    filterInviteesForPublishedEdit,
+    hasOnlyPublishedInvitees,
+    isPrivateInvitationPublished,
+} from '../utils/privateInvitationPublishLock';
 
 const CreatePrivateInvitation = () => {
     const { t } = useTranslation();
@@ -276,6 +281,8 @@ const CreatePrivateInvitation = () => {
 
     const maxGuests = getMaxGuests();
     const isAtLimit = (formData.invitedFriends || []).length >= maxGuests;
+    const isPublishedEdit = isPrivateInvitationPublished(editInvitation);
+    const publishedInviteeIds = editInvitation?.invitedFriends || [];
 
     const toggleFriendSelection = (friendId) => {
         const current = formData.invitedFriends || [];
@@ -286,6 +293,16 @@ const CreatePrivateInvitation = () => {
 
         // Block adding if at limit
         if (current.length >= getMaxGuests()) return;
+
+        // Published invites cannot expand invitees (publish callable will not re-charge/filter).
+        if (isPublishedEdit && !publishedInviteeIds.includes(friendId)) {
+            showToast(
+                t('cannot_add_invitees_after_publish') ||
+                    'Cannot add new guests after publishing. Create a new invitation instead.',
+                'error'
+            );
+            return;
+        }
 
         setFormData(prev => ({ ...prev, invitedFriends: [...(prev.invitedFriends || []), friendId] }));
     };
@@ -322,23 +339,43 @@ const CreatePrivateInvitation = () => {
                 }
             }
 
+            const nextInvitees = isPublishedEdit
+                ? filterInviteesForPublishedEdit(publishedInviteeIds, formData.invitedFriends)
+                : formData.invitedFriends;
+
+            if (isPublishedEdit && !hasOnlyPublishedInvitees(publishedInviteeIds, formData.invitedFriends)) {
+                showToast(
+                    t('cannot_add_invitees_after_publish') ||
+                        'Cannot add new guests after publishing. Create a new invitation instead.',
+                    'error'
+                );
+                return;
+            }
+
             // Initialize RSVPs as 'pending' for all invited friends
             const initialRsvps = {};
-            formData.invitedFriends.forEach(friendId => {
+            nextInvitees.forEach(friendId => {
                 initialRsvps[friendId] = 'pending';
             });
 
             const draftData = {
                 ...formData,
                 ...mediaFields,
+                invitedFriends: nextInvitees,
                 cardFrameColorId,
                 cardFontId,
                 cardBackgroundId: cardBackgroundId || null,
                 rsvps: initialRsvps,
                 type: 'Private',
-                status: 'draft',
-                createdAt: serverTimestamp()
             };
+
+            if (isPublishedEdit) {
+                // Keep published status/marker; do not demote to draft or rewrite createdAt.
+                draftData.status = editInvitation.status || 'published';
+            } else {
+                draftData.status = 'draft';
+                draftData.createdAt = serverTimestamp();
+            }
 
             if (existingDraftId) {
                 // UPDATE EXISTING
