@@ -1,4 +1,4 @@
-package com.dinebuddies.app;
+package com.dinebuddies.mobile;
 
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;

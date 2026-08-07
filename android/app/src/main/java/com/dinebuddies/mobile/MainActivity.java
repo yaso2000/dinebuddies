@@ -1,4 +1,4 @@
-package com.dinebuddies.app;
+package com.dinebuddies.mobile;
 
 import com.getcapacitor.BridgeActivity;
 

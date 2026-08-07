@@ -3,7 +3,7 @@
  * Display prices come from Play Billing at runtime on Android; labels here are fallbacks for web preview.
  */
 
-export const GOOGLE_PLAY_PACKAGE_NAME = 'com.dinebuddies.app';
+export const GOOGLE_PLAY_PACKAGE_NAME = 'com.dinebuddies.mobile';
 
 /** @type {Record<string, string>} internal package id → Play product id */
 export const GOOGLE_PLAY_CREDIT_SKUS = {

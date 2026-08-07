@@ -2,8 +2,8 @@
 <resources>
     <string name="app_name">DineBuddies</string>
     <string name="title_activity_main">DineBuddies</string>
-    <string name="package_name">com.dinebuddies.app</string>
-    <string name="custom_url_scheme">com.dinebuddies.app</string>
+    <string name="package_name">com.dinebuddies.mobile</string>
+    <string name="custom_url_scheme">com.dinebuddies.mobile</string>
     <!-- Meta / Facebook Login — App ID matches web Firebase Facebook provider -->
     <string name="facebook_app_id">1718617005774108</string>
     <string name="fb_login_protocol_scheme">fb1718617005774108</string>

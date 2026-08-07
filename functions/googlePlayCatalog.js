@@ -16,7 +16,7 @@ const PACKAGE_ID_TO_GOOGLE_PRODUCT = Object.fromEntries(
 );
 
 function resolveGooglePlayPackageName() {
-    return String(process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.dinebuddies.app').trim();
+    return String(process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.dinebuddies.mobile').trim();
 }
 
 function resolveGoogleProductFromPackageId(packageId) {
