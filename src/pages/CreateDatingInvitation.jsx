@@ -20,6 +20,11 @@ import { detectUserLocationContext } from '../utils/locationUtils';
 import './PrivateInvitation.css';
 import { goToLogin } from '../utils/goToLogin';
 import { resolveVenueCountryIso } from '../utils/countryIso';
+import {
+    filterInviteesForPublishedEdit,
+    hasOnlyPublishedInvitees,
+    isPrivateInvitationPublished,
+} from '../utils/privateInvitationPublishLock';
 
 const CreateDatingInvitation = () => {
     const { t, i18n } = useTranslation();
@@ -181,6 +186,8 @@ const CreateDatingInvitation = () => {
     // Dating: max 1 guest
     const MAX_GUESTS = 1;
     const isAtLimit = (formData.invitedFriends || []).length >= MAX_GUESTS;
+    const isPublishedEdit = isPrivateInvitationPublished(editInvitation);
+    const publishedInviteeIds = editInvitation?.invitedFriends || [];
 
     const toggleFriendSelection = async (friendId) => {
         const current = formData.invitedFriends || [];
@@ -190,6 +197,15 @@ const CreateDatingInvitation = () => {
         }
 
         if (isAtLimit) return;
+
+        if (isPublishedEdit && !publishedInviteeIds.includes(friendId)) {
+            showToast(
+                t('cannot_add_invitees_after_publish') ||
+                    'Cannot add new guests after publishing. Create a new invitation instead.',
+                'error'
+            );
+            return;
+        }
 
         const target = mutualFriends.find((f) => f.id === friendId);
         if (target?.availableForDating === false) {
@@ -232,19 +248,38 @@ const CreateDatingInvitation = () => {
                 }
             }
 
+            const nextInvitees = isPublishedEdit
+                ? filterInviteesForPublishedEdit(publishedInviteeIds, formData.invitedFriends)
+                : formData.invitedFriends;
+
+            if (isPublishedEdit && !hasOnlyPublishedInvitees(publishedInviteeIds, formData.invitedFriends)) {
+                showToast(
+                    t('cannot_add_invitees_after_publish') ||
+                        'Cannot add new guests after publishing. Create a new invitation instead.',
+                    'error'
+                );
+                return;
+            }
+
             const initialRsvps = {};
-            formData.invitedFriends.forEach(friendId => {
+            nextInvitees.forEach(friendId => {
                 initialRsvps[friendId] = 'pending';
             });
 
             const draftData = {
                 ...formData,
                 ...mediaFields,
+                invitedFriends: nextInvitees,
                 rsvps: initialRsvps,
                 type: 'Dating',
-                status: 'draft',
-                createdAt: serverTimestamp()
             };
+
+            if (isPublishedEdit) {
+                draftData.status = editInvitation.status || 'published';
+            } else {
+                draftData.status = 'draft';
+                draftData.createdAt = serverTimestamp();
+            }
 
             if (existingDraftId) {
                 const draftRef = doc(db, 'private_invitations', existingDraftId);

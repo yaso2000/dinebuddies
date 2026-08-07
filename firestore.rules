@@ -73,6 +73,25 @@ service cloud.firestore {
       return isHost || (invited && accepted);
     }
 
+    function isPrivateInvitationHost() {
+      return resource.data.authorId == request.auth.uid ||
+             (resource.data.author != null && resource.data.author.id == request.auth.uid);
+    }
+
+    // Once publishPrivateInvitationDraft stamps publishedAt, the callable returns
+    // alreadyPublished without re-filtering invitees or charging credits. Lock the
+    // invitee ACL and publish marker so hosts cannot expand access client-side.
+    function privateInvitationPostPublishHostUpdateOk() {
+      return !resource.data.keys().hasAny(['publishedAt']) ||
+             (
+               request.resource.data.publishedAt == resource.data.publishedAt &&
+               !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['authorId', 'author', 'publishedAt']) &&
+               request.resource.data.get('invitedFriends', [])
+                 .hasOnly(resource.data.get('invitedFriends', []))
+             );
+    }
+
     // True when Firestore doc has never stored `role` (e.g. email-only stub from auth sync).
     // Allows the first write that sets role to business during /business/signup — without allowing
     // consumer accounts (role == 'user') to change role via client (those docs always have role set).
@@ -283,11 +302,10 @@ service cloud.firestore {
                        (request.resource.data.authorId == request.auth.uid ||
                         request.resource.data.author.id == request.auth.uid);
 
-      // Host can update freely; invited friends can update only their RSVP
+      // Host can update drafts freely; after publish, invitee list may only shrink
+      // (or stay the same). Invited friends can update only their own RSVP.
       allow update: if isSignedIn() &&
-                       (resource.data.authorId == request.auth.uid ||
-                        (resource.data.author != null &&
-                         resource.data.author.id == request.auth.uid) ||
+                       ((isPrivateInvitationHost() && privateInvitationPostPublishHostUpdateOk()) ||
                         (request.auth.uid in resource.data.invitedFriends &&
                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
                          request.resource.data.rsvps.diff(resource.data.rsvps).affectedKeys().hasOnly([request.auth.uid])));
