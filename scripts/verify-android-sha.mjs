@@ -1,5 +1,5 @@
 /**
- * List Firebase Android SHA certs for com.dinebuddies.mobile and compare to google-services.json.
+ * List Firebase Android SHA certs for com.dinebuddies.app and compare to google-services.json.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -76,7 +76,7 @@ console.log('Firebase SHA API status', shaRes.status);
 console.log(JSON.stringify(shaJson, null, 2));
 
 const gs = JSON.parse(fs.readFileSync(path.join(root, 'android/app/google-services.json'), 'utf8'));
-const app = gs.client.find((c) => c.client_info?.android_client_info?.package_name === 'com.dinebuddies.mobile');
+const app = gs.client.find((c) => c.client_info?.android_client_info?.package_name === 'com.dinebuddies.app');
 const hashes = (app?.oauth_client || [])
   .filter((o) => o.client_type === 1)
   .map((o) => o.android_info?.certificate_hash);

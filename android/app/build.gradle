@@ -13,10 +13,10 @@ if (facebookPropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.dinebuddies.mobile"
+    namespace = "com.dinebuddies.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.dinebuddies.mobile"
+        applicationId "com.dinebuddies.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 44

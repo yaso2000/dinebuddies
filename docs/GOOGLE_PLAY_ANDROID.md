@@ -6,7 +6,7 @@ DineBuddies is **web + Google Play together**: same Firebase backend. **Stripe o
 
 | Step | Status |
 |------|--------|
-| Capacitor config (`com.dinebuddies.mobile`) | Done |
+| Capacitor config (`com.dinebuddies.app`) | Done |
 | `android/` native shell | Done |
 | npm scripts `android:sync` / `cap:open` | Done |
 | Play Billing native plugin (`GooglePlayBilling`) | Done |
@@ -39,14 +39,14 @@ Follow the full step-by-step checklist:
 
 → **[`docs/PLAY_CONSOLE_CHECKLIST.md`](./PLAY_CONSOLE_CHECKLIST.md)**
 
-Summary: create app `com.dinebuddies.mobile` → store listing + policy URLs → four credit SKUs → API service account → `google-services.json` → signed AAB → Internal testing.
+Summary: create app `com.dinebuddies.app` → store listing + policy URLs → four credit SKUs → API service account → `google-services.json` → signed AAB → Internal testing.
 
 ## 2. Capacitor Android shell (done in repo)
 
 Already added:
 
 - `@capacitor/core`, `@capacitor/cli`, `@capacitor/android`
-- `android/` project (`applicationId` = `com.dinebuddies.mobile`)
+- `android/` project (`applicationId` = `com.dinebuddies.app`)
 - `capacitor.config.json`
 
 ## 3. Billing plugin (native) — done
@@ -100,7 +100,7 @@ Do **not** offer Stripe credit checkout inside the native Android app for digita
 
 | Item | Value |
 |------|--------|
-| Firebase Android app | package `com.dinebuddies.mobile` |
+| Firebase Android app | package `com.dinebuddies.app` |
 | Config file | `android/app/google-services.json` (gitignored — keep local copy) |
 | Plugin | `@capacitor-firebase/authentication` |
 | Native bridge | `src/platform/nativeGoogleAuth.js` (from `AuthContext.signInWithGoogle`) |
@@ -125,8 +125,8 @@ Meta Developer Console → App settings → Basic → Android:
 
 | Field | Value |
 |------|--------|
-| Package name | `com.dinebuddies.mobile` |
-| Class name | `com.dinebuddies.mobile.MainActivity` |
+| Package name | `com.dinebuddies.app` |
+| Class name | `com.dinebuddies.app.MainActivity` |
 | Key hashes | see below |
 
 Key hashes (keep all):

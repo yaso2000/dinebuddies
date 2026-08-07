@@ -1,6 +1,6 @@
 /**
  * List Firebase Android SHA certs and Google Cloud OAuth clients
- * for package com.dinebuddies.mobile. Prints hashes only (no secrets).
+ * for package com.dinebuddies.app. Prints hashes only (no secrets).
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,7 +8,7 @@ import { createSign } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PACKAGE = 'com.dinebuddies.mobile';
+const PACKAGE = 'com.dinebuddies.app';
 const UPLOAD_SHA1 = '32c47db7c1d6dcff44edfe42f589a41a8a7645a9';
 const PLAY_SHA1 = 'e00525d80311a4444a3acd1c8a32454cac1c9d20';
 

@@ -1,4 +1,4 @@
-package com.dinebuddies.mobile;
+package com.dinebuddies.app;
 
 import android.app.Activity;
 

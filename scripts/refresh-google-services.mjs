@@ -1,5 +1,5 @@
 /**
- * Download fresh google-services.json for com.dinebuddies.mobile from Firebase.
+ * Download fresh google-services.json for com.dinebuddies.app from Firebase.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -87,7 +87,7 @@ const outPath = path.join(root, 'android/app/google-services.json');
 fs.writeFileSync(outPath, jsonText, 'utf8');
 const parsed = JSON.parse(jsonText);
 const app = parsed.client.find(
-  (c) => c.client_info?.android_client_info?.package_name === 'com.dinebuddies.mobile'
+  (c) => c.client_info?.android_client_info?.package_name === 'com.dinebuddies.app'
 );
 console.log('Wrote', outPath);
 console.log(
