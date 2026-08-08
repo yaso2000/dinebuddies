@@ -12,8 +12,8 @@ import '../components/discovery/discovery.css';
 import { AppText } from '../components/base';
 
 /**
- * Connect — single immersive magnetic profile card inside the app shell
- * (header + bottom nav). Replaces the old multi-card grid as the primary view.
+ * Connect swipe deck — optional immersive magnetic cards at /search/swipe.
+ * Primary Connect browse is the member list at /search.
  */
 export default function DiscoveryPage() {
   const { t, i18n } = useTranslation();
@@ -26,14 +26,14 @@ export default function DiscoveryPage() {
 
   useEffect(() => {
     if (isGuest || userProfile?.role === 'guest') {
-      goToLogin({ returnPath: '/search' });
+      goToLogin({ returnPath: '/search/swipe' });
     }
   }, [isGuest, userProfile?.role]);
 
   const handleLike = useCallback(
     async (profile) => {
       if (!viewerUid) {
-        goToLogin({ returnPath: '/search' });
+        goToLogin({ returnPath: '/search/swipe' });
         return false;
       }
 
@@ -64,7 +64,7 @@ export default function DiscoveryPage() {
   const handleGreeting = useCallback(
     async (profile) => {
       if (!viewerUid) {
-        goToLogin({ returnPath: '/search' });
+        goToLogin({ returnPath: '/search/swipe' });
         return false;
       }
 
@@ -94,7 +94,7 @@ export default function DiscoveryPage() {
   const handleGift = useCallback(
     (profile) => {
       if (!viewerUid) {
-        goToLogin({ returnPath: '/search' });
+        goToLogin({ returnPath: '/search/swipe' });
         return;
       }
       openGiftPicker(profile);

@@ -4,7 +4,7 @@ import { ADMIN_EMAILS, SUPER_ADMIN_UIDS } from './adminAccess';
 const TEAM_ROLES = new Set(['admin', 'staff', 'support', 'moderator', 'affiliate_agent']);
 
 /**
- * Consumer member directory (/search, /search/list) — regular diners only.
+ * Consumer member directory (/search) — regular diners only.
  * Legacy public_profiles may omit `searchable` / `accountRole`; we exclude only when explicit.
  */
 export function isConsumerDirectoryMember(publicDoc, userDoc = null) {

@@ -1,77 +1,52 @@
 .user-directory-card {
-    --udc-accent: #2563eb;
-    --udc-accent-soft: rgba(37, 99, 235, 0.55);
-    --udc-frame-white: rgba(255, 255, 255, 0.96);
-    --udc-hex-clip: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0% 50%);
-    --udc-half-hex-clip: polygon(38% 0%, 100% 0%, 100% 100%, 38% 100%, 0% 50%);
-    --udc-half-hex-origin: right center;
-    position: relative;
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
     width: 100%;
-    border-radius: 18px;
-    overflow: hidden;
+    padding: 12px;
+    border-radius: 16px;
     border: 1px solid var(--border-color);
-    background: #0b1220;
+    background:
+        linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--bg-card) 92%, var(--primary) 8%) 0%,
+            var(--bg-card) 48%,
+            color-mix(in srgb, var(--bg-card) 94%, #0ea5e9 6%) 100%
+        );
+    color: var(--text-main);
     text-align: start;
-    color: #fff;
-    display: block;
-    padding: 0;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-    transition: transform 0.18s ease, box-shadow 0.18s ease;
+    box-sizing: border-box;
+    transition: border-color 0.18s ease, transform 0.18s ease;
 }
 
 .user-directory-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+    border-color: color-mix(in srgb, var(--primary) 42%, var(--border-color));
+    transform: translateY(-1px);
 }
 
 .user-directory-card:active {
-    transform: scale(0.99);
+    transform: scale(0.995);
 }
 
-.user-directory-card--hexagon {
-    --udc-accent: #c026d3;
-    --udc-accent-soft: rgba(192, 38, 211, 0.55);
-}
-
-.user-directory-card--tilt {
-    --udc-accent: #ec4899;
-    --udc-accent-soft: rgba(236, 72, 153, 0.5);
-}
-
-.user-directory-card--circle {
-    --udc-accent: #ffffff;
-    --udc-accent-soft: rgba(15, 23, 42, 0.35);
-    --udc-half-hex-clip: none;
-}
-
-.user-directory-card--halfHex {
-    --udc-accent: #2563eb;
-    --udc-accent-soft: rgba(37, 99, 235, 0.55);
-}
-
-.user-directory-card__media {
+.user-directory-card__photo {
     position: relative;
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    min-height: 118px;
-    isolation: isolate;
-    container-type: size;
+    flex: 0 0 96px;
+    width: 96px;
+    align-self: stretch;
+    min-height: 112px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--bg-main) 70%, var(--border-color));
 }
 
-.user-directory-card__cover-bg {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-}
-
-.user-directory-card__cover-link {
+.user-directory-card__photo-link {
     display: block;
     width: 100%;
     height: 100%;
     text-decoration: none;
 }
 
-.user-directory-card__cover-img {
+.user-directory-card__avatar {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -80,545 +55,182 @@
     pointer-events: none;
 }
 
-.user-directory-card__cover-scrim {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-        to right,
-        rgba(0, 0, 0, 0.78) 0%,
-        rgba(0, 0, 0, 0.52) 40%,
-        rgba(0, 0, 0, 0.28) 68%,
-        rgba(0, 0, 0, 0.18) 100%
-    );
-    pointer-events: none;
-}
-
-[dir='rtl'] .user-directory-card__cover-scrim {
-    background: linear-gradient(
-        to left,
-        rgba(0, 0, 0, 0.78) 0%,
-        rgba(0, 0, 0, 0.52) 40%,
-        rgba(0, 0, 0, 0.28) 68%,
-        rgba(0, 0, 0, 0.18) 100%
-    );
-}
-
-/* ---------- Portrait (shared) ---------- */
-.user-directory-card__portrait {
-    position: absolute;
-    z-index: 2;
-    pointer-events: none;
-}
-
-.user-directory-card__portrait-shell,
-.user-directory-card__portrait-ring,
-.user-directory-card__portrait-photo {
-    position: absolute;
-    inset: 0;
-}
-
-.user-directory-card__portrait-shell {
-    background: var(--udc-accent);
-    filter: drop-shadow(-3px 4px 12px var(--udc-accent-soft));
-}
-
-[dir='rtl'] .user-directory-card__portrait-shell {
-    filter: drop-shadow(3px 4px 12px var(--udc-accent-soft));
-}
-
-.user-directory-card__portrait-ring {
-    background: var(--udc-frame-white);
-}
-
-.user-directory-card__portrait-photo {
-    overflow: hidden;
-    background: #374151;
-}
-
-.user-directory-card__avatar-link {
-    display: block;
-    width: 100%;
-    height: 100%;
-    text-decoration: none;
-    pointer-events: auto;
-    cursor: pointer;
-}
-
-.user-directory-card__avatar {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center top;
-    display: block;
-    border: none;
-    background: #374151;
-    pointer-events: none;
-}
-
-/* 1) Full hexagon — nearly card-tall, inside the card */
-.user-directory-card--hexagon .user-directory-card__portrait {
-    top: 3%;
-    bottom: 3%;
-    inset-inline-end: 2%;
-    height: 94%;
-    width: auto;
-    aspect-ratio: 1;
-    max-width: 54%;
-    transform: none;
-}
-
-.user-directory-card--hexagon .user-directory-card__portrait-shell,
-.user-directory-card--hexagon .user-directory-card__portrait-ring,
-.user-directory-card--hexagon .user-directory-card__portrait-photo {
-    clip-path: var(--udc-hex-clip);
-}
-
-.user-directory-card--hexagon .user-directory-card__portrait-ring {
-    transform: scale(0.94);
-    transform-origin: center;
-}
-
-.user-directory-card--hexagon .user-directory-card__portrait-photo {
-    transform: scale(0.88);
-    transform-origin: center;
-}
-
-/* 2) Tilted rounded square — larger frame (match mockup scale) */
-.user-directory-card--tilt .user-directory-card__portrait {
-    top: 50%;
-    inset-inline-end: 2%;
-    height: 82%;
-    width: auto;
-    aspect-ratio: 1;
-    max-width: 56%;
-    transform: translateY(-50%) rotate(15deg);
-}
-
-.user-directory-card--tilt .user-directory-card__portrait-shell,
-.user-directory-card--tilt .user-directory-card__portrait-ring,
-.user-directory-card--tilt .user-directory-card__portrait-photo {
-    border-radius: 16%;
-    clip-path: none;
-}
-
-.user-directory-card--tilt .user-directory-card__portrait-ring {
-    inset: 4px;
-}
-
-.user-directory-card--tilt .user-directory-card__portrait-photo {
-    inset: 7px;
-    border-radius: 12%;
-}
-
-.user-directory-card--tilt .user-directory-card__avatar,
-.user-directory-card--tilt .user-directory-card__avatar-link {
-    border-radius: 12%;
-}
-
-.user-directory-card--tilt .user-directory-card__portrait-shell {
-    box-shadow: -5px 7px 18px var(--udc-accent-soft);
-    filter: none;
-}
-
-/* 1 / classic) Original default — round avatar on the start edge */
-.user-directory-card--circle .user-directory-card__cover-scrim {
-    background: linear-gradient(
-        to top,
-        rgba(0, 0, 0, 0.82) 0%,
-        rgba(0, 0, 0, 0.38) 38%,
-        rgba(0, 0, 0, 0.12) 68%,
-        rgba(0, 0, 0, 0.28) 100%
-    );
-}
-
-[dir='rtl'] .user-directory-card--circle .user-directory-card__cover-scrim {
-    background: linear-gradient(
-        to top,
-        rgba(0, 0, 0, 0.82) 0%,
-        rgba(0, 0, 0, 0.38) 38%,
-        rgba(0, 0, 0, 0.12) 68%,
-        rgba(0, 0, 0, 0.28) 100%
-    );
-}
-
-.user-directory-card--circle .user-directory-card__portrait {
-    top: 50%;
-    inset-inline-start: 10px;
-    inset-inline-end: auto;
-    width: min(40%, 48cqh);
-    height: auto;
-    aspect-ratio: 1;
-    max-width: none;
-    transform: translateY(-50%);
-}
-
-.user-directory-card--circle .user-directory-card__portrait-shell,
-.user-directory-card--circle .user-directory-card__portrait-ring,
-.user-directory-card--circle .user-directory-card__portrait-photo {
-    border-radius: 50% !important;
-    clip-path: none !important;
-    transform: none !important;
-}
-
-.user-directory-card--circle .user-directory-card__portrait-shell {
-    background: #374151;
-    box-shadow:
-        0 0 0 3px rgba(255, 255, 255, 0.94),
-        0 4px 16px rgba(0, 0, 0, 0.38);
-    filter: none;
-}
-
-.user-directory-card--circle .user-directory-card__portrait-ring {
-    inset: 0;
-    background: transparent;
-}
-
-.user-directory-card--circle .user-directory-card__portrait-photo {
-    inset: 0;
-    border-radius: 50% !important;
-    overflow: hidden;
-}
-
-.user-directory-card--circle .user-directory-card__avatar,
-.user-directory-card--circle .user-directory-card__avatar-link {
-    border-radius: 50% !important;
-}
-
-/* 4) Half-hexagon flush to edge — wider portrait band */
-.user-directory-card--halfHex .user-directory-card__portrait {
-    top: 0;
-    bottom: 0;
-    inset-inline-end: 0;
-    width: min(66%, 78cqh);
-}
-
-[dir='rtl'] .user-directory-card--halfHex {
-    --udc-half-hex-clip: polygon(0% 0%, 62% 0%, 100% 50%, 62% 100%, 0% 100%);
-    --udc-half-hex-origin: left center;
-}
-
-.user-directory-card--halfHex {
-    --udc-half-hex-clip: polygon(38% 0%, 100% 0%, 100% 100%, 38% 100%, 0% 50%);
-}
-
-.user-directory-card--halfHex .user-directory-card__portrait-shell,
-.user-directory-card--halfHex .user-directory-card__portrait-ring,
-.user-directory-card--halfHex .user-directory-card__portrait-photo {
-    clip-path: var(--udc-half-hex-clip);
-}
-
-.user-directory-card--halfHex .user-directory-card__portrait-ring {
-    transform: scale(0.97);
-    transform-origin: var(--udc-half-hex-origin);
-}
-
-.user-directory-card--halfHex .user-directory-card__portrait-photo {
-    transform: scale(0.94);
-    transform-origin: var(--udc-half-hex-origin);
-}
-
-/* Private invite — same action row, gold + ring to stand out */
-.user-directory-card__actions .user-directory-card__private-invite.private-invite-profile-badge,
-.user-directory-card__action--private-invite.private-invite-profile-badge {
-    position: static !important;
-    inset: auto !important;
-    bottom: auto !important;
-    flex: 0 0 auto;
-    width: 40px;
-    height: 40px;
-    max-width: none;
-    max-height: none;
-    margin: 0;
-    padding: 0;
-    transform: none;
-    pointer-events: auto;
-    background: linear-gradient(145deg, #fcd34d 0%, #b45309 100%);
-    border: 2.5px solid rgba(255, 255, 255, 0.95);
-    box-shadow:
-        0 0 0 2px rgba(212, 175, 55, 0.55),
-        0 3px 10px rgba(180, 83, 9, 0.45);
-}
-
-.user-directory-card__actions .user-directory-card__private-invite.private-invite-profile-badge:hover,
-.user-directory-card__action--private-invite.private-invite-profile-badge:hover {
-    transform: translateY(-1px) scale(1.05);
-    box-shadow:
-        0 0 0 2px rgba(253, 224, 71, 0.85),
-        0 4px 14px rgba(180, 83, 9, 0.55);
-}
-
-.user-directory-card__actions .user-directory-card__private-invite.private-invite-profile-badge:active,
-.user-directory-card__action--private-invite.private-invite-profile-badge:active {
-    transform: scale(0.94);
-}
-
-.user-directory-card__actions .user-directory-card__private-invite .private-invite-profile-badge__logo,
-.user-directory-card__action--private-invite .private-invite-profile-badge__logo {
-    width: 58%;
-    height: 58%;
-}
-
-.user-directory-card__actions
-    .user-directory-card__private-invite.private-invite-profile-badge--disabled {
-    opacity: 0.55;
-    filter: grayscale(0.25);
-}
-
-/* ---------- Overlay / copy ---------- */
-.user-directory-card__overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    align-items: stretch;
-    min-width: 0;
-    padding: 12px 14px;
-    color: #fff;
-    pointer-events: none;
-}
-
-.user-directory-card--hexagon .user-directory-card__overlay {
-    padding-inline-end: calc(min(54%, 94cqh) + 8px);
-}
-
-.user-directory-card--tilt .user-directory-card__overlay {
-    padding-inline-end: calc(min(56%, 82cqh) + 12px);
-}
-
-.user-directory-card--circle .user-directory-card__overlay {
-    /* Text sits beside the start-side circular avatar (original layout). */
-    padding-inline-start: calc(min(40%, 48cqh) + 18px);
-    padding-inline-end: 12px;
-}
-
-.user-directory-card--halfHex .user-directory-card__overlay {
-    padding-inline-end: calc(min(66%, 78cqh) * 0.72 + 8px);
-}
-
-.user-directory-card__overlay a,
-.user-directory-card__overlay button {
-    pointer-events: auto;
-}
-
-.user-directory-card__top-meta {
-    position: relative;
-    z-index: 4;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    align-self: flex-start;
-    pointer-events: none;
-}
-
-.user-directory-card__city {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 11px;
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.82);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    color: #fff;
-    font-size: 0.7rem;
-    font-weight: 700;
-    line-height: 1.2;
-    white-space: nowrap;
-}
-
-.user-directory-card__city-icon {
-    width: 0.72em;
-    height: 0.72em;
-    flex-shrink: 0;
-    opacity: 0.95;
-}
-
 .user-directory-card__online-badge {
-    position: static;
-    flex-shrink: 0;
+    position: absolute;
+    top: 6px;
+    inset-inline-end: 6px;
+    z-index: 1;
 }
 
-.user-directory-card__footer {
+.user-directory-card__body {
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    align-items: stretch;
-    margin-top: auto;
+    gap: 6px;
+    justify-content: center;
+}
+
+.user-directory-card__header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     min-width: 0;
-    gap: 5px;
 }
 
 .user-directory-card__name-link {
     text-decoration: none;
     color: inherit;
-    align-self: flex-start;
-    max-width: 100%;
+    min-width: 0;
 }
 
 .user-directory-card__name {
-    margin: 0;
-    font-size: 1.08rem;
+    display: block;
+    font-size: 1.02rem;
     font-weight: 800;
-    line-height: 1.2;
-    color: #fff;
-    white-space: nowrap;
+    line-height: 1.25;
+    color: var(--text-main);
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100%;
-    display: block;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
 }
 
 .user-directory-card__age {
     font-weight: 650;
-    opacity: 0.95;
+    color: var(--text-muted);
+}
+
+.user-directory-card__city {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.user-directory-card__city-icon {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    opacity: 0.85;
 }
 
 .user-directory-card__bio {
     margin: 0;
-    font-size: 0.8rem;
-    font-weight: 500;
+    font-size: 0.86rem;
     line-height: 1.35;
-    color: rgba(255, 255, 255, 0.94);
+    color: var(--text-muted);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    text-align: start;
-    text-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
 }
 
 .user-directory-card__actions {
-    position: relative;
-    z-index: 4;
     display: flex;
-    gap: 9px;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: flex-start;
-    padding-top: 6px;
+    gap: 6px;
+    margin-top: 2px;
 }
 
 .user-directory-card__action {
-    flex: 0 0 auto;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    padding: 0;
-    cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1.5px solid transparent;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
-    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 11px;
+    border: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--bg-main) 55%, var(--bg-card));
+    color: var(--text-main);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.12s ease;
 }
 
-.user-directory-card__action:not(:disabled):hover {
-    transform: translateY(-1px) scale(1.05);
-    filter: brightness(1.06);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
-}
-
-.user-directory-card__action:active {
-    transform: scale(0.94);
+.user-directory-card__action:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--primary) 40%, var(--border-color));
+    transform: translateY(-1px);
 }
 
 .user-directory-card__action:disabled {
-    cursor: default;
-    filter: none;
-}
-
-.user-directory-card__action--gift {
-    background: linear-gradient(145deg, #fbbf24 0%, #ea580c 100%);
-    color: #fff;
-    border-color: rgba(254, 243, 199, 0.45);
-}
-
-.user-directory-card__action--greeting {
-    background: linear-gradient(145deg, #c4b5fd 0%, #7c3aed 100%);
-    color: #fff;
-    border-color: rgba(221, 214, 254, 0.5);
-}
-
-.user-directory-card__action--greeting.user-directory-card__action--greeted {
-    opacity: 0.5;
-    filter: grayscale(0.35);
-}
-
-.user-directory-card__wave {
-    font-size: 1.08rem;
-    line-height: 1;
-    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
-}
-
-.user-directory-card__action--like {
-    background: linear-gradient(145deg, #fda4af 0%, #e11d48 100%);
-    color: #fff;
-    border-color: rgba(254, 205, 211, 0.5);
-}
-
-.user-directory-card__action--like.user-directory-card__action--liked {
-    background: linear-gradient(145deg, #fb7185 0%, #be123c 100%);
-    border-color: #fda4af;
-    box-shadow: 0 0 0 2px rgba(253, 164, 175, 0.35), 0 4px 14px rgba(190, 18, 60, 0.4);
-}
-
-.user-directory-card__action--follow {
-    background: linear-gradient(145deg, #60a5fa 0%, #2563eb 100%);
-    color: #fff;
-    border-color: rgba(191, 219, 254, 0.5);
-}
-
-.user-directory-card__action--follow.user-directory-card__action--following {
-    background: linear-gradient(145deg, #3b82f6 0%, #1d4ed8 100%);
-    border-color: rgba(147, 197, 253, 0.65);
-}
-
-.user-directory-card__action--chat {
-    background: linear-gradient(145deg, #5eead4 0%, #0f766e 100%);
-    color: #fff;
-    border-color: rgba(153, 246, 228, 0.5);
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .user-directory-card__action-icon {
-    width: 15px;
-    height: 15px;
-    flex-shrink: 0;
+    width: 0.95rem;
+    height: 0.95rem;
 }
 
-[data-theme='light'] .user-directory-card {
-    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.1);
+.user-directory-card__wave {
+    font-size: 1rem;
+    line-height: 1;
 }
 
-@media (min-width: 768px) {
+.user-directory-card__action--like-idle {
+    color: #e11d48;
+}
+
+.user-directory-card__action--liked {
+    background: color-mix(in srgb, #e11d48 16%, var(--bg-card));
+    border-color: color-mix(in srgb, #e11d48 45%, var(--border-color));
+    color: #e11d48;
+}
+
+.user-directory-card__action--follow {
+    color: var(--primary);
+}
+
+.user-directory-card__action--following {
+    background: color-mix(in srgb, var(--primary) 14%, var(--bg-card));
+    border-color: color-mix(in srgb, var(--primary) 40%, var(--border-color));
+    color: var(--primary);
+}
+
+.user-directory-card__action--greeting {
+    font-size: 1rem;
+}
+
+.user-directory-card__action--greeted {
+    opacity: 0.55;
+}
+
+.user-directory-card__action--gift {
+    color: #d97706;
+}
+
+.user-directory-card__action--chat {
+    color: #0ea5e9;
+}
+
+.user-directory-card__private-invite {
+    width: 36px;
+    height: 36px;
+}
+
+@media (min-width: 640px) {
+    .user-directory-card {
+        gap: 14px;
+        padding: 14px;
+    }
+
+    .user-directory-card__photo {
+        flex-basis: 112px;
+        width: 112px;
+        min-height: 128px;
+    }
+
     .user-directory-card__name {
-        font-size: 1.22rem;
+        font-size: 1.08rem;
     }
 
     .user-directory-card__bio {
-        font-size: 0.88rem;
         -webkit-line-clamp: 3;
-    }
-
-    .user-directory-card__action,
-    .user-directory-card__actions .user-directory-card__private-invite.private-invite-profile-badge {
-        width: 44px;
-        height: 44px;
-    }
-}
-
-@media (max-width: 380px) {
-    .user-directory-card__name {
-        font-size: 0.98rem;
-    }
-
-    .user-directory-card__action,
-    .user-directory-card__actions .user-directory-card__private-invite.private-invite-profile-badge {
-        width: 34px;
-        height: 34px;
-    }
-
-    .user-directory-card__actions {
-        gap: 7px;
     }
 }
