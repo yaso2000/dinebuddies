@@ -321,12 +321,10 @@ const Layout = ({ children }) => {
   location.pathname === '/restaurants/' ||
   location.pathname.startsWith('/restaurants/');
   const isSearchListRoute =
+  location.pathname === '/search/list' || location.pathname.startsWith('/search/list/');
+  const isConnectMagneticRoute =
   location.pathname === '/search' ||
   location.pathname === '/search/' ||
-  location.pathname === '/search/list' ||
-  location.pathname.startsWith('/search/list/');
-  const isConnectMagneticRoute =
-  location.pathname === '/search/swipe' ||
   location.pathname === '/invitations' ||
   location.pathname === '/invitations/' ||
   location.pathname === '/restaurants' ||

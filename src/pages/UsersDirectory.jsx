@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaMapMarkerAlt, FaTimes } from 'react-icons/fa';
+import { LuSparkles } from 'react-icons/lu';
 import InboxHubLink from '../components/discovery/InboxHubLink';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { useAuth } from '../context/AuthContext';
@@ -225,6 +227,15 @@ export default function UsersDirectory() {
               genderFilter={genderFilter}
               onGenderFilterChange={setGenderFilter}
             />
+            <Link
+              to="/search"
+              className="users-directory-feed-link"
+              title={t('user_directory_feed_view', 'Connect cards')}>
+              <LuSparkles aria-hidden />
+              <AppText as="span" className="users-directory-feed-link__label">
+                {t('user_directory_feed_view', 'Card view')}
+              </AppText>
+            </Link>
             <InboxHubLink
               className="users-directory-inbox-link inbox-hub-link"
               tab="activity"

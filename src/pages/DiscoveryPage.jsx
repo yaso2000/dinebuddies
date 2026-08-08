@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import DiscoveryFeed from '../components/discovery/DiscoveryFeed';
 import { useAuth } from '../context/AuthContext';
@@ -12,8 +13,8 @@ import '../components/discovery/discovery.css';
 import { AppText } from '../components/base';
 
 /**
- * Connect swipe deck — optional immersive magnetic cards at /search/swipe.
- * Primary Connect browse is the member list at /search.
+ * Connect — immersive magnetic swipe cards (default /search).
+ * List browse remains available at /search/list.
  */
 export default function DiscoveryPage() {
   const { t, i18n } = useTranslation();
@@ -26,14 +27,14 @@ export default function DiscoveryPage() {
 
   useEffect(() => {
     if (isGuest || userProfile?.role === 'guest') {
-      goToLogin({ returnPath: '/search/swipe' });
+      goToLogin({ returnPath: '/search' });
     }
   }, [isGuest, userProfile?.role]);
 
   const handleLike = useCallback(
     async (profile) => {
       if (!viewerUid) {
-        goToLogin({ returnPath: '/search/swipe' });
+        goToLogin({ returnPath: '/search' });
         return false;
       }
 
@@ -64,7 +65,7 @@ export default function DiscoveryPage() {
   const handleGreeting = useCallback(
     async (profile) => {
       if (!viewerUid) {
-        goToLogin({ returnPath: '/search/swipe' });
+        goToLogin({ returnPath: '/search' });
         return false;
       }
 
@@ -94,7 +95,7 @@ export default function DiscoveryPage() {
   const handleGift = useCallback(
     (profile) => {
       if (!viewerUid) {
-        goToLogin({ returnPath: '/search/swipe' });
+        goToLogin({ returnPath: '/search' });
         return;
       }
       openGiftPicker(profile);
@@ -121,13 +122,19 @@ export default function DiscoveryPage() {
       {!canLoad ? (
         <div className="discovery-feed discovery-feed__empty">
           <AppText as="p">{t('user_directory_login_required', 'Sign in to browse members.')}</AppText>
+          <Link to="/search/list" className="discovery-feed__replay-btn" style={{ marginTop: 12 }}>
+            {t('list_view', 'List')}
+          </Link>
         </div>
       ) : loading && profiles.length === 0 ? (
         <div className="discovery-feed discovery-feed__empty">
           <AppText as="p">{t('loading', 'Loading…')}</AppText>
+          <Link to="/search/list" className="discovery-feed__replay-btn" style={{ marginTop: 12 }}>
+            {t('list_view', 'List')}
+          </Link>
         </div>
       ) : (
-        <DiscoveryFeed profiles={profiles} {...feedHandlers} />
+        <DiscoveryFeed profiles={profiles} listPath="/search/list" {...feedHandlers} />
       )}
 
       {loadingMore ? (

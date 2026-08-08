@@ -265,19 +265,12 @@ function App() {
                                                         path="/search"
                                                         element={
                                                             <GuestBlockedRoute>
-                                                                <UsersDirectory />
-                                                            </GuestBlockedRoute>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="/search/swipe"
-                                                        element={
-                                                            <GuestBlockedRoute>
                                                                 <DiscoveryPage />
                                                             </GuestBlockedRoute>
                                                         }
                                                     />
-                                                    <Route path="/search/list" element={<Navigate to="/search" replace />} />
+                                                    <Route path="/search/list" element={<UsersDirectory />} />
+                                                    <Route path="/search/swipe" element={<Navigate to="/search" replace />} />
                                                     <Route path="/restaurants" element={<BusinessesSwipePage />} />
                                                     <Route path="/restaurants/list" element={<BusinessesDirectory />} />
                                                     <Route path="/rankings" element={<BusinessRankings />} />

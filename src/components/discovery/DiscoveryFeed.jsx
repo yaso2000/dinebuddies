@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { LuSparkles } from 'react-icons/lu';
 import DiscoveryCard from './DiscoveryCard';
@@ -14,6 +15,7 @@ export default function DiscoveryFeed({
   onGreeting,
   onDeckEmpty,
   onNearEnd,
+  listPath = '/search/list',
 }) {
   const { t } = useTranslation();
   const [index, setIndex] = useState(0);
@@ -114,6 +116,15 @@ export default function DiscoveryFeed({
           <button type="button" className="discovery-feed__replay-btn" onClick={handleReplay}>
             {t('discovery_deck_replay', 'Browse again')}
           </button>
+        ) : null}
+        {listPath ? (
+          <Link
+            to={listPath}
+            className="discovery-feed__replay-btn"
+            style={{ marginTop: deckFinished ? 10 : 20 }}
+          >
+            {t('list_view', 'List')}
+          </Link>
         ) : null}
       </div>
     );
