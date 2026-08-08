@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, animate, motion, useMotionValue } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { FaComments, FaGift, FaHeart, FaMapMarkerAlt, FaUserCheck, FaUserPlus } from 'react-icons/fa';
+import { LuX } from 'react-icons/lu';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
@@ -54,6 +55,7 @@ export default function DiscoveryCard({
   onSendGift,
   onGreeting: _onGreeting,
   isTop = true,
+  listPath = '/search/list',
 }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -160,7 +162,9 @@ export default function DiscoveryCard({
   const isInteractiveTarget = useCallback((target) => {
     if (!target?.closest) return false;
     return Boolean(
-      target.closest('.discovery-card__actions, .discovery-card__inbox, button, a')
+      target.closest(
+        '.discovery-card__actions, .discovery-card__inbox, .discovery-card__close, button, a'
+      )
     );
   }, []);
 
@@ -306,6 +310,11 @@ export default function DiscoveryCard({
     navigate(`/chat/${profile.id}`);
   };
 
+  const handleClose = (e) => {
+    e.stopPropagation();
+    if (listPath) navigate(listPath, { replace: true });
+  };
+
   const identityLine = ageLabel ? `${profile.name}, ${ageLabel}` : profile.name;
 
   return (
@@ -360,12 +369,26 @@ export default function DiscoveryCard({
             <span className="discovery-card__location-spacer" aria-hidden />
           )}
 
-          <InboxHubLink
-            className="discovery-card__inbox discovery-card__action--glass"
-            tab="activity"
-            showLabel={false}
-            label={t('inbox_title', 'Inbox')}
-          />
+          <div className="discovery-card__top-actions">
+            <InboxHubLink
+              className="discovery-card__inbox discovery-card__action--glass"
+              tab="activity"
+              showLabel={false}
+              label={t('inbox_title', 'Inbox')}
+            />
+            {listPath ? (
+              <button
+                type="button"
+                className="discovery-card__close discovery-card__action--glass"
+                aria-label={t('close', 'Close')}
+                title={t('magnetic_close_to_list', 'Back to list')}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={handleClose}
+              >
+                <LuX size={22} aria-hidden />
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="discovery-card__identity">

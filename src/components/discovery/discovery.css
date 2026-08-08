@@ -268,6 +268,13 @@
     pointer-events: auto;
 }
 
+.discovery-card__top-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-shrink: 0;
+}
+
 .discovery-card__location-spacer {
     flex: 1 1 auto;
     min-width: 0;
@@ -663,6 +670,11 @@
 .discovery-card--connect .discovery-card__action--like.discovery-card__action--liked,
 .discovery-card--connect .discovery-card__heart-3d {
     color: #ff4d9a;
+}
+
+.discovery-card--connect .discovery-card__close {
+    border-color: rgba(255, 77, 154, 0.45);
+    background: rgba(255, 77, 154, 0.18);
 }
 
 /* ── Theme: Invitations — amber / coral (event energy) ─────────────────── */

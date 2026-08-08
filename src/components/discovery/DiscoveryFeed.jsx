@@ -138,7 +138,13 @@ export default function DiscoveryFeed({
         </div>
       ) : null}
 
-      <DiscoveryCard key={activeProfile.id} profile={activeProfile} isTop {...handlers} />
+      <DiscoveryCard
+        key={activeProfile.id}
+        profile={activeProfile}
+        isTop
+        listPath={listPath}
+        {...handlers}
+      />
     </div>
   );
 }
