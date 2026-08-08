@@ -1,0 +1,18 @@
+/* Off-screen mount — never move into viewport during capture (causes visible flash). */
+.private-invitation-share-capture {
+    position: fixed;
+    top: 0;
+    left: -12000px;
+    width: 1080px;
+    overflow: hidden;
+    pointer-events: none;
+    visibility: visible;
+    opacity: 1;
+    z-index: -9999;
+}
+
+.private-invitation-share-capture__stage {
+    width: 1080px;
+    display: inline-block;
+    background: transparent;
+}

@@ -1,16 +1,15 @@
-/* PostCard.css - Twitter-like Feed Style */
+/* PostCard.css - Facebook-like Feed Style */
 .post-card {
     display: flex;
-    gap: 12px;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border-color);
-    background: transparent;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     cursor: pointer;
-    transition: background 0.2s;
-}
-
-.post-card:not(.in-chat):hover {
-    background: var(--hover-overlay);
+    overflow: hidden;
 }
 
 .post-card.in-chat {
@@ -18,18 +17,17 @@
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 12px;
+    margin-bottom: 0;
 }
 
 .post-avatar-col {
     flex-shrink: 0;
 }
 
-.post-avatar {
+.post-avatar.user-avatar > .user-avatar__img {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background-size: cover;
-    background-position: center;
     background-color: var(--bg-input);
 }
 
@@ -48,6 +46,54 @@
     white-space: nowrap;
     /* overflow: hidden; Removed to allow dropdown menu */
     /* text-overflow: ellipsis; */
+}
+
+.post-card-actions {
+    margin-inline-start: auto;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.post-card-menu {
+    position: absolute;
+    top: 100%;
+    inset-inline-end: 0;
+    margin-top: 4px;
+    min-width: 148px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    z-index: 50;
+    overflow: hidden;
+}
+
+.post-card-menu--align-start {
+    inset-inline-end: auto;
+    inset-inline-start: 0;
+}
+
+.post-card-menu__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 0.9rem;
+    text-align: start;
+    white-space: nowrap;
+}
+
+.post-card-menu__item:not(:last-child) {
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+}
+
+.post-card-menu__item--danger {
+    color: #e53935;
 }
 
 .post-user-name {
@@ -80,20 +126,188 @@
 
 /* Media */
 .post-media-container {
-    margin-top: 10px;
-    margin-bottom: 4px;
-    border-radius: 16px;
+    position: relative;
+    margin: 10px 16px 0;
+    width: calc(100% - 32px);
+    box-sizing: border-box;
+    border-radius: 12px;
     overflow: hidden;
     border: 1px solid var(--border-color);
-    max-height: 500px;
+    background: var(--bg-darker, #0d0d12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.post-card.in-chat .post-media-container {
+    margin-inline: 0;
+    width: 100%;
+}
+
+.post-media-preview {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 420px;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
     background: #000;
+}
+
+.post-media-preview--tall {
+    aspect-ratio: 9 / 16;
+    max-height: 480px;
+}
+
+/* YouTube Shorts — full-width native 9:16 (no downscaling) */
+.post-card--youtube-short {
+    overflow: visible;
+}
+
+.post-media-container--vertical {
+    margin: 10px 0 0;
+    width: 100%;
+    border-radius: 0;
+    border-inline: none;
+}
+
+.post-media-preview--vertical,
+.post-media-preview--short {
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    max-height: none;
+    height: auto;
+}
+
+.post-media-preview--short .post-media-preview__img {
+    object-fit: contain;
+    opacity: 1;
+}
+
+.post-embed-player--vertical {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+}
+
+.post-embed-player--vertical iframe,
+.post-media-container--vertical .post-embed-player iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    aspect-ratio: unset;
+}
+
+.post-media-preview__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.88;
+}
+
+.post-media-preview__brand {
+    position: absolute;
+    pointer-events: none;
+}
+
+.post-media-preview__play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.post-media-preview__play-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    backdrop-filter: blur(6px);
+}
+
+.post-embed-player,
+.post-embed-shell {
+    position: relative;
+    width: 100%;
+    line-height: 0;
+    background: #000;
+}
+
+.post-embed-player iframe,
+.post-embed-shell iframe,
+.post-media-container > iframe {
+    display: block;
+    width: 100%;
+    border: none;
+}
+
+.post-embed-player iframe {
+    aspect-ratio: 16 / 9;
+    height: auto;
+    min-height: 200px;
+    max-height: 420px;
+}
+
+.post-embed-shell {
+    display: flex;
+    justify-content: center;
+}
+
+.post-embed-shell iframe {
+    max-width: 400px;
+    min-height: 360px;
+    max-height: 520px;
+}
+
+.post-video {
+    width: 100%;
+    max-height: 480px;
+    object-fit: contain;
+    display: block;
+    background: #000;
+}
+
+.post-embed-unmute-hint {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+[dir="rtl"] .post-embed-unmute-hint {
+    right: auto;
+    left: 8px;
 }
 
 .post-media-content {
     width: 100%;
-    max-height: 500px;
+    max-height: 80vh;
     object-fit: cover;
-    /* Twitter usually crops to cover, but contain is safer for varying sizes. Let's start with cover but maintain aspect ratio via max-height container */
     display: block;
 }
 
@@ -101,68 +315,293 @@
 .post-actions {
     display: flex;
     justify-content: space-between;
-    margin-top: 8px;
-    max-width: 400px;
-    /* Limit width to keep icons closer */
+    margin-top: 4px;
+    width: 100%;
+    border-top: 1px solid var(--border-color);
+    padding: 4px 16px;
 }
 
 .action-item {
+    flex: 1;
     display: flex;
+    justify-content: center;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     background: none;
     border: none;
     color: var(--text-muted);
-    font-size: 0.9rem;
-    padding: 8px;
-    border-radius: 20px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 8px 0;
+    border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
-    position: relative;
-    /* Create a larger hit area visually via padding/margin if needed */
 }
 
 .action-count {
-    font-size: 0.8rem;
-    /* font-weight: 600; */
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    min-width: 1ch;
+}
+
+.action-item.like.liked .action-count {
+    color: var(--primary);
 }
 
 /* Hover Effects */
-.action-item.reply:hover {
-    color: #1d9bf0;
-    background: rgba(29, 155, 240, 0.1);
-}
-
-.action-item.repost:hover {
-    color: #00ba7c;
-    background: rgba(0, 186, 124, 0.1);
-}
-
-.action-item.like:hover {
-    color: #f91880;
-    background: rgba(249, 24, 128, 0.1);
+.action-item:hover {
+    background: rgba(128, 128, 128, 0.1);
 }
 
 .action-item.like.liked {
-    color: #f91880;
+    color: var(--primary);
 }
 
-.action-item.share:hover {
-    color: #1d9bf0;
-    background: rgba(29, 155, 240, 0.1);
+/* Comments — feed preview (count + last only) */
+.post-comments-preview {
+    margin: 0 16px 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    text-align: start;
 }
 
-/* Comments Dropdown (Simple implementation) */
+.post-comments-preview:hover {
+    background: color-mix(in srgb, var(--bg-elevated) 92%, var(--primary));
+}
+
+.post-comments-preview__count {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.post-comments-preview__last {
+    font-size: 0.9rem;
+    line-height: 1.35;
+    color: var(--text-main);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.post-comments-preview__name {
+    font-weight: 700;
+    margin-inline-end: 6px;
+}
+
+.post-comments-preview__text {
+    font-weight: 400;
+    word-break: break-word;
+}
+
+/* Feed: space below comment preview (was flush with card bottom) */
+.post-card:not(.in-chat) .post-comments-preview {
+    margin-bottom: 20px;
+}
+
+/* Full-bleed video in feed: extra room above bottom nav */
+.post-card--video:not(.in-chat) .post-comments-preview--video {
+    margin-bottom: calc(var(--nav-height, 64px) + env(safe-area-inset-bottom, 0px) + 20px);
+}
+
+.post-card--video .post-comments-preview--video .post-comments-preview__last + .post-comments-preview__last {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+
+.post-card--video .comments-section--video-feed,
+.post-card--video .comments-section--video-detail {
+    margin-bottom: calc(var(--nav-height, 64px) + env(safe-area-inset-bottom, 0px) + 20px);
+    padding-bottom: 16px;
+}
+
+.post-card--video.in-chat .comments-section--video-detail {
+    margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 32px);
+}
+
+.post-card--video .post-detail-comments-scroll {
+    margin-bottom: 8px;
+}
+
+/* Comments — inline expand (feed): one last comment + framed composer */
 .comments-section {
-    margin-top: 12px;
-    padding-top: 12px;
+    margin-top: 0;
+    padding: 0;
+    border-top: none;
+}
+
+.comments-section--chat {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 8px;
+    padding: 12px 16px 14px 16px;
     border-top: 1px solid var(--border-color);
+}
+
+.comments-inline-last {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+}
+
+.post-comment-composer-wrap {
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border-color));
+    background: color-mix(in srgb, var(--bg-card) 88%, var(--primary));
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+.post-comment-composer-wrap .comment-input--inline {
+    width: 100%;
+    padding-inline-end: 80px;
+    padding-inline-start: 14px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    border-radius: 22px;
+    border: 1px solid color-mix(in srgb, var(--border-color) 90%, var(--primary));
+    background: var(--bg-body);
+    color: var(--text-main);
+    outline: none;
+    font-size: 0.95rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.post-comment-composer-wrap .comment-input--inline:focus {
+    border-color: color-mix(in srgb, var(--primary) 45%, var(--border-color));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+/* Standalone post page — composer first, then scrollable comments */
+.comments-section--detail {
+    flex-direction: column;
+    gap: 12px;
+}
+
+.post-detail-comments-scroll {
+    max-height: min(320px, 45vh);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 4px 2px 8px 0;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-elevated);
+}
+
+.post-detail-comments-pull-hint {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding: 8px 10px;
+    background: linear-gradient(180deg, var(--bg-elevated) 85%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+
+.comments-thread__item--detail {
+    padding: 10px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 65%, transparent);
+}
+
+.comments-thread__item--detail:last-child {
+    border-bottom: none;
+}
+
+.comments-thread {
+    max-height: 280px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-inline-end: 4px;
+}
+
+.comments-thread__item {
+    padding-bottom: 10px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+}
+
+.comments-thread__item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.comments-thread__meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+    font-size: 0.8rem;
+}
+
+.comments-thread__author {
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.comments-thread__time {
+    color: var(--text-muted);
+    flex-shrink: 0;
+    font-size: 0.75rem;
+}
+
+.comments-thread__body {
+    font-size: 0.9rem;
+    color: var(--text-main);
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.comments-emoji-strip {
+    display: flex;
+    gap: 12px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    background: var(--bg-elevated);
+    border-radius: 14px;
+    border: 1px solid var(--border-color);
+}
+
+.comments-emoji-strip button {
+    background: transparent;
+    border: none;
+    font-size: 1.45rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    flex-shrink: 0;
 }
 
 .comment-input-row {
     display: flex;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 0;
+}
+
+.comment-input-row--footer {
+    position: relative;
+    margin-top: 0;
 }
 
 .comment-input {

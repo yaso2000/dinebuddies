@@ -1,5 +1,5 @@
 // Invitation Template Configurations
-// 6 Different Layout Styles × 6 Different Color Schemes = 36 Combinations
+// Classic public cards use photoBottom accents; color schemes drive share/UI theming.
 
 export const COLOR_SCHEMES = {
     oceanBlue: {
@@ -95,375 +95,188 @@ export const COLOR_SCHEMES = {
 };
 
 export const TEMPLATE_STYLES = {
-    classic: {
-        name: 'Classic',
-        emoji: '🎨',
-        description: 'Traditional elegant card design',
+    photoBottom: {
+        name: 'Bottom focus',
+        emoji: '\u{1F4CD}',
+        description: 'Title on the image; details along the bottom',
 
         getStyles: (colors) => ({
             card: {
-                background: 'var(--bg-card)',
-                borderRadius: '16px',
-                border: `2px solid ${colors.primary}`,
-                boxShadow: `0 8px 24px ${colors.shadow}`,
-                padding: '1.25rem'
+                background: 'transparent',
+                borderRadius: '24px',
+                border: 'none',
+                boxShadow: '0 20px 50px rgba(0,0,0,0.35)',
+                padding: 0,
+                overflow: 'hidden',
+                position: 'relative',
             },
             header: {
-                background: colors.gradient,
-                color: 'white',
-                padding: '1rem',
-                borderRadius: '12px',
-                marginBottom: '1rem'
+                background: 'transparent',
+                color: '#ffffff',
+                padding: 0,
+                marginBottom: 0,
             },
             badge: {
-                background: colors.light,
-                color: colors.primary,
-                border: `2px solid ${colors.primary}`,
-                borderRadius: '8px',
+                background: 'rgba(255,255,255,0.2)',
+                color: '#ffffff',
+                border: '1px solid rgba(255,255,255,0.35)',
+                borderRadius: '12px',
                 padding: '6px 12px',
                 fontSize: '0.75rem',
-                fontWeight: '700'
+                fontWeight: '800',
             },
             button: {
                 background: colors.gradient,
                 color: 'white',
-                borderRadius: '10px',
-                padding: '10px 20px',
-                border: 'none',
-                fontWeight: '700'
-            },
-            layout: {
-                textAlign: 'left',
-                displayDescription: true,
-                titleSize: '1.4rem',
-                messageStyle: { fontStyle: 'italic', opacity: 0.9 },
-                showSecondaryInfo: true
-            }
-        })
-    },
-
-    modern: {
-        name: 'Modern',
-        emoji: '✨',
-        description: 'Contemporary with glassmorphism',
-
-        getStyles: (colors) => ({
-            card: {
-                background: `linear-gradient(135deg, ${colors.primary}10, ${colors.secondary}10)`,
-                borderRadius: '24px',
-                border: `1px solid ${colors.primary}30`,
-                boxShadow: `0 20px 60px ${colors.shadow}`,
-                padding: '1.5rem',
-                backdropFilter: 'blur(10px)'
-            },
-            header: {
-                background: `${colors.primary}15`,
-                backdropFilter: 'blur(20px)',
-                color: colors.primary,
-                padding: '1.25rem',
-                borderRadius: '18px',
-                marginBottom: '1.25rem',
-                border: `1px solid ${colors.primary}30`
-            },
-            badge: {
-                background: `${colors.primary}20`,
-                backdropFilter: 'blur(10px)',
-                color: colors.primary,
-                border: `1px solid ${colors.primary}40`,
-                borderRadius: '20px',
-                padding: '8px 16px',
-                fontSize: '0.75rem',
-                fontWeight: '800'
-            },
-            button: {
-                background: colors.gradient,
-                color: 'white',
-                borderRadius: '16px',
-                padding: '12px 24px',
+                borderRadius: '14px',
+                padding: '12px 20px',
                 border: 'none',
                 fontWeight: '800',
-                boxShadow: `0 8px 24px ${colors.shadow}`
+                boxShadow: `0 10px 28px ${colors.shadow}`,
             },
             layout: {
-                textAlign: 'center',
+                cardVariant: 'photoBottom',
+                textAlign: 'left',
                 displayDescription: true,
-                titleSize: '1.6rem',
-                fontFamily: "'Inter', sans-serif",
-                messageStyle: { fontWeight: '400', letterSpacing: '0.5px', color: 'rgba(255,255,255,0.9)' },
+                titleSize: '1.35rem',
+                fontFamily: "'Inter', system-ui, sans-serif",
+                messageStyle: { color: 'rgba(255,255,255,0.92)', fontWeight: '500' },
                 showSecondaryInfo: true,
                 accentColor: colors.primary,
-                backgroundOverlay: 'url("data:image/svg+xml,%3Csvg width=\'20\' height=\'20\' viewBox=\'0 0 20 20\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0l20 20M20 0L0 20\' stroke=\'%23f59e0b\' stroke-opacity=\'0.05\' stroke-width=\'1\'/%3E%3C/svg%3E")'
-            }
-        })
+            },
+        }),
     },
-
-    elegant: {
-        name: 'Romantic',
-        emoji: '🌹',
-        description: 'Luxurious with rose and gold accents',
-
-        getStyles: (colors) => ({
-            card: {
-                background: colors.gradient || `linear-gradient(135deg, var(--bg-card), ${colors.light})`,
-                borderRadius: '30px',
-                border: `2px solid ${colors.primary}`,
-                boxShadow: `0 0 30px ${colors.shadow}`,
-                padding: '1.5rem',
-                position: 'relative',
-                color: 'white'
-            },
-            header: {
-                background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary}, var(--luxury-gold))`,
-                color: 'white',
-                padding: '1.5rem',
-                borderRadius: '20px',
-                marginBottom: '1.5rem',
-                textAlign: 'center',
-                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)'
-            },
-            badge: {
-                background: 'rgba(255, 255, 255, 0.2)',
-                color: 'white',
-                border: `1.5px solid rgba(255,255,255,0.4)`,
-                borderRadius: '20px',
-                padding: '8px 16px',
-                fontSize: '0.75rem',
-                fontWeight: '700',
-                backdropFilter: 'blur(5px)'
-            },
-            button: {
-                background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary}, var(--luxury-gold))`,
-                color: 'white',
-                borderRadius: '30px',
-                padding: '12px 28px',
-                border: 'none',
-                fontWeight: '800',
-                boxShadow: `0 8px 24px ${colors.shadow}`
-            },
-            layout: {
-                textAlign: 'center',
-                displayDescription: true,
-                titleSize: '2.2rem',
-                fontFamily: "'Inter', sans-serif",
-                messageStyle: { fontSize: '1.2rem', fontStyle: 'italic', fontWeight: '400', letterSpacing: '0.2px', color: '#D4AF37' },
-                showSecondaryInfo: false,
-                backgroundOverlay: 'none'
-            }
-        })
-    },
-
-    fun: {
-        name: 'Family',
-        emoji: '🌳',
-        description: 'Warm, friendly and welcoming',
-
-        getStyles: (colors) => ({
-            card: {
-                background: `linear-gradient(to bottom right, ${colors.light}20, var(--bg-card))`,
-                borderRadius: '25px',
-                border: `3px solid ${colors.primary}40`,
-                boxShadow: `0 10px 30px ${colors.shadow}`,
-                padding: '1.5rem'
-            },
-            header: {
-                background: colors.gradient,
-                color: 'white',
-                padding: '1.25rem',
-                borderRadius: '20px',
-                marginBottom: '1.25rem'
-            },
-            badge: {
-                background: colors.primary,
-                color: 'white',
-                borderRadius: '12px',
-                padding: '6px 14px',
-                fontSize: '0.8rem',
-                fontWeight: '700'
-            },
-            button: {
-                background: colors.gradient,
-                color: 'white',
-                borderRadius: '18px',
-                padding: '14px 24px',
-                border: 'none',
-                fontWeight: '700',
-                boxShadow: `0 6px 15px ${colors.shadow}`
-            },
-            layout: {
-                textAlign: 'left',
-                displayDescription: true,
-                titleSize: '1.6rem',
-                fontFamily: "'Outfit', sans-serif",
-                messageStyle: { fontWeight: '500', color: 'var(--text-main)', opacity: '0.9' },
-                showSecondaryInfo: true,
-                decorativeElement: '👨‍👩‍👧‍👦',
-                backgroundOverlay: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M30 10c0-5-5-5-5 0s5 5 5 5 5-5 5-5-5 0-5 0z\' fill=\'%2310b981\' fill-opacity=\'0.03\'/%3E%3C/svg%3E")'
-            }
-        })
-    },
-
-    minimal: {
-        name: 'Minimal',
-        emoji: '⚪',
-        description: 'Clean and simple',
-
-        getStyles: (colors) => ({
-            card: {
-                background: 'var(--bg-card)',
-                borderRadius: '12px',
-                border: `1px solid var(--border-color)`,
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
-                padding: '1.25rem'
-            },
-            header: {
-                background: 'transparent',
-                color: colors.primary,
-                padding: '0.75rem 0',
-                borderBottom: `2px solid ${colors.primary}`,
-                marginBottom: '1rem'
-            },
-            badge: {
-                background: 'transparent',
-                color: colors.primary,
-                border: `1px solid ${colors.primary}`,
-                borderRadius: '6px',
-                padding: '6px 12px',
-                fontSize: '0.7rem',
-                fontWeight: '600'
-            },
-            button: {
-                background: colors.primary,
-                color: 'white',
-                borderRadius: '8px',
-                padding: '10px 20px',
-                border: 'none',
-                fontWeight: '600'
-            },
-            layout: {
-                textAlign: 'left',
-                displayDescription: false,
-                titleSize: '1.2rem',
-                fontFamily: "'Inter', sans-serif",
-                messageStyle: {},
-                showSecondaryInfo: true
-            }
-        })
-    },
-
-    premium: {
-        name: 'Business',
-        emoji: '👔',
-        description: 'Elite corporate professional',
-
-        getStyles: (colors) => ({
-            card: {
-                background: `linear-gradient(135deg, #0f172a, #1e293b)`,
-                borderRadius: '16px',
-                border: `1px solid ${colors.primary}50`,
-                boxShadow: `0 25px 50px -12px rgba(0, 0, 0, 0.5)`,
-                padding: '2rem',
-                overflow: 'hidden'
-            },
-            header: {
-                background: `rgba(255,255,255,0.05)`,
-                color: 'white',
-                padding: '1.5rem',
-                borderRadius: '12px',
-                marginBottom: '1.75rem',
-                textAlign: 'center',
-                borderBottom: `3px solid ${colors.primary}`
-            },
-            badge: {
-                background: 'transparent',
-                color: colors.primary,
-                border: `1.5px solid ${colors.primary}`,
-                borderRadius: '4px',
-                padding: '6px 12px',
-                fontSize: '0.7rem',
-                fontWeight: '800',
-                textTransform: 'uppercase',
-                letterSpacing: '1.5px'
-            },
-            button: {
-                background: colors.primary,
-                color: 'white',
-                borderRadius: '4px',
-                padding: '14px 32px',
-                border: 'none',
-                fontWeight: '900',
-                fontSize: '0.95rem',
-                textTransform: 'uppercase',
-                letterSpacing: '1px'
-            },
-            layout: {
-                textAlign: 'center',
-                displayDescription: true,
-                titleSize: '1.8rem',
-                fontFamily: "'Montserrat', sans-serif",
-                messageStyle: { fontWeight: '600', letterSpacing: '0.5px', color: 'rgba(255,255,255,0.8)' },
-                showSecondaryInfo: true,
-                decorativeElement: '💼',
-                backgroundOverlay: 'url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' viewBox=\'0 0 40 40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0h40v40H0z\' fill=\'none\'/%3E%3Cpath d=\'M0 20h40M20 0v40\' stroke=\'%23ffffff\' stroke-opacity=\'0.03\' stroke-width=\'1\'/%3E%3C/svg%3E")'
-            }
-        })
-    }
 };
 
+/** Legacy header+body template names → unified classic split card. */
+const HEADER_BODY_LEGACY = new Set(['modern', 'elegant', 'fun', 'minimal', 'premium', 'editorial']);
+
+/**
+ * Canonical public invitation layout. Header+body (`classic`) is the only model.
+ * Legacy card/hero keys normalize to classic so old drafts render as header.
+ * @param {string | undefined | null} raw
+ * @returns {'classic'}
+ */
+export function normalizePublicCardTemplateKey(raw) {
+    void raw;
+    void HEADER_BODY_LEGACY;
+    return 'classic';
+}
+
+/** Public magic-cover bitmap aspects (header layout). */
+export const MAGIC_COVER_ASPECT_RATIOS = ['1:1'];
+
+/**
+ * @param {string | undefined | null} templateType
+ * @returns {'4:5'|'1:1'}
+ */
+export function templateTypeToMagicCoverAspect(templateType) {
+    void templateType;
+    return '1:1';
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {'4:5'|'1:1'|'9:16'}
+ */
+export function normalizeMagicCoverAspectRatio(raw) {
+    const s = String(raw ?? '').trim();
+    if (s === '16:9' || s === '9:16') return '4:5';
+    if (s === '1:1') return '1:1';
+    if (s === '4:5') return '4:5';
+    return '4:5';
+}
+
 export const OCCASION_PRESETS = {
-    Dating: {
-        templateType: 'elegant',
-        colorScheme: 'royalRed',
-        lottieUrl: 'https://assets9.lottiefiles.com/packages/lf20_m6cu961l.json' // Romantic Heart
-    },
     Birthday: {
-        templateType: 'fun',
+        templateType: 'photoBottom',
         colorScheme: 'sunsetOrange',
         lottieUrl: 'https://assets5.lottiefiles.com/packages/lf20_u4j3cx7u.json' // Confetti
     },
     Social: {
-        templateType: 'modern',
+        templateType: 'photoGlass',
         colorScheme: 'leafGreen',
         lottieUrl: 'https://assets10.lottiefiles.com/packages/lf20_o6spyj.json' // Social Network
     },
     Work: {
-        templateType: 'premium',
+        templateType: 'photoChips',
         colorScheme: 'royalPurple',
         lottieUrl: 'https://assets3.lottiefiles.com/packages/lf20_vnikbeve.json' // Office/Work
     },
     Nightlife: {
-        templateType: 'modern',
+        templateType: 'photoGlass',
         colorScheme: 'midnightGold',
         lottieUrl: 'https://assets2.lottiefiles.com/packages/lf20_myej9j9j.json' // Nightlife/Party
     },
     Dining: {
-        templateType: 'elegant',
+        templateType: 'photoChips',
         colorScheme: 'oceanBlue',
         lottieUrl: 'https://assets4.lottiefiles.com/packages/lf20_06m8n5.json' // Dining/Food
     },
     Café: {
-        templateType: 'classic',
+        templateType: 'photoBottom',
         colorScheme: 'sunsetOrange',
         lottieUrl: 'https://assets2.lottiefiles.com/packages/lf20_ytp7shm2.json' // Coffee
     },
     Gaming: {
-        templateType: 'fun',
+        templateType: 'photoBottom',
         colorScheme: 'slateBlue',
         lottieUrl: 'https://assets5.lottiefiles.com/packages/lf20_5njpkv83.json' // Gaming
+    },
+    Family: {
+        templateType: 'photoGlass',
+        colorScheme: 'natureGreen',
+        emoji: '\u{1F46A}',
+        lottieUrl: 'https://assets3.lottiefiles.com/packages/lf20_cjqtkpjm.json' // Family/Home
+    },
+    Celebration: {
+        templateType: 'photoChips',
+        colorScheme: 'midnightGold',
+        emoji: '\u{1F389}',
+        lottieUrl: 'https://assets2.lottiefiles.com/packages/lf20_obhph3t0.json' // Celebration/Fireworks
+    },
+    Cinema: {
+        templateType: 'photoGlass',
+        colorScheme: 'royalPurple',
+        emoji: '\u{1F37F}',
+        lottieUrl: 'https://assets2.lottiefiles.com/packages/lf20_6s1bndto.json' // Cinema/Popcorn/Movies
+    },
+    Sports: {
+        templateType: 'photoBottom',
+        colorScheme: 'oceanBlue',
+        emoji: '\u{1F3C6}',
+        lottieUrl: 'https://assets5.lottiefiles.com/packages/lf20_jmz1a7.json' // Sports
+    },
+    Bbq: {
+        templateType: 'photoChips',
+        colorScheme: 'sunsetOrange',
+        emoji: '\u{1F525}',
+        lottieUrl: 'https://assets4.lottiefiles.com/packages/lf20_06m8n5.json' // Food/BBQ
     }
 };
 
-export const getTemplateStyle = (templateType, colorScheme, occasionType) => {
-    // If occasionType is provided and a preset exists, use it
-    const normalizedOccasion = (occasionType || '').charAt(0).toUpperCase() + (occasionType || '').slice(1).toLowerCase();
-    if (normalizedOccasion && OCCASION_PRESETS[normalizedOccasion]) {
-        const preset = OCCASION_PRESETS[normalizedOccasion];
-        const template = TEMPLATE_STYLES[preset.templateType] || TEMPLATE_STYLES.modern;
-        const colors = COLOR_SCHEMES[preset.colorScheme] || COLOR_SCHEMES.oceanBlue;
-        return template.getStyles(colors);
-    }
-
-    // Fallback to manual selection or defaults
-    const template = TEMPLATE_STYLES[templateType] || TEMPLATE_STYLES.classic;
+/**
+ * @param {string} templateType
+ * @param {string} colorScheme
+ * @param {string} [occasionType]
+ * @param {{ cardFontFamily?: string }} [opts] — optional overrides from AI or user (public card typography)
+ */
+export const getTemplateStyle = (templateType, colorScheme, occasionType, opts) => {
+    void templateType;
+    void occasionType;
+    const template = TEMPLATE_STYLES.photoBottom;
     const colors = COLOR_SCHEMES[colorScheme] || COLOR_SCHEMES.oceanBlue;
-    return template.getStyles(colors);
+    const base = template.getStyles(colors);
+    const font =
+        opts && typeof opts.cardFontFamily === 'string' && opts.cardFontFamily.trim()
+            ? opts.cardFontFamily.trim()
+            : '';
+    if (!font || !base.layout) return base;
+    return {
+        ...base,
+        layout: {
+            ...base.layout,
+            fontFamily: font,
+        },
+    };
 };

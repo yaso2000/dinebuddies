@@ -1,0 +1,15 @@
+.motion-title {
+    font-family: 'Changa', sans-serif;
+    font-weight: 800;
+}
+
+.motion-body {
+    font-family: 'Tajawal', sans-serif;
+    font-weight: 500;
+    direction: rtl;
+}
+
+.motion-button {
+    font-family: 'Cairo', sans-serif;
+    font-weight: 700;
+}

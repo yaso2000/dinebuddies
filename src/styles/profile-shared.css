@@ -6,11 +6,18 @@
 
 /* Profile tokens (extend index.css :root) */
 :root {
-  --profile-shell-padding: 0 1rem 1rem;
+  /* Profile avatar gender rings */
+  --avatar-ring-male: #3b82f6;
+  --avatar-ring-female: #ec4899;
+  --avatar-ring-unspecified: #a855f7;
+  --avatar-inner-gap: var(--bg-body);
+  /* Single vertical rhythm between profile cards / stats / tabs (both Profile + BusinessProfile) */
+  --profile-stack-gap: 0.75rem;
+  --profile-shell-padding: 0 1rem 0.75rem;
   --profile-shell-padding-bottom: 100px;
-  --profile-content-padding: 0 1rem 2rem 1rem;
-  --profile-section-gap: 1.5rem;
-  --profile-section-gap-lg: 24px;
+  --profile-content-padding: 0 1rem 1rem 1rem;
+  --profile-section-gap: var(--profile-stack-gap);
+  --profile-section-gap-lg: var(--profile-stack-gap);
   --profile-card-radius: 20px;
   --profile-card-radius-lg: 24px;
   --profile-card-padding: 1rem;
@@ -26,6 +33,10 @@
   padding-bottom: var(--profile-shell-padding-bottom);
   background: var(--bg-body);
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 /* profile-content — main content area with horizontal padding */
@@ -50,6 +61,51 @@
 .profile-identity {
   text-align: center;
   margin-bottom: var(--profile-section-gap);
+}
+
+/* UserAvatar — layout-stable rings (padding-based, not box-shadow) */
+.user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  line-height: 0;
+  flex-shrink: 0;
+  border-radius: 50%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.user-avatar__img {
+  display: block;
+  object-fit: cover;
+  border-radius: 50%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+/* Story / highlight ring — outer gradient shell */
+.avatar-story-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  padding: 3px;
+  line-height: 0;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.avatar-story-ring--active {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899, #f97316);
+}
+
+.avatar-story-ring--viewed {
+  background: var(--border-color);
+}
+
+.avatar-story-ring--own {
+  background: linear-gradient(135deg, #10b981, #059669);
 }
 
 /* profile-stats — stats row (Reviews/Members/Invites or Followers/Following) */
@@ -87,14 +143,14 @@
   flex-direction: column;
   gap: var(--profile-actions-gap);
   width: 100%;
-  margin-bottom: 1rem;
+  margin-bottom: var(--profile-stack-gap);
 }
 
 .profile-actions-row {
   display: flex;
   gap: var(--profile-actions-gap);
   width: 100%;
-  margin-bottom: 1rem;
+  margin-bottom: var(--profile-stack-gap);
 }
 
 /* profile-section — section wrapper with vertical spacing */
@@ -248,6 +304,7 @@
 .profile-invitation-item__title {
   font-size: 0.85rem;
   font-weight: 800;
+  color: var(--text-heading);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -267,15 +324,91 @@
   border: 1px solid color-mix(in srgb, var(--color-rating-filled) 30%, transparent);
 }
 
+.profile-invitation-item__badge--draft {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
 .profile-invitation-item__badge--public {
   background: color-mix(in srgb, var(--primary) 20%, transparent);
   color: var(--primary);
   border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
 }
 
+.profile-invitation-item__badge--archived {
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  color: var(--text-muted);
+  border: 1px solid color-mix(in srgb, var(--text-muted) 28%, transparent);
+}
+
+.profile-invitation-item--archived {
+  cursor: default;
+  opacity: 0.88;
+}
+
+.profile-invitation-item--archived:hover {
+  transform: none;
+}
+
 .profile-invitation-item__date {
   font-size: 0.7rem;
   color: var(--text-muted);
+}
+
+[data-theme='light'] .profile-invitation-item {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+[data-theme='light'] .profile-invitation-item:hover {
+  background: color-mix(in srgb, var(--primary) 6%, var(--bg-card));
+}
+
+/* User profile — invitation tab list: ~5 large rows visible, scroll for the rest */
+.user-profile-invitation-list-scroll {
+  max-height: min(52vh, 430px);
+  min-height: 100px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-inline-end: 2px;
+}
+
+/* User profile — action buttons: full-width rows on desktop */
+@media (min-width: 1024px) {
+  .user-profile-action-rows {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .user-profile-action-rows__primary,
+  .user-profile-action-rows__secondary {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .user-profile-action-rows__secondary {
+    gap: 8px;
+  }
+
+  .user-profile-action-rows__primary > *,
+  .user-profile-action-rows__secondary > * {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+  }
 }
 
 /* profile-theme-toggle — theme switch button in profile header */
@@ -343,26 +476,19 @@
   box-shadow: var(--shadow-glow);
 }
 
+/* Delivery links — fetch/save buttons readable on dark theme */
+.delivery-link-fetch-btn.ui-btn--primary {
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover, #d85a20) 100%);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+.delivery-link-fetch-btn.ui-btn--primary:disabled {
+  cursor: not-allowed;
+}
+
 /* profile-guest-prompt, profile-banner-warning, profile-clear-btn
    → aliased in ui-primitives.css. Keep until migration to ui-prompt, ui-banner, ui-btn. */
-
-/* profile-add-story-btn — Add Story floating button */
-.profile-add-story-btn {
-  position: absolute;
-  bottom: 5px;
-  right: 5px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--color-danger);
-  color: white;
-  border: 3px solid var(--bg-body);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: var(--shadow-premium);
-}
 
 /* profile-form-surface, profile-form-field, profile-form-label
    → aliased in ui-primitives.css. Keep until migration to ui-form-*. */

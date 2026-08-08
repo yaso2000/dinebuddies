@@ -1,4 +1,20 @@
 {
+    "auth": {
+        "providers": {
+            "googleSignIn": {
+                "oAuthBrandDisplayName": "DineBuddies",
+                "supportEmail": "admin@dinebuddies.com",
+                "authorizedRedirectUris": [
+                    "https://dinebuddies.firebaseapp.com/__/auth/handler",
+                    "https://dinebuddies.web.app/__/auth/handler",
+                    "https://www.dinebuddies.com/__/auth/handler",
+                    "https://dinebuddies.com/__/auth/handler",
+                    "http://localhost/__/auth/handler",
+                    "http://127.0.0.1/__/auth/handler"
+                ]
+            }
+        }
+    },
     "functions": {
         "source": "functions",
         "codebase": "default",
@@ -14,17 +30,86 @@
         "rules": "firestore.rules",
         "indexes": "firestore.indexes.json"
     },
-    "storage": {
-        "rules": "storage.rules"
-    },
+    "storage": [
+        {
+            "bucket": "dinebuddies.firebasestorage.app",
+            "rules": "storage.rules"
+        }
+    ],
     "hosting": {
+        "site": "dinebuddies",
         "public": "dist",
         "ignore": [
             "firebase.json",
             "**/.*",
             "**/node_modules/**"
         ],
+        "headers": [
+            {
+                "source": "/firebase-messaging-sw.js",
+                "headers": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/javascript; charset=utf-8"
+                    },
+                    {
+                        "key": "Cache-Control",
+                        "value": "public, max-age=0, must-revalidate"
+                    }
+                ]
+            },
+            {
+                "source": "/index.html",
+                "headers": [
+                    {
+                        "key": "Cache-Control",
+                        "value": "no-cache, no-store, must-revalidate"
+                    },
+                    {
+                        "key": "Cross-Origin-Opener-Policy",
+                        "value": "same-origin-allow-popups"
+                    }
+                ]
+            },
+            {
+                "source": "**",
+                "headers": [
+                    {
+                        "key": "Cross-Origin-Opener-Policy",
+                        "value": "same-origin-allow-popups"
+                    }
+                ]
+            },
+            {
+                "source": "/assets/**",
+                "headers": [
+                    {
+                        "key": "Cache-Control",
+                        "value": "public, max-age=31536000, immutable"
+                    }
+                ]
+            }
+        ],
+        "redirects": [
+            {
+                "source": "/business-signup",
+                "destination": "/signup/business",
+                "type": 301
+            }
+        ],
         "rewrites": [
+            {
+                "source": "/api/consumer-search",
+                "function": "consumerAccountSearchHttp"
+            },
+            {
+                "source": "/api/place-photo",
+                "function": "placePhoto"
+            },
+            {
+                "source": "/invite/p/**",
+                "function": "privateInvitationSharePage"
+            },
             {
                 "source": "**",
                 "destination": "/index.html"

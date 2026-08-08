@@ -1,7 +1,20 @@
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../firebase/config';
+import { storage, auth } from '../firebase/config';
 import { generateThumbnail } from '../utils/thumbnailGenerator';
 import { compressImage } from '../utils/imageUpload';
+import { uploadImageWithModeration } from './moderatedImageUpload';
+import { folderToImageZone } from './imageUploadZones';
+import {
+    beginImageUploadSession,
+    finishImageUploadSession,
+    updateImageUploadSession,
+} from './imageUploadProgressStore';
+import {
+    decodeFirebaseStorageBucketName,
+    decodeFirebaseStorageObjectPath,
+    isRestrictedFirebaseStorageUrl,
+    isServerPersistedAiCoverUrl,
+} from '../utils/aiGeneratedMediaUrl';
 
 /**
  * Upload media file (image or video) to Firebase Storage
@@ -32,6 +45,18 @@ export const uploadMedia = async (file, userId, type, folder = 'invitations') =>
                 console.warn('Image compression failed, uploading original:', e?.message);
             }
         }
+
+        if (type === 'image' || type === 'thumbnail') {
+            const purpose = folderToImageZone(folder, type);
+            beginImageUploadSession('preparing');
+            try {
+                updateImageUploadSession(8, 'preparing');
+                return await uploadImageWithModeration(fileToUpload, userId, purpose);
+            } finally {
+                finishImageUploadSession();
+            }
+        }
+
         // Determin extension
         let extension = type === 'video' ? 'webm' : 'jpg';
         if (fileToUpload.name) {
@@ -88,23 +113,18 @@ export const uploadMedia = async (file, userId, type, folder = 'invitations') =>
  */
 export const uploadVideoWithThumbnail = async (videoFile, userId, folder = 'invitations') => {
     try {
-        console.log('📹 Starting video upload...');
 
         // Upload video first
         const videoUrl = await uploadMedia(videoFile, userId, 'video', folder);
-        console.log('✅ Video uploaded:', videoUrl);
 
         let thumbnailUrl = null;
 
         // Try to generate and upload thumbnail
         try {
-            console.log('🖼️ Generating thumbnail...');
             const thumbnailBlob = await generateThumbnail(videoFile, 0.5);
-            console.log('✅ Thumbnail generated:', thumbnailBlob.size, 'bytes');
 
             const thumbnailFile = new File([thumbnailBlob], 'thumbnail.jpg', { type: 'image/jpeg' });
             thumbnailUrl = await uploadMedia(thumbnailFile, userId, 'thumbnail', folder);
-            console.log('✅ Thumbnail uploaded:', thumbnailUrl);
         } catch (thumbError) {
             console.warn('⚠️ Thumbnail generation failed, using default:', thumbError);
             // Use a default thumbnail or the video URL itself
@@ -122,55 +142,416 @@ export const uploadVideoWithThumbnail = async (videoFile, userId, folder = 'invi
 };
 
 /**
+ * Upload Place Photo from our server-side API (for Google Business import).
+ * Use when placeId is available; avoids PhotoService 403.
+ * @param {string} placeId - Google Place ID
+ * @param {number} index - Photo index (0 = cover/header)
+ * @param {string} userId - User ID
+ * @param {string} [folder='businesses'] - Storage folder
+ * @returns {Promise<string|null>} - Firebase Storage URL or null
+ */
+export const uploadPlacePhoto = async (placeId, index, userId, folder = 'businesses') => {
+    void placeId;
+    void index;
+    void userId;
+    void folder;
+    // Emergency kill-switch: Google Place photos are disabled.
+    return null;
+};
+
+/**
+ * Upload a photo from a relative /api/place-photo?placeId=...&index=N URL.
+ * Parses placeId + index from the URL, then calls uploadPlacePhoto.
+ * Returns Firebase Storage URL on success, null on failure.
+ * @param {string} url - Relative or absolute place-photo URL
+ * @param {string} userId
+ * @param {string} [folder='businesses']
+ */
+export const uploadPlacePhotoFromUrl = async (url, userId, folder = 'businesses') => {
+    void url;
+    void userId;
+    void folder;
+    return null;
+};
+
+/**
  * Upload Google/External image via Proxy
  * @param {string} url - External URL
  * @param {string} userId - User ID
+ * @param {string} [folder='invitations'] - Storage folder (e.g. 'invitations', 'businesses')
  * @returns {Promise<string>} - Firebase Storage URL
  */
-export const uploadGoogleImage = async (url, userId) => {
-    // Optimization: if already Firebase URL, just return it
+export const uploadGoogleImage = async (url, userId, folder = 'invitations') => {
     if (!url) return null;
-    if (url.includes('firebasestorage')) {
+    if (url.includes('firebasestorage') && !isRestrictedFirebaseStorageUrl(url)) {
         return url;
     }
-
-    console.log('🔄 Fetching image via proxy to bypass CORS:', url);
-
-    // In dev: uses vite middleware. In prod: uses Vercel function
-    const proxyEndpoint = import.meta.env.DEV ? '/__dev/proxy-image' : '/api/proxy';
-    const proxyUrl = `${proxyEndpoint}?url=${encodeURIComponent(url)}`;
+    // Block Google Place photo URLs completely (cost-control emergency mode).
+    if (
+        url.includes('/api/place-photo') ||
+        url.includes('/__dev/place-photo') ||
+        url.includes('maps.googleapis.com/maps/api/place/photo')
+    ) {
+        return null;
+    }
 
     try {
-        const response = await fetch(proxyUrl);
-
-        if (!response.ok) {
-            throw new Error(`Proxy fetch failed with status: ${response.status}`);
-        }
-
-        const blob = await response.blob();
-        console.log(`📦 Proxy Blob: Size=${blob.size}, Type=${blob.type}`);
-
-        if (blob.size < 1000) {
-            console.warn('⚠️ Blob too small, likely an error page.');
-            // Optional: read text to debug, but proceed with caution
-            const text = await blob.text();
-            console.error('Proxy Response:', text);
-        }
-
-        // Generate unique filename
+        const blob = await fetchRemoteImageBlob(url);
         const filename = `google_place_${Date.now()}.jpg`;
-        const file = new File([blob], filename, { type: 'image/jpeg' });
-
-        console.log('📤 Uploading proxied image to storage...');
-        const uploadedUrl = await uploadMedia(file, userId, 'image', 'invitations');
-        console.log('✅ Image permanently stored:', uploadedUrl);
-
+        const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+        const uploadedUrl = await uploadMedia(file, userId, 'image', folder);
         return uploadedUrl;
     } catch (error) {
-        console.error("Failed to upload Google image:", error);
-        // Silently fail or track error without intrusive alert
+        console.error('Failed to upload Google image:', error);
         throw error;
     }
+};
+
+/**
+ * Fetch a remote image through the app proxy (or directly if already on public Storage).
+ * @param {string} url
+ * @returns {Promise<Blob>}
+ */
+export async function fetchRemoteImageBlob(url, { attempts = 3 } = {}) {
+    if (!url || typeof url !== 'string') {
+        throw new Error('No image URL');
+    }
+
+    const tryFetch = async (targetUrl) => {
+        const response = await fetch(targetUrl);
+        if (!response.ok) {
+            return { ok: false, status: response.status };
+        }
+        const blob = await response.blob();
+        if (blob.size < 500) {
+            return { ok: false, status: 0, error: new Error('Image payload too small') };
+        }
+        return { ok: true, blob };
+    };
+
+    if (url.includes('firebasestorage') && !isRestrictedFirebaseStorageUrl(url)) {
+        let lastStatus = 0;
+        for (let i = 0; i < attempts; i++) {
+            const result = await tryFetch(url);
+            if (result.ok) {
+                return result.blob;
+            }
+            lastStatus = result.status;
+            if (result.status === 404 || result.status === 503) {
+                if (i < attempts - 1) {
+                    await new Promise((r) => setTimeout(r, 350 * (i + 1)));
+                    continue;
+                }
+            }
+            if (result.error) {
+                throw result.error;
+            }
+            break;
+        }
+
+        const objectPath = decodeFirebaseStorageObjectPath(url);
+        if (lastStatus === 404 && objectPath && auth.currentUser) {
+            try {
+                return await fetchServerAiCoverBlobViaApi(
+                    objectPath,
+                    decodeFirebaseStorageBucketName(url),
+                );
+            } catch {
+                /* fall through */
+            }
+        }
+
+        throw new Error(`Storage fetch failed with status: ${lastStatus || 'unknown'}`);
+    }
+
+    const proxyEndpoint = import.meta.env.DEV ? '/__dev/proxy-image' : '/api/proxy';
+    const proxyUrl = `${proxyEndpoint}?url=${encodeURIComponent(url)}`;
+    const response = await fetch(proxyUrl);
+    if (!response.ok) {
+        throw new Error(`Proxy fetch failed with status: ${response.status}`);
+    }
+    const blob = await response.blob();
+    if (blob.size < 500) {
+        throw new Error('Proxied image payload too small');
+    }
+    return blob;
+}
+
+/**
+ * Confirm a public Storage download URL returns an image (handles brief propagation lag).
+ * @param {string} url
+ * @param {{ attempts?: number, delayMs?: number }} [opts]
+ */
+export async function verifyPublicStorageImageUrl(url, { attempts = 6, delayMs = 450 } = {}) {
+    if (!url || typeof url !== 'string') return false;
+    for (let i = 0; i < attempts; i++) {
+        try {
+            const response = await fetch(url, { method: 'GET', cache: 'no-store' });
+            if (response.ok) {
+                const blob = await response.blob();
+                if (blob.size >= 500) {
+                    return true;
+                }
+            }
+        } catch {
+            /* retry */
+        }
+        if (i < attempts - 1) {
+            await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+        }
+    }
+    return false;
+}
+
+/**
+ * Resolve a browser-displayable preview for a freshly generated AI cover URL.
+ * Polls Storage propagation, then falls back to authenticated API / fetch → blob URL.
+ *
+ * @param {string} remoteUrl
+ * @returns {Promise<{ displayUrl: string, remoteUrl: string, revokeDisplay?: () => void }>}
+ */
+export async function resolveAiGeneratedCoverPreview(remoteUrl) {
+    if (!remoteUrl || typeof remoteUrl !== 'string') {
+        throw new Error('No AI image URL');
+    }
+
+    const trimmed = remoteUrl.trim();
+    if (!/^https?:\/\//i.test(trimmed)) {
+        throw new Error('Invalid AI image URL');
+    }
+
+    const ready = await verifyPublicStorageImageUrl(trimmed, { attempts: 10, delayMs: 550 });
+    if (ready) {
+        return { displayUrl: trimmed, remoteUrl: trimmed };
+    }
+
+    /** @type {Blob | null} */
+    let blob = null;
+
+    if (isServerPersistedAiCoverUrl(trimmed)) {
+        const objectPath = decodeFirebaseStorageObjectPath(trimmed);
+        const bucket = decodeFirebaseStorageBucketName(trimmed);
+        if (objectPath) {
+            try {
+                blob = await fetchServerAiCoverBlobViaApi(objectPath, bucket);
+            } catch (apiErr) {
+                console.warn('[resolveAiGeneratedCoverPreview] storage-image API failed:', apiErr);
+            }
+        }
+    }
+
+    if (!blob) {
+        blob = await fetchRemoteImageBlob(trimmed, { attempts: 5 });
+    }
+
+    const displayUrl = URL.createObjectURL(blob);
+    return {
+        displayUrl,
+        remoteUrl: trimmed,
+        revokeDisplay: () => {
+            try {
+                URL.revokeObjectURL(displayUrl);
+            } catch {
+                /* ignore */
+            }
+        },
+    };
+}
+
+async function fetchServerAiCoverBlobViaApi(objectPath, bucket = '') {
+    const user = auth.currentUser;
+    if (!user) {
+        throw new Error('not_signed_in');
+    }
+    const idToken = await user.getIdToken();
+
+    const attempt = async (params) => {
+        const response = await fetch(`/api/storage-image?${params.toString()}`, {
+            headers: { Authorization: `Bearer ${idToken}` },
+        });
+        if (!response.ok) {
+            throw new Error(`storage_image_api_${response.status}`);
+        }
+        const blob = await response.blob();
+        if (blob.size < 500) {
+            throw new Error('storage_image_too_small');
+        }
+        return blob;
+    };
+
+    const withBucket = new URLSearchParams({ path: objectPath });
+    if (bucket) {
+        withBucket.set('bucket', bucket);
+    }
+
+    try {
+        return await attempt(withBucket);
+    } catch (firstErr) {
+        if (!bucket) {
+            throw firstErr;
+        }
+        const anyBucket = new URLSearchParams({ path: objectPath });
+        return attempt(anyBucket);
+    }
+}
+
+async function publishAiCoverBlob(blob, userId, remoteUrl) {
+    const blobPreview = URL.createObjectURL(blob);
+    const file = new File([blob], `ai_cover_${Date.now()}.jpg`, {
+        type: blob.type?.startsWith('image/') ? blob.type : 'image/jpeg',
+    });
+    try {
+        const publishedUrl = await uploadMedia(file, userId, 'image', 'invitations');
+        const ready = await verifyPublicStorageImageUrl(publishedUrl, { attempts: 5, delayMs: 400 });
+        if (ready) {
+            try {
+                URL.revokeObjectURL(blobPreview);
+            } catch {
+                /* ignore */
+            }
+            return {
+                source: 'ai_generated',
+                type: 'image',
+                file: null,
+                url: publishedUrl,
+                preview: publishedUrl,
+                publishedUrl,
+            };
+        }
+
+        console.warn('[publishAiCoverBlob] uploaded URL not yet publicly readable, falling back to blob preview:', publishedUrl);
+        return {
+            source: 'ai_generated',
+            type: 'image',
+            file,
+            url: publishedUrl,
+            preview: blobPreview,
+            publishedUrl,
+        };
+    } catch (uploadErr) {
+        console.warn('[prepareAiCoverMediaFromRemoteUrl] re-upload failed, keeping blob preview:', uploadErr);
+        return {
+            source: 'ai_generated',
+            type: 'image',
+            file,
+            url: remoteUrl,
+            preview: blobPreview,
+        };
+    }
+}
+
+/**
+ * Download an AI cover, show a local blob preview, and publish to Storage when possible.
+ * Avoids broken thumbnails from short-lived / CORS-blocked provider URLs in img tags.
+ * @param {string} remoteUrl
+ * @param {string} userId
+ */
+export async function prepareAiCoverMediaFromRemoteUrl(remoteUrl, userId) {
+    if (isServerPersistedAiCoverUrl(remoteUrl)) {
+        const ready = await verifyPublicStorageImageUrl(remoteUrl);
+        if (ready) {
+            return {
+                source: 'ai_generated',
+                type: 'image',
+                file: null,
+                url: remoteUrl,
+                preview: remoteUrl,
+                publishedUrl: remoteUrl,
+            };
+        }
+
+        const objectPath = decodeFirebaseStorageObjectPath(remoteUrl);
+        const bucket = decodeFirebaseStorageBucketName(remoteUrl);
+        if (objectPath) {
+            try {
+                const blob = await fetchServerAiCoverBlobViaApi(objectPath, bucket);
+                return publishAiCoverBlob(blob, userId, remoteUrl);
+            } catch (apiErr) {
+                console.warn('[prepareAiCoverMediaFromRemoteUrl] storage-image API fallback failed:', apiErr);
+            }
+        }
+
+        try {
+            const blob = await fetchRemoteImageBlob(remoteUrl);
+            return publishAiCoverBlob(blob, userId, remoteUrl);
+        } catch (remoteErr) {
+            console.warn('[prepareAiCoverMediaFromRemoteUrl] direct fetch fallback failed:', remoteErr);
+        }
+
+        throw new Error('ai_cover_storage_not_ready');
+    }
+
+    const blob = await fetchRemoteImageBlob(remoteUrl);
+    const blobPreview = URL.createObjectURL(blob);
+    const file = new File([blob], `ai_cover_${Date.now()}.jpg`, {
+        type: blob.type?.startsWith('image/') ? blob.type : 'image/jpeg',
+    });
+
+    try {
+        const publishedUrl = await uploadMedia(file, userId, 'image', 'invitations');
+        try {
+            URL.revokeObjectURL(blobPreview);
+        } catch {
+            /* ignore */
+        }
+        return {
+            source: 'ai_generated',
+            type: 'image',
+            file: null,
+            url: publishedUrl,
+            preview: publishedUrl,
+            publishedUrl,
+        };
+    } catch (uploadErr) {
+        console.warn('[prepareAiCoverMediaFromRemoteUrl] upload failed, keeping blob preview:', uploadErr);
+        return {
+            source: 'ai_generated',
+            type: 'image',
+            file,
+            url: remoteUrl,
+            preview: blobPreview,
+        };
+    }
+}
+
+/**
+ * Re-upload a remote image (blocked Firebase path or external URL) to a public Storage folder.
+ * @param {string} url
+ * @param {string} userId
+ * @param {string} [folder='invitations']
+ * @returns {Promise<string|null>}
+ */
+export const ensurePublicImageUrl = async (url, userId, folder = 'invitations') => {
+    return uploadGoogleImage(url, userId, folder);
+};
+
+/**
+ * Persist a staged AI cover image to a public Storage folder when the user selects it.
+ * @param {{ url?: string, preview?: string, publishedUrl?: string }} mediaData
+ * @param {string} userId
+ * @returns {Promise<string>}
+ */
+export const commitInvitationAiCover = async (mediaData, userId) => {
+    if (mediaData?.publishedUrl) return mediaData.publishedUrl;
+    if (mediaData?.file instanceof File) {
+        const publishedUrl = await uploadMedia(mediaData.file, userId, 'image', 'invitations');
+        if (!publishedUrl) {
+            throw new Error('Failed to save AI cover image');
+        }
+        return publishedUrl;
+    }
+    const remoteUrl = mediaData?.url || mediaData?.preview;
+    if (!remoteUrl || typeof remoteUrl !== 'string' || String(remoteUrl).startsWith('blob:')) {
+        throw new Error('No AI image URL to commit');
+    }
+    if (isServerPersistedAiCoverUrl(remoteUrl)) {
+        return remoteUrl;
+    }
+    const publishedUrl = await ensurePublicImageUrl(remoteUrl, userId, 'invitations');
+    if (!publishedUrl) {
+        throw new Error('Failed to save AI cover image');
+    }
+    return publishedUrl;
 };
 
 /**
@@ -192,6 +573,27 @@ const getVideoDuration = (file) => {
         };
     });
 };
+
+/**
+ * Upload a small list/archive thumbnail alongside the main invitation image.
+ * @param {File | Blob | undefined} file
+ * @param {string} userId
+ * @returns {Promise<string | null>}
+ */
+async function uploadInvitationListThumbnail(file, userId) {
+    if (!file || !file.type?.startsWith('image/')) return null;
+    try {
+        const thumbBlob = await compressImage(file, { maxSizeMB: 0.12, maxWidthOrHeight: 320 });
+        const thumbFile =
+            thumbBlob instanceof File
+                ? thumbBlob
+                : new File([thumbBlob], 'list-thumb.jpg', { type: 'image/jpeg' });
+        return await uploadMedia(thumbFile, userId, 'thumbnail', 'invitation-thumbs');
+    } catch (e) {
+        console.warn('List thumbnail upload skipped:', e?.message);
+        return null;
+    }
+}
 
 /**
  * Process and upload invitation media based on source
@@ -217,16 +619,40 @@ export const processInvitationMedia = async (mediaData, userId) => {
                 };
 
             case 'custom_image':
-                // Upload custom image if file present, otherwise assume preview is url
+                // Upload custom image if file present; otherwise persist remote/AI URL to public folder
                 let imageUrl;
+                let listThumbnailUrl = null;
                 if (file) {
                     imageUrl = await uploadMedia(file, userId, 'image', 'invitations');
+                    listThumbnailUrl = await uploadInvitationListThumbnail(file, userId);
+                } else if (mediaData.publishedUrl) {
+                    imageUrl = mediaData.publishedUrl;
                 } else {
-                    imageUrl = mediaData.preview;
+                    const remoteUrl = url || mediaData.preview;
+                    imageUrl = await ensurePublicImageUrl(remoteUrl, userId, 'invitations');
                 }
                 return {
                     mediaSource: 'custom_image',
                     customImage: imageUrl,
+                    listThumbnailUrl: listThumbnailUrl || undefined,
+                    mediaType: 'image'
+                };
+
+            case 'ai_generated':
+                let aiImageUrl;
+                let aiListThumbnailUrl = null;
+                if (mediaData.publishedUrl) {
+                    aiImageUrl = mediaData.publishedUrl;
+                } else if (file) {
+                    aiImageUrl = await uploadMedia(file, userId, 'image', 'invitations');
+                    aiListThumbnailUrl = await uploadInvitationListThumbnail(file, userId);
+                } else {
+                    aiImageUrl = await ensurePublicImageUrl(url || mediaData.preview, userId, 'invitations');
+                }
+                return {
+                    mediaSource: 'custom_image',
+                    customImage: aiImageUrl,
+                    listThumbnailUrl: aiListThumbnailUrl || undefined,
                     mediaType: 'image'
                 };
 
@@ -251,6 +677,7 @@ export const processInvitationMedia = async (mediaData, userId) => {
                     mediaSource: 'custom_video',
                     customVideo,
                     videoThumbnail,
+                    listThumbnailUrl: videoThumbnail || undefined,
                     videoDuration,
                     mediaType: 'video'
                 };

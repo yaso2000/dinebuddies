@@ -1,9 +1,17 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { fetchPlaceAutocompleteWithFallback } from './api/_googlePlacesAutocompleteCore.js'
+import { runDevApiHandler } from './scripts/dev-api-local.mjs'
 import fs from 'fs'
 import path from 'path'
 import dns from 'dns'
 import { exec } from 'child_process'
+import { createRequire } from 'module'
+import { fileURLToPath } from 'url'
+
+const __viteConfigDir = path.dirname(fileURLToPath(import.meta.url))
+const require = createRequire(import.meta.url)
+const { fetchPlacePhotoBufferDetailed } = require(path.join(__viteConfigDir, 'functions', 'placePhotoFetch.js'))
 
 const dnsLookup = dns.promises.lookup.bind(dns.promises)
 
@@ -88,7 +96,214 @@ async function validateProxyUrl(targetUrl) {
 const devOperations = () => ({
     name: 'dev-operations',
     configureServer(server) {
+        function parseAddressComponents(components) {
+            let city = ''
+            let country = ''
+            let countryCode = ''
+            if (Array.isArray(components)) {
+                for (const c of components) {
+                    if (c.types?.includes('locality')) city = c.long_name || ''
+                    if (c.types?.includes('administrative_area_level_1') && !city) city = c.long_name || ''
+                    if (c.types?.includes('country')) {
+                        country = c.long_name || ''
+                        countryCode = (c.short_name || '').toUpperCase().slice(0, 2)
+                    }
+                }
+            }
+            return { city, country, countryCode }
+        }
+
         server.middlewares.use(async (req, res, next) => {
+            let devUrl = null
+            try {
+                devUrl = new URL(req.url, `http://${req.headers.host}`)
+            } catch {
+                devUrl = null
+            }
+
+            if (devUrl?.pathname === '/api/business-login-resolver' && req.method === 'POST') {
+                try {
+                    const handler = await import('./api/auth/login-resolver.js')
+                    await runDevApiHandler(handler, req, res)
+                } catch (err) {
+                    console.error('Dev business-login-resolver error:', err)
+                    res.statusCode = 500
+                    res.setHeader('Content-Type', 'application/json')
+                    const hint =
+                        err instanceof Error &&
+                        /Firebase Admin credentials/i.test(err.message)
+                            ? 'Firebase Admin غير مُعد محلياً — أضف FIREBASE_SERVICE_ACCOUNT_JSON في .env'
+                            : 'حدث خطأ في خادم حل الهوية.'
+                    res.end(JSON.stringify({ message: hint }))
+                }
+                return
+            }
+
+            if (req.method === 'GET') {
+                let url
+                try {
+                    url = new URL(req.url, `http://${req.headers.host}`)
+                } catch {
+                    url = null
+                }
+                const env = loadEnv(process.env.MODE || 'development', process.cwd(), '')
+                const key = process.env.GOOGLE_MAPS_SERVER_KEY || env.GOOGLE_MAPS_SERVER_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || env.VITE_GOOGLE_MAPS_API_KEY || env.GOOGLE_MAPS_API_KEY
+                const referer = `http://${req.headers.host || 'localhost:5176'}/`
+
+                if (url && url.pathname === '/api/place-autocomplete') {
+                    const input = url.searchParams.get('input')
+                    const sessionToken = url.searchParams.get('sessionToken')
+                    const countryCode = url.searchParams.get('countryCode')
+                    const languageCode = url.searchParams.get('languageCode')
+                    const businessOnly = url.searchParams.get('businessOnly')
+                    const minLat = url.searchParams.get('minLat')
+                    const minLon = url.searchParams.get('minLon')
+                    const maxLat = url.searchParams.get('maxLat')
+                    const maxLon = url.searchParams.get('maxLon')
+                    if (!input || typeof input !== 'string' || input.trim().length < 2 || !sessionToken) {
+                        res.statusCode = 400
+                        res.setHeader('Content-Type', 'application/json')
+                        res.end(JSON.stringify({ error: 'Missing input (min 2 chars) or sessionToken' }))
+                        return
+                    }
+                    try {
+                        const result = await fetchPlaceAutocompleteWithFallback({
+                            input: input.trim(),
+                            sessionToken: String(sessionToken),
+                            languageCode: languageCode || 'en',
+                            countryCode: countryCode || '',
+                            minLat,
+                            minLon,
+                            maxLat,
+                            maxLon,
+                            businessOnly: businessOnly === '1' || businessOnly === 'true',
+                        })
+                        res.setHeader('Content-Type', 'application/json')
+                        res.setHeader('Access-Control-Allow-Origin', '*')
+                        if (!result.ok) {
+                            res.statusCode = result.status === 503 ? 503 : 502
+                            res.end(JSON.stringify({
+                                status: 'ERROR',
+                                predictions: [],
+                                error: result.errorMessage || 'Autocomplete upstream error',
+                            }))
+                            return
+                        }
+                        res.end(JSON.stringify({
+                            status: result.predictions.length ? 'OK' : 'ZERO_RESULTS',
+                            predictions: result.predictions,
+                            ...(result.errorMessage && !result.predictions.length
+                                ? { hint: result.errorMessage }
+                                : {}),
+                        }))
+                        return
+                    } catch (err) {
+                        console.error('Dev place-autocomplete error:', err)
+                        res.statusCode = 500
+                        res.setHeader('Content-Type', 'application/json')
+                        res.end(JSON.stringify({ error: 'Internal server error' }))
+                        return
+                    }
+                }
+
+                if (url && url.pathname === '/api/place-details') {
+                    const placeId = url.searchParams.get('placeId')
+                    if (!placeId || !key) {
+                        res.statusCode = 400
+                        res.setHeader('Content-Type', 'application/json')
+                        res.end(JSON.stringify({ error: 'Missing placeId or API key' }))
+                        return
+                    }
+                    // Cost-control: disable Google Place photos in dev too.
+                    const fields = 'name,formatted_address,address_components,geometry,place_id,formatted_phone_number,international_phone_number,website,url,opening_hours,types'
+                    try {
+                        const durl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=${fields}&key=${key}`
+                        const response = await fetch(durl, { headers: { 'Referer': referer } })
+                        const data = await response.json()
+                        res.setHeader('Content-Type', 'application/json')
+                        res.setHeader('Access-Control-Allow-Origin', '*')
+                        if (data.status !== 'OK' || !data.result) {
+                            res.statusCode = data.status === 'ZERO_RESULTS' ? 404 : 400
+                            res.end(JSON.stringify({ error: data.status || 'Not found' }))
+                            return
+                        }
+                        const place = data.result
+                        const { city, country, countryCode } = parseAddressComponents(place.address_components || [])
+                        const loc = place.geometry?.location || {}
+                        const plat = typeof loc.lat === 'number' ? loc.lat : null
+                        const plng = typeof loc.lng === 'number' ? loc.lng : null
+                        let workingHours = null
+                        if (place.opening_hours?.weekday_text?.length) {
+                            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+                            workingHours = {}
+                            place.opening_hours.weekday_text.forEach((text, i) => {
+                                workingHours[days[i]] = {
+                                    isOpen: !String(text || '').toLowerCase().includes('closed'),
+                                    text: String(text || ''),
+                                }
+                            })
+                        }
+                        res.end(JSON.stringify({
+                            businessName: place.name || '',
+                            address: place.formatted_address || '',
+                            city,
+                            country,
+                            countryCode: countryCode || 'AU',
+                            lat: plat,
+                            lng: plng,
+                            placeId: place.place_id || placeId,
+                            phone: place.formatted_phone_number || place.international_phone_number || '',
+                            website: place.website || place.url || '',
+                            description: '',
+                            coverImage: null,
+                            logo: null,
+                            gallery: [],
+                            workingHours,
+                            types: place.types || [],
+                        }))
+                        return
+                    } catch (err) {
+                        console.error('Dev place-details error:', err)
+                        res.statusCode = 500
+                        res.setHeader('Content-Type', 'application/json')
+                        res.end(JSON.stringify({ error: 'Internal server error' }))
+                        return
+                    }
+                }
+
+                if (url && url.pathname === '/api/place-photo') {
+                    const placeId = url.searchParams.get('placeId');
+                    const index = url.searchParams.get('index') || '0';
+                    const googleKey = key || '';
+                    if (!placeId || !googleKey) {
+                        res.statusCode = 400;
+                        res.end(JSON.stringify({ error: 'Missing placeId or maps API key' }));
+                        return;
+                    }
+                    try {
+                        const result = await fetchPlacePhotoBufferDetailed(placeId, index, googleKey, referer);
+                        if (!result.ok) {
+                            console.warn(`Dev place-photo fetch failed for ${placeId}:`, result.error);
+                            res.statusCode = result.status;
+                            res.end(JSON.stringify({
+                                error: result.error,
+                                ...(result.google !== undefined ? { google: result.google } : {}),
+                            }));
+                            return;
+                        }
+                        res.setHeader('Content-Type', result.contentType);
+                        res.setHeader('Access-Control-Allow-Origin', '*');
+                        res.setHeader('Cache-Control', 'public, max-age=3600');
+                        res.end(Buffer.from(result.buffer));
+                    } catch (e) {
+                        console.error('Dev place-photo error:', e);
+                        res.statusCode = 500;
+                        res.end(JSON.stringify({ error: String(e?.message || 'Unknown error') }));
+                    }
+                    return;
+                }
+            }
+
             if (req.url.startsWith('/__dev/')) {
                 const url = new URL(req.url, `http://${req.headers.host}`)
                 const action = url.pathname.replace('/__dev/', '')
@@ -181,6 +396,8 @@ const devOperations = () => ({
                     }
                     return;
                 }
+
+
 
                 if (req.method === 'GET' && action === 'backups') {
                     // List backups
@@ -300,11 +517,23 @@ const devOperations = () => ({
     }
 })
 
+const devEnv = loadEnv(process.env.MODE || 'development', process.cwd(), '')
+/** In `npm run dev`, proxy /api/auth to production (or VITE_DEV_API_PROXY). Plain Vite does not run serverless API routes. */
+const devAuthApiProxy =
+    String(devEnv.VITE_DEV_API_PROXY || 'https://www.dinebuddies.com').trim() || 'https://www.dinebuddies.com'
+
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [react(), devOperations()],
+    // Server-only packages used by scripts/API — never pull into the browser bundle.
+    optimizeDeps: {
+        exclude: ['firebase-admin', 'sharp'],
+    },
     build: {
+        // Default 500 kB triggers noisy warnings; main app chunk is intentionally large until further code-splitting.
+        chunkSizeWarningLimit: 2000,
         rollupOptions: {
+            external: ['firebase-admin', 'sharp'],
             output: {
                 manualChunks(id) {
                     if (!id.includes('node_modules')) return
@@ -314,12 +543,32 @@ export default defineConfig({
                     if (id.includes('/leaflet/') || id.includes('/react-leaflet/')) return 'vendor-maps'
                     if (id.includes('/stripe/')) return 'vendor-stripe'
                     if (id.includes('/lottie-react/') || id.includes('/lottie-web/')) return 'vendor-media'
+                    if (id.includes('/framer-motion/')) return 'vendor-motion'
+                    if (id.includes('/html2canvas/')) return 'vendor-html2canvas'
+                    if (id.includes('/country-state-city/')) return 'vendor-country-state-city'
+                    if (id.includes('/browser-image-compression/')) return 'vendor-image-compress'
+                    if (id.includes('/jspdf/')) return 'vendor-jspdf'
+                    if (id.includes('/emoji-picker-react/')) return 'vendor-emoji'
                 }
             }
         }
     },
     server: {
-        host: '0.0.0.0', // Listen on all network interfaces
-        port: 5176
-    }
+        host: '0.0.0.0',
+        port: 5176,
+        strictPort: true,
+        open: '/login?tab=business',
+        // Allow Firebase OAuth popups to retain window.closed access under Chrome COOP.
+        headers: {
+            'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+        },
+        proxy: {
+            '/api': {
+                target: devAuthApiProxy,
+                changeOrigin: true,
+                // Local dev: avoid 500 when Node cannot verify the production TLS chain (corporate proxy / AV).
+                secure: false,
+            },
+        },
+    },
 })

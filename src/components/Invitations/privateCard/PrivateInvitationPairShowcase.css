@@ -1,0 +1,248 @@
+.private-invite-pair {
+    margin-bottom: 2rem;
+    padding: 22px 18px 20px;
+    border-radius: 24px;
+    border: 1px solid transparent;
+    box-shadow:
+        0 16px 40px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    text-align: center;
+}
+
+.private-invite-pair__title {
+    margin: 0 0 18px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.private-invite-pair__stage {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 118px;
+    margin-bottom: 14px;
+}
+
+.private-invite-pair__glow {
+    position: absolute;
+    width: 180px;
+    height: 90px;
+    border-radius: 50%;
+    filter: blur(8px);
+    pointer-events: none;
+}
+
+.private-invite-pair__avatars {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 200px;
+    height: 96px;
+}
+
+.private-invite-pair__avatar-wrap {
+    position: absolute;
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    padding: 3px;
+}
+
+.private-invite-pair__avatar-wrap--host {
+    inset-inline-start: 0;
+    z-index: 1;
+    transform: rotate(-8deg);
+}
+
+.private-invite-pair__avatar-wrap--guest {
+    inset-inline-end: 0;
+    z-index: 2;
+    transform: rotate(8deg);
+}
+
+.private-invite-pair__avatar {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid rgba(12, 10, 18, 0.92);
+    display: block;
+}
+
+.private-invite-pair__connector {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+.private-invite-pair__names {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.private-invite-pair__name {
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: var(--text-main, #fff);
+}
+
+.private-invite-pair__ampersand {
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.private-invite-pair__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    border: 1px solid transparent;
+}
+
+.private-invite-pair__status--accepted {
+    background: rgba(16, 185, 129, 0.14);
+    color: #6ee7b7;
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
+.private-invite-pair__status--pending {
+    background: rgba(245, 158, 11, 0.14);
+    color: #fcd34d;
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+.private-invite-pair__status--declined {
+    background: rgba(239, 68, 68, 0.14);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
+[dir='rtl'] .private-invite-pair__avatar-wrap--host {
+    transform: rotate(8deg);
+}
+
+[dir='rtl'] .private-invite-pair__avatar-wrap--guest {
+    transform: rotate(-8deg);
+}
+
+/* --- Dating (default pink / romantic) --- */
+.private-invite-pair--dating {
+    background: linear-gradient(
+        145deg,
+        rgba(236, 72, 153, 0.12) 0%,
+        rgba(139, 92, 246, 0.08) 45%,
+        rgba(255, 255, 255, 0.04) 100%
+    );
+    border-color: rgba(236, 72, 153, 0.22);
+}
+
+.private-invite-pair--dating .private-invite-pair__title {
+    color: #f9a8d4;
+}
+
+.private-invite-pair--dating .private-invite-pair__glow {
+    background: radial-gradient(ellipse, rgba(236, 72, 153, 0.35), transparent 70%);
+}
+
+.private-invite-pair--dating .private-invite-pair__avatar-wrap {
+    background: linear-gradient(135deg, #f472b6, #a855f7, #ec4899);
+    box-shadow: 0 10px 28px rgba(236, 72, 153, 0.35);
+}
+
+.private-invite-pair--dating .private-invite-pair__connector {
+    background: linear-gradient(145deg, #fb7185, #db2777);
+    box-shadow: 0 6px 18px rgba(219, 39, 119, 0.45);
+    font-size: 1rem;
+}
+
+.private-invite-pair--dating .private-invite-pair__ampersand {
+    color: #f9a8d4;
+}
+
+/* --- Friendship (warm teal / amber) --- */
+.private-invite-pair--friendship {
+    background: linear-gradient(
+        145deg,
+        rgba(45, 212, 191, 0.14) 0%,
+        rgba(251, 191, 36, 0.08) 50%,
+        rgba(255, 255, 255, 0.04) 100%
+    );
+    border-color: rgba(45, 212, 191, 0.28);
+}
+
+.private-invite-pair--friendship .private-invite-pair__title {
+    color: #5eead4;
+}
+
+.private-invite-pair--friendship .private-invite-pair__glow {
+    background: radial-gradient(ellipse, rgba(45, 212, 191, 0.32), transparent 70%);
+}
+
+.private-invite-pair--friendship .private-invite-pair__avatar-wrap {
+    background: linear-gradient(135deg, #2dd4bf, #0d9488, #fbbf24);
+    box-shadow: 0 10px 28px rgba(13, 148, 136, 0.32);
+}
+
+.private-invite-pair--friendship .private-invite-pair__connector {
+    background: linear-gradient(145deg, #14b8a6, #0f766e);
+    box-shadow: 0 6px 18px rgba(13, 148, 136, 0.4);
+    font-size: 1.05rem;
+}
+
+.private-invite-pair--friendship .private-invite-pair__ampersand {
+    color: #5eead4;
+}
+
+/* --- Social (violet / playful) --- */
+.private-invite-pair--social {
+    background: linear-gradient(
+        145deg,
+        rgba(139, 92, 246, 0.14) 0%,
+        rgba(56, 189, 248, 0.08) 48%,
+        rgba(255, 255, 255, 0.04) 100%
+    );
+    border-color: rgba(139, 92, 246, 0.28);
+}
+
+.private-invite-pair--social .private-invite-pair__title {
+    color: #c4b5fd;
+}
+
+.private-invite-pair--social .private-invite-pair__glow {
+    background: radial-gradient(ellipse, rgba(139, 92, 246, 0.34), transparent 70%);
+}
+
+.private-invite-pair--social .private-invite-pair__avatar-wrap {
+    background: linear-gradient(135deg, #a78bfa, #6366f1, #38bdf8);
+    box-shadow: 0 10px 28px rgba(99, 102, 241, 0.32);
+}
+
+.private-invite-pair--social .private-invite-pair__connector {
+    background: linear-gradient(145deg, #8b5cf6, #6366f1);
+    box-shadow: 0 6px 18px rgba(99, 102, 241, 0.42);
+    font-size: 1.05rem;
+}
+
+.private-invite-pair--social .private-invite-pair__ampersand {
+    color: #c4b5fd;
+}

@@ -1,0 +1,269 @@
+.gift-shield-section {
+    margin: 1.25rem 0;
+}
+
+.gift-shield-section__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.65rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.gift-shield-section__title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--text-main);
+}
+
+.gift-shield-section__title-icon {
+    color: #fbbf24;
+}
+
+.gift-shield-section__badge {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-main);
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.gift-shield-section__lead {
+    margin: 0 0 0.85rem;
+    font-size: 0.86rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
+.gift-shield-section__progress-bar {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    margin-bottom: 0.35rem;
+}
+
+.gift-shield-section__progress-fill {
+    height: 100%;
+    border-radius: inherit;
+    transition: width 0.35s ease;
+}
+
+.gift-shield-section__progress-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 0.9rem;
+}
+
+.gift-shield-section__grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.55rem;
+}
+
+.gift-shield-section__card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(0, 0, 0, 0.18) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 0.45rem 0.3rem 0.55rem;
+    text-align: center;
+    position: relative;
+    min-height: 108px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.2rem;
+    transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s, background 0.25s;
+}
+
+.gift-shield-section__card--completed {
+    border-color: rgba(251, 191, 36, 0.28);
+    background: linear-gradient(180deg, rgba(251, 191, 36, 0.06) 0%, rgba(0, 0, 0, 0.15) 100%);
+}
+
+.gift-shield-section__card--active,
+.gift-shield-section__card--active-second {
+    border-color: rgba(96, 165, 250, 0.55);
+    background: linear-gradient(180deg, rgba(59, 130, 246, 0.1) 0%, rgba(15, 23, 42, 0.35) 100%);
+    box-shadow:
+        0 0 0 1px rgba(96, 165, 250, 0.15),
+        0 10px 24px rgba(37, 99, 235, 0.14);
+}
+
+.gift-shield-section__card--locked {
+    background: rgba(0, 0, 0, 0.22);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.gift-shield-section__card-label {
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.38);
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+}
+
+.gift-shield-section__card--active .gift-shield-section__card-label,
+.gift-shield-section__card--active-second .gift-shield-section__card-label,
+.gift-shield-section__card--completed .gift-shield-section__card-label {
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.gift-shield-section__lock {
+    position: absolute;
+    top: 0.38rem;
+    right: 0.38rem;
+    font-size: 0.68rem;
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.gift-shield-section__slot-tag {
+    position: absolute;
+    top: 0.38rem;
+    left: 0.38rem;
+    font-size: 0.62rem;
+    font-weight: 800;
+    padding: 0.12rem 0.38rem;
+    border-radius: 999px;
+    background: rgba(59, 130, 246, 0.22);
+    color: #bfdbfe;
+    border: 1px solid rgba(147, 197, 253, 0.25);
+    line-height: 1;
+}
+
+.gift-shield-section__visual-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 76px;
+    flex: 1;
+}
+
+/* ---- Shield model ---- */
+.gift-shield-visual {
+    position: relative;
+    display: grid;
+    place-items: center;
+}
+
+.gift-shield-visual__svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.gift-shield-visual__ring-arc {
+    transition: stroke-dasharray 0.45s ease;
+}
+
+.gift-shield-visual__ring-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.gift-shield-visual__img {
+    position: relative;
+    z-index: 1;
+    width: 68%;
+    height: auto;
+    max-height: 78%;
+    object-fit: contain;
+    filter: drop-shadow(0 6px 10px var(--shield-glow, rgba(0, 0, 0, 0.25)));
+    transition: filter 0.25s ease, opacity 0.25s ease;
+}
+
+.gift-shield-visual__img--ghost {
+    position: absolute;
+    width: 58%;
+    max-height: 68%;
+    transform: translate(-12%, -8%) scale(0.9);
+    opacity: 0.38;
+    z-index: 0;
+    filter: none;
+}
+
+.gift-shield-visual--locked .gift-shield-visual__img {
+    opacity: 0.42;
+    filter: grayscale(0.85) brightness(0.65);
+}
+
+.gift-shield-visual--completed .gift-shield-visual__img {
+    filter: drop-shadow(0 0 14px var(--shield-glow, rgba(251, 191, 36, 0.35)));
+}
+
+.gift-shield-visual--active .gift-shield-visual__img,
+.gift-shield-visual--active-second .gift-shield-visual__img {
+    filter: drop-shadow(0 8px 14px var(--shield-glow, rgba(0, 0, 0, 0.25)));
+}
+
+.gift-shield-visual--active .gift-shield-visual__svg,
+.gift-shield-visual--active-second .gift-shield-visual__svg {
+    filter: drop-shadow(0 8px 14px var(--shield-glow, rgba(0, 0, 0, 0.25)));
+}
+
+.gift-shield-visual--completed .gift-shield-visual__svg {
+    filter: drop-shadow(0 0 16px var(--shield-glow, rgba(251, 191, 36, 0.35)));
+}
+
+.gift-shield-visual--locked .gift-shield-visual__svg {
+    filter: none;
+    opacity: 0.85;
+}
+
+.gift-shield-visual--bronze.gift-shield-visual--active .gift-shield-visual__svg,
+.gift-shield-visual--bronze.gift-shield-visual--active-second .gift-shield-visual__svg {
+    filter: drop-shadow(0 6px 12px rgba(180, 90, 30, 0.45));
+}
+
+.gift-shield-visual--silver.gift-shield-visual--completed .gift-shield-visual__svg {
+    filter: drop-shadow(0 0 14px rgba(200, 210, 225, 0.4));
+}
+
+.gift-shield-visual--gold.gift-shield-visual--completed .gift-shield-visual__svg {
+    filter: drop-shadow(0 0 16px rgba(255, 200, 50, 0.45));
+}
+
+.gift-shield-visual--platinum.gift-shield-visual--completed .gift-shield-visual__svg {
+    filter: drop-shadow(0 0 16px rgba(180, 210, 235, 0.45));
+}
+
+.gift-shield-visual--diamond.gift-shield-visual--completed .gift-shield-visual__svg,
+.gift-shield-visual--diamond.gift-shield-visual--active .gift-shield-visual__svg,
+.gift-shield-visual--diamond.gift-shield-visual--active-second .gift-shield-visual__svg {
+    filter: drop-shadow(0 0 18px rgba(56, 189, 248, 0.5));
+}
+
+.gift-shield-section.loading {
+    min-height: 140px;
+}
+
+@media (max-width: 720px) {
+    .gift-shield-section__grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 420px) {
+    .gift-shield-section__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

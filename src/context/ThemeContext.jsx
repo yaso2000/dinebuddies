@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useLayoutEffect, useState, useCallback } from 'react';
+import {
+    applyDocumentTheme,
+    readBootAccountTheme,
+    readStoredThemeMode,
+    THEME_STORAGE_KEY,
+} from '../theme/bootDocumentTheme';
 
 const ThemeContext = createContext();
 
@@ -10,29 +16,29 @@ export const useTheme = () => {
     return context;
 };
 
-const STORAGE_KEY = 'theme';
-
 export const ThemeProvider = ({ children }) => {
-    const [themeMode, setThemeMode] = useState(() => {
-        if (typeof window === 'undefined') return 'dark';
-        return localStorage.getItem(STORAGE_KEY) || 'dark';
-    });
+    const [themeMode, setThemeMode] = useState(readStoredThemeMode);
+    const [brandColor, setBrandColor] = useState(null);
+    // Match bootDocumentTheme so React does not flash personal → business on entry.
+    const [accountTheme, setAccountThemeState] = useState(readBootAccountTheme);
 
     const isDark = themeMode === 'dark';
+    const isBusinessTheme = accountTheme === 'business';
+    const isAffiliateTheme = accountTheme === 'affiliate';
 
-    useEffect(() => {
-        document.documentElement.setAttribute('data-theme', themeMode);
-        document.body.classList.toggle('light-mode', themeMode === 'light');
-        localStorage.setItem(STORAGE_KEY, themeMode);
-
-        const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-        if (metaThemeColor) {
-            metaThemeColor.setAttribute('content', themeMode === 'dark' ? '#0b0812' : '#f8fafc');
+    const setAccountTheme = useCallback((next) => {
+        if (next === 'business' || next === 'personal' || next === 'affiliate') {
+            setAccountThemeState(next);
         }
-    }, [themeMode]);
+    }, []);
+
+    useLayoutEffect(() => {
+        applyDocumentTheme({ themeMode, accountTheme, brandColor });
+        localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+    }, [themeMode, brandColor, accountTheme]);
 
     const toggleTheme = () => {
-        setThemeMode(prev => prev === 'dark' ? 'light' : 'dark');
+        setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'));
     };
 
     const setTheme = (mode) => {
@@ -44,11 +50,13 @@ export const ThemeProvider = ({ children }) => {
         isDark,
         toggleTheme,
         setTheme,
+        brandColor,
+        setBrandColor,
+        accountTheme,
+        isBusinessTheme,
+        isAffiliateTheme,
+        setAccountTheme,
     };
 
-    return (
-        <ThemeContext.Provider value={value}>
-            {children}
-        </ThemeContext.Provider>
-    );
+    return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };

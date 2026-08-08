@@ -1,0 +1,27 @@
+/* RTL locale — dates, numbers, codes stay LTR inside RTL UI */
+
+[dir='rtl'] .ltr-isolate,
+[dir='rtl'] .numeric-ltr,
+[dir='rtl'] time[datetime],
+[dir='rtl'] .post-date,
+[dir='rtl'] .invitation-date,
+[dir='rtl'] .locale-number {
+    direction: ltr;
+    unicode-bidi: isolate;
+    display: inline-block;
+}
+
+[dir='rtl'] input[type='date'],
+[dir='rtl'] input[type='time'],
+[dir='rtl'] input[type='datetime-local'],
+[dir='rtl'] input[type='tel'],
+[dir='rtl'] input[inputmode='numeric'],
+[dir='rtl'] input[inputmode='decimal'] {
+    direction: ltr;
+    text-align: left;
+}
+
+[dir='rtl'] input[type='date']::-webkit-datetime-edit,
+[dir='rtl'] input[type='time']::-webkit-datetime-edit {
+    direction: ltr;
+}

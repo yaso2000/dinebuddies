@@ -98,7 +98,7 @@ export function getMessageMediaUrls(data) {
  * Delete invitation and all related Firestore + Storage (cost-efficient: no list-all).
  * Deletes: invitation media (images/videos), chat messages and their media, then invitation doc.
  * @param {string} invitationId - Document ID
- * @param {string} collectionName - 'invitations' | 'private_invitations'
+ * @param {string} collectionName - 'invitations' | 'social_invitations'
  * @returns {Promise<boolean>} - true if deleted, false if doc not found
  */
 export async function deleteInvitationAndStorage(invitationId, collectionName = 'invitations') {

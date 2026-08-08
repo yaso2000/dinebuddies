@@ -1,8 +1,22 @@
 /* Notification Settings Page */
 .notification-settings-page {
     min-height: 100vh;
-    padding-bottom: 100px;
+    min-height: 100dvh;
+    padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
     background: var(--bg-body);
+    -webkit-overflow-scrolling: touch;
+}
+
+.notification-settings-ios-hint {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 14px 16px;
+    margin-bottom: 1rem;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(139, 92, 246, 0.08));
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    color: var(--text-main);
 }
 
 /* Header */

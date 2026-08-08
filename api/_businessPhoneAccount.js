@@ -1,0 +1,453 @@
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { ensureFirebaseAdmin } from './_firebaseAdmin.js';
+import { lookupBusinessPhone } from './_businessPhoneRegistry.js';
+import {
+    claimRestaurantOwnershipTransaction,
+    buildUserProfileFromClaimedRestaurant,
+    restaurantDocIsUnclaimed,
+} from './_restaurantClaim.js';
+import {
+    loadGoogleBusinessClaimSession,
+} from './_googleBusinessClaimSessions.js';
+import { userManagesGooglePlace } from './_googleBusinessProfileLocations.js';
+import { loadExistingRestaurantForImport } from './_virtualBusinessIngest.js';
+
+/**
+ * @param {string | null | undefined} phone
+ */
+function normalizeAuthPhone(phone) {
+    const s = String(phone || '').trim();
+    if (!s) return '';
+    return s.startsWith('+') ? s : `+${s.replace(/\D/g, '')}`;
+}
+
+/**
+ * @param {import('firebase-admin/firestore').Firestore} db
+ * @param {string} claimId
+ */
+async function resolveClaimSource(db, claimId) {
+    const restaurantSnap = await db.collection('restaurants').doc(claimId).get();
+    if (restaurantSnap.exists) {
+        return { source: 'restaurants', snap: restaurantSnap };
+    }
+    const userSnap = await db.collection('users').doc(claimId).get();
+    if (userSnap.exists) {
+        return { source: 'users', snap: userSnap };
+    }
+    return { source: null, snap: null };
+}
+
+/**
+ * Finalize business Firestore profile after Firebase Phone Auth (+ email link on client).
+ * @param {{
+ *   firebaseUid: string,
+ *   standardizedPhone: string,
+ *   email: string,
+ *   businessInfo: Record<string, unknown>,
+ *   claimBusinessId?: string | null,
+ *   referredBy?: string | null,
+ * }} input
+ */
+export async function completeBusinessPhoneSignup(input) {
+    ensureFirebaseAdmin();
+    const db = getFirestore();
+    const auth = getAuth();
+
+    const firebaseUid = String(input.firebaseUid || '').trim();
+    const standardizedPhone = String(input.standardizedPhone || '').trim();
+    const email = String(input.email || '').trim().toLowerCase();
+
+    if (!firebaseUid || !standardizedPhone || !email) {
+        throw Object.assign(new Error('INVALID_COMPLETE_PAYLOAD'), { code: 'invalid-request' });
+    }
+
+    const userRecord = await auth.getUser(firebaseUid);
+    const accountPhone = normalizeAuthPhone(userRecord.phoneNumber);
+    if (!accountPhone || accountPhone !== standardizedPhone) {
+        throw Object.assign(new Error('PHONE_MISMATCH'), { code: 'phone-mismatch' });
+    }
+
+    const accountEmail = String(userRecord.email || '').trim().toLowerCase();
+    if (accountEmail && accountEmail !== email) {
+        throw Object.assign(new Error('EMAIL_MISMATCH'), { code: 'invalid-request' });
+    }
+
+    const lookup = await lookupBusinessPhone(standardizedPhone);
+    if (lookup.flow === 'claimed') {
+        const claimId = input.claimBusinessId || null;
+        if (claimId) {
+            const { source, snap } = await resolveClaimSource(db, claimId);
+            if (source === 'restaurants' && snap?.exists) {
+                const data = snap.data() || {};
+                if (data.isClaimed === true && data.ownerId === firebaseUid) {
+                    /* allow idempotent finalize for same owner */
+                } else if (data.isClaimed === true && data.ownerId !== firebaseUid) {
+                    throw Object.assign(new Error('PHONE_IN_USE'), { code: 'phone-already-in-use' });
+                }
+            } else if (source === 'users' && snap?.exists) {
+                const data = snap.data() || {};
+                if (data.businessInfo?.isClaimed === true && claimId !== firebaseUid) {
+                    throw Object.assign(new Error('PHONE_IN_USE'), { code: 'phone-already-in-use' });
+                }
+            } else {
+                throw Object.assign(new Error('PHONE_IN_USE'), { code: 'phone-already-in-use' });
+            }
+        } else {
+            throw Object.assign(new Error('PHONE_IN_USE'), { code: 'phone-already-in-use' });
+        }
+    }
+
+    let mergedBusinessInfo = { ...(input.businessInfo || {}) };
+    const claimId = input.claimBusinessId || (lookup.flow === 'claim' ? lookup.businessId : null);
+    let claimedFromRestaurantId = null;
+
+    if (claimId) {
+        const { source, snap } = await resolveClaimSource(db, claimId);
+        if (source === 'restaurants' && snap?.exists) {
+            const preData = snap.data() || {};
+            const docPhone =
+                String(preData.standardized_phone || '').trim() ||
+                String(preData.businessInfo?.standardized_phone || '').trim();
+            if (docPhone && docPhone !== standardizedPhone) {
+                throw Object.assign(new Error('PHONE_MISMATCH'), { code: 'phone-mismatch' });
+            }
+            const claimData = await claimRestaurantOwnershipTransaction({
+                restaurantId: claimId,
+                firebaseUid,
+                standardizedPhone,
+            });
+            const userPayload = buildUserProfileFromClaimedRestaurant(
+                claimData,
+                claimId,
+                firebaseUid,
+                email,
+                standardizedPhone
+            );
+            mergedBusinessInfo = { ...userPayload.businessInfo, ...mergedBusinessInfo };
+            claimedFromRestaurantId = claimId;
+
+            if (!accountEmail) {
+                try {
+                    await auth.updateUser(firebaseUid, {
+                        email,
+                        emailVerified: false,
+                        displayName: String(mergedBusinessInfo.businessName || '').trim() || undefined,
+                    });
+                } catch (err) {
+                    const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : '';
+                    if (code === 'auth/email-already-exists') {
+                        throw Object.assign(new Error('EMAIL_IN_USE'), { code: 'auth/email-already-in-use' });
+                    }
+                    throw err;
+                }
+            }
+
+            const userPayloadOut = {
+                ...userPayload,
+                businessInfo: mergedBusinessInfo,
+                created_at: FieldValue.serverTimestamp(),
+                last_active_time: FieldValue.serverTimestamp(),
+            };
+            if (input.referredBy) {
+                userPayloadOut.referred_by = input.referredBy;
+            }
+
+            await db.collection('users').doc(firebaseUid).set(userPayloadOut, { merge: true });
+
+            return {
+                uid: firebaseUid,
+                email,
+                flow: 'claim',
+                claimedFromBusinessId: claimId,
+                claimedFromRestaurantId,
+            };
+        }
+
+        if (source === 'users' && snap?.exists) {
+            const claimData = snap.data() || {};
+            const claimBi =
+                claimData.businessInfo && typeof claimData.businessInfo === 'object'
+                    ? claimData.businessInfo
+                    : {};
+            mergedBusinessInfo = { ...claimBi, ...mergedBusinessInfo };
+        }
+    }
+
+    mergedBusinessInfo.standardized_phone = standardizedPhone;
+    mergedBusinessInfo.isClaimed = true;
+    mergedBusinessInfo.phone_verified = true;
+    mergedBusinessInfo.phone_claimed = true;
+    mergedBusinessInfo.createdAt = FieldValue.serverTimestamp();
+    if (!mergedBusinessInfo.phone) {
+        mergedBusinessInfo.phone = standardizedPhone;
+    }
+
+    if (!accountEmail) {
+        try {
+            await auth.updateUser(firebaseUid, {
+                email,
+                emailVerified: false,
+                displayName: String(mergedBusinessInfo.businessName || '').trim() || undefined,
+            });
+        } catch (err) {
+            const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : '';
+            if (code === 'auth/email-already-exists') {
+                throw Object.assign(new Error('EMAIL_IN_USE'), { code: 'auth/email-already-in-use' });
+            }
+            throw err;
+        }
+    }
+
+    const userPayload = {
+        uid: firebaseUid,
+        email,
+        authInfo: { email },
+        accountType: 'business',
+        role: 'partner',
+        display_name: String(mergedBusinessInfo.businessName || '').trim() || email,
+        photo_url: userRecord.photoURL || null,
+        created_at: FieldValue.serverTimestamp(),
+        last_active_time: FieldValue.serverTimestamp(),
+        pendingBusinessRegistration: false,
+        businessProfileSetupPending: false,
+        isProfileComplete: true,
+        registrationIntent: null,
+        businessInfo: mergedBusinessInfo,
+        claimedFromBusinessId: claimId || null,
+        followersCount: 0,
+        ownedCommunities: [],
+    };
+    if (input.referredBy) {
+        userPayload.referred_by = input.referredBy;
+    }
+
+    await db.collection('users').doc(firebaseUid).set(userPayload, { merge: true });
+
+    if (claimId && claimId !== firebaseUid) {
+        await db.collection('users').doc(claimId).set(
+            {
+                unclaimedProfileMergedInto: firebaseUid,
+                mergedAt: FieldValue.serverTimestamp(),
+                isClaimed: true,
+                businessInfo: {
+                    isClaimed: true,
+                    phone_claimed: true,
+                    standardized_phone: standardizedPhone,
+                },
+            },
+            { merge: true }
+        );
+    }
+
+    return {
+        uid: firebaseUid,
+        email,
+        flow: claimId ? 'claim' : 'new',
+        claimedFromBusinessId: claimId || null,
+        claimedFromRestaurantId,
+    };
+}
+
+/**
+ * New business registration via email/password only (no SMS OTP).
+ * Phone verification is reserved for claiming published restaurant profiles.
+ * @param {{
+ *   firebaseUid: string,
+ *   email: string,
+ *   businessInfo: Record<string, unknown>,
+ *   referredBy?: string | null,
+ * }} input
+ */
+export async function completeBusinessEmailSignup(input) {
+    ensureFirebaseAdmin();
+    const db = getFirestore();
+    const auth = getAuth();
+
+    const firebaseUid = String(input.firebaseUid || '').trim();
+    const email = String(input.email || '').trim().toLowerCase();
+
+    if (!firebaseUid || !email) {
+        throw Object.assign(new Error('INVALID_COMPLETE_PAYLOAD'), { code: 'invalid-request' });
+    }
+
+    const userRecord = await auth.getUser(firebaseUid);
+    const accountEmail = String(userRecord.email || '').trim().toLowerCase();
+    if (!accountEmail || accountEmail !== email) {
+        throw Object.assign(new Error('EMAIL_MISMATCH'), { code: 'invalid-request' });
+    }
+
+    const mergedBusinessInfo = { ...(input.businessInfo || {}) };
+    const placeId = String(mergedBusinessInfo.placeId || mergedBusinessInfo.googlePlaceId || '').trim();
+    if (!placeId) {
+        throw Object.assign(new Error('PLACE_REQUIRED'), { code: 'place-required' });
+    }
+
+    // Avoid duplicate profiles when the venue is already listed (claimed or not).
+    const existingRestaurant = await loadExistingRestaurantForImport(placeId);
+    if (existingRestaurant) {
+        if (restaurantDocIsUnclaimed(existingRestaurant.data)) {
+            throw Object.assign(new Error('PLACE_CLAIM_REQUIRED'), {
+                code: 'place-claim-required',
+                restaurantId: existingRestaurant.docId,
+            });
+        }
+        throw Object.assign(new Error('PLACE_ALREADY_CLAIMED'), {
+            code: 'place-already-claimed',
+            restaurantId: existingRestaurant.docId,
+        });
+    }
+
+    mergedBusinessInfo.isClaimed = true;
+    mergedBusinessInfo.phone_verified = false;
+    mergedBusinessInfo.phone_claimed = false;
+    if ('standardized_phone' in mergedBusinessInfo) {
+        delete mergedBusinessInfo.standardized_phone;
+    }
+    mergedBusinessInfo.createdAt = FieldValue.serverTimestamp();
+
+    const userPayload = {
+        uid: firebaseUid,
+        email,
+        authInfo: { email },
+        accountType: 'business',
+        role: 'partner',
+        display_name: String(mergedBusinessInfo.businessName || '').trim() || email,
+        photo_url: userRecord.photoURL || null,
+        created_at: FieldValue.serverTimestamp(),
+        last_active_time: FieldValue.serverTimestamp(),
+        pendingBusinessRegistration: false,
+        businessProfileSetupPending: false,
+        isProfileComplete: true,
+        registrationIntent: null,
+        businessInfo: mergedBusinessInfo,
+        claimedFromBusinessId: null,
+        followersCount: 0,
+        ownedCommunities: [],
+    };
+    if (input.referredBy) {
+        userPayload.referred_by = input.referredBy;
+    }
+
+    await db.collection('users').doc(firebaseUid).set(userPayload, { merge: true });
+
+    return {
+        uid: firebaseUid,
+        email,
+        flow: 'new',
+        claimedFromBusinessId: null,
+        claimedFromRestaurantId: null,
+    };
+}
+
+/**
+ * Claim an admin-imported restaurant after Google Business Profile ownership verification.
+ * @param {{
+ *   firebaseUid: string;
+ *   email: string;
+ *   restaurantId: string;
+ *   googleClaimSessionId: string;
+ *   referredBy?: string | null,
+ * }} input
+ */
+export async function completeBusinessGoogleClaimSignup(input) {
+    ensureFirebaseAdmin();
+    const db = getFirestore();
+    const auth = getAuth();
+
+    const firebaseUid = String(input.firebaseUid || '').trim();
+    const email = String(input.email || '').trim().toLowerCase();
+    const restaurantId = String(input.restaurantId || '').trim();
+    const sessionId = String(input.googleClaimSessionId || '').trim();
+
+    if (!firebaseUid || !email || !restaurantId || !sessionId) {
+        throw Object.assign(new Error('INVALID_COMPLETE_PAYLOAD'), { code: 'invalid-request' });
+    }
+
+    const session = await loadGoogleBusinessClaimSession(sessionId);
+    if (!session) {
+        throw Object.assign(new Error('SESSION_NOT_FOUND'), { code: 'session-not-found' });
+    }
+    if (session.restaurantId !== restaurantId) {
+        throw Object.assign(new Error('SESSION_RESTAURANT_MISMATCH'), { code: 'invalid-request' });
+    }
+
+    const userRecord = await auth.getUser(firebaseUid);
+    const accountEmail = String(userRecord.email || '').trim().toLowerCase();
+    if (!accountEmail || accountEmail !== email) {
+        throw Object.assign(new Error('EMAIL_MISMATCH'), { code: 'invalid-request' });
+    }
+
+    if (!session.placeVerified || session.verifiedPlaceId !== session.googlePlaceId) {
+        const accessToken = session.accessToken;
+        if (!accessToken) {
+            throw Object.assign(new Error('SESSION_NOT_AUTHENTICATED'), { code: 'session-not-authenticated' });
+        }
+        const check = await userManagesGooglePlace(accessToken, session.googlePlaceId);
+        if (!check.managed) {
+            throw Object.assign(new Error('PLACE_NOT_MANAGED'), { code: 'place-not-managed' });
+        }
+    }
+
+    if (!session.accessToken) {
+        throw Object.assign(new Error('SESSION_NOT_AUTHENTICATED'), { code: 'session-not-authenticated' });
+    }
+
+    const restaurantSnap = await db.collection('restaurants').doc(restaurantId).get();
+    if (!restaurantSnap.exists) {
+        throw Object.assign(new Error('RESTAURANT_NOT_FOUND'), { code: 'restaurant-not-found' });
+    }
+    const preData = restaurantSnap.data() || {};
+    const docPlaceId = String(preData.googlePlaceId || restaurantId).trim();
+    if (docPlaceId !== session.googlePlaceId) {
+        throw Object.assign(new Error('PLACE_MISMATCH'), { code: 'place-mismatch' });
+    }
+
+    const docPhone =
+        String(preData.standardized_phone || '').trim() ||
+        String(preData.businessInfo?.standardized_phone || '').trim() ||
+        String(preData.businessInfo?.phone || '').trim() ||
+        String(preData.phone || '').trim();
+
+    const claimData = await claimRestaurantOwnershipTransaction({
+        restaurantId,
+        firebaseUid,
+        standardizedPhone: docPhone,
+        verificationMethod: 'google_business_profile',
+    });
+
+    const userPayload = buildUserProfileFromClaimedRestaurant(
+        claimData,
+        restaurantId,
+        firebaseUid,
+        email,
+        docPhone,
+        { verificationMethod: 'google_business_profile' }
+    );
+
+    const userPayloadOut = {
+        ...userPayload,
+        businessInfo: {
+            ...userPayload.businessInfo,
+            google_business_verified: true,
+            googleClaimSessionId: sessionId,
+        },
+        claimVerificationMethod: 'google_business_profile',
+        created_at: FieldValue.serverTimestamp(),
+        last_active_time: FieldValue.serverTimestamp(),
+    };
+    if (input.referredBy) {
+        userPayloadOut.referred_by = input.referredBy;
+    }
+
+    await db.collection('users').doc(firebaseUid).set(userPayloadOut, { merge: true });
+
+    return {
+        uid: firebaseUid,
+        email,
+        flow: 'claim',
+        claimedFromBusinessId: restaurantId,
+        claimedFromRestaurantId: restaurantId,
+        verificationMethod: 'google_business_profile',
+    };
+}
