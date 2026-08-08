@@ -582,24 +582,24 @@ function toPublicProfile(userDocData, uid) {
                     ? businessInfo.openingHours
                     : null,
             // Paid swipe-card special offer (title + optional image + date window).
-            swipeSpecialOffer:
-                businessInfo.swipeSpecialOffer && typeof businessInfo.swipeSpecialOffer === 'object'
-                    ? {
-                        title: asTrimmedString(businessInfo.swipeSpecialOffer.title),
-                        imageUrl: asTrimmedString(
-                            businessInfo.swipeSpecialOffer.imageUrl ||
-                                businessInfo.swipeSpecialOffer.mediaUrl
-                        ) || null,
-                        startDate: asTrimmedString(
-                            businessInfo.swipeSpecialOffer.startDate ||
-                                businessInfo.swipeSpecialOffer.startAt
-                        ),
-                        endDate: asTrimmedString(
-                            businessInfo.swipeSpecialOffer.endDate ||
-                                businessInfo.swipeSpecialOffer.endAt
-                        ),
-                    }
-                    : null,
+            swipeSpecialOffer: (() => {
+                const offer =
+                    businessInfo.swipeSpecialOffer && typeof businessInfo.swipeSpecialOffer === 'object'
+                        ? businessInfo.swipeSpecialOffer
+                        : null;
+                if (!offer) return null;
+                const title = asTrimmedString(offer.title);
+                const startDate = asTrimmedString(offer.startDate || offer.startAt);
+                const endDate = asTrimmedString(offer.endDate || offer.endAt);
+                if (!title || !startDate || !endDate) return null;
+                return {
+                    title,
+                    imageUrl:
+                        asTrimmedString(offer.imageUrl || offer.mediaUrl) || null,
+                    startDate,
+                    endDate,
+                };
+            })(),
         }
         : null;
 
