@@ -26,13 +26,13 @@ export const DINE_CREDIT_PACKS = STRIPE_TEST_MODE
           },
       ]
     : [
-          { id: 'credits_200', credits: 200, priceLabel: '$2' },
-          { id: 'credits_500', credits: 500, priceLabel: '$5' },
-          { id: 'credits_1000', credits: 1000, priceLabel: '$10' },
+          { id: 'credits_200', credits: 200, priceLabel: 'A$2' },
+          { id: 'credits_500', credits: 500, priceLabel: 'A$5' },
+          { id: 'credits_1000', credits: 1000, priceLabel: 'A$10' },
           {
               id: 'credits_3000',
               credits: 3000,
-              priceLabel: '$25',
+              priceLabel: 'A$25',
               sub: 'Best value',
               highlight: true,
           },
