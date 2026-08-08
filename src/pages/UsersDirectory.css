@@ -1,0 +1,242 @@
+.users-directory-page {
+    width: 100%;
+    min-height: 100%;
+    background: var(--bg-main);
+    box-sizing: border-box;
+}
+
+.users-directory-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 12px 6px;
+}
+
+.users-directory-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    height: 40px;
+    border-radius: 12px;
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-card);
+}
+
+.users-directory-field--place {
+    position: relative;
+    z-index: 5;
+    height: auto;
+    min-height: 40px;
+    align-items: stretch;
+    padding-block: 0;
+}
+
+.users-directory-field--place .users-directory-field-icon {
+    align-self: center;
+}
+
+.users-directory-place-autocomplete {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+}
+
+.users-directory-place-autocomplete > div,
+.users-directory-field--place .users-directory-place-autocomplete {
+    width: 100%;
+}
+
+.users-directory-field--place input {
+    outline: none !important;
+}
+
+.users-directory-field:focus-within {
+    border-color: var(--primary);
+}
+
+.users-directory-field-icon {
+    color: var(--text-muted);
+    flex-shrink: 0;
+    font-size: 0.9rem;
+}
+
+.users-directory-field-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-main);
+    font-size: 0.94rem;
+    outline: none;
+}
+
+.users-directory-field-clear {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    padding: 4px;
+    cursor: pointer;
+}
+
+.users-directory-toolbar__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.users-directory-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 12px 8px;
+}
+
+.users-directory-filters--toolbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    padding: 0;
+    margin-inline-end: auto;
+}
+
+.users-directory-filters__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    width: 100%;
+}
+
+.users-directory-filter-chip {
+    padding: 5px 10px !important;
+    min-height: 0 !important;
+}
+
+.users-directory-filter-chip .home-geo-chip__label {
+    font-size: 0.74rem !important;
+}
+
+.users-directory-feed-link,
+.users-directory-inbox-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    flex-shrink: 0;
+    min-height: 34px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    background: var(--bg-card);
+    color: var(--text-main);
+}
+
+.users-directory-feed-link {
+    background: rgba(232, 110, 46, 0.12);
+    color: var(--primary);
+}
+
+.users-directory-feed-link svg,
+.users-directory-inbox-link svg {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+
+.users-directory-inbox-link svg {
+    color: var(--primary);
+}
+
+.users-directory-inbox-link {
+    position: relative;
+    overflow: visible;
+}
+
+.users-directory-inbox-link .inbox-hub-link__badge {
+    top: -5px;
+    inset-inline-end: -5px;
+    min-width: 1.05rem;
+    height: 1.05rem;
+    line-height: 1.05rem;
+    font-size: 0.58rem;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.users-directory-feed-link__label {
+    display: none;
+}
+
+.users-directory-main {
+    padding: 4px 12px 24px;
+}
+
+.users-directory-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.users-directory-message {
+    text-align: center;
+    padding: 20px 12px;
+    color: var(--text-muted);
+}
+
+.users-directory-message--error {
+    color: #f87171;
+    font-weight: 600;
+}
+
+.users-directory-load-more {
+    display: flex;
+    justify-content: center;
+    margin-top: 14px;
+}
+
+.users-directory-load-more-btn {
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-main);
+    border-radius: 999px;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.users-directory-load-more-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+@media (min-width: 640px) {
+    .users-directory-feed-link__label {
+        display: inline;
+    }
+}
+
+@media (min-width: 1024px) {
+    .users-directory-toolbar {
+        padding: 10px 14px 8px;
+    }
+
+    .users-directory-feed-link,
+    .users-directory-inbox-link {
+        min-height: 36px;
+        padding: 7px 12px;
+        font-size: 0.8rem;
+    }
+
+    .users-directory-inbox-link .inbox-hub-link__label,
+    .users-directory-inbox-link span:not(.badge):not(.inbox-hub-link__badge) {
+        display: inline;
+    }
+}

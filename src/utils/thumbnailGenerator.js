@@ -29,10 +29,6 @@ export const generateThumbnail = (videoFile, timeInSeconds = 0.5) => {
 
         try {
             objectUrl = URL.createObjectURL(videoFile);
-            video.src = objectUrl;
-            video.muted = true;
-            video.playsInline = true;
-            video.crossOrigin = 'anonymous'; // Good practice even for local blobs sometimes
 
             // Step 1: Wait for metadata/data to be ready
             video.onloadeddata = () => {
@@ -74,6 +70,10 @@ export const generateThumbnail = (videoFile, timeInSeconds = 0.5) => {
                 reject(new Error('Video load error'));
             };
 
+            video.muted = true;
+            video.playsInline = true;
+            
+            video.src = objectUrl;
             // Trigger load (sometimes needed)
             video.load();
         } catch (e) {
@@ -93,9 +93,6 @@ export const generateThumbnail = (videoFile, timeInSeconds = 0.5) => {
 export const generateMultipleThumbnails = async (videoFile, count = 3) => {
     return new Promise((resolve, reject) => {
         const video = document.createElement('video');
-        video.src = URL.createObjectURL(videoFile);
-        video.muted = true;
-        video.preload = 'metadata';
 
         video.onloadedmetadata = async () => {
             const duration = video.duration;
@@ -120,6 +117,10 @@ export const generateMultipleThumbnails = async (videoFile, count = 3) => {
             reject(new Error('Failed to load video'));
             URL.revokeObjectURL(video.src);
         };
+
+        video.muted = true;
+        video.preload = 'metadata';
+        video.src = URL.createObjectURL(videoFile);
 
         video.load();
     });

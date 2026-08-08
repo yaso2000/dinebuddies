@@ -1,0 +1,42 @@
+.private-card-copy-font-scale-rail {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 6px;
+    pointer-events: auto;
+}
+
+.private-card-copy-font-scale-rail__btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    border: 1.5px solid rgba(255, 255, 255, 0.28);
+    background: rgba(15, 23, 42, 0.84);
+    color: rgba(248, 250, 252, 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.private-card-copy-font-scale-rail__btn:hover:not(:disabled) {
+    border-color: rgba(212, 175, 55, 0.55);
+    background: rgba(15, 23, 42, 0.92);
+    color: var(--luxury-gold, #d4af37);
+}
+
+.private-card-copy-font-scale-rail__btn:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+}

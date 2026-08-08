@@ -1,0 +1,177 @@
+.social-ping {
+    position: fixed;
+    inset: 0;
+    z-index: 11850;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.social-ping__stage {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: min(100%, 360px);
+    padding: 0;
+    text-align: center;
+    background: none;
+    border: none;
+    box-shadow: none;
+}
+
+.social-ping__visual-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    isolation: isolate;
+}
+
+/* Soft glow halo — no box, border, or plate */
+.social-ping__visual-wrap--wave::before,
+.social-ping__visual-wrap--gift::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(72vw, 240px);
+    height: min(72vw, 240px);
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+    animation: social-ping-glow-breathe 2.6s ease-in-out infinite;
+}
+
+.social-ping__visual-wrap--wave::before {
+    background: radial-gradient(
+        circle,
+        rgba(255, 210, 90, 0.55) 0%,
+        rgba(255, 170, 60, 0.22) 38%,
+        transparent 72%
+    );
+    filter: blur(18px);
+}
+
+.social-ping__visual-wrap--gift::before {
+    background: radial-gradient(
+        circle,
+        color-mix(in srgb, var(--social-ping-glow, #fbbf24) 72%, transparent) 0%,
+        color-mix(in srgb, var(--social-ping-glow, #fbbf24) 28%, transparent) 42%,
+        transparent 72%
+    );
+    filter: blur(20px);
+}
+
+@keyframes social-ping-glow-breathe {
+    0%,
+    100% {
+        opacity: 0.72;
+        transform: translate(-50%, -50%) scale(0.94);
+    }
+    50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.06);
+    }
+}
+
+.social-ping__wave {
+    position: relative;
+    z-index: 1;
+    font-size: clamp(4.5rem, 18vw, 6.75rem);
+    line-height: 1;
+    display: inline-block;
+    background: none;
+    border: none;
+    box-shadow: none;
+    filter:
+        drop-shadow(0 0 14px rgba(255, 220, 120, 0.9))
+        drop-shadow(0 0 28px rgba(255, 180, 70, 0.55))
+        drop-shadow(0 0 44px rgba(255, 150, 50, 0.28));
+}
+
+.social-ping__gift-visual {
+    position: relative;
+    z-index: 1;
+    background: none;
+    border: none;
+    box-shadow: none;
+    filter:
+        drop-shadow(0 0 16px color-mix(in srgb, var(--social-ping-glow, #fbbf24) 85%, transparent))
+        drop-shadow(0 0 32px color-mix(in srgb, var(--social-ping-glow, #fbbf24) 50%, transparent))
+        drop-shadow(0 0 48px color-mix(in srgb, var(--social-ping-glow, #fbbf24) 25%, transparent));
+}
+
+.social-ping__gift-visual .profile-gift-visual,
+.social-ping__gift-visual .profile-gift-visual--ping {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: min(68vw, 208px);
+    height: min(68vw, 208px);
+    background: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.social-ping__gift-visual .profile-gift-visual__img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: none;
+    border: none;
+    box-shadow: none;
+    filter: none;
+}
+
+.social-ping__gift-visual .profile-gift-visual__icon {
+    font-size: 4.5rem;
+    color: #fff;
+    background: none;
+    border: none;
+    box-shadow: none;
+    filter: none;
+}
+
+.social-ping__title {
+    width: 100%;
+    margin: 0 0 8px;
+    font-size: clamp(1.15rem, 4.5vw, 1.4rem);
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    text-align: center;
+    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55);
+}
+
+.social-ping__subtitle {
+    width: 100%;
+    margin: 0;
+    font-size: clamp(0.88rem, 3.5vw, 1rem);
+    color: rgba(255, 255, 255, 0.88);
+    line-height: 1.45;
+    text-align: center;
+    text-shadow: 0 1px 12px rgba(0, 0, 0, 0.45);
+}
+
+.social-ping__sender {
+    color: #fde68a;
+    font-weight: 700;
+}
+
+.social-ping__hint {
+    width: 100%;
+    margin: 20px 0 0;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.52);
+    text-align: center;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+}

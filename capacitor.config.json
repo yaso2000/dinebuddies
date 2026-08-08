@@ -1,0 +1,15 @@
+{
+  "appId": "com.dinebuddies.app",
+  "appName": "DineBuddies",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": false
+  },
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com", "facebook.com"]
+    }
+  }
+}

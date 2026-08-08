@@ -1,77 +1,52 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FaGlobe, FaLock, FaTimes } from 'react-icons/fa';
+import React, { useMemo } from 'react';
+import { FaTimes } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
-import { useToast } from '../context/ToastContext';
-import { useAuth } from '../context/AuthContext';
+import {
+  resolveHostInvitationNavigationState,
+} from '../utils/hostInvitationFromBusiness';
+import InviteCreateTypePicker, { inviteCreateTypeSubtitle } from './InviteCreateTypePicker';
 import './CreateInvitationSelector.css';
+import { AppText } from './base';
 
 const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
-    const { t } = useTranslation();
-    const navigate = useNavigate();
-    const { showToast } = useToast();
-    const { userProfile } = useAuth();
-    const isBusiness = userProfile?.role === 'business';
+  const { t } = useTranslation();
+  const { restaurants } = useInvitations();
 
-    const { canCreatePrivateInvitation } = useInvitations();
+  const resolvedState = useMemo(
+    () =>
+      resolveHostInvitationNavigationState({
+        locationState: navigationState,
+        businessId: navigationState?.businessId || navigationState?.restaurantData?.id,
+        restaurants,
+      }),
+    [navigationState, restaurants]
+  );
 
-    if (!isOpen) return null;
+  if (!isOpen) return null;
 
-    const handleSelect = (type) => {
-        if (isBusiness) {
-            showToast(t('business_cannot_create_invitation', 'Business accounts cannot create or publish invitations.'), 'error');
-            onClose();
-            return;
-        }
-        if (type === 'public') {
-            navigate('/create', { state: navigationState });
-        } else {
-            const quotaInfo = canCreatePrivateInvitation();
-            if (quotaInfo.canCreate) {
-                navigate('/create-private', { state: navigationState });
-            } else {
-                showToast(t('insufficient_private_credits', 'Sorry, you have used all your private invitation credits. Upgrade to get more.'), 'error');
-                navigate('/pricing');
-            }
-        }
-        onClose();
-    };
+  return (
+    <div className="selector-overlay" onClick={onClose}>
+      <div className="selector-content" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="close-btn" onClick={onClose}>
+          <FaTimes />
+        </button>
 
-    return (
-        <div className="selector-overlay" onClick={onClose}>
-            <div className="selector-content" onClick={e => e.stopPropagation()}>
-                <button className="close-btn" onClick={onClose}>
-                    <FaTimes />
-                </button>
+        <AppText as="h3" className="selector-title">
+          {t('invite_create_title')}
+        </AppText>
+        <AppText as="p" className="selector-subtitle">
+          {inviteCreateTypeSubtitle(t, resolvedState?.restaurantData?.name)}
+        </AppText>
 
-                <h3 className="selector-title">{t('select_invitation_type')}</h3>
-                <p className="selector-subtitle">{t('choose_invitation_type_to_continue', 'Choose invitation type to continue')}</p>
-
-                <div className="selector-options">
-                    <div className="selector-card public" onClick={() => handleSelect('public')}>
-                        <div className="icon-wrapper">
-                            <FaGlobe />
-                        </div>
-                        <div className="option-info">
-                            <h4>{t('create_public_invitation')}</h4>
-                            <p>{t('public_invitation_desc')}</p>
-                        </div>
-                    </div>
-
-                    <div className="selector-card private" onClick={() => handleSelect('private')}>
-                        <div className="icon-wrapper">
-                            <FaLock />
-                        </div>
-                        <div className="option-info">
-                            <h4>{t('create_private_invitation')}</h4>
-                            <p>{t('private_invitation_desc')}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+        <InviteCreateTypePicker
+          variant="selector"
+          navigationState={navigationState}
+          onAfterNavigate={onClose}
+        />
+      </div>
+    </div>
+  );
 };
 
 export default CreateInvitationSelector;

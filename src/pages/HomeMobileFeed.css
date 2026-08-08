@@ -1,10 +1,10 @@
 /* Mobile Feed Styling - Standard Full Width Feed */
 @media screen and (max-width: 768px) {
 
-    /* 1. Page & Scroll Container */
+    /* 1. Page — scroll lives on .app-main; avoid nested scroll here */
     .home-page {
         height: auto !important;
-        overflow-y: auto !important;
+        overflow: visible !important;
         background: transparent !important;
         padding: 0 !important;
         padding-bottom: 80px !important;
@@ -16,8 +16,7 @@
     }
 
     /* 3. Card Styling - Edge to Edge */
-    .smart-invitation-card,
-    .business-ad-card {
+    .smart-invitation-card {
         height: auto !important;
         min-height: 450px !important;
 
@@ -26,19 +25,40 @@
         width: auto !important;
         max-width: 100% !important;
 
-        background: var(--bg-card) !important;
         border-radius: 16px !important;
-        /* Rounded corners */
-        /* Edge to edge */
-        border: none !important;
-        border-bottom: 1px solid var(--border-color) !important;
-
         box-shadow: none !important;
         /* Simplify */
 
         display: flex !important;
         flex-direction: column !important;
         position: relative !important;
+    }
+
+    .business-ad-card {
+        height: auto !important;
+        min-height: 0 !important;
+        aspect-ratio: 4 / 6;
+
+        margin: 0 2px 12px 2px !important;
+        width: auto !important;
+        max-width: 100% !important;
+
+        border-radius: 16px !important;
+        box-shadow: none !important;
+
+        display: flex !important;
+        flex-direction: column !important;
+        position: relative !important;
+    }
+
+    .smart-invitation-card.invitation-card--video-split {
+        min-height: 0 !important;
+        overflow: visible !important;
+    }
+
+    .smart-invitation-card.invitation-card--compact {
+        height: auto !important;
+        min-height: 0 !important;
     }
 
     .business-ad-card {
@@ -90,8 +110,9 @@
         display: block !important;
     }
 
-    /* Actions */
-    .header-actions {
+    /* Card overlay actions only — do not target Layout .app-header .header-actions */
+    .smart-invitation-card .header-actions,
+    .business-ad-card .header-actions {
         gap: 8px !important;
     }
 

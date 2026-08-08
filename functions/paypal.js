@@ -1,0 +1,845 @@
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
+const {
+    CREDIT_PACKAGES,
+    grantPaidCreditsInTransaction,
+    isBusinessUserDoc,
+} = require('./creditsCore');
+
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
+
+const db = admin.firestore();
+
+const PAYPAL_CHECKOUT_ORDERS = 'paypal_checkout_orders';
+
+const CREDIT_PACKAGE_PRICES = {
+    credits_200: '2.00',
+    credits_500: '5.00',
+    credits_1000: '10.00',
+    credits_3000: '25.00',
+};
+
+function getBusinessPlanPrice() {
+    const raw = String(process.env.PAYPAL_BUSINESS_MONTHLY_PRICE || '29.00').trim();
+    if (!/^\d+\.\d{2}$/.test(raw)) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'Invalid PAYPAL_BUSINESS_MONTHLY_PRICE (use format 29.00).'
+        );
+    }
+    return raw;
+}
+
+async function assertCallerIsBusinessUser(userId) {
+    const snap = await db.collection('users').doc(String(userId || '').trim()).get();
+    if (!snap.exists || !isBusinessUserDoc(snap.data())) {
+        throw new functions.https.HttpsError('failed-precondition', 'Business account required.');
+    }
+}
+
+/** Request-scoped API host override (must match frontend Client ID environment). */
+let paypalApiBaseOverride = null;
+
+function paypalMode() {
+    const mode = String(process.env.PAYPAL_MODE || 'sandbox').trim().toLowerCase();
+    return mode === 'live' ? 'live' : 'sandbox';
+}
+
+function normalizePayPalMode(value) {
+    const mode = String(value || '').trim().toLowerCase();
+    if (mode === 'live') return 'live';
+    if (mode === 'sandbox') return 'sandbox';
+    return null;
+}
+
+function isPayPalSandbox() {
+    if (paypalApiBaseOverride) {
+        return paypalApiBaseOverride.includes('sandbox');
+    }
+    return paypalMode() !== 'live';
+}
+
+function paypalApiBaseForMode(mode) {
+    return mode === 'live'
+        ? 'https://api-m.paypal.com'
+        : 'https://api-m.sandbox.paypal.com';
+}
+
+function paypalApiBase() {
+    if (paypalApiBaseOverride) return paypalApiBaseOverride;
+    return paypalApiBaseForMode(paypalMode());
+}
+
+function formatPayPalApiFailure(data, fallback = 'Could not complete PayPal request.') {
+    if (!data || typeof data !== 'object') return fallback;
+    const detail = Array.isArray(data.details) ? data.details[0] : null;
+    const issue = detail?.issue ? String(detail.issue) : '';
+    const description = detail?.description ? String(detail.description) : '';
+    const message = data.message ? String(data.message) : '';
+    const debugId = data.debug_id ? String(data.debug_id) : '';
+    const parts = [issue, description || message, debugId ? `debug_id=${debugId}` : '']
+        .map((p) => String(p || '').trim())
+        .filter(Boolean);
+    return parts.length ? parts.join(' — ') : fallback;
+}
+
+function paypalClientId() {
+    return String(process.env.PAYPAL_CLIENT_ID || '').trim();
+}
+
+function paypalClientSecret() {
+    return String(process.env.PAYPAL_CLIENT_SECRET || '').trim();
+}
+
+function paypalAllowUsd() {
+    const raw = String(process.env.PAYPAL_ALLOW_USD || '').trim().toLowerCase();
+    return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
+function normalizePayPalCurrency(value) {
+    const currency = String(value || '')
+        .trim()
+        .toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) return '';
+    // Legacy env often still says USD while the AU merchant only receives AUD.
+    if (currency === 'USD' && !paypalAllowUsd()) return 'AUD';
+    return currency;
+}
+
+function paypalCurrency() {
+    return normalizePayPalCurrency(process.env.PAYPAL_CURRENCY) || 'AUD';
+}
+
+/** Prefer the currency the frontend SDK loaded with so order + buttons stay aligned. */
+function resolveOrderCurrency(clientCurrency) {
+    return normalizePayPalCurrency(clientCurrency) || paypalCurrency();
+}
+
+function enhancePayPalCreateFailure(data, currency) {
+    const base = formatPayPalApiFailure(data, 'Could not create PayPal order.');
+    const issue = String(data?.details?.[0]?.issue || '').toUpperCase();
+
+    if (issue === 'PAYEE_ACCOUNT_RESTRICTED' || issue.includes('ACCOUNT_RESTRICTED')) {
+        return (
+            `${base} Open PayPal Business → settings / account status and complete ` +
+            `verification (identity, bank, business info) until receiving payments is enabled. ` +
+            `This cannot be fixed from the app until PayPal lifts the restriction.`
+        );
+    }
+
+    if (issue.includes('CURRENCY')) {
+        return (
+            `${base} Currency tried: ${currency}. ` +
+            `For an Australian PayPal business account use PAYPAL_CURRENCY=AUD ` +
+            `(and Vercel VITE_PAYPAL_CURRENCY=AUD), enable that currency in PayPal, then redeploy Functions.`
+        );
+    }
+
+    return base;
+}
+
+function assertPayPalConfigured() {
+    if (!paypalClientId() || !paypalClientSecret()) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'PayPal is not configured (missing PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET).'
+        );
+    }
+}
+
+function getCreditPackagePrice(packageId) {
+    const value = CREDIT_PACKAGE_PRICES[String(packageId || '').trim()];
+    if (!value) {
+        throw new functions.https.HttpsError('invalid-argument', 'Invalid credit package price');
+    }
+    return value;
+}
+
+function buildPayPalCustomId({ userId, packageId, credits }) {
+    return JSON.stringify({
+        userId: String(userId || '').trim(),
+        packageId: String(packageId || '').trim(),
+        credits: Math.floor(Number(credits) || 0),
+    });
+}
+
+function parsePayPalCustomId(raw) {
+    try {
+        const parsed = JSON.parse(String(raw || '{}'));
+        return {
+            userId: String(parsed.userId || '').trim(),
+            packageId: String(parsed.packageId || '').trim(),
+            credits: Math.floor(Number(parsed.credits) || 0),
+            kind: String(parsed.kind || '').trim(),
+            planId: String(parsed.planId || '').trim(),
+        };
+    } catch {
+        return { userId: '', packageId: '', credits: 0, kind: '', planId: '' };
+    }
+}
+
+function buildPayPalBusinessPlanCustomId({ userId, planId }) {
+    return JSON.stringify({
+        userId: String(userId || '').trim(),
+        kind: 'business_plan',
+        planId: String(planId || 'paid').trim(),
+    });
+}
+
+async function probePayPalOAuth(baseUrl) {
+    const auth = Buffer.from(`${paypalClientId()}:${paypalClientSecret()}`).toString('base64');
+    const res = await fetch(`${baseUrl}/v1/oauth2/token`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Basic ${auth}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'grant_type=client_credentials',
+    });
+    const data = await res.json().catch(() => ({}));
+    return {
+        ok: res.ok && Boolean(data?.access_token),
+        data,
+        accessToken: data?.access_token || null,
+    };
+}
+
+async function detectPayPalCredentialEnvironment() {
+    const [sandbox, live] = await Promise.all([
+        probePayPalOAuth('https://api-m.sandbox.paypal.com'),
+        probePayPalOAuth('https://api-m.paypal.com'),
+    ]);
+    if (sandbox.ok) return 'sandbox';
+    if (live.ok) return 'live';
+    return null;
+}
+
+function buildPayPalAuthErrorMessage(data, configuredMode) {
+    const base = data?.error_description || data?.error || 'Could not authenticate with PayPal.';
+    if (data?.error !== 'invalid_client') return base;
+    if (configuredMode === 'sandbox') {
+        return `${base} Your Client ID/Secret look like Live credentials while PAYPAL_MODE=sandbox. In PayPal Developer Dashboard switch to Sandbox, copy that app’s Client ID + Secret, then redeploy functions.`;
+    }
+    return `${base} Check PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET for the ${configuredMode} environment.`;
+}
+
+/**
+ * Pick API host that matches the frontend Client ID environment.
+ * Never create a sandbox order for a live frontend SDK (or the reverse).
+ */
+async function resolvePayPalApiMode(clientMode) {
+    const preferred = normalizePayPalMode(clientMode) || paypalMode();
+    const preferredBase = paypalApiBaseForMode(preferred);
+    const preferredAuth = await probePayPalOAuth(preferredBase);
+    if (preferredAuth.accessToken) {
+        paypalApiBaseOverride = preferredBase;
+        return { mode: preferred, accessToken: preferredAuth.accessToken };
+    }
+
+    const detected = await detectPayPalCredentialEnvironment();
+    console.error('PayPal token error:', preferredAuth.data, {
+        preferred,
+        configured: paypalMode(),
+        detected,
+    });
+
+    if (detected && detected !== preferred) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            `PayPal frontend is "${preferred}" but Functions credentials only work on "${detected}". ` +
+                `In functions/.env set PAYPAL_MODE=${preferred} and use the ${preferred} Client ID + Secret ` +
+                `from PayPal Developer Dashboard (${preferred} tab), then redeploy functions.`
+        );
+    }
+
+    throw new functions.https.HttpsError(
+        'failed-precondition',
+        buildPayPalAuthErrorMessage(preferredAuth.data, preferred)
+    );
+}
+
+async function getPayPalAccessToken(clientMode = null) {
+    if (paypalApiBaseOverride) {
+        const cached = await probePayPalOAuth(paypalApiBaseOverride);
+        if (cached.accessToken) return cached.accessToken;
+        paypalApiBaseOverride = null;
+    }
+    const resolved = await resolvePayPalApiMode(clientMode);
+    return resolved.accessToken;
+}
+
+async function paypalApiRequest(
+    path,
+    { method = 'GET', body = null, headers = {}, clientMode = null } = {}
+) {
+    const token = await getPayPalAccessToken(clientMode);
+    const res = await fetch(`${paypalApiBase()}${path}`, {
+        method,
+        headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            ...headers,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+    });
+
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+}
+
+function extractPayPalCapture(orderData) {
+    const purchaseUnit = Array.isArray(orderData?.purchase_units) ? orderData.purchase_units[0] : null;
+    const capture = purchaseUnit?.payments?.captures?.[0] || null;
+    return {
+        purchaseUnit,
+        capture,
+        customId: purchaseUnit?.custom_id || '',
+        referenceId: String(purchaseUnit?.reference_id || '').trim(),
+    };
+}
+
+async function loadPayPalCheckoutOrder(orderId) {
+    const snap = await db.collection(PAYPAL_CHECKOUT_ORDERS).doc(orderId).get();
+    return snap.exists ? snap.data() : null;
+}
+
+async function savePayPalCheckoutOrder(orderId, payload) {
+    await db.collection(PAYPAL_CHECKOUT_ORDERS).doc(orderId).set(
+        {
+            ...payload,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+    );
+}
+
+/**
+ * Resolve credits metadata from PayPal custom_id or server-stored checkout doc.
+ * Never trust reference_id alone — that would let any signed-in caller capture another
+ * user's paid order and grant the credits to themselves.
+ */
+async function resolveCreditsOrderMeta(orderId, orderData, authUid) {
+    const { customId } = extractPayPalCapture(orderData);
+    const parsed = parsePayPalCustomId(customId);
+    if (
+        parsed.userId &&
+        parsed.userId === authUid &&
+        parsed.packageId &&
+        CREDIT_PACKAGES[parsed.packageId] &&
+        parsed.credits > 0
+    ) {
+        // Prefer server catalog credits over client-influenced custom_id credit counts.
+        return {
+            userId: parsed.userId,
+            packageId: parsed.packageId,
+            credits: CREDIT_PACKAGES[parsed.packageId].credits,
+        };
+    }
+
+    // custom_id present but belongs to someone else → hard deny (do not fall through).
+    if (parsed.userId && parsed.userId !== authUid) {
+        return { userId: '', packageId: '', credits: 0, kind: '', planId: '' };
+    }
+
+    const pending = await loadPayPalCheckoutOrder(orderId);
+    if (
+        pending &&
+        String(pending.userId || '').trim() === authUid &&
+        String(pending.kind || 'credits') === 'credits' &&
+        CREDIT_PACKAGES[pending.packageId]
+    ) {
+        return {
+            userId: authUid,
+            packageId: String(pending.packageId).trim(),
+            credits: CREDIT_PACKAGES[pending.packageId].credits,
+        };
+    }
+
+    return { userId: '', packageId: '', credits: 0, kind: '', planId: '' };
+}
+
+async function fetchPayPalOrder(orderId, clientMode = null) {
+    return paypalApiRequest(`/v2/checkout/orders/${orderId}`, { clientMode });
+}
+
+function isPayPalOrderCompleted(orderData, capture) {
+    const captureStatus = String(capture?.status || '').toUpperCase();
+    const orderStatus = String(orderData?.status || '').toUpperCase();
+    return captureStatus === 'COMPLETED' || orderStatus === 'COMPLETED';
+}
+
+async function captureOrLoadCompletedPayPalOrder(orderId, clientMode = null) {
+    const captureAttempt = await paypalApiRequest(`/v2/checkout/orders/${orderId}/capture`, {
+        method: 'POST',
+        headers: {
+            'PayPal-Request-Id': `capture-${orderId}`,
+        },
+        body: {},
+        clientMode,
+    });
+
+    if (captureAttempt.ok && captureAttempt.data) {
+        return captureAttempt.data;
+    }
+
+    const issue = captureAttempt.data?.details?.[0]?.issue;
+    const fetched = await fetchPayPalOrder(orderId, clientMode);
+    if (!fetched.ok || !fetched.data) {
+        console.error('PayPal capture error:', captureAttempt.status, captureAttempt.data);
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            formatPayPalApiFailure(
+                captureAttempt.data || fetched.data,
+                'Could not capture PayPal order.'
+            )
+        );
+    }
+
+    const { capture } = extractPayPalCapture(fetched.data);
+    if (!isPayPalOrderCompleted(fetched.data, capture)) {
+        if (issue === 'ORDER_ALREADY_CAPTURED') {
+            throw new functions.https.HttpsError(
+                'failed-precondition',
+                'PayPal payment is still processing. Wait a moment and tap PayPal again to restore credits.'
+            );
+        }
+        console.error('PayPal capture error:', captureAttempt.status, captureAttempt.data);
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            formatPayPalApiFailure(captureAttempt.data, 'Could not capture PayPal order.')
+        );
+    }
+
+    return fetched.data;
+}
+
+async function fulfillPayPalCreditsOrder(orderId, authUid, clientMode = null) {
+    const orderData = await captureOrLoadCompletedPayPalOrder(orderId, clientMode);
+    const { purchaseUnit, capture } = extractPayPalCapture(orderData);
+    const meta = await resolveCreditsOrderMeta(orderId, orderData, authUid);
+
+    if (!meta.userId || meta.userId !== authUid) {
+        throw new functions.https.HttpsError('permission-denied', 'This PayPal order does not belong to you.');
+    }
+    if (!meta.packageId || !CREDIT_PACKAGES[meta.packageId] || meta.credits <= 0) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'PayPal order metadata is invalid. Contact support with your PayPal receipt.'
+        );
+    }
+
+    if (!isPayPalOrderCompleted(orderData, capture)) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'PayPal payment is not completed yet.'
+        );
+    }
+
+    await grantPayPalCredits({
+        orderId,
+        captureId: String(capture?.id || '').trim(),
+        userId: meta.userId,
+        packageId: meta.packageId,
+        credits: meta.credits,
+    });
+
+    await db.collection(PAYPAL_CHECKOUT_ORDERS).doc(orderId).set(
+        {
+            fulfilledAt: admin.firestore.FieldValue.serverTimestamp(),
+            fulfilledCredits: meta.credits,
+        },
+        { merge: true }
+    );
+
+    return {
+        ok: true,
+        orderId,
+        captureId: String(capture?.id || '').trim() || null,
+        credits: meta.credits,
+        packageId: meta.packageId,
+        payerStatus: String(capture?.status || orderData?.status || 'COMPLETED').toUpperCase(),
+        amount: purchaseUnit?.amount || null,
+    };
+}
+
+async function grantPayPalCredits({ orderId, captureId, userId, packageId, credits }) {
+    const fulfillRef = db.collection('paypal_dine_credit_fulfillments').doc(captureId || orderId);
+    const userRef = db.collection('users').doc(userId);
+
+    await db.runTransaction(async (tx) => {
+        const done = await tx.get(fulfillRef);
+        if (done.exists) return;
+
+        const snap = await tx.get(userRef);
+        if (!snap.exists) {
+            throw new Error(`User not found for PayPal credits: ${userId}`);
+        }
+
+        const userData = snap.data() || {};
+        const accountRole = isBusinessUserDoc(userData) ? 'business' : 'user';
+
+        grantPaidCreditsInTransaction(tx, userRef, userData, {
+            uid: userId,
+            accountRole,
+            credits,
+            type: 'purchase',
+            reason: `paypal_${packageId || 'credits'}`,
+            relatedId: captureId || orderId,
+        });
+
+        tx.set(fulfillRef, {
+            userId,
+            orderId,
+            captureId: captureId || null,
+            packageId,
+            credits,
+            provider: 'paypal',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    });
+}
+
+async function grantPayPalBusinessPlan({ orderId, captureId, userId, planId }) {
+    const fulfillRef = db.collection('paypal_business_plan_fulfillments').doc(captureId || orderId);
+    const userRef = db.collection('users').doc(userId);
+    const paidUntil = admin.firestore.Timestamp.fromDate(
+        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    );
+
+    await db.runTransaction(async (tx) => {
+        const done = await tx.get(fulfillRef);
+        if (done.exists) return;
+
+        const snap = await tx.get(userRef);
+        if (!snap.exists) {
+            throw new Error(`User not found for PayPal business plan: ${userId}`);
+        }
+        const userData = snap.data() || {};
+        if (!isBusinessUserDoc(userData)) {
+            throw new Error(`PayPal business plan requires business account: ${userId}`);
+        }
+
+        tx.update(userRef, {
+            subscriptionStatus: 'active',
+            subscriptionTier: 'paid',
+            currentPlan: planId || 'paid',
+            weeklyPrivateQuota: 0,
+            usedPrivateCreditsThisWeek: 0,
+            subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
+            subscriptionProvider: 'paypal',
+            paypalLastBusinessOrderId: orderId,
+            paypalLastBusinessCaptureId: captureId || null,
+            businessPaidUntil: paidUntil,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        tx.set(fulfillRef, {
+            userId,
+            orderId,
+            captureId: captureId || null,
+            planId: planId || 'paid',
+            provider: 'paypal',
+            paidUntil,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    });
+}
+
+exports.createPayPalCreditsOrder = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+    }
+
+    assertPayPalConfigured();
+    // Fresh resolve per callable invocation (warm instances must not reuse wrong host).
+    paypalApiBaseOverride = null;
+
+    const packageId = String(data?.packageId || '').trim();
+    const def = CREDIT_PACKAGES[packageId];
+    if (!def) {
+        throw new functions.https.HttpsError('invalid-argument', 'Invalid credit package');
+    }
+
+    const userId = context.auth.uid;
+    const clientMode = normalizePayPalMode(data?.clientMode);
+    const currency = resolveOrderCurrency(data?.currency);
+    const orderPayload = {
+        intent: 'CAPTURE',
+        purchase_units: [
+            {
+                reference_id: packageId,
+                description: `${def.credits} Dine Credits`,
+                custom_id: buildPayPalCustomId({
+                    userId,
+                    packageId,
+                    credits: def.credits,
+                }),
+                amount: {
+                    currency_code: currency,
+                    value: getCreditPackagePrice(packageId),
+                },
+            },
+        ],
+        application_context: {
+            shipping_preference: 'NO_SHIPPING',
+            user_action: 'PAY_NOW',
+            brand_name: 'DineBuddies',
+        },
+    };
+
+    const result = await paypalApiRequest('/v2/checkout/orders', {
+        method: 'POST',
+        body: orderPayload,
+        clientMode,
+    });
+
+    if (!result.ok || !result.data?.id) {
+        console.error('PayPal order create error:', result.status, result.data, { currency });
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            enhancePayPalCreateFailure(result.data, currency)
+        );
+    }
+
+    await savePayPalCheckoutOrder(result.data.id, {
+        userId,
+        kind: 'credits',
+        packageId,
+        credits: def.credits,
+        currency,
+        amount: getCreditPackagePrice(packageId),
+    });
+
+    return {
+        orderId: result.data.id,
+        status: result.data.status || 'CREATED',
+    };
+});
+
+exports.capturePayPalCreditsOrder = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+    }
+
+    assertPayPalConfigured();
+    paypalApiBaseOverride = null;
+
+    const orderId = String(data?.orderId || data?.orderID || '').trim();
+    if (!orderId) {
+        throw new functions.https.HttpsError('invalid-argument', 'orderId is required');
+    }
+    const clientMode = normalizePayPalMode(data?.clientMode);
+
+    try {
+        return await fulfillPayPalCreditsOrder(orderId, context.auth.uid, clientMode);
+    } catch (error) {
+        if (error instanceof functions.https.HttpsError) throw error;
+        console.error('capturePayPalCreditsOrder:', error);
+        throw new functions.https.HttpsError(
+            'internal',
+            error?.message || 'Could not fulfill PayPal credits purchase.'
+        );
+    }
+});
+
+/** Idempotent recovery when payment completed but credits were not granted. */
+exports.reconcilePayPalCreditsOrder = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+    }
+
+    assertPayPalConfigured();
+    paypalApiBaseOverride = null;
+
+    const orderId = String(data?.orderId || data?.orderID || '').trim();
+    if (!orderId) {
+        throw new functions.https.HttpsError('invalid-argument', 'orderId is required');
+    }
+    const clientMode = normalizePayPalMode(data?.clientMode);
+
+    try {
+        return await fulfillPayPalCreditsOrder(orderId, context.auth.uid, clientMode);
+    } catch (error) {
+        if (error instanceof functions.https.HttpsError) throw error;
+        console.error('reconcilePayPalCreditsOrder:', error);
+        throw new functions.https.HttpsError(
+            'internal',
+            error?.message || 'Could not reconcile PayPal credits purchase.'
+        );
+    }
+});
+
+exports.createPayPalBusinessPlanOrder = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+    }
+
+    assertPayPalConfigured();
+    paypalApiBaseOverride = null;
+    const userId = context.auth.uid;
+    await assertCallerIsBusinessUser(userId);
+
+    const planId = String(data?.planId || 'paid').trim();
+    const clientMode = normalizePayPalMode(data?.clientMode);
+    const currency = resolveOrderCurrency(data?.currency);
+    const orderPayload = {
+        intent: 'CAPTURE',
+        purchase_units: [
+            {
+                reference_id: 'business_paid_monthly',
+                description: 'DineBuddies Paid Business — 1 month',
+                custom_id: buildPayPalBusinessPlanCustomId({ userId, planId }),
+                amount: {
+                    currency_code: currency,
+                    value: getBusinessPlanPrice(),
+                },
+            },
+        ],
+        application_context: {
+            shipping_preference: 'NO_SHIPPING',
+            user_action: 'PAY_NOW',
+            brand_name: 'DineBuddies',
+        },
+    };
+
+    const result = await paypalApiRequest('/v2/checkout/orders', {
+        method: 'POST',
+        body: orderPayload,
+        clientMode,
+    });
+
+    if (!result.ok || !result.data?.id) {
+        console.error('PayPal business plan order create error:', result.status, result.data, {
+            currency,
+        });
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            enhancePayPalCreateFailure(result.data, currency)
+        );
+    }
+
+    await savePayPalCheckoutOrder(result.data.id, {
+        userId,
+        kind: 'business_plan',
+        planId,
+        currency,
+        amount: getBusinessPlanPrice(),
+    });
+
+    return {
+        orderId: result.data.id,
+        status: result.data.status || 'CREATED',
+        planId,
+        amount: getBusinessPlanPrice(),
+        currency,
+    };
+});
+
+exports.capturePayPalBusinessPlanOrder = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+    }
+
+    assertPayPalConfigured();
+    paypalApiBaseOverride = null;
+    await assertCallerIsBusinessUser(context.auth.uid);
+
+    const orderId = String(data?.orderId || data?.orderID || '').trim();
+    if (!orderId) {
+        throw new functions.https.HttpsError('invalid-argument', 'orderId is required');
+    }
+    const clientMode = normalizePayPalMode(data?.clientMode);
+
+    let result = await paypalApiRequest(`/v2/checkout/orders/${orderId}/capture`, {
+        method: 'POST',
+        headers: {
+            'PayPal-Request-Id': `capture-business-${orderId}`,
+        },
+        body: {},
+        clientMode,
+    });
+
+    if (!result.ok && result.status === 422) {
+        const issue = result.data?.details?.[0]?.issue;
+        if (issue === 'ORDER_ALREADY_CAPTURED') {
+            result = await paypalApiRequest(`/v2/checkout/orders/${orderId}`, { clientMode });
+        }
+    }
+
+    if (!result.ok) {
+        console.error('PayPal business plan capture error:', result.status, result.data);
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            formatPayPalApiFailure(result.data, 'Could not capture PayPal order.')
+        );
+    }
+
+    const { capture, customId } = extractPayPalCapture(result.data);
+    const meta = parsePayPalCustomId(customId);
+
+    if (!meta.userId || meta.userId !== context.auth.uid) {
+        throw new functions.https.HttpsError('permission-denied', 'This PayPal order does not belong to you.');
+    }
+    if (meta.kind !== 'business_plan' || !meta.planId) {
+        throw new functions.https.HttpsError('failed-precondition', 'PayPal order metadata is invalid.');
+    }
+
+    const captureStatus = String(capture?.status || result.data?.status || '').toUpperCase();
+    if (captureStatus !== 'COMPLETED') {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            `PayPal payment is not completed yet (${captureStatus || 'unknown'}).`
+        );
+    }
+
+    await grantPayPalBusinessPlan({
+        orderId,
+        captureId: String(capture?.id || '').trim(),
+        userId: meta.userId,
+        planId: meta.planId,
+    });
+
+    return {
+        ok: true,
+        orderId,
+        captureId: String(capture?.id || '').trim() || null,
+        planId: meta.planId,
+        subscriptionTier: 'paid',
+    };
+});
+
+exports.getPayPalCommerceStatus = functions.https.onCall(async (data) => {
+    paypalApiBaseOverride = null;
+    const mode = paypalMode();
+    const clientMode = normalizePayPalMode(data?.clientMode);
+    const detectedEnvironment = await detectPayPalCredentialEnvironment();
+    let activeMode = mode;
+    let oauthOk = false;
+    let modeError = null;
+    try {
+        await getPayPalAccessToken(clientMode || mode);
+        activeMode = isPayPalSandbox() ? 'sandbox' : 'live';
+        oauthOk = true;
+    } catch (error) {
+        oauthOk = false;
+        modeError = error?.message || 'PayPal OAuth failed';
+    }
+    return {
+        mode,
+        clientMode: clientMode || null,
+        activeMode,
+        sandbox: activeMode === 'sandbox',
+        clientIdPresent: Boolean(paypalClientId()),
+        clientSecretPresent: Boolean(paypalClientSecret()),
+        currency: paypalCurrency(),
+        oauthOk,
+        modeError,
+        detectedCredentialEnvironment: detectedEnvironment,
+        modeMatchesCredentials: !detectedEnvironment || detectedEnvironment === (clientMode || mode),
+        businessPlanPrice: getBusinessPlanPrice(),
+        businessPlanCurrency: paypalCurrency(),
+    };
+});

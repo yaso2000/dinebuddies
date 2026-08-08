@@ -2,6 +2,9 @@
  * Updates Open Graph and Twitter Card meta tags dynamically for rich social sharing
  */
 import { getSafeAvatar } from './avatarUtils';
+import { resolvePrivateInvitationShareOgImage } from './privateInvitationShare';
+
+const DEFAULT_OG_FALLBACK = 'https://www.dinebuddies.com/icon-light-512.png';
 
 /**
  * Update meta tags for social media sharing
@@ -54,8 +57,6 @@ export const updateSocialMetaTags = (data) => {
     updateMetaTag('meta[property="twitter:title"]', title);
     updateMetaTag('meta[property="twitter:description"]', description);
     updateMetaTag('meta[property="twitter:image"]', image);
-
-    console.log('✅ Social meta tags updated:', { title, description, image, url });
 };
 
 /**
@@ -112,6 +113,106 @@ export const generateBusinessMetaTags = (business) => {
 
 /** @deprecated Use generateBusinessMetaTags */
 export const generatePartnerMetaTags = generateBusinessMetaTags;
+
+/**
+ * Open Graph data for a community / featured post page.
+ */
+export const generatePostMetaTags = (post) => {
+    if (!post) return {};
+    const content =
+        typeof post.content === 'string'
+            ? post.content
+            : post.caption || post.description || '';
+    const titleText =
+        (typeof post.content === 'object' && post.content?.title) ||
+        String(content).split('\n')[0]?.slice(0, 80) ||
+        'DineBuddies Post';
+    const description =
+        (typeof post.content === 'object' && (post.content.description || post.content.subtitle)) ||
+        String(content).slice(0, 200) ||
+        'See this post on DineBuddies';
+    const image =
+        post.mediaUrl ||
+        post.image ||
+        post.thumbnailUrl ||
+        (post.media && typeof post.media === 'object' ? post.media.imageUrl : null) ||
+        'https://www.dinebuddies.com/icon-light-512.png';
+    const absImage =
+        image.startsWith('http') || image.startsWith('data:')
+            ? image
+            : typeof window !== 'undefined'
+              ? `${window.location.origin}${image.startsWith('/') ? image : `/${image}`}`
+              : image;
+    const path = post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`;
+    const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
+    return {
+        title: `${titleText} - DineBuddies`,
+        description,
+        image: absImage,
+        url: shareUrl,
+        type: 'article',
+    };
+};
+
+/**
+ * Open Graph data for a private invitation share link (/invite/p/:token).
+ * @param {Record<string, unknown>} preview
+ * @param {string} shareUrl
+ */
+export const generatePrivateInvitationMetaTags = (preview, shareUrl) => {
+    if (!preview) return {};
+
+    const titleText = String(preview.title || '').trim() || 'Private Invitation';
+    const inviter = String(preview.inviterName || '').trim();
+    const location = String(preview.location || preview.venueName || '').trim();
+    const formattedDate = preview.date
+        ? new Date(preview.date).toLocaleDateString(undefined, {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+          })
+        : '';
+    const formattedTime = preview.time
+        ? String(preview.time).includes('T')
+            ? String(preview.time).split('T')[1].substring(0, 5)
+            : String(preview.time)
+        : '';
+    const whenLine = [formattedDate, formattedTime].filter(Boolean).join(' · ');
+
+    const descriptionParts = [];
+    if (inviter) descriptionParts.push(`${inviter} invited you`);
+    if (titleText) descriptionParts.push(titleText);
+    if (whenLine) descriptionParts.push(whenLine);
+    if (location) descriptionParts.push(location);
+    if (preview.description) {
+        descriptionParts.push(String(preview.description).trim().slice(0, 180));
+    }
+    descriptionParts.push('Open the link to view the invitation and respond on DineBuddies.');
+
+    let image = resolvePrivateInvitationShareOgImage(preview);
+    if (!image) {
+        image = preview.customImage || preview.videoThumbnail || preview.image || DEFAULT_OG_FALLBACK;
+        if (image && !String(image).startsWith('http')) {
+            image =
+                typeof window !== 'undefined'
+                    ? `${window.location.origin}${String(image).startsWith('/') ? image : `/${image}`}`
+                    : image;
+        }
+    }
+
+    const absUrl =
+        shareUrl ||
+        (typeof window !== 'undefined' ? window.location.href : 'https://www.dinebuddies.com/invite/p');
+
+    return {
+        title: `${titleText} · DineBuddies`,
+        description: descriptionParts.filter(Boolean).join('\n'),
+        image,
+        url: absUrl,
+        type: 'website',
+    };
+};
 
 /**
  * Reset meta tags to default

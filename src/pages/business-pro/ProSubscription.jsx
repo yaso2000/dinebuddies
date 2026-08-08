@@ -1,200 +1,371 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { FaCrown, FaBolt, FaCheck, FaExternalLinkAlt } from 'react-icons/fa';
-import { BASE_SUBSCRIPTION_PLANS } from '../../config/planDefaults';
+import { PayPalScriptProvider } from '@paypal/react-paypal-js';
+import app from '../../firebase/config';
+import { FaCheck, FaExternalLinkAlt } from 'react-icons/fa';
+import { BUSINESS_PAID_PLAN_DISPLAY, STRIPE_PUBLISHABLE_CONFIGURED } from '../../config/stripeCommerce';
+import {
+  PAYPAL_CLIENT_CONFIGURED,
+  PAYPAL_CLIENT_ID,
+  PAYPAL_CURRENCY,
+  PAYPAL_TEST_MODE,
+} from '../../config/paypalCommerce';
+import PayPalScriptStatus from '../../components/PayPalScriptGate';
+import PayPalBusinessPlanButton from '../../components/PayPalBusinessPlanButton';
+import {
+  BUSINESS_FREE_PLAN_FEATURE_KEYS,
+  BUSINESS_PAID_PLAN_FEATURE_KEYS,
+  normalizeBusinessTier } from
+'../../utils/businessSubscription';
 import { useToast } from '../../context/ToastContext';
-
-const PARTNER_PLANS = BASE_SUBSCRIPTION_PLANS.filter(p => p.type === 'business' && p.price > 0);
+import StripeTestModeBanner from '../../components/StripeTestModeBanner';
+import { AppText } from "../../components/base";
 
 const ProSubscription = () => {
-    const { userProfile } = useAuth();
-    const { showToast } = useToast();
-    const [loading, setLoading] = useState(null);
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { userProfile } = useAuth();
+  const { showToast } = useToast();
+  const [loading, setLoading] = useState(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState(() => {
+    if (STRIPE_PUBLISHABLE_CONFIGURED) return 'stripe';
+    if (PAYPAL_CLIENT_CONFIGURED) return 'paypal';
+    return 'stripe';
+  });
+  const payPalScriptOptions = useMemo(
+    () => ({
+      clientId: PAYPAL_CLIENT_ID,
+      currency: PAYPAL_CURRENCY,
+      intent: 'capture',
+      components: 'buttons',
+      disableFunding: 'card,credit,paylater',
+    }),
+    []
+  );
+  const upgradePaymentMethods = useMemo(() => {
+    const methods = [];
+    if (STRIPE_PUBLISHABLE_CONFIGURED) methods.push('stripe');
+    if (PAYPAL_CLIENT_CONFIGURED) methods.push('paypal');
+    return methods;
+  }, []);
 
-    const tier = userProfile?.subscriptionTier || 'free';
-    const isElite = tier === 'elite';
-    const isProfessional = tier === 'professional';
+  const normalized = normalizeBusinessTier(userProfile?.subscriptionTier);
+  const isPaid = normalized === 'paid';
+  const isFree = normalized === 'free';
 
-    const handleUpgrade = async (plan) => {
-        if (!plan.stripePriceId) {
-            showToast('Please contact support to upgrade your plan.', 'warning');
-            return;
-        }
-        setLoading(plan.id);
-        try {
-            const functions = getFunctions();
-            const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
-            const result = await createCheckoutSession({
-                priceId: plan.stripePriceId,
-                planId: plan.id,
-                planName: plan.name,
-                successUrl: `${window.location.origin}/business-pro?section=subscription&purchase=success`,
-                cancelUrl: `${window.location.origin}/business-pro?section=subscription`
-            });
-            window.location.href = result.data.url;
-        } catch (e) {
-            console.error('Checkout error:', e);
-            showToast('Could not start checkout: ' + e.message, 'error');
-        } finally {
-            setLoading(null);
-        }
-    };
+  const billingReturnUrl = `${window.location.origin}${location.pathname || '/settings/subscription'}`;
 
-    const handleManageBilling = () => {
-        window.open('https://billing.stripe.com/p/login/test_...', '_blank');
-    };
+  const handleUpgrade = async () => {
+    setLoading('paid');
+    try {
+      const functions = getFunctions(app, 'us-central1');
+      const createBusinessCheckout = httpsCallable(functions, 'createBusinessSubscriptionCheckout');
+      const result = await createBusinessCheckout({
+        planName: t('biz_plan_paid_name', BUSINESS_PAID_PLAN_DISPLAY.name),
+        successUrl: `${window.location.origin}/payment-success`,
+        cancelUrl: billingReturnUrl
+      });
+      if (result.data?.url) window.location.href = result.data.url;
+    } catch (e) {
+      console.error('Checkout error:', e);
+      showToast(
+        t('biz_plan_checkout_error', 'Could not start checkout: ') + (e.message || String(e)),
+        'error'
+      );
+    } finally {
+      setLoading(null);
+    }
+  };
 
-    const currentPlanLabel = isElite ? '👑 Elite Business' : isProfessional ? '⚡ Professional Business' : '🎁 Free Business';
+  const handleManageBilling = async () => {
+    setPortalLoading(true);
+    try {
+      const functions = getFunctions(app, 'us-central1');
+      const createPortalSession = httpsCallable(functions, 'createPortalSession');
+      const result = await createPortalSession({ returnUrl: billingReturnUrl });
+      if (result.data?.url) window.location.href = result.data.url;else
+      showToast(t('biz_plan_portal_no_url', 'Could not open billing portal.'), 'error');
+    } catch (e) {
+      console.error('Portal error:', e);
+      showToast(t('biz_plan_portal_error', 'Could not open billing: ') + (e.message || String(e)), 'error');
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  const paidPriceLabel = `${BUSINESS_PAID_PLAN_DISPLAY.priceLabel}${BUSINESS_PAID_PLAN_DISPLAY.periodLabel}`;
+
+  const bannerBorder = isPaid ? 'color-mix(in srgb, var(--primary) 45%, transparent)' : 'var(--border-color)';
+  const bannerBg = isPaid ?
+  'linear-gradient(135deg, color-mix(in srgb, var(--primary) 16%, transparent), color-mix(in srgb, var(--primary) 8%, transparent))' :
+  'var(--hover-overlay)';
+
+  const planCard = (key, { titleKey, titleDefault, priceLabel, features, tierKey }) => {
+    const current = tierKey === 'free' ? isFree : isPaid;
+    const isPaidCard = tierKey === 'paid';
+    const showUpgradeOnPaidCard = isFree && isPaidCard;
 
     return (
-        <div>
-            {/* Current Plan Banner - uses theme tokens for light/dark */}
-            <div style={{
-                background: isElite
-                    ? 'linear-gradient(135deg, color-mix(in srgb, var(--stat-reviews) 18%, transparent), color-mix(in srgb, var(--stat-reviews) 10%, transparent))'
-                    : isProfessional
-                        ? 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 18%, transparent), color-mix(in srgb, var(--primary) 10%, transparent))'
-                        : 'var(--hover-overlay)',
-                border: `1px solid ${isElite ? 'color-mix(in srgb, var(--stat-reviews) 40%, transparent)' : isProfessional ? 'color-mix(in srgb, var(--primary) 35%, transparent)' : 'var(--border-color)'}`,
-                borderRadius: 16,
-                padding: '24px 28px',
-                marginBottom: 28,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: 16
+      <div
+        key={key}
+        style={{
+          background: current ? 'color-mix(in srgb, var(--primary) 10%, var(--bg-card))' : 'var(--bg-card)',
+          border: `2px solid ${current ? 'var(--primary)' : 'var(--border-color)'}`,
+          borderRadius: 16,
+          padding: '24px',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+
+                <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: 4 }}>
+                        {t(titleKey, titleDefault)}
+                    </div>
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
+                    <AppText as="span" style={{ fontSize: '2.2rem', fontWeight: 900, color: current ? 'var(--primary)' : 'var(--text-main)' }}>
+                        {priceLabel}
+                    </AppText>
+                    {isPaidCard &&
+          <AppText as="span" style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginInlineStart: 6 }}>
+                            / {t('month', 'month')}
+                        </AppText>
+          }
+                </div>
+
+                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px 0', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {features.map(([fk, def]) =>
+          <li key={fk} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                            <FaCheck style={{ color: 'var(--color-success)', flexShrink: 0, marginTop: 2 }} />
+                            {t(fk, def)}
+                        </li>
+          )}
+                </ul>
+
+                {current ?
+        <button
+          type="button"
+          className="ui-btn"
+          disabled
+          style={{
+            padding: '12px',
+            fontSize: '0.875rem',
+            cursor: 'default',
+            background: isPaidCard ? 'linear-gradient(135deg, var(--primary), #ea580c)' : 'var(--bg-muted, #1e293b)',
+            color: isPaidCard ? '#fff' : 'var(--text-muted)',
+            border: 'none',
+            fontWeight: 800,
+            opacity: isPaidCard ? 1 : 0.95
+          }}>
+
+                        {t('biz_plan_btn_current', 'Current Plan')}
+                    </button> :
+        showUpgradeOnPaidCard ?
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {upgradePaymentMethods.length > 1 ?
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              padding: 4,
+              borderRadius: 12,
+              background: 'var(--hover-overlay)',
             }}>
+            {upgradePaymentMethods.includes('stripe') ?
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('stripe')}
+              style={{
+                flex: 1,
+                border: 'none',
+                borderRadius: 10,
+                padding: '8px 10px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                background:
+                  paymentMethod === 'stripe' ?
+                  'linear-gradient(135deg, var(--primary), var(--primary-hover))' :
+                  'transparent',
+                color: paymentMethod === 'stripe' ? '#fff' : 'var(--text-main)',
+              }}>
+              {t('payment_method_card', 'Card')}
+            </button> :
+            null}
+            {upgradePaymentMethods.includes('paypal') ?
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('paypal')}
+              style={{
+                flex: 1,
+                border: 'none',
+                borderRadius: 10,
+                padding: '8px 10px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                background:
+                  paymentMethod === 'paypal' ?
+                  'linear-gradient(135deg, #0070ba, #003087)' :
+                  'transparent',
+                color: paymentMethod === 'paypal' ? '#fff' : 'var(--text-main)',
+              }}>
+              PayPal
+            </button> :
+            null}
+          </div> :
+          null}
+          {paymentMethod === 'paypal' && PAYPAL_CLIENT_CONFIGURED ?
+          <PayPalScriptProvider options={payPalScriptOptions}>
+            <PayPalScriptStatus />
+            <PayPalBusinessPlanButton
+              disabled={loading === 'paid'}
+              onSuccess={() => window.location.reload()}
+            />
+          </PayPalScriptProvider> :
+          <button
+            type="button"
+            onClick={handleUpgrade}
+            disabled={loading === 'paid'}
+            className="ui-btn ui-btn--primary"
+            style={{
+              padding: '12px',
+              fontSize: '0.875rem',
+              fontWeight: 800,
+              opacity: loading === 'paid' ? 0.65 : 1,
+            }}>
+            {loading === 'paid' ? t('loading', 'Loading...') : `${t('biz_plan_upgrade_cta', 'Upgrade to Paid')} →`}
+          </button>
+          }
+          {paymentMethod === 'paypal' && PAYPAL_TEST_MODE ?
+          <AppText as="p" style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            {t('biz_plan_paypal_monthly_note', 'PayPal pays for one month. Renew manually each month or use Card for auto-billing.')}
+          </AppText> :
+          null}
+        </div> :
+
+        <button
+          type="button"
+          className="ui-btn ui-btn--secondary"
+          disabled
+          style={{ padding: '12px', fontSize: '0.875rem', cursor: 'default', opacity: 0.85 }}>
+
+                        {t('biz_plan_btn_not_current', 'Not current')}
+                    </button>
+        }
+            </div>);
+
+  };
+
+  return (
+    <div>
+            <StripeTestModeBanner />
+            <div
+        style={{
+          background: bannerBg,
+          border: `1px solid ${bannerBorder}`,
+          borderRadius: 16,
+          padding: '24px 28px',
+          marginBottom: 28,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 16
+        }}>
+
                 <div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 6, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                        Current Plan
+                        {t('biz_plan_current_label', 'Current Plan')}
                     </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 800, color: isElite ? 'var(--stat-reviews)' : isProfessional ? 'var(--primary)' : 'var(--text-muted)' }}>
-                        {currentPlanLabel}
+                    <div style={{ fontSize: '1.5rem', fontWeight: 800, color: isPaid ? 'var(--primary)' : 'var(--text-muted)' }}>
+                        {isPaid ? t('biz_plan_paid_name', 'Paid Business') : t('biz_plan_free_name', 'Free Business')}
                     </div>
-                    {(isElite || isProfessional) && (
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 6 }}>
-                            {isElite
-                                ? '1 permanent offer slot • Unlimited display time • Priority placement'
-                                : '1 offer slot × 50h/week • Buy extra hours or slots as needed'}
-                        </div>
-                    )}
+                    <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: 8, maxWidth: 420, lineHeight: 1.45 }}>
+                        {isPaid ?
+            <>
+                                {paidPriceLabel}
+                                {t(
+                'biz_plan_paid_banner_suffix',
+                '/month — full manual feature set. Buy Dine Credits for AI.'
+              )}
+                            </> :
+
+            t(
+              'biz_plan_free_banner_desc',
+              'Core profile and community. Motion limits apply; AI uses Dine Credits.'
+            )
+            }
+                    </div>
                 </div>
-                {(isElite || isProfessional) && (
-                    <button
-                        type="button"
-                        className="ui-btn ui-btn--secondary"
-                        onClick={handleManageBilling}
-                        style={{ padding: '10px 18px', gap: 8, fontSize: '0.875rem' }}
-                    >
-                        <FaExternalLinkAlt size={12} /> Manage Billing
+                {isPaid &&
+        <button
+          type="button"
+          className="ui-btn ui-btn--secondary"
+          onClick={handleManageBilling}
+          disabled={portalLoading}
+          style={{ padding: '10px 18px', gap: 8, fontSize: '0.875rem' }}>
+
+                        <FaExternalLinkAlt size={12} /> {portalLoading ? t('loading', 'Loading...') : t('biz_plan_manage_billing', 'Manage billing')}
                     </button>
-                )}
+        }
             </div>
 
-            {/* Plans Comparison - theme tokens for text/surfaces */}
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 20, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                {isElite ? 'Plan Overview' : 'Available Plans'}
-            </h3>
+            <AppText as="h3"
+      style={{
+        fontSize: '0.85rem',
+        fontWeight: 700,
+        color: 'var(--text-muted)',
+        marginBottom: 16,
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase'
+      }}>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
-                {PARTNER_PLANS.map(plan => {
-                    const isCurrent = plan.tier === tier;
-                    const isRecommended = plan.recommended;
+                {t('biz_plan_compare_heading', 'Plans')}
+            </AppText>
 
-                    return (
-                        <div key={plan.id} style={{
-                            background: isCurrent ? 'color-mix(in srgb, var(--stat-reviews) 12%, var(--bg-card))' : 'var(--bg-card)',
-                            border: `1px solid ${isCurrent ? 'color-mix(in srgb, var(--stat-reviews) 45%, transparent)' : isRecommended ? 'color-mix(in srgb, var(--primary) 35%, transparent)' : 'var(--border-color)'}`,
-                            borderRadius: 16,
-                            padding: '24px',
-                            position: 'relative',
-                            display: 'flex',
-                            flexDirection: 'column'
-                        }}>
-                            {isCurrent && (
-                                <div style={{
-                                    position: 'absolute', top: -10, right: 16,
-                                    background: 'linear-gradient(135deg, var(--stat-reviews), var(--primary-hover))',
-                                    color: 'var(--text-white)', padding: '3px 12px', borderRadius: 8,
-                                    fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.05em'
-                                }}>
-                                    CURRENT
-                                </div>
-                            )}
-                            {isRecommended && !isCurrent && (
-                                <div style={{
-                                    position: 'absolute', top: -10, right: 16,
-                                    background: 'linear-gradient(135deg, var(--primary), var(--primary-hover))',
-                                    color: 'var(--text-white)', padding: '3px 12px', borderRadius: 8,
-                                    fontSize: '0.7rem', fontWeight: 800
-                                }}>
-                                    RECOMMENDED
-                                </div>
-                            )}
-
-                            {/* Plan header */}
-                            <div style={{ marginBottom: 16 }}>
-                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>
-                                    {plan.name}
-                                </div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                    {plan.description}
-                                </div>
-                            </div>
-
-                            {/* Price */}
-                            <div style={{ marginBottom: 20 }}>
-                                <span style={{ fontSize: '2.2rem', fontWeight: 900, color: isCurrent ? 'var(--stat-reviews)' : 'var(--text-main)' }}>
-                                    ${Math.round(plan.price * 1.53)} AUD
-                                </span>
-                                <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginLeft: 6 }}>/ month</span>
-                                {plan.discount > 0 && (
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--color-success)', marginTop: 4 }}>
-                                        ✨ First month FREE
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Features */}
-                            <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px 0', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                {(plan.features || []).map((f, i) => (
-                                    <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                                        <FaCheck style={{ color: 'var(--color-success)', flexShrink: 0, marginTop: 2 }} />
-                                        {f}
-                                    </li>
-                                ))}
-                            </ul>
-
-                            {/* CTA */}
-                            {isCurrent ? (
-                                <button type="button" className="ui-btn ui-btn--secondary" disabled style={{ padding: '12px', fontSize: '0.875rem', cursor: 'default', opacity: 0.8 }}>
-                                    Current Plan
-                                </button>
-                            ) : (
-                                <button
-                                    type="button"
-                                    onClick={() => handleUpgrade(plan)}
-                                    disabled={loading === plan.id}
-                                    className="ui-btn ui-btn--primary"
-                                    style={{
-                                        padding: '12px', borderRadius: 10, fontSize: '0.875rem',
-                                        opacity: loading === plan.id ? 0.6 : 1,
-                                        background: isRecommended ? 'linear-gradient(135deg, var(--stat-reviews), var(--primary-hover))' : undefined,
-                                        color: isRecommended ? 'var(--text-white)' : undefined
-                                    }}
-                                >
-                                    {loading === plan.id ? 'Loading...' : plan.tier === 'elite' ? 'Upgrade to Elite →' : 'Start with Professional →'}
-                                </button>
-                            )}
-                        </div>
-                    );
-                })}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20 }}>
+                {planCard('free', {
+          titleKey: 'biz_plan_free_name',
+          titleDefault: 'Free Business',
+          priceLabel: '$0',
+          features: BUSINESS_FREE_PLAN_FEATURE_KEYS,
+          tierKey: 'free'
+        })}
+                {planCard('paid', {
+          titleKey: 'biz_plan_paid_name',
+          titleDefault: 'Paid Business',
+          priceLabel: paidPriceLabel,
+          features: BUSINESS_PAID_PLAN_FEATURE_KEYS,
+          tierKey: 'paid'
+        })}
             </div>
-        </div>
-    );
+
+            <AppText as="p" style={{ marginTop: 24, fontSize: '0.9rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                {t('biz_plan_credits_lead', 'Need AI?')}{' '}
+                <button
+          type="button"
+          onClick={() => navigate('/settings/credits')}
+          style={{
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            color: 'var(--primary)',
+            fontWeight: 800,
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            font: 'inherit'
+          }}>
+
+                    {t('biz_plan_credits_link', 'Open Dine Credits wallet')}
+                </button>
+            </AppText>
+        </div>);
+
 };
 
 export default ProSubscription;

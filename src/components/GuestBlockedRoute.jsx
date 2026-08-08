@@ -1,24 +1,39 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { buildLoginPath } from '../utils/goToLogin';
+import { sanitizeNextPath } from '../utils/safeInternalPath';
+import { isAuthBootstrapPending } from '../utils/authBootstrap';
+import AppShellLoading from './AppShellLoading';
+
+function hasPendingBusinessSessionHint() {
+    try {
+        return Boolean(sessionStorage.getItem('dineb_biz_uid'));
+    } catch {
+        return false;
+    }
+}
 
 /**
- * Blocks guest users from accessing protected routes.
- * Uses the unified `isGuest` flag from AuthContext — no dual checks needed.
+ * Blocks guest users from accessing protected routes — redirects to /login with ?next=.
  */
 const GuestBlockedRoute = ({ children }) => {
-    const { currentUser, isGuest, loading } = useAuth();
+    const { currentUser, isGuest, loading, profileServerSynced } = useAuth();
+    const location = useLocation();
 
-    if (loading) {
-        return (
-            <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-body)' }}>
-                <div className="spinner" />
-            </div>
-        );
+    if (
+        isAuthBootstrapPending({ loading, currentUser, isGuest, profileServerSynced }) ||
+        (!currentUser && hasPendingBusinessSessionHint())
+    ) {
+        // Same shell as AuthRoutingGate — avoid a second distinct spinner flash.
+        return <AppShellLoading variant="session" />;
     }
 
     if (!currentUser || isGuest) {
-        return <Navigate to="/login" replace />;
+        const returnPath = sanitizeNextPath(
+            `${location.pathname || ''}${location.search || ''}`
+        );
+        return <Navigate to={buildLoginPath({ returnPath })} replace />;
     }
 
     return children;

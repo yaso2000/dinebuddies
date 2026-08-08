@@ -1,499 +1,944 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link, useLocation, Outlet } from 'react-router-dom';
-import { FaHome, FaPlusCircle, FaBell, FaStore, FaUsers, FaComments, FaCrown, FaCog, FaEnvelope, FaUser, FaClock, FaFire } from 'react-icons/fa';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import { useNavigate, Link, useLocation, Outlet, Navigate } from 'react-router-dom';
+import { useDesktopShell } from '../hooks/useDesktopShell';
+import {
+  FaHome,
+  FaPlusCircle,
+  FaBell,
+  FaStore,
+  FaUsers,
+  FaComments,
+  FaCrown,
+  FaCog,
+  FaEnvelope,
+  FaUser,
+  FaSignInAlt,
+  FaTimes,
+  FaImages,
+  FaPenAlt,
+  FaPhotoVideo,
+  FaChevronRight,
+  FaThLarge,
+  FaMicrophone,
+} from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
-import { useInvitations } from '../context/InvitationContext';
 import { useChat } from '../context/ChatContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
+import { useJoinedStages } from '../hooks/useJoinedStages';
 import { useTheme } from '../context/ThemeContext';
-import ProfileCompletionModal from './ProfileCompletionModal';
+import UnpublishedBusinessReminder from './UnpublishedBusinessReminder';
+import EmailVerificationBusinessBanner from './EmailVerificationBusinessBanner';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { collection, query, orderBy, limit, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import UserAvatar from './UserAvatar';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import OffersBanner from './OffersBanner';
+import AppRouteLoading from './AppRouteLoading';
+import AppShellLoading from './AppShellLoading';
+import DesktopRightSidebar from './DesktopRightSidebar';
+import PushNotificationPrompt from './PushNotificationPrompt';
+import PushSessionManager from './PushSessionManager';
+import InviteLandingGate from './Invitations/InviteLandingGate';
+import InviteInboxLiveGate from './Invitations/InviteInboxLiveGate';
+import { getAppRouteShell, APP_HOME_PATH } from '../utils/appRouteShell';
+import useStaleInvitationNotificationCleanup from '../hooks/useStaleInvitationNotificationCleanup';
+import { isBusinessUser } from '../utils/accountRole';
+import { needsEmailPasswordVerification, needsConsumerEmailVerification } from '../utils/emailVerification';
+import { buildLoginPath, goToLogin } from '../utils/goToLogin';
+import { isAdminIdentity } from '../utils/adminAccess';
+import { attachIosAppHeaderViewportOffset } from '../utils/iosAppHeaderVisualViewport';
+import { attachHideBottomNavOnKeyboard } from '../utils/hideBottomNavOnKeyboard';
+import { isIOS, isStandalonePwa, markIosPwaLaunch } from '../services/notificationService';
+import { isAuthRoutePath } from '../utils/authRoutePaths';
+import { usePresence } from '../hooks/usePresence';
+import { AppText } from "./base";
+import InviteCreateTypePicker from './InviteCreateTypePicker';
+import { useMyLiveStage } from '../hooks/useMyLiveStage';
+
+function DesktopNavGroup({ title, variant = 'default', children }) {
+  const items = React.Children.toArray(children).filter(Boolean);
+  if (items.length === 0) return null;
+
+  return (
+    <section className={`ds-nav-group ds-nav-group--${variant}`} aria-label={title || undefined}>
+      {title ? <AppText as="h2" className="ds-nav-group__title">{title}</AppText> : null}
+      <div className="ds-nav-group__items">{items}</div>
+    </section>
+  );
+}
 
 const Layout = ({ children }) => {
-    const [imgLoaded, setImgLoaded] = useState(false);
-    const location = useLocation();
-    const navigate = useNavigate();
-    const { t, i18n } = useTranslation();
-    const invContext = useInvitations();
-    const { invitations = [], getFollowingInvitations = () => [], currentUser = null } = invContext || {};
-    const { unreadCount: chatUnreadCount } = useChat();
-    const { unreadCount } = useNotifications();
-    const { userProfile, isGuest } = useAuth();
-    const { themeMode } = useTheme();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
+  const { currentUser, userProfile, isGuest, isBusiness, loading } = useAuth();
+  usePresence();
+  const { unreadCount: chatUnreadCount, conversations = [] } = useChat();
+  const { unreadCount, unreadBellCount = 0, unreadMessageCount = 0, markMessageNotificationsAsRead } = useNotifications();
+  useStaleInvitationNotificationCleanup();
 
-    // Right sidebar data
-    const [trendingPartners, setTrendingPartners] = useState([]);
-    const [recentCommunities, setRecentCommunities] = useState([]);
-    const [joinedCommunityData, setJoinedCommunityData] = useState([]);
+  // Total unread messages
+  const totalChatUnread = chatUnreadCount + unreadMessageCount;
+  const { activeCount: stageActiveCount, totalUnread: stageUnreadCount } = useJoinedStages();
+  const { themeMode } = useTheme();
+  const isDesktopShell = useDesktopShell();
 
-    const isActive = (path) => location.pathname === path;
-    const isBusinessAccount = userProfile?.role === 'business';
-    // Business plan: only users/{userId}.subscriptionTier; valid tiers: free, professional, elite (no legacy aliases).
-    const businessTier = (userProfile?.subscriptionTier || 'free').toLowerCase();
-    const canAccessDesktopDashboard = isBusinessAccount && (businessTier === 'elite');
+  const [businessCreateOpen, setBusinessCreateOpen] = useState(false);
+  const [inviteCreateOpen, setInviteCreateOpen] = useState(false);
+  const {
+    stageId: businessLiveStageId,
+    hasLiveStage: businessHasLiveStage,
+    loading: businessLiveStageLoading,
+  } = useMyLiveStage();
 
-    // Route type detection
-    const isChatRoute = location.pathname.startsWith('/chat/') ||
-        location.pathname === '/messages' ||
-        location.pathname.startsWith('/messages') ||
-        (location.pathname.startsWith('/invitation/') && location.pathname.endsWith('/chat'));
-    const isCommunityRoute = location.pathname.startsWith('/community/');
-    const isStoryRoute = location.pathname === '/create-story';
-    const isChatScreen = isChatRoute || isCommunityRoute; // mobile: hide bottom nav
+  const viewerUid = currentUser?.uid || currentUser?.id;
+  const businessNavHintEarly = useMemo(() => {
+    try {
+      return Boolean(viewerUid && sessionStorage.getItem('dineb_biz_uid') === viewerUid);
+    } catch {
+      return false;
+    }
+  }, [viewerUid]);
+  const isBusinessAccountEarly = isBusiness || businessNavHintEarly;
 
-    // Reset avatar on change
-    useEffect(() => {
-        setImgLoaded(false);
-    }, [userProfile?.photoURL, userProfile?.photo_url, userProfile?.avatar]);
+  const openInviteCreate = () => {
+    setInviteCreateOpen(true);
+  };
 
+  const closeInviteCreate = () => {
+    setInviteCreateOpen(false);
+  };
 
-    // Fetch trending partners for right sidebar
-    useEffect(() => {
+  useEffect(() => {
+    if (!businessCreateOpen && !inviteCreateOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setBusinessCreateOpen(false);
+        setInviteCreateOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [businessCreateOpen, inviteCreateOpen]);
+
+  // Mobile: hide bottom tab bar while any field is focused / keyboard is open (feed composer, comments, forms).
+  useEffect(() => {
+    return attachHideBottomNavOnKeyboard();
+  }, []);
+
+  useEffect(() => {
+    if (isStandalonePwa()) {
+      markIosPwaLaunch();
+      return;
+    }
+    try {
+      if (!window.matchMedia('(display-mode: browser)').matches) {
+        markIosPwaLaunch();
+      }
+    } catch {
+
+      /* ignore */}
+  }, []);
+
+  // iOS: keep fixed app header aligned with the visual viewport when the keyboard opens (feed, comments, etc.)
+  useEffect(() => {
+    const path = location.pathname;
+    const isChatLike =
+    path.startsWith('/chat/') ||
+    path === '/messages' ||
+    path.startsWith('/messages') ||
+    path.startsWith('/invitation/') && path.endsWith('/chat') ||
+    path.startsWith('/community/') ||
+    path.startsWith('/stage/');
+    const mq = typeof window !== 'undefined' ? window.matchMedia('(max-width: 1023px)') : null;
+
+    let detach = () => {};
+    const attach = () => {
+      detach();
+      detach = () => {};
+      if (isChatLike || !mq?.matches) return;
+      detach = attachIosAppHeaderViewportOffset();
+    };
+
+    attach();
+    const onMq = () => attach();
+    mq?.addEventListener('change', onMq);
+    return () => {
+      mq?.removeEventListener('change', onMq);
+      detach();
+    };
+  }, [location.pathname]);
+
+  const [joinedCommunityData, setJoinedCommunityData] = useState([]);
+
+  // Auto-mark chat notifications as read when visiting chat pages or the messages inbox panel.
+  useEffect(() => {
+    if (!location || !markMessageNotificationsAsRead) return;
+
+    const path = location.pathname;
+    if (path === '/messages') {
+      const panel = new URLSearchParams(location.search).get('panel');
+      if (panel === 'notifications') return undefined;
+      const timer = window.setTimeout(() => markMessageNotificationsAsRead('/messages'), 400);
+      return () => window.clearTimeout(timer);
+    }
+    if (
+      path.startsWith('/chat/') ||
+      path.startsWith('/community/') ||
+      path.startsWith('/stage/') ||
+      path.startsWith('/invitation/')
+    ) {
+      const timer = window.setTimeout(() => markMessageNotificationsAsRead(path), 500);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [location?.pathname, markMessageNotificationsAsRead]);
+
+  // Fetch communities the current user has JOINED (from userProfile.joinedCommunities)
+  useEffect(() => {
+    const ids = userProfile?.joinedCommunities;
+    if (!ids || ids.length === 0) {setJoinedCommunityData([]);return;}
+    let cancelled = false;
+    Promise.all(
+      ids.map(async (partnerId) => {
         try {
-            const q = query(collection(db, 'restaurants'), orderBy('rating', 'desc'), limit(4));
-            const unsub = onSnapshot(q, (snap) => {
-                setTrendingPartners(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-            }, () => { });
-            return () => unsub();
-        } catch { return () => { }; }
-    }, []);
+          const snap = await getDoc(doc(db, 'users', partnerId));
+          if (!snap.exists()) return null;
+          const d = snap.data();
+          if (!isBusinessUser(d)) return null;
+          const bi = d.businessInfo || {};
+          return {
+            id: partnerId,
+            name: bi.businessName || d.display_name || d.name || t('layout_community_fallback', 'Community'),
+            logo: d.photo_url || d.photoURL || d.avatar || null,
+            memberCount: d.communityMembers?.length || 0
+          };
+        } catch {return null;}
+      })
+    ).then((results) => {
+      if (!cancelled) setJoinedCommunityData(results.filter(Boolean));
+    });
+    return () => {cancelled = true;};
+  }, [userProfile?.joinedCommunities, userProfile?.id]);
 
-    // Fetch communities the current user has JOINED (from userProfile.joinedCommunities)
-    useEffect(() => {
-        const ids = userProfile?.joinedCommunities;
-        if (!ids || ids.length === 0) { setJoinedCommunityData([]); return; }
-        let cancelled = false;
-        Promise.all(
-            ids.map(async (partnerId) => {
-                try {
-                    const snap = await getDoc(doc(db, 'users', partnerId));
-                    if (!snap.exists()) return null;
-                    const d = snap.data();
-                    if (d.role !== 'business') return null;
-                    const bi = d.businessInfo || {};
-                    return {
-                        id: partnerId,
-                        name: bi.businessName || d.display_name || d.name || 'Community',
-                        logo: d.photo_url || d.photoURL || d.avatar || null,
-                        memberCount: d.communityMembers?.length || 0,
-                    };
-                } catch { return null; }
-            })
-        ).then(results => {
-            if (!cancelled) setJoinedCommunityData(results.filter(Boolean));
-        });
-        return () => { cancelled = true; };
-    }, [userProfile?.joinedCommunities, userProfile?.id]);
+  // 1. Wait for auth to settle before running guards (must be after all hooks — see React #310).
+  // Never return null here: <Outlet /> would not mount, so GuestBlockedRoute never runs and users
+  // see a blank screen until refresh (protected routes + guests redirecting to /login).
+  //
+  // IMPORTANT: Do not unmount <Outlet /> on /admin while `loading` flips true (Firestore/auth churn).
+  // That tore down AdminRoute/AdminLayout and felt like "desktop↔mobile" or home↔admin flicker.
+  const isAdminPath = location.pathname.startsWith('/admin');
+  const adminBypassConsumerGate = isAdminIdentity(currentUser, userProfile);
+  const isCreateInvitationPath =
+  location.pathname === '/create-private' ||
+  location.pathname === '/create-social' ||
+  location.pathname === '/create' ||
+  location.pathname.startsWith('/create/');
+  const isPrivateInvitationDeepLink =
+  location.pathname.startsWith('/invitation/private/') ||
+  location.pathname.startsWith('/invite/p/');
+  const isCommunityChatPath = location.pathname.startsWith('/community/');
+  const isStageChatPath = location.pathname.startsWith('/stage/');
+  const isFirstEntryHomePath =
+    location.pathname === '/posts-feed' ||
+    location.pathname === '/business-dashboard' ||
+    location.pathname.startsWith('/business/');
+  const keepOutletMountedWhileLoading =
+    isAuthRoutePath(location.pathname) ||
+    ((isCommunityChatPath || isStageChatPath) && Boolean(currentUser?.uid)) ||
+    (isFirstEntryHomePath && Boolean(currentUser?.uid)) ||
+    ((isAdminPath || isCreateInvitationPath || isPrivateInvitationDeepLink) &&
+      Boolean(currentUser?.uid));
 
-    const changeLanguage = (lang) => i18n.changeLanguage(lang);
+  // Do not tear down the first home page on auth/profile loading flips.
+  if (loading && !keepOutletMountedWhileLoading) {
+    return <AppShellLoading variant="session" />;
+  }
 
-    // Latest invitations for right sidebar
-    const latestInvitations = invitations?.slice(0, 3) || [];
+  // 2. Email verification — email/password accounts (consumer or business) until verified
+  // For business accounts, we allow them to continue but show the EmailVerificationBusinessBanner instead of force redirect.
+  const isAdminAccount = isAdminIdentity(currentUser, userProfile);
+  const privateInvitationPath =
+  location.pathname.startsWith('/invitation/private/') ||
+  location.pathname.startsWith('/invite/p/') ||
+  location.pathname === '/create-private' ||
+  location.pathname === '/create-social' ||
+  location.pathname === '/create' ||
+  location.pathname.startsWith('/create/');
+  if (
+  !isAdminAccount &&
+  !isGuest &&
+  currentUser &&
+  userProfile &&
+  needsConsumerEmailVerification(currentUser, userProfile) &&
+  !privateInvitationPath)
+  {
+    return <Navigate to="/verify-email" replace />;
+  }
 
-    // ── Contextual Chat Sidebar (conversations list for /chat/ & /messages) ──
-    const { conversations } = useChat();
-    const ChatSidebar = () => {
-        const { t: tl } = useTranslation();
-        const seenUids = new Set();
-        const filteredConvos = (conversations || [])
-            .filter(c => c.otherUser)
-            .filter(c => {
-                if (seenUids.has(c.otherUser.uid)) return false;
-                seenUids.add(c.otherUser.uid);
-                return true;
-            });
-        return (
-            <aside className="ds-left-sidebar">
+  const isActive = (path) => location.pathname === path;
+  const businessNavHint = (() => {
+    try {
+      return Boolean(currentUser?.uid && sessionStorage.getItem('dineb_biz_uid') === currentUser.uid);
+    } catch {
+      return false;
+    }
+  })();
+  const isBusinessAccount = isBusiness || businessNavHint;
+
+  // Social feed "Home" — same for all logged-in users; business dashboard has its own nav row.
+  const feedHomePath = APP_HOME_PATH;
+  const isFeedHomeActive = isActive('/posts-feed') || isActive('/');
+
+  const routeShell = getAppRouteShell(location.pathname, location.search, { isDesktopShell });
+  const {
+    isMessagesHub,
+    isMessagesIndex,
+    isCommunityRoute,
+    isCommunityFullscreen,
+    showConversationSidebar,
+    isNotificationsRoute,
+    hideMobileAppHeader,
+    hideBottomNav,
+    useChatMainLayout,
+  } = routeShell;
+  const isDashboardRoute = location.pathname.startsWith('/my-community');
+  const isStoryRoute = location.pathname === '/create-story';
+  const isAiDesignRoute = location.pathname === '/ai-design-studio';
+  const isAiTextRoute = location.pathname === '/ai-text-studio';
+  const isStudioRoute =
+  location.pathname === '/create-post' || location.pathname === '/create-featured-post';
+  const isDirectoryNavActive =
+  location.pathname === '/search' ||
+  location.pathname === '/search/list' ||
+  location.pathname.startsWith('/search/');
+  const isInvitationsNavActive =
+  location.pathname === '/invitations' ||
+  location.pathname === '/invitations/' ||
+  location.pathname.startsWith('/invitations/');
+  const isRestaurantsNavActive =
+  location.pathname === '/restaurants' ||
+  location.pathname === '/restaurants/' ||
+  location.pathname.startsWith('/restaurants/');
+  const isSearchListRoute =
+  location.pathname === '/search/list' || location.pathname.startsWith('/search/list/');
+  const isConnectMagneticRoute =
+  location.pathname === '/search' ||
+  location.pathname === '/search/' ||
+  location.pathname === '/invitations' ||
+  location.pathname === '/invitations/' ||
+  location.pathname === '/restaurants' ||
+  location.pathname === '/restaurants/';
+  const isInboxMessagesActive = isMessagesHub && !isNotificationsRoute;
+  const isAdminRoute = location.pathname.startsWith('/admin');
+
+  const businessCreateFabActive =
+  location.pathname === '/create-post' ||
+  location.pathname === '/business-dashboard';
+
+  const inviteCreateFabActive =
+  location.pathname === '/create/manual' ||
+  location.pathname === '/create' ||
+  location.pathname === '/create-social' ||
+  location.pathname === '/create-private';
+
+  const changeLanguage = (lang) => i18n.changeLanguage(lang);
+
+  // ── Contextual Chat Sidebar (conversations list for /chat/ & /messages) ──
+  const ChatSidebar = () => {
+    const { t: tl } = useTranslation();
+    const seenUids = new Set();
+    const filteredConvos = (conversations || []).
+    filter((c) => c.otherUser).
+    filter((c) => {
+      if (seenUids.has(c.otherUser.uid)) return false;
+      seenUids.add(c.otherUser.uid);
+      return true;
+    });
+    return (
+      <aside className="ds-left-sidebar">
                 <div style={{ padding: '6px 14px 8px', fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)', borderBottom: '1px solid var(--border-color)', marginBottom: '6px' }}>
                     💬 {tl('messages', 'Messages')}
                 </div>
-                {filteredConvos.length === 0 && (
-                    <div style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>No conversations yet</div>
-                )}
-                {filteredConvos.map(convo => {
-                    const ou = convo.otherUser;
-                    const activeChatId = location.pathname.split('/chat/')[1];
-                    const isActiveCh = activeChatId === ou?.uid;
-                    return (
-                        <div
-                            key={convo.id}
-                            onClick={() => navigate(`/chat/${ou.uid}`)}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: '10px',
-                                padding: '9px 12px', borderRadius: '12px', cursor: 'pointer',
-                                background: isActiveCh ? 'var(--hover-overlay)' : 'transparent',
-                                transition: 'background 0.15s',
-                            }}
-                        >
-                            <img src={ou.photoURL || ou.avatar || '/default-avatar.png'} alt={ou.displayName}
-                                style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-                                onError={e => { e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40"%3E%3Crect fill="%238b5cf6" width="40" height="40"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="18"%3E👤%3C/text%3E%3C/svg%3E'; }}
-                            />
+                {filteredConvos.length === 0 &&
+        <div style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{t('no_conversations', 'No conversations yet')}</div>
+        }
+                {filteredConvos.map((convo) => {
+          const ou = convo.otherUser;
+          const activeChatId = location.pathname.split('/chat/')[1];
+          const isActiveCh = activeChatId === ou?.uid;
+          return (
+            <div
+              key={convo.id}
+              onClick={() => navigate(`/chat/${ou.uid}`)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '9px 12px', borderRadius: '12px', cursor: 'pointer',
+                background: isActiveCh ? 'var(--hover-overlay)' : 'transparent',
+                transition: 'background 0.15s'
+              }}>
+              
+                            <UserAvatar
+                user={ou}
+                src={ou?.photoURL || ou?.avatar}
+                alt={ou?.displayName}
+                style={{ width: 38, height: 38, flexShrink: 0 }} />
+              
                             <div style={{ minWidth: 0 }}>
                                 <div style={{ fontWeight: '700', fontSize: '0.88rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ou.displayName}</div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{convo.lastMessage || '...'}</div>
                             </div>
                             {convo.isUnread && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary)', flexShrink: 0, marginLeft: 'auto' }} />}
-                        </div>
-                    );
-                })}
-            </aside>
-        );
-    };
+                        </div>);
 
-    // ── Contextual Community Sidebar ──
-    const CommunitySidebar = () => {
-        const { t: tl } = useTranslation();
-        const activeCommunityId = location.pathname.split('/community/')[1];
-        return (
-            <aside className="ds-left-sidebar">
+        })}
+            </aside>);
+
+  };
+
+  // ── Contextual Community Sidebar ──
+  const CommunitySidebar = () => {
+    const { t: tl } = useTranslation();
+    const activeCommunityId = location.pathname.split('/community/')[1];
+    return (
+      <aside className="ds-left-sidebar">
                 {/* Label */}
                 <div style={{ padding: '6px 14px 8px', fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)', borderBottom: '1px solid var(--border-color)', marginBottom: '6px' }}>
                     👥 {tl('my_communities', 'My Communities')}
                 </div>
-                {joinedCommunityData.length === 0 && (
-                    <div style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                {joinedCommunityData.length === 0 &&
+        <div style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                         {tl('no_communities_joined', 'No communities joined yet')}
                     </div>
-                )}
-                {joinedCommunityData.map(c => {
-                    const isActiveC = activeCommunityId === c.id;
-                    return (
-                        <div
-                            key={c.id}
-                            onClick={() => navigate(`/community/${c.id}`)}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: '10px',
-                                padding: '9px 12px', borderRadius: '12px', cursor: 'pointer',
-                                background: isActiveC ? 'var(--hover-overlay)' : 'transparent',
-                                transition: 'background 0.15s',
-                            }}
-                        >
+        }
+                {joinedCommunityData.map((c) => {
+          const isActiveC = activeCommunityId === c.id;
+          return (
+            <div
+              key={c.id}
+              onClick={() => navigate(`/community/${c.id}`)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '9px 12px', borderRadius: '12px', cursor: 'pointer',
+                background: isActiveC ? 'var(--hover-overlay)' : 'transparent',
+                transition: 'background 0.15s'
+              }}>
+              
                             <img src={c.logo || '/default-avatar.png'} alt={c.name}
-                                style={{ width: 38, height: 38, borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }}
-                                onError={e => { e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40"%3E%3Crect fill="%238b5cf6" width="40" height="40"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="18"%3E👥%3C/text%3E%3C/svg%3E'; }}
-                            />
+              style={{ width: 38, height: 38, borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }}
+              onError={(e) => {e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40"%3E%3Crect fill="%238b5cf6" width="40" height="40"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="18"%3E👥%3C/text%3E%3C/svg%3E';}} />
+              
                             <div style={{ minWidth: 0 }}>
                                 <div style={{ fontWeight: '700', fontSize: '0.88rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{c.memberCount} members</div>
                             </div>
-                        </div>
-                    );
-                })}
+                        </div>);
+
+        })}
                 <button
-                    onClick={() => navigate('/communities')}
-                    style={{ margin: '8px 12px 0', padding: '7px 12px', borderRadius: '9999px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-muted)', fontSize: '0.82rem', cursor: 'pointer', width: 'calc(100% - 24px)' }}
-                >
+          onClick={() => navigate('/messages?tab=communities')}
+          style={{ margin: '8px 12px 0', padding: '7px 12px', borderRadius: '9999px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-muted)', fontSize: '0.82rem', cursor: 'pointer', width: 'calc(100% - 24px)' }}>
+          
                     + {tl('explore_communities', 'Explore Communities')}
                 </button>
-            </aside>
-        );
-    };
+            </aside>);
 
-    const Badge = ({ count }) => count > 0 ? (
-        <span style={{
-            background: 'var(--primary)', color: 'white',
-            borderRadius: '9999px', fontSize: '0.62rem',
-            padding: '1px 5px', marginLeft: '6px',
-            fontWeight: '800', lineHeight: 1
-        }}>{count}</span>
-    ) : null;
+  };
 
-    // ── Right Sidebar Widgets ──────────────────────────────
-    const [hasOffers, setHasOffers] = useState(false);
+  const Badge = ({ count, absolute }) => count > 0 ?
+  <AppText as="span" style={{
+    background: 'var(--primary)', color: 'white',
+    borderRadius: '9999px', fontSize: '0.62rem',
+    padding: '1px 5px', marginLeft: absolute ? 0 : '6px',
+    fontWeight: '800', lineHeight: 1,
+    position: absolute ? 'absolute' : 'static',
+    top: absolute ? '-6px' : 'auto',
+    right: absolute ? '-8px' : 'auto',
+    border: absolute ? '2px solid var(--bg-card)' : 'none'
+  }}>{count}</AppText> :
+  null;
 
-    const RightSidebar = () => (
-        <aside className="ds-right-sidebar">
+  // ── Right Sidebar Widgets ──────────────────────────────
 
-            {/* ── Offers Banner (desktop only) ── */}
-            <OffersBanner onHasOffers={setHasOffers} />
+  return (
+    <div className="app-layout" dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
 
-            {/* Latest Invitations */}
-            {latestInvitations.length > 0 && (
-
-                <div className="ds-widget-card">
-                    <div className="ds-widget-header">
-                        <FaClock size={14} />
-                        <span>{t('latest_invitations', 'Latest Invitations')}</span>
-                        <Link to="/invitations" className="ds-widget-see-all">{t('see_all', 'See all')}</Link>
-                    </div>
-                    {latestInvitations.map(inv => (
-                        <div
-                            key={inv.id}
-                            className="ds-widget-row"
-                            onClick={() => navigate(`/invitation/${inv.id}`)}
-                        >
-                            <img
-                                src={inv.restaurantImage || inv.customImage || inv.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=80'}
-                                alt={inv.title}
-                                className="ds-widget-img-sq"
-                                onError={e => { e.target.src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=80'; }}
-                            />
-                            <div className="ds-widget-info">
-                                <div className="ds-widget-title">{inv.title}</div>
-                                <div className="ds-widget-sub">{inv.restaurantName || inv.location || '—'}</div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* Trending Partners */}
-            {trendingPartners.length > 0 && (
-                <div className="ds-widget-card">
-                    <div className="ds-widget-header">
-                        <FaFire size={14} style={{ color: '#f97316' }} />
-                        <span>{t('trending_partners', 'Trending Businesses')}</span>
-                        <Link to="/restaurants" className="ds-widget-see-all">{t('see_all', 'See all')}</Link>
-                    </div>
-                    {trendingPartners.map(r => (
-                        <div
-                            key={r.id}
-                            className="ds-widget-row"
-                            onClick={() => navigate(`/restaurant/${r.id}`)}
-                        >
-                            <img
-                                src={r.image || r.logo}
-                                alt={r.name}
-                                className="ds-widget-img-sq"
-                                style={{ borderRadius: '10px' }}
-                                onError={e => { e.target.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${r.id}`; }}
-                            />
-                            <div className="ds-widget-info">
-                                <div className="ds-widget-title">{r.name}</div>
-                                <div className="ds-widget-sub">⭐ {r.rating || '—'} · {r.cuisine || 'Restaurant'}</div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* Communities */}
-            {recentCommunities.length > 0 && (
-                <div className="ds-widget-card">
-                    <div className="ds-widget-header">
-                        <FaUsers size={14} />
-                        <span>{t('communities', 'Communities')}</span>
-                        <Link to="/communities" className="ds-widget-see-all">{t('see_all', 'See all')}</Link>
-                    </div>
-                    {recentCommunities.map(c => (
-                        <div
-                            key={c.id}
-                            className="ds-widget-row"
-                            onClick={() => navigate(`/community/${c.id}`)}
-                        >
-                            <div className="ds-widget-avatar" style={{ background: c.color || 'var(--primary)', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                {c.emoji || c.icon || '👥'}
-                            </div>
-                            <div className="ds-widget-info">
-                                <div className="ds-widget-title">{c.name}</div>
-                                <div className="ds-widget-sub">{c.membersCount || 0} {t('members', 'members')}</div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* Footer */}
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', paddingLeft: '4px', lineHeight: 2 }}>
-                © {new Date().getFullYear()} DineBuddies ·{' '}
-                <Link to="/settings" style={{ color: 'var(--text-muted)' }}>Settings</Link>
-            </div>
-        </aside>
-    );
-
-    return (
-        <div className="app-layout" dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
-
-            <ProfileCompletionModal />
-
-            {/* ── HEADER ── always on desktop, hidden on mobile chat ── */}
-            <header className={`app-header${isChatScreen ? ' app-header--chat' : ''}`}>
-                <div className="logo-wrapper" onClick={() => navigate('/')}>
+            <PushNotificationPrompt />
+            <PushSessionManager />
+            {currentUser?.uid && !isGuest && !isBusinessAccount &&
+      <>
+        <InviteLandingGate />
+        <InviteInboxLiveGate />
+      </>
+      }
+            {/* ── HEADER ── hidden on mobile chat only (chat has its own bar) ── */}
+            <header
+              className={`app-header${hideMobileAppHeader ? ' app-header--chat' : ''}${isCommunityFullscreen ? ' app-header--community-fullscreen' : ''}`}>
+                <div className="logo-wrapper" onClick={() => navigate(feedHomePath)}>
                     <img src="/db-logo.svg" alt="DineBuddies" className="app-logo-img" />
-                    <span className="app-name">DineBuddies</span>
                 </div>
                 <div className="header-actions">
-                    {!isGuest && userProfile?.role !== 'guest' ? (
-                        <>
-                            <Link to="/messages" className="notification-bell">
+                    {!isGuest && userProfile?.role !== 'guest' ?
+          <>
+                            <Link
+              to="/ai-design-studio"
+              className={`notification-bell header-ai-studio-btn header-ai-studio-btn--image${isAiDesignRoute ? ' active' : ''}`}
+              title={t('ai_image_nav', 'AI Images')}
+              aria-label={t('ai_image_nav', 'AI Images')}>
+              
+                                <FaImages />
+                            </Link>
+                            <Link
+              to="/ai-text-studio"
+              className={`notification-bell header-ai-studio-btn header-ai-studio-btn--text${isAiTextRoute ? ' active' : ''}`}
+              title={t('ai_text_nav', 'Relationship tips')}
+              aria-label={t('ai_text_nav', 'Relationship tips')}>
+              
+                                <FaPenAlt />
+                            </Link>
+                            <Link
+              to="/messages"
+              className={`notification-bell${isMessagesHub || isNotificationsRoute ? ' active' : ''}`}
+              aria-label={t('inbox_hub_title', 'Inbox')}
+              title={t('inbox_hub_title', 'Inbox')}>
                                 <FaComments />
-                                {chatUnreadCount > 0 && <span className="badge">{chatUnreadCount}</span>}
+                                {(totalChatUnread + unreadBellCount) > 0 && (
+                                  <AppText as="span" className="badge">
+                                    {(totalChatUnread + unreadBellCount) > 99 ? '99+' : totalChatUnread + unreadBellCount}
+                                  </AppText>
+                                )}
                             </Link>
-                            <Link to="/notifications" className="notification-bell">
-                                <FaBell />
-                                {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
-                            </Link>
-                            <Link to="/settings" className="notification-bell" title={t('settings', 'Settings')}>
+                            {!isBusinessAccount ? (
+                              <Link
+                                to="/stages"
+                                className={`notification-bell header-stages-btn${location.pathname === '/stages' || location.pathname.startsWith('/stage/') ? ' active' : ''}`}
+                                aria-label={t('stages_hub_title', 'Stages')}
+                                title={t('stages_hub_live_subtitle', 'Browse live open rooms near you')}
+                              >
+                                <FaMicrophone />
+                                {(stageUnreadCount > 0 || stageActiveCount > 0) && (
+                                  <AppText as="span" className="badge">
+                                    {(stageUnreadCount > 0 ? stageUnreadCount : stageActiveCount) > 99
+                                      ? '99+'
+                                      : stageUnreadCount > 0
+                                        ? stageUnreadCount
+                                        : stageActiveCount}
+                                  </AppText>
+                                )}
+                              </Link>
+                            ) : null}
+                            <Link
+              to="/settings"
+              className={`notification-bell${isActive('/settings') || location.pathname.startsWith('/settings/') ? ' active' : ''}`}
+              title={t('settings', 'Settings')}
+              aria-label={t('settings', 'Settings')}>
                                 <FaCog />
                             </Link>
 
                             <div
-                                className="header-profile-pic"
-                                onClick={() => navigate(isBusinessAccount ? (window.innerWidth >= 1024 && canAccessDesktopDashboard ? '/business-pro' : '/business-dashboard') : '/profile')}
-                                style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border-color)', cursor: 'pointer', position: 'relative', background: 'var(--hover-overlay)' }}
-                            >
-                                {!imgLoaded && (
-                                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, var(--bg-input) 25%, var(--border-color) 50%, var(--bg-input) 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }} />
-                                )}
-                                <img
-                                    src={getSafeAvatar(userProfile)}
-                                    alt="Profile"
-                                    onLoad={() => setImgLoaded(true)}
-                                    onError={() => setImgLoaded(true)}
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: imgLoaded ? 1 : 0, transition: 'opacity 0.3s' }}
-                                />
+              className="header-profile-pic"
+              onClick={() => navigate(isBusinessAccount ? `/business/${currentUser.uid}` : '/profile')}
+              style={{ cursor: 'pointer', position: 'relative', lineHeight: 0 }}>
+              
+                                <UserAvatar
+                user={userProfile || currentUser}
+                alt="Profile"
+                style={{ width: 40, height: 40 }} />
+              
                             </div>
-                        </>
-                    ) : (
-                        <button onClick={() => navigate('/login')} style={{ background: 'white', color: 'var(--primary)', border: 'none', padding: '8px 16px', borderRadius: '20px', fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+                        </> :
+
+          <button onClick={() => goToLogin()} style={{ background: 'white', color: 'var(--primary)', border: 'none', padding: '8px 16px', borderRadius: '20px', fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
                             {t('login_signup', 'Login / Sign Up')}
                         </button>
-                    )}
+          }
                 </div>
             </header>
 
             {/* ── DESKTOP 3-COLUMN BODY (all routes, incl. chat) ── */}
-            <div className="ds-body-grid">
+            <div
+              className={`ds-body-grid${isAdminRoute ? ' ds-body-grid--admin' : ''}${isCommunityFullscreen ? ' ds-body-grid--community-fullscreen' : ''}`}>
 
                 {/* Column 1 — contextual left sidebar */}
-                {isChatRoute ? (
-                    <ChatSidebar />
-                ) : isCommunityRoute ? (
-                    <CommunitySidebar />
-                ) : (
-                    <aside className="ds-left-sidebar">
-                        <Link to="/" className={`ds-nav-item ${isActive('/') ? 'active' : ''}`}>
-                            <FaHome /><span>{t('nav_home')}</span>
-                        </Link>
-                        <Link to="/invitations" className={`ds-nav-item ${isActive('/invitations') ? 'active' : ''}`}>
-                            <FaEnvelope /><span>{t('nav_invitations', 'Invitations')}</span>
-                        </Link>
-                        <Link to="/restaurants" className={`ds-nav-item ${isActive('/restaurants') ? 'active' : ''}`}>
-                            <FaStore /><span>{t('nav_partners', 'Businesses')}</span>
-                        </Link>
-                        {!isBusinessAccount && !isGuest && userProfile?.role !== 'guest' && (
-                            <Link to="/communities" className={`ds-nav-item ${isActive('/communities') ? 'active' : ''}`}>
-                                <FaUsers /><span>{t('communities')}</span>
-                            </Link>
-                        )}
+                {!isAdminRoute && (showConversationSidebar ?
+        <ChatSidebar /> :
+        isCommunityRoute && !isCommunityFullscreen ?
+        <CommunitySidebar /> :
 
-                        {!isGuest && (
-                            <>
-                                {/* Messages & Notifications: hidden for business (available in dashboard) */}
-                                {!isBusinessAccount && (
-                                    <>
-                                        <Link to="/messages" className={`ds-nav-item ${isActive('/messages') ? 'active' : ''}`}>
-                                            <FaComments />
-                                            <span>{t('nav_messages', 'Messages')}<Badge count={chatUnreadCount} /></span>
-                                        </Link>
-                                        <Link to="/notifications" className={`ds-nav-item ${isActive('/notifications') ? 'active' : ''}`}>
-                                            <FaBell />
-                                            <span>{t('notifications', 'Notifications')}<Badge count={unreadCount} /></span>
-                                        </Link>
-                                    </>
-                                )}
-                                <Link to={isBusinessAccount ? (canAccessDesktopDashboard ? '/business-pro' : '/business-dashboard') : '/profile'} className={`ds-nav-item ${isActive('/profile') || isActive('/business-pro') || isActive('/business-dashboard') ? 'active' : ''}`}>
-                                    <FaUser /><span>{isBusinessAccount ? t('dashboard', 'Dashboard') : t('profile', 'Profile')}</span>
-                                </Link>
-                                {isBusinessAccount && currentUser && (
-                                    <Link
-                                        to={`/business/${currentUser.uid}`}
-                                        className={`ds-nav-item ${location.pathname === `/business/${currentUser.uid}` ? 'active' : ''}`}
-                                    >
-                                        <FaStore /><span>My Profile</span>
-                                    </Link>
-                                )}
-                                {isBusinessAccount && currentUser && (
-                                    <Link
-                                        to="/my-community"
-                                        className={`ds-nav-item ${isActive('/my-community') ? 'active' : ''}`}
-                                    >
-                                        <FaUsers /><span>{t('my_community', 'My Community')}</span>
-                                    </Link>
-                                )}
-                            </>
-                        )}
-                        {/* Settings: hidden for business accounts (available in dashboard) */}
-                        {!isBusinessAccount && (
-                            <Link to="/settings" className={`ds-nav-item ${isActive('/settings') ? 'active' : ''}`}>
-                                <FaCog /><span>{t('settings', 'Settings')}</span>
+        <aside className="ds-left-sidebar">
+                        {isGuest &&
+          <DesktopNavGroup variant="auth">
+                            <Link to="/login" className={`ds-nav-item ${isActive('/login') ? 'active' : ''}`} style={{ color: 'var(--primary)', textDecoration: 'none' }}>
+                                <FaSignInAlt /><AppText as="span">{t('nav_login', 'Login')}</AppText>
                             </Link>
-                        )}
-                        {(userProfile?.role === 'admin' || ['admin@dinebuddies.com', 'yaser@dinebuddies.com', 'info@dinebuddies.com.au', 'y.abohamed@gmail.com'].includes(currentUser?.email?.toLowerCase()) || currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33') && (
-                            <Link to="/admin" className={`ds-nav-item ${isActive('/admin') ? 'active' : ''}`}>
-                                <FaCrown /><span>Admin</span>
+          </DesktopNavGroup>
+          }
+
+                        <DesktopNavGroup title={t('nav_group_browse', 'Browse')} variant="browse">
+                        <Link to={feedHomePath} className={`ds-nav-item ${isFeedHomeActive ? 'active' : ''}`}>
+                            <FaHome /><AppText as="span">{t('nav_home')}</AppText>
+                        </Link>
+                        </DesktopNavGroup>
+
+                        {!isGuest && userProfile?.role !== 'guest' &&
+          <DesktopNavGroup title={t('nav_group_create', 'Create')} variant="create">
+          <Link
+            to="/ai-design-studio"
+            className={`ds-nav-item ds-nav-item--ai-image${isAiDesignRoute ? ' active' : ''}`}>
+                                <FaImages aria-hidden /><AppText as="span">{t('ai_image_nav', 'AI Images')}</AppText>
                             </Link>
-                        )}
-                        {!isBusinessAccount && !isGuest && (
-                            <button className="ds-create-btn" onClick={() => navigate('/create-post')}>
-                                ✏️ {t('create', 'New Post')}
+          <Link
+            to="/ai-text-studio"
+            className={`ds-nav-item ds-nav-item--ai-text${isAiTextRoute ? ' active' : ''}`}>
+                                <FaPenAlt aria-hidden /><AppText as="span">{t('ai_text_nav', 'AI Text')}</AppText>
+                            </Link>
+                        {!isBusinessAccount && currentUser &&
+          <>
+          <button
+            type="button"
+            className={`ds-nav-item${inviteCreateFabActive || inviteCreateOpen ? ' active' : ''}`}
+            onClick={openInviteCreate}
+            aria-haspopup="dialog"
+            aria-expanded={inviteCreateOpen}>
+            
+                                <FaPlusCircle /><AppText as="span">{t('create_invitation', 'Create Invitation')}</AppText>
                             </button>
-                        )}
-                    </aside>
-                )}
+          <button
+            type="button"
+            className={`ds-nav-item${
+              location.pathname === '/create-stage' ||
+              (businessHasLiveStage &&
+                businessLiveStageId &&
+                location.pathname === `/stage/${businessLiveStageId}`)
+                ? ' active'
+                : ''
+            }`}
+            disabled={businessLiveStageLoading}
+            aria-busy={businessLiveStageLoading || undefined}
+            onClick={() => {
+              if (businessLiveStageLoading) return;
+              if (businessHasLiveStage && businessLiveStageId) {
+                navigate(`/stage/${businessLiveStageId}`, {
+                  state: { stageHostId: currentUser?.uid || null },
+                });
+                return;
+              }
+              navigate('/create-stage');
+            }}>
+            <FaMicrophone />
+            <AppText as="span">
+              {businessLiveStageLoading
+                ? t('loading_stages', 'Loading stages…')
+                : businessHasLiveStage
+                  ? t('invite_enter_stage_title', 'Enter Stage')
+                  : t('create_stage_open', 'Open Stage')}
+            </AppText>
+          </button>
+          </>
+          }
+          </DesktopNavGroup>
+          }
+
+                        <DesktopNavGroup title={t('nav_group_discover', 'Discover')} variant="discover">
+                        <Link to="/invitations" className={`ds-nav-item ${isInvitationsNavActive ? 'active' : ''}`}>
+                            <FaEnvelope /><AppText as="span">{t('nav_invitations', 'Invitations')}</AppText>
+                        </Link>
+                        <Link to="/restaurants" className={`ds-nav-item ${isRestaurantsNavActive ? 'active' : ''}`}>
+                            <FaStore /><AppText as="span">{t('nav_partners', 'Businesses')}</AppText>
+                        </Link>
+                        {!isBusinessAccount && !isGuest && userProfile?.role !== 'guest' &&
+          <Link to="/search" className={`ds-nav-item ${isDirectoryNavActive ? 'active' : ''}`}>
+                                <FaUsers /><AppText as="span">{t('user_directory_nav', 'Connect')}</AppText>
+                            </Link>
+          }
+                        </DesktopNavGroup>
+
+                        {!isGuest &&
+          <DesktopNavGroup title={t('nav_group_inbox', 'Inbox')} variant="inbox">
+                                <Link to="/messages" className={`ds-nav-item ${isInboxMessagesActive ? 'active' : ''}`}>
+                                    <div style={{ position: 'relative', display: 'inline-flex' }}>
+                                        <FaComments />
+                                        <Badge count={totalChatUnread} absolute />
+                                    </div>
+                                    <AppText as="span">{t('nav_messages', 'Messages')}</AppText>
+                                </Link>
+                                <Link to="/messages?panel=notifications" className={`ds-nav-item ${isNotificationsRoute ? 'active' : ''}`}>
+                                    <div style={{ position: 'relative', display: 'inline-flex' }}>
+                                        <FaBell />
+                                        <Badge count={unreadBellCount} absolute />
+                                    </div>
+                                    <AppText as="span">{t('notifications', 'Notifications')}</AppText>
+                                </Link>
+          </DesktopNavGroup>
+          }
+
+                        {isBusinessAccount && currentUser &&
+          <DesktopNavGroup title={t('nav_group_business', 'Business')} variant="business">
+            <button
+              type="button"
+              className={`ds-nav-item${businessCreateFabActive ? ' active' : ''}`}
+              onClick={() => setBusinessCreateOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={businessCreateOpen}>
+              
+                                        <FaPlusCircle /><AppText as="span">{t('business_nav_create_posts', 'Create posts')}</AppText>
+                                    </button>
+            <Link
+              to={`/business/${currentUser.uid}`}
+              className={`ds-nav-item ${location.pathname === `/business/${currentUser.uid}` ? 'active' : ''}`}>
+              
+                                        <FaStore /><AppText as="span">{t('profile_title', 'My Profile')}</AppText>
+                                    </Link>
+            <Link
+              to="/my-community"
+              className={`ds-nav-item ${location.pathname.startsWith('/my-community') ? 'active' : ''}`}>
+              
+                                        <FaThLarge /><AppText as="span">{t('business_dashboard', 'Dashboard')}</AppText>
+                                    </Link>
+          </DesktopNavGroup>
+          }
+
+                        {(!isGuest || !isBusinessAccount) &&
+          <DesktopNavGroup title={t('nav_group_settings', 'Settings')} variant="settings">
+                        {!isGuest &&
+          <Link to={isBusinessAccount ? '/business-dashboard' : '/profile'} className={`ds-nav-item ${isActive('/profile') || isActive('/business-dashboard') ? 'active' : ''}`}>
+                                    <FaUser /><AppText as="span">{isBusinessAccount ? t('dashboard', 'Dashboard') : t('profile', 'Profile')}</AppText>
+                                </Link>
+          }
+                        {!isBusinessAccount && (
+          isGuest ?
+          <Link
+            to={buildLoginPath({ returnPath: '/settings' })}
+            className={`ds-nav-item ${isActive('/login') ? 'active' : ''}`}>
+            
+                                    <FaCog /><AppText as="span">{t('settings', 'Settings')}</AppText>
+                                </Link> :
+
+          <Link to="/settings" className={`ds-nav-item ${isActive('/settings') ? 'active' : ''}`}>
+                                    <FaCog /><AppText as="span">{t('settings', 'Settings')}</AppText>
+                                </Link>)
+
+          }
+                        {isAdminAccount &&
+          <Link to="/admin/users" className={`ds-nav-item ${location.pathname.startsWith('/admin') ? 'active' : ''}`}>
+                                <FaCrown /><AppText as="span">Admin</AppText>
+                            </Link>
+          }
+          </DesktopNavGroup>
+          }
+
+                    </aside>)
+        }
 
                 {/* Column 2 — Main content */}
-                <main className={`app-main${isChatScreen ? ' app-main--chat' : ''}${isStoryRoute ? ' app-main--fullscreen' : ''}`}>
+                <main
+                  className={`app-main${useChatMainLayout ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute || isStudioRoute || isConnectMagneticRoute ? ' app-main--fullscreen' : ''}${isCommunityFullscreen ? ' app-main--community-fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}${isDashboardRoute ? ' app-main--dashboard' : ''}${isConnectMagneticRoute ? ' app-main--connect' : ''}`}>
+                    {!isSearchListRoute && !isConnectMagneticRoute && !isCommunityFullscreen && <EmailVerificationBusinessBanner />}
+                    {!isSearchListRoute && !isConnectMagneticRoute && !isCommunityFullscreen && <UnpublishedBusinessReminder />}
                     {children}
-                    <Outlet />
+                    <Suspense fallback={<AppRouteLoading variant="route" />}>
+                        <Outlet />
+                    </Suspense>
                 </main>
 
                 {/* Column 3 — Right widgets */}
-                <RightSidebar />
+                {!isAdminRoute && !isCommunityFullscreen && <DesktopRightSidebar />}
             </div>
 
-            {/* ── MOBILE BOTTOM NAV ── */}
-            {!isChatScreen && (
-                <nav className="bottom-nav user-nav">
-                    <Link to="/" className={`nav-item ${isActive('/') ? 'active' : ''}`}>
+            {/* ── MOBILE BOTTOM NAV (admin uses embedded nav in AdminLayout) ── */}
+            {!hideBottomNav && !isAdminRoute && !isStudioRoute &&
+      <nav className="bottom-nav user-nav">
+                    <Link to={feedHomePath} className={`nav-item ${isFeedHomeActive ? 'active' : ''}`}>
                         <FaHome className="nav-icon" />
-                        <span>{t('nav_home')}</span>
+                        <AppText as="span">{t('nav_home')}</AppText>
                     </Link>
-                    <Link to="/invitations" className={`nav-item ${isActive('/invitations') ? 'active' : ''}`}>
+                    <Link to="/invitations" className={`nav-item ${isInvitationsNavActive ? 'active' : ''}`}>
                         <FaEnvelope className="nav-icon" />
-                        <span>{t('nav_invitations', 'Invitations')}</span>
+                        <AppText as="span">{t('nav_invitations', 'Invitations')}</AppText>
                     </Link>
-                    {!isBusinessAccount && !isGuest && (
-                        <Link to="/create-post" className={`nav-item fab-nav-item ${isActive('/create-post') ? 'active' : ''}`}>
+                    {isGuest ?
+        <Link to="/login" className={`nav-item ${isActive('/login') ? 'active' : ''}`} style={{ color: 'var(--primary)', textDecoration: 'none' }}>
+                            <FaSignInAlt className="nav-icon" />
+                            <AppText as="span">{t('nav_login', 'Login')}</AppText>
+                        </Link> :
+        !isBusinessAccount ?
+        <button
+          type="button"
+          className={`nav-item fab-nav-item${inviteCreateFabActive ? ' active' : ''}`}
+          onClick={openInviteCreate}
+          aria-haspopup="dialog"
+          aria-expanded={inviteCreateOpen}
+          aria-label={t('invite_create_menu', 'Create invitation')}>
+          
                             <div className="fab-container"><FaPlusCircle className="nav-icon fab" /></div>
-                        </Link>
-                    )}
-                    {isBusinessAccount && (
-                        <Link to="/create-post" className={`nav-item fab-nav-item ${isActive('/create-post') ? 'active' : ''}`}>
+                        </button> :
+        null}
+                    {isBusinessAccount &&
+        <button
+          type="button"
+          className={`nav-item fab-nav-item${businessCreateFabActive ? ' active' : ''}`}
+          onClick={() => setBusinessCreateOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={businessCreateOpen}
+          aria-label={t('business_create_menu', 'Create')}>
+          
                             <div className="fab-container"><FaPlusCircle className="nav-icon fab" /></div>
-                        </Link>
-                    )}
-                    <Link to="/restaurants" className={`nav-item ${isActive('/restaurants') ? 'active' : ''}`}>
+                        </button>
+        }
+                    <Link to="/restaurants" className={`nav-item ${isRestaurantsNavActive ? 'active' : ''}`}>
                         <FaStore className="nav-icon" />
-                        <span>{t('nav_partners', 'Businesses')}</span>
+                        <AppText as="span">{t('nav_partners', 'Businesses')}</AppText>
                     </Link>
-                    {!isBusinessAccount && !isGuest && userProfile?.role !== 'guest' && (
-                        <Link to="/communities" className={`nav-item ${isActive('/communities') ? 'active' : ''}`}>
+                    {!isBusinessAccount && !isGuest && userProfile?.role !== 'guest' &&
+        <Link to="/search" className={`nav-item ${isDirectoryNavActive ? 'active' : ''}`}>
                             <div className="friend-nav-icon-container"><FaUsers className="nav-icon" /></div>
-                            <span>{t('communities')}</span>
+                            <AppText as="span">{t('user_directory_nav', 'Connect')}</AppText>
                         </Link>
-                    )}
-                    {isBusinessAccount && (
-                        <Link to="/my-community" className={`nav-item ${isActive('/my-community') ? 'active' : ''}`}>
-                            <div className="friend-nav-icon-container"><FaUsers className="nav-icon" /></div>
-                            <span>{t('my_community')}</span>
+        }
+                    {isBusinessAccount &&
+        <Link to="/my-community" className={`nav-item ${location.pathname.startsWith('/my-community') ? 'active' : ''}`}>
+                            <div className="friend-nav-icon-container"><FaThLarge className="nav-icon" /></div>
+                            <AppText as="span">{t('business_dashboard', 'Dashboard')}</AppText>
                         </Link>
-                    )}
-                    {(userProfile?.role === 'admin' || ['admin@dinebuddies.com', 'yaser@dinebuddies.com', 'info@dinebuddies.com.au', 'y.abohamed@gmail.com'].includes(currentUser?.email?.toLowerCase()) || currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33') && (
-                        <Link to="/admin" className={`nav-item ${isActive('/admin') ? 'active' : ''}`}>
+        }
+                    {isAdminAccount &&
+        <Link to="/admin/users" className={`nav-item ${location.pathname.startsWith('/admin') ? 'active' : ''}`}>
                             <FaCrown className="nav-icon" />
-                            <span>Admin</span>
+                            <AppText as="span">Admin</AppText>
                         </Link>
-                    )}
+        }
                 </nav>
-            )}
-        </div>
-    );
+      }
+
+            {!isBusinessAccount && !isGuest && inviteCreateOpen &&
+      <div
+        className="business-create-overlay"
+        role="presentation"
+        onClick={closeInviteCreate}>
+        
+                    <div
+          className="business-create-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="invite-create-title"
+          onClick={(e) => e.stopPropagation()}>
+          
+                        <div className="business-create-sheet__header">
+                            <div className="business-create-sheet__titles">
+                                <AppText as="h2" id="invite-create-title" className="business-create-sheet__title">
+                                    {t('invite_create_title')}
+                                </AppText>
+                                <AppText as="p" className="business-create-sheet__subtitle">
+                                    {t('invite_create_subtitle')}
+                                </AppText>
+                            </div>
+                            <button
+              type="button"
+              className="business-create-sheet__close"
+              onClick={closeInviteCreate}
+              aria-label={t('close', 'Close')}>
+              
+                                <FaTimes />
+                            </button>
+                        </div>
+                        <InviteCreateTypePicker
+                          variant="sheet"
+                          includeStage={!isDesktopShell}
+                          onAfterNavigate={closeInviteCreate}
+                        />
+                    </div>
+                </div>
+      }
+
+            {isBusinessAccount && businessCreateOpen &&
+      <div
+        className="business-create-overlay"
+        role="presentation"
+        onClick={() => setBusinessCreateOpen(false)}>
+        
+                    <div
+          className="business-create-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="business-create-title"
+          onClick={(e) => e.stopPropagation()}>
+          
+                        <div className="business-create-sheet__header">
+                            <div className="business-create-sheet__titles">
+                                <AppText as="h2" id="business-create-title" className="business-create-sheet__title">
+                                    {t('business_create_title', 'Create')}
+                                </AppText>
+                                <AppText as="p" className="business-create-sheet__subtitle">
+                                    {t(
+                                      'business_create_subtitle',
+                                      'Publish a featured post for your community.'
+                                    )}
+                                </AppText>
+                            </div>
+                            <button
+              type="button"
+              className="business-create-sheet__close"
+              onClick={() => setBusinessCreateOpen(false)}
+              aria-label={t('close', 'Close')}>
+              
+                                <FaTimes />
+                            </button>
+                        </div>
+                        <div className="business-create-sheet__options">
+                            <button
+              type="button"
+              className="business-create-option"
+              onClick={() => {
+                setBusinessCreateOpen(false);
+                navigate('/create-featured-post');
+              }}>
+              
+                                <AppText as="span" className="business-create-option__icon business-create-option__icon--featured" aria-hidden>
+                                    <FaImages />
+                                </AppText>
+                                <AppText as="span" className="business-create-option__text">
+                                    <AppText as="span" className="business-create-option__label">
+                                        {t('business_create_featured_title', 'Featured Post')}
+                                    </AppText>
+                                    <AppText as="span" className="business-create-option__desc">
+                                        {t(
+                    'business_create_featured_desc',
+                    'Elite slide on the home feed for all users.'
+                  )}
+                                    </AppText>
+                                </AppText>
+                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
+                            </button>
+                            <button
+              type="button"
+              className="business-create-option"
+              onClick={() => {
+                setBusinessCreateOpen(false);
+                navigate('/create-post');
+              }}>
+              
+                                <AppText as="span" className="business-create-option__icon business-create-option__icon--motion" aria-hidden>
+                                    <FaPhotoVideo />
+                                </AppText>
+                                <AppText as="span" className="business-create-option__text">
+                                    <AppText as="span" className="business-create-option__label">
+                                        {t('business_create_studio_title', 'Motion post')}
+                                    </AppText>
+                                    <AppText as="span" className="business-create-option__desc">
+                                        {t(
+                    'business_create_studio_desc',
+                    'Animated studio post in the community feed.'
+                  )}
+                                    </AppText>
+                                </AppText>
+                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+      }
+        </div>);
+
 };
 
 export default Layout;

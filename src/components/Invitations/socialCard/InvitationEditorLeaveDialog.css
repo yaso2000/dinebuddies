@@ -1,0 +1,83 @@
+/* Self-contained leave confirm — always above banner tool modals (z-index 1400). */
+.invitation-preview-leave-dialog {
+    position: fixed;
+    inset: 0;
+    z-index: 1600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.invitation-preview-leave-dialog__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+}
+
+.invitation-preview-leave-dialog__card {
+    position: relative;
+    z-index: 1;
+    width: min(360px, 100%);
+    border-radius: 18px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
+    background: var(--bg-card, #1e293b);
+    box-shadow: var(--shadow-card-hover, 0 12px 32px rgba(0, 0, 0, 0.35));
+    padding: 18px 16px 14px;
+    color: var(--text-main, #f8fafc);
+}
+
+.invitation-preview-leave-dialog__title {
+    margin: 0 0 6px;
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.invitation-preview-leave-dialog__text {
+    margin: 0 0 14px;
+    font-size: 0.82rem;
+    color: var(--text-muted, rgba(255, 255, 255, 0.7));
+    line-height: 1.5;
+}
+
+.invitation-preview-leave-dialog__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.invitation-preview-leave-dialog__btn {
+    width: 100%;
+    min-height: 42px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
+    background: var(--bg-input, var(--bg-secondary, rgba(255, 255, 255, 0.06)));
+    color: var(--text-main, #f8fafc);
+    font-size: 0.85rem;
+    font-weight: 800;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.invitation-preview-leave-dialog__btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.invitation-preview-leave-dialog__btn--save {
+    border-color: var(--primary, #e86e2e);
+    background: color-mix(in srgb, var(--primary, #e86e2e) 14%, transparent);
+    color: var(--primary, #e86e2e);
+}
+
+.invitation-preview-leave-dialog__btn--discard {
+    border-color: color-mix(in srgb, #ef4444 45%, var(--border-color, #64748b));
+    color: #ef4444;
+}
+
+.invitation-preview-leave-dialog__btn--cancel {
+    color: var(--text-muted, rgba(255, 255, 255, 0.7));
+}

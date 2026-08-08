@@ -1,0 +1,14 @@
+{
+  "glass_effect_toggle": "شیشے جیسا اثر",
+  "notif_msg_follow": "{{name}} نے آپ کو فالو کرنا شروع کر دیا",
+  "notif_title_comment_like": "تبصرہ پسند کیا گیا",
+  "offer_delete_confirm": "کیا آپ واقعی یہ آفر مستقل طور پر حذف کرنا چاہتے ہیں؟",
+  "offer_image_label": "آفر کی تصویر:",
+  "on_way_too_early": "آپ دعوت کے وقت سے زیادہ سے زیادہ 1 گھنٹہ پہلے ہی \"میں راستے میں ہوں\" بھیج سکتے ہیں۔",
+  "social_share_line_event": "📌 تقریب: {{title}}",
+  "social_share_line_when": "📅 وقت: {{when}}",
+  "social_share_line_where": "📍 جگہ: {{location}}",
+  "time_d": "د",
+  "time_h": "گ",
+  "time_m": "م"
+}

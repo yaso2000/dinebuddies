@@ -1,6 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
+import { isBusinessUser } from '../utils/accountRole';
+import { useToast } from './ToastContext';
+import { useTranslation } from 'react-i18next';
 import { db } from '../firebase/config';
+import { navigateToHostedInvitationDetails } from '../utils/hostedInvitationRoutes';
 import {
     collection,
     query,
@@ -19,6 +24,46 @@ import {
 
 const NotificationContext = createContext();
 
+/** True if user is already on the screen this notification points to (avoids toast + badge noise). */
+function shouldSuppressInAppToastForPath(pathname, notif) {
+    if (!notif || notif.read) return false;
+    const path = String(pathname || '');
+
+    // No foreground toasts while browsing messages, notifications, or discovery inbox.
+    if (path === '/messages' || path === '/notifications' || path.startsWith('/chat/') || path === '/search/inbox') {
+        return true;
+    }
+
+    const url = notif.actionUrl ? String(notif.actionUrl) : '';
+    if (url && path === url) return true;
+
+    const type = String(notif.type || '');
+
+    if (
+        type === 'social_invitation' ||
+        type === 'social_invitation_response' ||
+        type === 'reminder' ||
+        type === 'join_request' ||
+        type === 'request_approved' ||
+        type === 'invitation_accepted' ||
+        type === 'invitation_rejected'
+    ) {
+        // Private invites are shown only on app entry (/invite/received), not as in-app toasts.
+        return true;
+    }
+
+    if (type !== 'message') return false;
+
+    if (path === '/messages') return true;
+    if (url.startsWith('/community/') || url.startsWith('/stage/')) {
+        const base = url.replace(/\/chat\/?$/, '');
+        return path === base || path === url;
+    }
+    if (url.startsWith('/chat/')) return path === url;
+    if (url.includes('/invitation/') && url.includes('/chat')) return path === url;
+    return false;
+}
+
 export const useNotifications = () => {
     const context = useContext(NotificationContext);
     if (!context) {
@@ -27,67 +72,225 @@ export const useNotifications = () => {
     return context;
 };
 
-export const NotificationProvider = ({ children }) => {
-    const { currentUser } = useAuth();
-    const [notifications, setNotifications] = useState([]);
-    const [unreadCount, setUnreadCount] = useState(0);
-    const [activePrivateInvitation, setActivePrivateInvitation] = useState(null);
-    const [dismissedNotificationIds, setDismissedNotificationIds] = useState(new Set());
-    const [loading, setLoading] = useState(true);
+function partnerDocToNotif(docSnap) {
+    const data = docSnap.data() || {};
+    const created =
+        data.createdAt?.toDate?.() ||
+        data.timestamp?.toDate?.() ||
+        (data.createdAt instanceof Date ? data.createdAt : null) ||
+        new Date();
+    return {
+        id: docSnap.id,
+        _collection: 'partner_notifications',
+        userId: data.restaurantId,
+        type: data.type || 'new_booking',
+        title: data.title,
+        message: data.message,
+        actionUrl: data.actionUrl || null,
+        invitationId: data.invitationId || null,
+        fromUserId: data.senderId || null,
+        fromUserName: data.fromUserName || null,
+        fromUserAvatar: data.fromUserAvatar || null,
+        senderId: data.senderId || null,
+        senderName: data.fromUserName || null,
+        senderAvatar: data.fromUserAvatar || null,
+        metadata: { partnerNotificationId: docSnap.id, partnerId: data.restaurantId },
+        read: data.read === true,
+        createdAt: created,
+    };
+}
 
-    // Load notifications for current user
+export const NotificationProvider = ({ children }) => {
+    const { currentUser, userProfile } = useAuth();
+    const { t, i18n } = useTranslation();
+    const [inboxNotifs, setInboxNotifs] = useState([]);
+    const [partnerNotifs, setPartnerNotifs] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [unreadBellCount, setUnreadBellCount] = useState(0);
+    const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const isBusinessAccount = isBusinessUser(userProfile);
+
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { showToast } = useToast();
+    const pathnameRef = useRef(location.pathname);
+    pathnameRef.current = location.pathname;
+
+    const notifications = useMemo(() => {
+        const mirroredPartnerIds = new Set(
+            inboxNotifs
+                .map((n) => n.metadata?.partnerNotificationId)
+                .filter(Boolean)
+        );
+        const legacyPartner = partnerNotifs.filter((p) => !mirroredPartnerIds.has(p.id));
+        return [...inboxNotifs, ...legacyPartner]
+            .sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0))
+            .slice(0, 50);
+    }, [inboxNotifs, partnerNotifs]);
+
+    const applyCounts = useCallback((notifs) => {
+        const unread = notifs.filter((n) => !n.read).length;
+        const unreadMsgs = notifs.filter(
+            (n) =>
+                !n.read &&
+                (n.type === 'message' || n.type === 'community_message' || n.type === 'business_message')
+        ).length;
+        setUnreadCount(unread);
+        setUnreadMessageCount(unreadMsgs);
+        setUnreadBellCount(unread - unreadMsgs);
+    }, []);
+
+    useEffect(() => {
+        applyCounts(notifications);
+    }, [notifications, applyCounts]);
+
+    const showSystemBannerIfBackground = useCallback((notif, docId) => {
+        if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+        // Foreground: in-app inbox + toasts only — never duplicate OS banners (especially on iOS PWA).
+        if (document.visibilityState === 'visible') return;
+        if (document.hasFocus()) return;
+        const title = notif.title || 'DineBuddies';
+        const body = notif.message || '';
+        try {
+            const n = new Notification(title, {
+                body,
+                icon: notif.fromUserAvatar || notif.senderAvatar || '/icon-light-192.png',
+                tag: docId ? `db-notif-${docId}` : `db-notif-${Date.now()}`,
+                data: { url: notif.actionUrl || '/' },
+            });
+            n.onclick = () => {
+                try {
+                    window.focus();
+                    const invId = notif.invitationId || notif.metadata?.invitationId;
+                    const type = String(notif.type || '');
+                    if (
+                        (type === 'social_invitation' || type === 'social_invitation_response') &&
+                        invId
+                    ) {
+                        void navigateToHostedInvitationDetails(invId, navigate);
+                    } else if (notif.actionUrl) {
+                        navigate(notif.actionUrl);
+                    }
+                } catch {
+                    /* ignore */
+                }
+                n.close();
+            };
+        } catch {
+            /* ignore */
+        }
+    }, [navigate]);
+
+    const toastNewItems = useCallback(
+        (snapshot, isInitialLoad) => {
+            if (isInitialLoad) return;
+            const pathname = pathnameRef.current;
+            snapshot.docChanges().forEach((change) => {
+                if (change.type !== 'added') return;
+                const newNotif = change.doc.data();
+                const isAlreadyRead = newNotif.read;
+                const onTarget = shouldSuppressInAppToastForPath(pathname, newNotif);
+                if (!isAlreadyRead && !onTarget) {
+                    showSystemBannerIfBackground(newNotif, change.doc.id);
+                    showToast(
+                        {
+                            title: newNotif.title,
+                            body: newNotif.message,
+                            icon: newNotif.fromUserAvatar || newNotif.senderAvatar || null,
+                            onClick: () => {
+                                const invId =
+                                    newNotif.invitationId || newNotif.metadata?.invitationId;
+                                if (
+                                    (newNotif.type === 'social_invitation' ||
+                                        newNotif.type === 'social_invitation_response') &&
+                                    invId
+                                ) {
+                                    void navigateToHostedInvitationDetails(invId, navigate);
+                                } else if (newNotif.actionUrl) {
+                                    navigate(newNotif.actionUrl);
+                                }
+                            },
+                        },
+                        'notification'
+                    );
+                }
+            });
+        },
+        [navigate, showToast, showSystemBannerIfBackground]
+    );
+
+    // In-app inbox (all accounts) + legacy partner_notifications for business
     useEffect(() => {
         if (!currentUser?.uid) {
-            setNotifications([]);
+            setInboxNotifs([]);
+            setPartnerNotifs([]);
             setUnreadCount(0);
             setLoading(false);
-            return;
+            return undefined;
         }
 
-        const notificationsRef = collection(db, 'notifications');
-        const q = query(
-            notificationsRef,
+        let inboxInitial = true;
+        let partnerInitial = true;
+
+        const inboxQ = query(
+            collection(db, 'notifications'),
             where('userId', '==', currentUser.uid),
             orderBy('createdAt', 'desc'),
             limit(50)
         );
 
-
-        const unsubscribe = onSnapshot(
-            q,
+        const unsubInbox = onSnapshot(
+            inboxQ,
             (snapshot) => {
-                const notifs = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    createdAt: doc.data().createdAt?.toDate() || new Date()
+                const notifs = snapshot.docs.map((d) => ({
+                    id: d.id,
+                    _collection: 'notifications',
+                    ...d.data(),
+                    createdAt: d.data().createdAt?.toDate?.() || new Date(),
                 }));
-
-                setNotifications(notifs);
-
-                // Count unread
-                const unread = notifs.filter(n => !n.read).length;
-                setUnreadCount(unread);
-
-                // Find unread private invitations for the Digital Envelope
-                const unreadPrivate = notifs.filter(n =>
-                    n.type === 'private_invitation' &&
-                    !n.read &&
-                    !dismissedNotificationIds.has(n.id)
-                );
-                setActivePrivateInvitation(unreadPrivate.length > 0 ? unreadPrivate[0] : null);
-
+                setInboxNotifs(notifs);
+                toastNewItems(snapshot, inboxInitial);
+                inboxInitial = false;
                 setLoading(false);
             },
             (error) => {
                 console.error('Error loading notifications:', error);
-                setLoading(false); // ✅ Important: stop loading on error
-                setNotifications([]);
-                setUnreadCount(0);
+                setInboxNotifs([]);
+                setLoading(false);
             }
         );
 
-        return () => unsubscribe();
-    }, [currentUser?.uid, dismissedNotificationIds]);
+        let unsubPartner = () => {};
+        if (isBusinessAccount) {
+            const partnerQ = query(
+                collection(db, 'partner_notifications'),
+                where('restaurantId', '==', currentUser.uid),
+                limit(50)
+            );
+            unsubPartner = onSnapshot(
+                partnerQ,
+                (snapshot) => {
+                    const notifs = snapshot.docs.map(partnerDocToNotif);
+                    setPartnerNotifs(notifs);
+                    toastNewItems(snapshot, partnerInitial);
+                    partnerInitial = false;
+                    setLoading(false);
+                },
+                (error) => {
+                    console.error('Error loading partner notifications:', error);
+                    setPartnerNotifs([]);
+                }
+            );
+        } else {
+            setPartnerNotifs([]);
+        }
+
+        return () => {
+            unsubInbox();
+            unsubPartner();
+        };
+    }, [currentUser?.uid, isBusinessAccount, toastNewItems]);
 
     // Helper: Check if current time is in Do Not Disturb period
     const isInDNDPeriod = (dndSettings) => {
@@ -153,30 +356,7 @@ export const NotificationProvider = ({ children }) => {
         if (!userId) return;
 
         try {
-            // 🔍 Check user notification settings
-            const settings = await getUserSettings(userId);
-
-            // ❌ Check if push notifications are globally disabled
-            if (settings.pushEnabled === false) {
-                console.log('🔕 Push notifications disabled for user:', userId);
-                return;
-            }
-
-            // ❌ Check if this specific notification type is disabled
-            if (settings.pushTypes && settings.pushTypes[type] === false) {
-                console.log(`🔕 Notification type "${type}" disabled for user:`, userId);
-                return;
-            }
-
-            // 🌙 Check Do Not Disturb
-            if (settings.doNotDisturb && isInDNDPeriod(settings.doNotDisturb)) {
-                console.log('🌙 Do Not Disturb active - notification skipped for user:', userId);
-                return;
-            }
-
-            // ✅ All checks passed - create notification
-            console.log(`✅ Creating notification (${type}) for user:`, userId);
-
+            // Always write in-app notification; push prefs are enforced server-side (onNotificationCreated).
             const notificationsRef = collection(db, 'notifications');
             await addDoc(notificationsRef, {
                 userId,
@@ -196,19 +376,48 @@ export const NotificationProvider = ({ children }) => {
         }
     };
 
+    const notifDocRef = (notificationId, collectionName = 'notifications') =>
+        doc(db, collectionName === 'partner_notifications' ? 'partner_notifications' : 'notifications', notificationId);
+
     // Mark notification as read
-    const markAsRead = async (notificationId) => {
+    const markAsRead = async (notificationId, collectionName = 'notifications') => {
         if (!notificationId) return;
 
         try {
-            const notifRef = doc(db, 'notifications', notificationId);
-            await updateDoc(notifRef, {
+            await updateDoc(notifDocRef(notificationId, collectionName), {
                 read: true,
-                readAt: serverTimestamp()
+                readAt: serverTimestamp(),
             });
         } catch (error) {
             console.error('Error marking notification as read:', error);
         }
+    };
+
+    const markMessageNotificationsAsRead = async (actionUrlSubstring) => {
+        if (!currentUser?.uid) return;
+
+        const unreadToClear = notifications.filter((n) => {
+            if (n.read || n.type !== 'message') return false;
+            if (actionUrlSubstring === '/messages') return true;
+            if (!actionUrlSubstring || !n.actionUrl) return false;
+            return (
+                n.actionUrl.includes(actionUrlSubstring) ||
+                actionUrlSubstring.includes(n.actionUrl)
+            );
+        });
+
+        if (unreadToClear.length === 0) return;
+
+        await Promise.all(
+            unreadToClear.map((n) =>
+                updateDoc(doc(db, 'notifications', n.id), {
+                    read: true,
+                    readAt: serverTimestamp(),
+                }).catch((error) => {
+                    console.error(`Error marking message notification ${n.id} as read:`, error);
+                })
+            )
+        );
     };
 
     // Mark all as read
@@ -219,11 +428,10 @@ export const NotificationProvider = ({ children }) => {
             const batch = writeBatch(db);
             const unreadNotifs = notifications.filter(n => !n.read);
 
-            unreadNotifs.forEach(notif => {
-                const notifRef = doc(db, 'notifications', notif.id);
-                batch.update(notifRef, {
+            unreadNotifs.forEach((notif) => {
+                batch.update(notifDocRef(notif.id, notif._collection || 'notifications'), {
                     read: true,
-                    readAt: serverTimestamp()
+                    readAt: serverTimestamp(),
                 });
             });
 
@@ -234,12 +442,11 @@ export const NotificationProvider = ({ children }) => {
     };
 
     // Delete notification
-    const deleteNotification = async (notificationId) => {
+    const deleteNotification = async (notificationId, collectionName = 'notifications') => {
         if (!notificationId) return;
 
         try {
-            const notifRef = doc(db, 'notifications', notificationId);
-            await deleteDoc(notifRef);
+            await deleteDoc(notifDocRef(notificationId, collectionName));
         } catch (error) {
             console.error('Error deleting notification:', error);
         }
@@ -252,9 +459,8 @@ export const NotificationProvider = ({ children }) => {
         try {
             const batch = writeBatch(db);
 
-            notifications.forEach(notif => {
-                const notifRef = doc(db, 'notifications', notif.id);
-                batch.delete(notifRef);
+            notifications.forEach((notif) => {
+                batch.delete(notifDocRef(notif.id, notif._collection || 'notifications'));
             });
 
             await batch.commit();
@@ -263,13 +469,7 @@ export const NotificationProvider = ({ children }) => {
         }
     };
 
-    // Dismiss notification (hide for current session)
-    const dismissNotification = (notificationId) => {
-        if (!notificationId) return;
-        setDismissedNotificationIds(prev => new Set(prev).add(notificationId));
-    };
-
-    // Format time
+    // Format time — language-aware
     const formatTime = (date) => {
         if (!date) return '';
 
@@ -279,31 +479,27 @@ export const NotificationProvider = ({ children }) => {
         const hours = Math.floor(diff / 3600000);
         const days = Math.floor(diff / 86400000);
 
-        if (minutes < 1) return 'Just now';
-        if (minutes < 60) return `${minutes}m ago`;
-        if (hours < 24) return `${hours}h ago`;
-        if (days < 7) return `${days}d ago`;
+        if (minutes < 1) return t('just_now', 'Just now');
+        if (minutes < 60) return `${minutes}${t('time_m', 'm')} ${t('time_ago', 'ago')}`;
+        if (hours < 24) return `${hours}${t('time_h', 'h')} ${t('time_ago', 'ago')}`;
+        if (days < 7) return `${days}${t('time_d', 'd')} ${t('time_ago', 'ago')}`;
 
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const locale = i18n.language === 'ar' ? 'ar-u-nu-latn' : 'en-US';
+        return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
     };
 
     const value = {
         notifications,
         unreadCount,
+        unreadBellCount,
+        unreadMessageCount,
         loading,
         createNotification,
         markAsRead,
+        markMessageNotificationsAsRead,
         markAllAsRead,
         deleteNotification,
         deleteAllNotifications,
-        activePrivateInvitation,
-        setActivePrivateInvitation,
-        unreadPrivateInvitations: notifications.filter(n =>
-            n.type === 'private_invitation' &&
-            !n.read &&
-            !dismissedNotificationIds.has(n.id)
-        ),
-        dismissNotification,
         formatTime
     };
 

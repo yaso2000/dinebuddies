@@ -1,0 +1,79 @@
+{
+  "faq": {
+    "title": "Yardım ve Destek",
+    "subtitle": "Sorularının yanıtlarını bul ve DineBuddies'den en iyi şekilde nasıl yararlanacağını öğren.",
+    "empty": "Şu anda mevcut soru bulunmuyor.",
+    "user_questions": [
+      {
+        "q": "DineBuddies nedir?",
+        "a": "Yemek tutkunları için nihai platform! DineBuddies, kaliteli restoran keşfi, özenle hazırlanmış yemek davetiyeleriyle yeni insanlarla tanışma ve gerçek masa toplulukları oluşturmayı bir araya getiren yenilikçi bir sosyal uygulamadır."
+      },
+      {
+        "q": "Nasıl davetiye oluştururum ve hesabı bölerim?",
+        "a": "(+) düğmesine dokun, bir restoran seç ve tarih ile saatini belirle. Ayarlardan hesabın 'Ev Sahibinden', 'Eşit Bölüş' veya 'Herkes kendi ödemesini yapar' olacak şekilde seçebilirsin."
+      },
+      {
+        "q": "Herkese Açık, Özel ve Flört davetiyeleri arasındaki fark nedir?",
+        "a": "• Herkese Açık: Ana haritada görünür, herkes katılmak için istek gönderebilir.\n• Özel: Belirli kişilere zarif bir e-davetiye bağlantısıyla gönderilen gizli davetiye.\n• Flört: Premium abonelik gerektiren, gelişmiş filtreler ve güvenilir yorumlar sunan özel romantik buluşmalar."
+      },
+      {
+        "q": "Davetiyeme gelen katılım isteklerini nasıl kabul ederim?",
+        "a": "Biri katılmak istediğinde anında bildirim alırsın. Davetiye detaylarını aç, profilini incele ve 'Kabul Et' veya 'Reddet'e dokun. Kabul edildiğinde özel grup sohbeti otomatik olarak açılır."
+      },
+      {
+        "q": "Topluluk Sohbeti nedir?",
+        "a": "Uygulamadaki her restoranın kendi 'Topluluğu' vardır. Bir restoranın topluluğuna katılarak personel ve diğer müşterilerle yemekler hakkında soru sormak, öneri paylaşmak ve özel fırsatları yakalamak için herkese açık bir sohbet odasına girersin."
+      },
+      {
+        "q": "Hesabımı nasıl yükseltirim ve İtibar Puanı kazanırım?",
+        "a": "İtibar Puanları güvenilirliğini gösterir! Etkinliklere zamanında katıldığında ve ev sahiplerinden veya misafirlerden 5 yıldız aldığında artar. Gelmeyip şikâyet aldığında düşer."
+      },
+      {
+        "q": "Premium'a (VIP) nasıl yükseltirim?",
+        "a": "Profil > Ayarlar > Abonelikler'e git. VIP seviyesi sana üstün arama filtreleri, Flört davetiyelerine tam erişim, profil ziyaretçi analizleri ve sınırsız özel davetiye sağlar."
+      },
+      {
+        "q": "Hesabımı kalıcı olarak nasıl silerim?",
+        "a": "Profil > Ayarlar > Hesap > Hesabı Sil'e git. Bu işlemin kalıcı olduğunu ve verilerin 30 gün sonra geri getirilemeyeceğini unutma."
+      },
+      {
+        "q": "Restoran ve kafeleri nasıl filtrelerim?",
+        "a": "Arama çubuğu ve filtre düğmelerini kullanarak Restoranlar, Kafeler, şu an Açık mekânlar veya En Yüksek Puan ve En Yakın Mesafe'ye göre sıralama yapabilirsin."
+      },
+      {
+        "q": "Doğrudan e-davetiyeler nasıl çalışır?",
+        "a": "Uygulama kullanıcılarını beklemek yerine 'Özel' davetiye oluştur, zarif elektronik kart bağlantısını kopyala ve WhatsApp üzerinden paylaş! Bağlantıya tıklayan herkes sorunsuz şekilde seninle katılım onayı vermeye yönlendirilir."
+      }
+    ],
+    "business_questions": [
+      {
+        "q": "Business Pro Paneli nedir?",
+        "a": "DineBuddies restoran ortakları için özel, profesyonel bir kontrol merkezi. Menün, çalışma saatlerin, doğrudan sohbetlerin ve pazarlama gönderilerini platform genelinde yayınlaman üzerinde tam kontrol sağlar."
+      },
+      {
+        "q": "Öne çıkan tanıtım gönderisini nasıl yayınlarım?",
+        "a": "Pro Panelinden 'Öne Çıkan Gönderiler'e git, tanıtım görselini yükle ve bir açıklama yaz. Gönderin anında ana uygulama akışında tüm kullanıcılara görünür."
+      },
+      {
+        "q": "Topluluğuma nasıl teklif yayınlarım?",
+        "a": "'Topluluğuna' katılan her kullanıcı Üyeler sekmende görünür. Yoğun olmayan saatlerde anında trafik çekmek için dev indirimleri doğrudan 'Topluluk Sohbeti'ne bırakabilirsin."
+      },
+      {
+        "q": "Dijital Menümü nasıl yönetirim?",
+        "a": "Panelinde 'Menü ve Hizmetler' altında ağız sulandıran görseller ve fiyatlarla yemekleri yükle. Şık dijital menü tüm profil ziyaretçileri için anında güncellenir."
+      },
+      {
+        "q": "Profesyonel ve Elite Ortak seviyeleri arasındaki fark nedir?",
+        "a": "'Pro' seviyesi vitrinini ve dizin listesini kurar. 'Elite' seviyesi algoritma sıralamasını güçlendiren ve maksimum görünürlük için sınırsız, öncelikli Öne Çıkan Slaytlar sunan güç paketimizdir."
+      },
+      {
+        "q": "Müşteri Yorumlarını nasıl yönetirim?",
+        "a": "'Yorumlar' sekmesi puanlarının detaylı analizlerini sunar. Ayrıca restoranının doğrulanmış adıyla yorumlara resmî yanıt vererek kalıcı müşteri sadakati oluşturma gücüne de sahipsin."
+      }
+    ]
+  },
+  "seo": {
+    "title": "DineBuddies | Premium Sosyal Yemek Deneyimi ve Özel Yemek Ağı",
+    "description": "DineBuddies, yemek tutkunlarının buluştuğu, özel restoran davetiyelerine katıldığı ve premium yemeklerin üzerinden bağ kurduğu özel bir sosyal yemek ağıdır."
+  }
+}

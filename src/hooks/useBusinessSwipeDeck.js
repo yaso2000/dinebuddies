@@ -1,0 +1,117 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useInvitations } from '../context/InvitationContext';
+import { useAuth } from '../context/AuthContext';
+import {
+  DEFAULT_BUSINESS_COVER,
+  resolveBusinessCoverImageUrl,
+} from '../utils/businessCoverImage';
+import { pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import { getBusinessCardCity } from '../utils/businessCardLocation';
+import { haversineKm } from '../utils/postsFeedScope';
+import { fetchIpLocation } from '../utils/locationUtils';
+
+function parseBusinessLatLng(res) {
+  const lat = Number(res?.lat ?? res?.location?.lat ?? res?.businessInfo?.lat);
+  const lng = Number(res?.lng ?? res?.location?.lng ?? res?.businessInfo?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
+
+/**
+ * Published partners for the magnetic swipe deck (same pool as /restaurants list).
+ */
+export function useBusinessSwipeDeck() {
+  const { restaurants = [], loadingInvitations = true } = useInvitations() || {};
+  const { userProfile } = useAuth();
+  const loading = loadingInvitations && restaurants.length === 0;
+  const [deviceLocation, setDeviceLocation] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const applyCoords = (lat, lng) => {
+      const latN = Number(lat);
+      const lngN = Number(lng);
+      if (cancelled || !Number.isFinite(latN) || !Number.isFinite(lngN)) return;
+      setDeviceLocation({ lat: latN, lng: lngN });
+    };
+
+    const applyIpOrProfileFallback = async () => {
+      try {
+        const ip = await fetchIpLocation();
+        if (cancelled) return;
+        if (ip?.latitude != null && ip?.longitude != null) {
+          applyCoords(ip.latitude, ip.longitude);
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+      const profileLat = Number(userProfile?.lat ?? userProfile?.location?.lat);
+      const profileLng = Number(userProfile?.lng ?? userProfile?.location?.lng);
+      if (Number.isFinite(profileLat) && Number.isFinite(profileLng)) {
+        applyCoords(profileLat, profileLng);
+      }
+    };
+
+    if (!navigator.geolocation) {
+      void applyIpOrProfileFallback();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => applyCoords(pos.coords.latitude, pos.coords.longitude),
+      () => {
+        void applyIpOrProfileFallback();
+      },
+      { maximumAge: 60000, timeout: 8000 }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userProfile]);
+
+  const userLocation = deviceLocation;
+
+  const items = useMemo(() => {
+    const mapped = (restaurants || [])
+      .filter((res) => res && res.id && res.name)
+      .map((res) => {
+        const coords = parseBusinessLatLng(res);
+        const distanceKm =
+          userLocation && coords
+            ? haversineKm(userLocation.lat, userLocation.lng, coords.lat, coords.lng)
+            : null;
+        const city = getBusinessCardCity(res) || '';
+        const coverImage =
+          resolveBusinessCoverImageUrl(res) ||
+          pickSafeDisplayImageUrl(res.image, res.businessInfo?.coverImage) ||
+          DEFAULT_BUSINESS_COVER;
+
+        return {
+          id: res.id,
+          coverImage,
+          title: res.name,
+          subtitle: [res.type, city].filter(Boolean).join(' · '),
+          locationLabel: city,
+          distanceKm,
+          href: `/business/${res.id}`,
+          raw: res,
+        };
+      });
+
+    mapped.sort((a, b) => {
+      if (a.distanceKm == null && b.distanceKm == null) return 0;
+      if (a.distanceKm == null) return 1;
+      if (b.distanceKm == null) return -1;
+      return a.distanceKm - b.distanceKm;
+    });
+
+    return mapped;
+  }, [restaurants, userLocation]);
+
+  return { items, loading };
+}

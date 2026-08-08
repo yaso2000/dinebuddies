@@ -1,0 +1,123 @@
+.biz-community-circle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 80px;
+  flex-shrink: 0;
+  padding: 0 0 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  overflow: visible;
+}
+
+.biz-community-circle__ring {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  box-sizing: border-box;
+  line-height: 0;
+  flex-shrink: 0;
+  background: conic-gradient(
+    from 200deg,
+    #0ea5e9,
+    #6366f1,
+    #0284c7,
+    #0ea5e9
+  );
+  transition: transform 0.18s ease;
+  overflow: visible;
+}
+
+.biz-community-circle:hover .biz-community-circle__ring,
+.biz-community-circle:focus-visible .biz-community-circle__ring {
+  transform: scale(1.05);
+  outline: none;
+}
+
+.biz-community-circle__avatar.user-avatar {
+  width: 64px !important;
+  height: 64px !important;
+  min-width: 64px !important;
+  min-height: 64px !important;
+  border-radius: 50% !important;
+  border: 3px solid var(--bg-card, #fff) !important;
+  box-sizing: border-box !important;
+  display: inline-flex !important;
+  overflow: hidden !important;
+  flex-shrink: 0;
+  background: var(--bg-body, #111);
+}
+
+.biz-community-circle__avatar .user-avatar__img {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  border-radius: 50% !important;
+  display: block !important;
+}
+
+.biz-community-circle__badge {
+  position: absolute;
+  inset-inline-end: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #0284c7;
+  color: #fff;
+  border: 2px solid var(--bg-card, #fff);
+  font-size: 0.55rem;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.4);
+  z-index: 2;
+}
+
+.biz-community-circle__badge-icon {
+  width: 0.65em;
+  height: 0.65em;
+}
+
+.biz-community-circle__label {
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--text-main, var(--text-primary));
+  max-width: 75px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.biz-community-circle__live-tag {
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  transform: translateX(-50%);
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #0284c7;
+  color: #fff;
+  border: 1.5px solid var(--bg-card, #fff);
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);
+  z-index: 2;
+  white-space: nowrap;
+  pointer-events: none;
+}

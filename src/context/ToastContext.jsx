@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import NotificationToastBanner from '../components/NotificationToastBanner';
+import PersistentWarningModal from '../components/PersistentWarningModal';
+import '../components/NotificationToastBanner.css';
 
 const ToastContext = createContext(null);
+
+const NOTIFICATION_AUTO_DISMISS_MS = 7000;
 
 export function useToast() {
     const ctx = useContext(ToastContext);
@@ -8,47 +13,47 @@ export function useToast() {
     return ctx;
 }
 
-function ToastContainer({ toasts }) {
+function ToastContainer({ toasts, onDismiss, onPin }) {
     return (
-        <div
-            style={{
-                position: 'fixed',
-                bottom: '1.5rem',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                zIndex: 99999,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.5rem',
-                maxWidth: 'min(90vw, 400px)',
-                pointerEvents: 'none'
-            }}
-        >
-            {toasts.map(({ id, message, type }) => (
-                <div
-                    key={id}
-                    role="alert"
-                    style={{
-                        padding: '0.75rem 1rem',
-                        borderRadius: '8px',
-                        background: 'var(--bg-secondary)',
-                        color: 'var(--text-main)',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                        border: '1px solid var(--border-color)',
-                        borderLeft: type === 'error' ? '4px solid #ef4444' : type === 'success' ? '4px solid #22c55e' : type === 'warning' ? '4px solid #f59e0b' : '4px solid var(--primary)',
-                        pointerEvents: 'auto',
-                        fontSize: '0.95rem'
-                    }}
-                >
-                    {message}
-                </div>
-            ))}
+        <div className="toast-container">
+            {toasts.map((toast) => {
+                const isNotification =
+                    toast.type === 'notification' && typeof toast.message === 'object';
+
+                if (isNotification) {
+                    return (
+                        <NotificationToastBanner
+                            key={toast.id}
+                            toast={toast}
+                            onNavigate={toast.onClick}
+                            onPin={onPin}
+                            onDismiss={onDismiss}
+                        />
+                    );
+                }
+
+                const typeClass =
+                    toast.type === 'error'
+                        ? 'toast-item--error'
+                        : toast.type === 'success'
+                          ? 'toast-item--success'
+                          : toast.type === 'warning'
+                            ? 'toast-item--warning'
+                            : 'toast-item--info';
+
+                return (
+                    <div key={toast.id} role="alert" className={`toast-item ${typeClass}`}>
+                        {toast.message}
+                    </div>
+                );
+            })}
         </div>
     );
 }
 
 export function ToastProvider({ children }) {
     const [toasts, setToasts] = useState([]);
+    const [persistentWarning, setPersistentWarning] = useState(null);
     const timeoutsRef = useRef({});
 
     const dismiss = useCallback((id) => {
@@ -59,15 +64,65 @@ export function ToastProvider({ children }) {
         setToasts((prev) => prev.filter((t) => t.id !== id));
     }, []);
 
-    const showToast = useCallback((message, type = 'info') => {
-        const id = Date.now() + Math.random();
-        setToasts((prev) => [...prev, { id, message, type, createdAt: Date.now() }]);
+    const scheduleDismiss = useCallback(
+        (id, ms) => {
+            if (timeoutsRef.current[id]) {
+                clearTimeout(timeoutsRef.current[id]);
+            }
+            timeoutsRef.current[id] = setTimeout(() => {
+                setToasts((prev) => {
+                    const target = prev.find((t) => t.id === id);
+                    if (target?.pinned) return prev;
+                    return prev.filter((t) => t.id !== id);
+                });
+                delete timeoutsRef.current[id];
+            }, ms);
+        },
+        []
+    );
 
-        const t = setTimeout(() => {
-            dismiss(id);
-        }, 5000);
-        timeoutsRef.current[id] = t;
-    }, [dismiss]);
+    const pinToast = useCallback(
+        (id) => {
+            if (timeoutsRef.current[id]) {
+                clearTimeout(timeoutsRef.current[id]);
+                delete timeoutsRef.current[id];
+            }
+            setToasts((prev) =>
+                prev.map((t) => (t.id === id ? { ...t, pinned: true } : t))
+            );
+        },
+        []
+    );
+
+    const showPersistentWarning = useCallback(({ title, message }) => {
+        if (!message) return;
+        setPersistentWarning({ title: title || null, message });
+    }, []);
+
+    const dismissPersistentWarning = useCallback(() => {
+        setPersistentWarning(null);
+    }, []);
+
+    const showToast = useCallback(
+        (message, type = 'info', onClick = null, durationMs = 5000) => {
+            const id = Date.now() + Math.random();
+            const isNotification = type === 'notification' && typeof message === 'object';
+            const ms =
+                isNotification
+                    ? NOTIFICATION_AUTO_DISMISS_MS
+                    : Number.isFinite(durationMs) && durationMs > 0
+                      ? durationMs
+                      : 5000;
+
+            setToasts((prev) => [
+                ...prev,
+                { id, message, type, onClick, pinned: false, createdAt: Date.now() },
+            ]);
+
+            scheduleDismiss(id, ms);
+        },
+        [scheduleDismiss]
+    );
 
     useEffect(() => {
         return () => {
@@ -76,9 +131,26 @@ export function ToastProvider({ children }) {
     }, []);
 
     return (
-        <ToastContext.Provider value={{ showToast }}>
+        <ToastContext.Provider
+            value={{
+                showToast,
+                dismissToast: dismiss,
+                pinToast,
+                showPersistentWarning,
+                dismissPersistentWarning,
+            }}
+        >
             {children}
-            {toasts.length > 0 && <ToastContainer toasts={toasts} />}
+            {persistentWarning && (
+                <PersistentWarningModal
+                    title={persistentWarning.title}
+                    message={persistentWarning.message}
+                    onDismiss={dismissPersistentWarning}
+                />
+            )}
+            {toasts.length > 0 && (
+                <ToastContainer toasts={toasts} onDismiss={dismiss} onPin={pinToast} />
+            )}
         </ToastContext.Provider>
     );
 }

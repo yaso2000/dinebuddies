@@ -1,0 +1,204 @@
+.sps-text-composer {
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.sps-text-composer.is-open {
+    visibility: visible;
+    pointer-events: auto;
+}
+
+/* Tracks visualViewport — centered when no keyboard, bottom when keyboard open */
+.sps-text-composer__shell {
+    position: fixed;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    box-sizing: border-box;
+    padding: 16px 12px max(12px, env(safe-area-inset-bottom, 0px));
+    background: color-mix(in srgb, #000 72%, transparent);
+    overflow: hidden;
+}
+
+.sps-text-composer__shell--keyboard {
+    justify-content: flex-end;
+    align-items: stretch;
+    padding: 8px 10px max(6px, env(safe-area-inset-bottom, 0px));
+}
+
+.sps-text-composer__card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: min(100%, 440px);
+    max-height: min(88vh, 100%);
+    min-height: 0;
+    border-radius: 16px;
+    border: 1px solid color-mix(in srgb, var(--border-color, #334155) 85%, #fff 8%);
+    background: var(--bg-card, #1a1d24);
+    color: var(--text-main, #f8fafc);
+    box-shadow:
+        0 12px 40px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+    overflow: hidden;
+}
+
+.sps-text-composer__shell--keyboard .sps-text-composer__card {
+    max-width: 100%;
+}
+
+.sps-text-composer__header {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px 0;
+}
+
+.sps-text-composer__header-title {
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: var(--text-main, #f8fafc);
+}
+
+.sps-text-composer__close {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid color-mix(in srgb, var(--border-color, #334155) 70%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--bg-body, #0f1115) 50%, transparent);
+    color: var(--text-muted, #94a3b8);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition:
+        color 0.15s ease,
+        border-color 0.15s ease,
+        background 0.15s ease;
+}
+
+.sps-text-composer__close:hover {
+    color: var(--text-main, #f8fafc);
+    border-color: color-mix(in srgb, var(--primary, #f97316) 45%, var(--border-color, #334155));
+    background: color-mix(in srgb, var(--primary, #f97316) 10%, transparent);
+}
+
+.sps-text-composer__close:active {
+    transform: scale(0.96);
+}
+
+.sps-text-composer__section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    min-width: 0;
+}
+
+.sps-text-composer__section--title {
+    flex-shrink: 0;
+}
+
+.sps-text-composer__section--body {
+    flex: 1;
+    min-height: 0;
+    max-height: min(42vh, 220px);
+}
+
+.sps-text-composer__label {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted, #94a3b8);
+    line-height: 1.2;
+}
+
+.sps-text-composer__divider {
+    flex-shrink: 0;
+    height: 1px;
+    margin: 0 12px;
+    background: color-mix(in srgb, var(--border-color, #334155) 90%, transparent);
+}
+
+.sps-text-composer__title,
+.sps-text-composer__body {
+    width: 100%;
+    box-sizing: border-box;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin: 0;
+    background: color-mix(in srgb, var(--bg-body, #0f1115) 65%, var(--bg-card, #1a1d24));
+    color: inherit;
+    font-family: inherit;
+    outline: none;
+    resize: none;
+    font-size: 1.0625rem;
+    line-height: 1.35;
+    -webkit-text-size-adjust: 100%;
+    border: 1px solid color-mix(in srgb, var(--border-color, #334155) 55%, transparent);
+}
+
+.sps-text-composer__title:focus,
+.sps-text-composer__body:focus {
+    border-color: color-mix(in srgb, var(--primary, #f97316) 55%, var(--border-color, #334155));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #f97316) 18%, transparent);
+}
+
+.sps-text-composer__title {
+    font-size: 1.125rem;
+    font-weight: 800;
+    line-height: 1.25;
+}
+
+.sps-text-composer__title::placeholder,
+.sps-text-composer__body::placeholder {
+    color: color-mix(in srgb, var(--text-muted, #94a3b8) 90%, transparent);
+    opacity: 1;
+    font-weight: 500;
+}
+
+.sps-text-composer__body {
+    flex: 1;
+    min-height: 4.5rem;
+    max-height: min(36vh, 180px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.sps-text-composer__apply {
+    flex-shrink: 0;
+    width: 100%;
+    margin: 0;
+    padding: 14px 16px;
+    border: none;
+    border-top: 1px solid color-mix(in srgb, var(--border-color, #334155) 90%, transparent);
+    border-radius: 0 0 16px 16px;
+    font-size: 1rem;
+    font-weight: 800;
+    font-family: inherit;
+    color: #fff;
+    cursor: pointer;
+    background: linear-gradient(135deg, var(--primary, #f97316), #ea580c);
+    touch-action: manipulation;
+}
+
+.sps-text-composer__apply:active {
+    filter: brightness(0.95);
+}
+
+.sps-text-composer[dir='rtl'] .sps-text-composer__label {
+    letter-spacing: 0.02em;
+    text-transform: none;
+}

@@ -1,0 +1,345 @@
+/**
+ * Shared request parsing for /api/ai/generate and /api/ai/multi-generate.
+ */
+
+import {
+    AI_USER_PROMPT_MAX_CHARS,
+    getAiUserPromptDefaultEn,
+} from '../../src/constants/aiPromptLimits.js';
+import { pickAiOutputLanguage } from '../../src/utils/aiOutputLanguage.js';
+
+const INVITATION_SUB_TYPES = new Set(['public', 'private', 'date']);
+const TEXT_POST_TYPES = new Set(['regular_post', 'featured_post', 'animated_post', 'invitation', 'design_studio', 'text_assistant']);
+const GENERATION_PACKAGES = new Set(['text', 'image', 'invitation_bundle']);
+const ASPECT_RATIOS = new Set(['1:1', '4:5', '9:16', '16:9']);
+const DESIGN_STUDIO_CATEGORIES = new Set([
+    'square',
+    'story',
+    'landscape',
+    'profile_picture',
+    'profile_cover',
+    'business_logo',
+]);
+const DESIGN_CATEGORY_ASPECT = {
+    square: '1:1',
+    story: '9:16',
+    landscape: '16:9',
+    profile_picture: '1:1',
+    profile_cover: '16:9',
+    business_logo: '1:1',
+};
+const CARD_STRUCTURES = new Set(['arch_luxury', 'vintage_ticket', 'modern_minimal']);
+
+/**
+ * @param {unknown} body
+ */
+export function parseAiGenerateBody(body) {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return { ok: false, error: 'Request body must be a JSON object' };
+    }
+
+    const record = /** @type {Record<string, unknown>} */ (body);
+    const {
+        userPrompt,
+        postType,
+        subType,
+        venueType,
+        venueName,
+        generationPackage,
+        aspectRatio,
+        inviteeId,
+        date,
+        time,
+        venueDetails,
+        cardStructure,
+        designCategory,
+        outputLanguage,
+    } = record;
+
+    const resolvedOutputLanguage = pickAiOutputLanguage(outputLanguage);
+
+    const manualPrompt = typeof userPrompt === 'string' ? userPrompt.trim() : '';
+    if (manualPrompt.length > AI_USER_PROMPT_MAX_CHARS) {
+        return {
+            ok: false,
+            error: `userPrompt must be at most ${AI_USER_PROMPT_MAX_CHARS} characters`,
+        };
+    }
+    const normalizedPackage = String(generationPackage || '').trim();
+    const normalizedPostType = typeof postType === 'string' ? postType.trim() : '';
+
+    /** @type {'text' | 'image' | 'invitation_bundle'} */
+    let resolvedPackage = 'text';
+
+    if (normalizedPackage && GENERATION_PACKAGES.has(normalizedPackage)) {
+        resolvedPackage = /** @type {'text' | 'image' | 'invitation_bundle'} */ (normalizedPackage);
+    } else if (normalizedPostType === 'magic_cover') {
+        resolvedPackage = 'image';
+    } else if (normalizedPostType === 'invitation') {
+        resolvedPackage = 'text';
+    }
+
+    if (resolvedPackage === 'image' || normalizedPostType === 'magic_cover') {
+        const designCategoryRaw =
+            typeof designCategory === 'string' ? designCategory.trim() : '';
+        const isDesignStudio =
+            normalizedPostType === 'design_studio' ||
+            (designCategoryRaw && DESIGN_STUDIO_CATEGORIES.has(designCategoryRaw));
+
+        if (isDesignStudio) {
+            if (!DESIGN_STUDIO_CATEGORIES.has(designCategoryRaw)) {
+                return {
+                    ok: false,
+                    error: 'designCategory is required for design_studio image generation',
+                };
+            }
+
+            const ratioFromCategory = DESIGN_CATEGORY_ASPECT[designCategoryRaw] || '1:1';
+            const ratio =
+                typeof aspectRatio === 'string' && ASPECT_RATIOS.has(aspectRatio.trim())
+                    ? aspectRatio.trim()
+                    : ratioFromCategory;
+
+            return {
+                ok: true,
+                outputLanguage: resolvedOutputLanguage,
+                generationPackage: 'image',
+                postType: 'design_studio',
+                userPrompt: normalizeUserPrompt(manualPrompt, 'design_studio'),
+                aspectRatio: ratio,
+                designCategory: designCategoryRaw,
+            };
+        }
+
+        const postTypeForImage =
+            normalizedPostType === 'magic_cover' || !normalizedPostType
+                ? 'invitation'
+                : TEXT_POST_TYPES.has(normalizedPostType)
+                  ? normalizedPostType
+                  : 'invitation';
+
+        if (subType !== undefined && subType !== null && subType !== '') {
+            if (typeof subType !== 'string' || !INVITATION_SUB_TYPES.has(subType)) {
+                return { ok: false, error: 'subType must be public, private, or date when provided' };
+            }
+            if (postTypeForImage !== 'invitation') {
+                return { ok: false, error: 'subType is only allowed for invitation requests' };
+            }
+        }
+
+        const optionalSubType =
+            postTypeForImage === 'invitation' &&
+            typeof subType === 'string' &&
+            INVITATION_SUB_TYPES.has(subType)
+                ? subType
+                : undefined;
+
+        const ratio =
+            typeof aspectRatio === 'string' && ASPECT_RATIOS.has(aspectRatio.trim())
+                ? aspectRatio.trim()
+                : '1:1';
+
+        return {
+            ok: true,
+            outputLanguage: resolvedOutputLanguage,
+            generationPackage: 'image',
+            postType: postTypeForImage,
+            userPrompt: normalizeUserPrompt(manualPrompt, postTypeForImage, optionalSubType),
+            aspectRatio: ratio,
+            ...(postTypeForImage === 'invitation'
+                ? {
+                      venueType: pickOptionalString(venueType),
+                      venueName: pickOptionalString(venueName),
+                  }
+                : {}),
+            ...(optionalSubType ? { subType: optionalSubType } : {}),
+        };
+    }
+
+    if (resolvedPackage === 'invitation_bundle') {
+        const postTypeForBundle =
+            normalizedPostType && TEXT_POST_TYPES.has(normalizedPostType)
+                ? normalizedPostType
+                : 'invitation';
+
+        /** @type {'public' | 'private' | 'date' | undefined} */
+        let parsedSubType;
+        if (postTypeForBundle === 'invitation') {
+            if (typeof subType !== 'string' || !INVITATION_SUB_TYPES.has(subType)) {
+                return { ok: false, error: 'subType is required for invitation_bundle' };
+            }
+            parsedSubType = subType;
+        } else if (subType !== undefined && subType !== null && subType !== '') {
+            return { ok: false, error: 'subType is only allowed for invitation requests' };
+        }
+
+        const ratio =
+            typeof aspectRatio === 'string' && ASPECT_RATIOS.has(aspectRatio.trim())
+                ? aspectRatio.trim()
+                : '1:1';
+
+        return {
+            ok: true,
+            outputLanguage: resolvedOutputLanguage,
+            generationPackage: 'invitation_bundle',
+            postType: postTypeForBundle,
+            userPrompt: normalizeUserPrompt(manualPrompt, postTypeForBundle, parsedSubType),
+            aspectRatio: ratio,
+            ...(postTypeForBundle === 'invitation'
+                ? {
+                      venueType: pickOptionalString(venueType),
+                      venueName: pickOptionalString(venueName),
+                  }
+                : {}),
+            ...(parsedSubType ? { subType: parsedSubType } : {}),
+        };
+    }
+
+    if (!normalizedPostType || !TEXT_POST_TYPES.has(normalizedPostType)) {
+        return { ok: false, error: 'postType is required and must be a supported value' };
+    }
+
+    if (normalizedPostType === 'design_studio') {
+        return {
+            ok: false,
+            error: 'design_studio requires generationPackage image with designCategory',
+        };
+    }
+
+    if (normalizedPostType === 'invitation') {
+        if (typeof subType !== 'string' || !INVITATION_SUB_TYPES.has(subType)) {
+            return { ok: false, error: 'subType is required for invitation postType' };
+        }
+
+        if (subType === 'private') {
+            const datingCtx = parsePrivateTextContext(record);
+            if (datingCtx.ok === false) {
+                return datingCtx;
+            }
+            return {
+                ok: true,
+                outputLanguage: resolvedOutputLanguage,
+                generationPackage: 'text',
+                postType: 'invitation',
+                userPrompt: normalizeUserPrompt(manualPrompt, 'invitation', 'date'),
+                subType,
+                inviteeId: datingCtx.inviteeId,
+                date: datingCtx.date,
+                time: datingCtx.time,
+                venueDetails: datingCtx.venueDetails,
+                venueType: pickOptionalString(venueType),
+                venueName: datingCtx.venueDetails.name || pickOptionalString(venueName),
+                cardStructure: pickCardStructure(cardStructure) || 'modern_minimal',
+            };
+        }
+
+        return {
+            ok: true,
+            outputLanguage: resolvedOutputLanguage,
+            generationPackage: 'text',
+            postType: 'invitation',
+            userPrompt: normalizeUserPrompt(manualPrompt, 'invitation', subType),
+            subType,
+            venueType: pickOptionalString(venueType),
+            venueName: pickOptionalString(venueName),
+            cardStructure: pickCardStructure(cardStructure) || 'modern_minimal',
+        };
+    }
+
+    if (subType !== undefined && subType !== null && subType !== '') {
+        return { ok: false, error: 'subType is only allowed for invitation requests' };
+    }
+
+    return {
+        ok: true,
+        outputLanguage: resolvedOutputLanguage,
+        generationPackage: 'text',
+        postType: normalizedPostType,
+        userPrompt: normalizeUserPrompt(manualPrompt, normalizedPostType),
+    };
+}
+
+/**
+ * @param {string} manual
+ * @param {string} postType
+ * @param {string | undefined} [subType]
+ */
+function normalizeUserPrompt(manual, postType, subType) {
+    const trimmed = String(manual || '').trim().slice(0, AI_USER_PROMPT_MAX_CHARS);
+    return trimmed || getAiUserPromptDefaultEn(postType, subType);
+}
+
+/** @param {unknown} value */
+function pickCardStructure(value) {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    return CARD_STRUCTURES.has(raw) ? raw : undefined;
+}
+
+/** @param {unknown} value */
+function pickOptionalString(value) {
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+/** @param {unknown} value */
+function pickVenueDetails(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    const v = /** @type {Record<string, unknown>} */ (value);
+    const name = pickOptionalString(v.name) || pickOptionalString(v.venueName) || pickOptionalString(v.location);
+    const venueId = pickOptionalString(v.venueId) || pickOptionalString(v.restaurantId);
+    if (!name && !venueId) return undefined;
+    return {
+        ...(venueId ? { venueId } : {}),
+        ...(name ? { name } : {}),
+        ...(pickOptionalString(v.address) ? { address: pickOptionalString(v.address) } : {}),
+        ...(pickOptionalString(v.city) ? { city: pickOptionalString(v.city) } : {}),
+        ...(pickOptionalString(v.country) ? { country: pickOptionalString(v.country) } : {}),
+        ...(typeof v.lat === 'number' ? { lat: v.lat } : {}),
+        ...(typeof v.lng === 'number' ? { lng: v.lng } : {}),
+    };
+}
+
+/**
+ * Dating text generation requires schedule and venue before Gemini runs.
+ * Invitee is optional during create — chosen later on the preview/send step.
+ * @param {Record<string, unknown>} record
+ */
+function parsePrivateTextContext(record) {
+    const inviteeId = pickOptionalString(record.inviteeId);
+    const date = pickOptionalString(record.date);
+    const time = pickOptionalString(record.time);
+    let venueDetails = pickVenueDetails(record.venueDetails);
+
+    if (!venueDetails) {
+        const topLevelName = pickOptionalString(record.venueName);
+        const topLevelId = pickOptionalString(record.venueId);
+        if (topLevelName || topLevelId) {
+            venueDetails = {
+                ...(topLevelId ? { venueId: topLevelId } : {}),
+                ...(topLevelName ? { name: topLevelName } : {}),
+            };
+        }
+    }
+
+    /** @type {string[]} */
+    const missing = [];
+    if (!date) missing.push('date');
+    if (!time) missing.push('time');
+    if (!venueDetails) missing.push('venueDetails');
+
+    if (missing.length > 0) {
+        return {
+            ok: false,
+            error: 'private_context_incomplete',
+            missing,
+            message: `Missing required dating fields: ${missing.join(', ')}`,
+        };
+    }
+
+    return {
+        ok: true,
+        inviteeId,
+        date,
+        time,
+        venueDetails,
+    };
+}

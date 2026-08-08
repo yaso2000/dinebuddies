@@ -1,134 +1,221 @@
-import React, { useState, useRef } from 'react';
-import { FaCamera, FaTrash, FaTimes, FaCheck } from 'react-icons/fa';
+import React, { useState, useRef, useEffect } from 'react';
+import { FaCamera, FaTimes } from 'react-icons/fa';
 import { useToast } from '../context/ToastContext';
+import { useTranslation } from 'react-i18next';
+import { prepareImageFileForUpload } from '../utils/imageUpload';
 import './ImageUpload.css';
+import { AppText } from './base';
 
+function isAcceptableImageFile(file) {
+  if (!file) return false;
+  const type = String(file.type || '').toLowerCase();
+  const name = String(file.name || '').toLowerCase();
+  if (['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(type)) {
+    return true;
+  }
+  if (!type || type === 'application/octet-stream' || type === 'image/*') {
+    if (!name) return true;
+    return /\.(jpe?g|png|webp|heic|heif)$/i.test(name);
+  }
+  return /\.(jpe?g|png|webp|heic|heif)$/i.test(name);
+}
+
+/**
+ * Preview via JPEG blob URL (not FileReader data-URLs).
+ * Keep the local blob until the saved remote URL actually loads — otherwise a
+ * brief 404/race looks like the photo was deleted.
+ */
 const ImageUpload = ({
-    currentImage = null,
-    onImageSelect,
-    onImageRemove = null,
-    shape = 'circle', // 'circle' or 'square'
-    size = 'medium', // 'small', 'medium', 'large'
-    label = 'Upload Image',
-    showPreview = true,
-    allowRemove = true
+  currentImage = null,
+  onImageSelect,
+  onImageRemove = null,
+  shape = 'circle',
+  size = 'medium',
+  label = 'Upload Image',
+  showPreview = true,
+  allowRemove = true,
+  busy = false,
 }) => {
-    const { showToast } = useToast();
-    const [preview, setPreview] = useState(currentImage);
-    const [isDragging, setIsDragging] = useState(false);
-    const fileInputRef = useRef(null);
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const [localPreview, setLocalPreview] = useState(null);
+  const [preparing, setPreparing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
+  const objectUrlRef = useRef(null);
 
-    const handleFileSelect = (file) => {
-        if (!file) return;
+  const revokeLocalPreview = () => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    setLocalPreview(null);
+  };
 
-        // Validate file type
-        const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-        if (!validTypes.includes(file.type)) {
-            showToast('Only JPG, PNG, and WebP images are allowed', 'error');
-            return;
-        }
+  useEffect(() => () => revokeLocalPreview(), []);
 
-        // Validate file size (5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            showToast('Image size must be less than 5MB', 'error');
-            return;
-        }
+  // When Firestore/Storage URL arrives, only drop the blob after that URL actually loads.
+  useEffect(() => {
+    const remote = typeof currentImage === 'string' ? currentImage.trim() : '';
+    if (!remote || remote.startsWith('blob:') || !localPreview) return undefined;
 
-        // Create preview
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setPreview(reader.result);
-        };
-        reader.readAsDataURL(file);
-
-        // Pass file to parent
-        if (onImageSelect) {
-            onImageSelect(file);
-        }
+    let cancelled = false;
+    const probe = new Image();
+    probe.onload = () => {
+      if (!cancelled) revokeLocalPreview();
     };
-
-    const handleInputChange = (e) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            handleFileSelect(file);
-        }
+    probe.onerror = () => {
+      // Keep local preview — remote missing usually means Storage delete race.
     };
-
-    const handleDragOver = (e) => {
-        e.preventDefault();
-        setIsDragging(true);
+    probe.src = remote;
+    return () => {
+      cancelled = true;
+      probe.onload = null;
+      probe.onerror = null;
     };
+  }, [currentImage, localPreview]);
 
-    const handleDragLeave = (e) => {
-        e.preventDefault();
-        setIsDragging(false);
-    };
+  const displaySrc = localPreview || currentImage || null;
+  const isBusy = busy || preparing;
 
-    const handleDrop = (e) => {
-        e.preventDefault();
-        setIsDragging(false);
+  const handleFileSelect = async (file) => {
+    if (!file || isBusy) return;
 
-        const file = e.dataTransfer.files?.[0];
-        if (file) {
-            handleFileSelect(file);
-        }
-    };
+    if (!isAcceptableImageFile(file)) {
+      showToast(t('image_upload_type_error', 'Only JPG, PNG, and WebP images are allowed'), 'error');
+      return;
+    }
 
-    const handleRemove = () => {
-        setPreview(null);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
-        if (onImageRemove) {
-            onImageRemove();
-        }
-    };
+    if (file.size > 25 * 1024 * 1024) {
+      showToast(t('image_upload_size_error', 'Image size must be less than 25MB'), 'error');
+      return;
+    }
 
-    const handleClick = () => {
-        fileInputRef.current?.click();
-    };
+    setPreparing(true);
+    try {
+      const prepared = await prepareImageFileForUpload(file);
+      revokeLocalPreview();
+      const objectUrl = URL.createObjectURL(prepared);
+      objectUrlRef.current = objectUrl;
+      setLocalPreview(objectUrl);
 
-    return (
-        <div className={`image-upload-container size-${size}`}>
-            <div
-                className={`image-upload-wrapper ${shape} ${isDragging ? 'dragging' : ''} ${preview ? 'has-image' : ''}`}
-                onClick={handleClick}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-            >
-                {showPreview && preview ? (
-                    <div className="image-preview">
-                        <img src={preview} alt="Preview" />
-                        {allowRemove && (
-                            <button
-                                className="remove-btn"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemove();
-                                }}
-                            >
-                                <FaTimes />
-                            </button>
-                        )}
-                    </div>
-                ) : (
-                    <div className="upload-placeholder">
-                        <FaCamera className="camera-icon" />
-                        <span className="upload-text">{label}</span>
-                    </div>
-                )}
-            </div>
+      if (onImageSelect) {
+        await Promise.resolve(onImageSelect(prepared));
+      }
+    } catch (err) {
+      console.error('Image prepare failed:', err);
+      showToast(
+        t('image_upload_type_error', 'Could not read this photo. Please choose a JPG or PNG.'),
+        'error'
+      );
+      revokeLocalPreview();
+    } finally {
+      setPreparing(false);
+    }
+  };
 
-            <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/jpg,image/png,image/webp"
-                onChange={handleInputChange}
-                style={{ display: 'none' }}
+  const handleInputChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) void handleFileSelect(file);
+    e.target.value = '';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) void handleFileSelect(file);
+  };
+
+  const handleRemove = () => {
+    if (isBusy) return;
+    revokeLocalPreview();
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (onImageRemove) onImageRemove();
+  };
+
+  const handleClick = () => {
+    if (isBusy) return;
+    fileInputRef.current?.click();
+  };
+
+  return (
+    <div className={`image-upload-container size-${size}`}>
+      <div
+        className={`image-upload-wrapper ${shape} ${isDragging ? 'dragging' : ''} ${displaySrc ? 'has-image' : ''}${isBusy ? ' is-busy' : ''}`}
+        onClick={handleClick}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        aria-busy={isBusy || undefined}
+      >
+        {showPreview && displaySrc ? (
+          <div className="image-preview">
+            <img
+              src={displaySrc}
+              alt=""
             />
+          </div>
+        ) : (
+          <div className="upload-placeholder">
+            <FaCamera className="camera-icon" />
+            <AppText as="span" className="upload-text">{label}</AppText>
+          </div>
+        )}
+      </div>
+
+      {showPreview && displaySrc ? (
+        <div className="image-upload-actions">
+          <button
+            type="button"
+            className="change-btn"
+            disabled={isBusy}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClick();
+            }}
+            title={label}
+            aria-label={label}
+          >
+            <FaCamera className="change-btn__icon" aria-hidden />
+          </button>
+          {allowRemove ? (
+            <button
+              type="button"
+              className="remove-btn"
+              disabled={isBusy}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRemove();
+              }}
+              title="Remove photo"
+              aria-label="Remove photo"
+            >
+              <FaTimes className="remove-btn__icon" aria-hidden />
+            </button>
+          ) : null}
         </div>
-    );
+      ) : null}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleInputChange}
+        style={{ display: 'none' }}
+      />
+    </div>
+  );
 };
 
 export default ImageUpload;

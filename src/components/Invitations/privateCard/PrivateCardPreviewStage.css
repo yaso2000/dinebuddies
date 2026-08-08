@@ -1,0 +1,107 @@
+.private-card-preview-bundle {
+    width: 100%;
+}
+
+.private-card-preview-stage {
+    position: relative;
+    width: 100%;
+}
+
+.private-card-preview-stage__top {
+    position: absolute;
+    z-index: 5;
+    top: 6px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 3px 5px;
+    max-width: calc(100% - 48px);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.84);
+    border: 1px solid rgba(212, 175, 55, 0.32);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    pointer-events: auto;
+    box-sizing: border-box;
+}
+
+.private-card-preview-stage__text-btn {
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    color: var(--luxury-gold, #d4af37);
+    font-size: 0.62rem;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+    touch-action: manipulation;
+    flex-shrink: 0;
+}
+
+.private-card-preview-stage__text-btn[aria-pressed='true'] {
+    color: #f9a8d4;
+}
+
+.private-card-preview-stage__top .private-card-text-backdrop-tone--icons {
+    flex-shrink: 0;
+    padding-inline-start: 2px;
+    border-inline-start: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.private-card-preview-stage .social-invitation-card-preview {
+    margin-bottom: 0;
+}
+
+.private-card-preview-stage__side-rail {
+    position: absolute;
+    z-index: 4;
+    inset-inline-end: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: auto;
+}
+
+.private-card-preview-stage__side-rail--font {
+    inset-inline-end: auto;
+    inset-inline-start: 2px;
+}
+
+.private-card-preview-stage__side-rail .private-card-copy-layout-rail {
+    position: static;
+    margin: 0;
+}
+
+.private-card-preview-stage__font-toggle {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 8px;
+    border: 2px solid rgba(236, 72, 153, 0.5);
+    background: rgba(15, 23, 42, 0.84);
+    color: #ec4899;
+    font-size: 0.82rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.private-card-preview-stage__font-toggle--open {
+    background: rgba(236, 72, 153, 0.2);
+    border-color: rgba(236, 72, 153, 0.85);
+}
