@@ -581,6 +581,25 @@ function toPublicProfile(userDocData, uid) {
                 businessInfo.openingHours && typeof businessInfo.openingHours === 'object'
                     ? businessInfo.openingHours
                     : null,
+            // Paid swipe-card special offer (title + optional image + date window).
+            swipeSpecialOffer:
+                businessInfo.swipeSpecialOffer && typeof businessInfo.swipeSpecialOffer === 'object'
+                    ? {
+                        title: asTrimmedString(businessInfo.swipeSpecialOffer.title),
+                        imageUrl: asTrimmedString(
+                            businessInfo.swipeSpecialOffer.imageUrl ||
+                                businessInfo.swipeSpecialOffer.mediaUrl
+                        ) || null,
+                        startDate: asTrimmedString(
+                            businessInfo.swipeSpecialOffer.startDate ||
+                                businessInfo.swipeSpecialOffer.startAt
+                        ),
+                        endDate: asTrimmedString(
+                            businessInfo.swipeSpecialOffer.endDate ||
+                                businessInfo.swipeSpecialOffer.endAt
+                        ),
+                    }
+                    : null,
         }
         : null;
 

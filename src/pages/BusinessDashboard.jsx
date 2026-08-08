@@ -11,6 +11,7 @@ import BusinessMemberNotificationsPanel from '../components/business/BusinessMem
 import BusinessFeedbackInbox from '../components/BusinessFeedbackInbox';
 import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import BusinessPaidFeatureGate from '../components/business/BusinessPaidFeatureGate';
+import BusinessSwipeSpecialOfferEditor from '../components/business/BusinessSwipeSpecialOfferEditor';
 import PremiumOfferCard from '../components/PremiumOfferCard';
 import { premiumOfferService } from '../services/premiumOfferService';
 import { syncBusinessPublicProfile } from '../services/businessPublicProfileSync';
@@ -973,6 +974,8 @@ const BusinessDashboard = () => {
                 </div>
                 <BusinessFeedbackInbox />
             </div>
+
+            {tierAccess.canUseSwipeSpecialOffer ? <BusinessSwipeSpecialOfferEditor /> : null}
 
             <BusinessMemberNotificationsPanel
         tierAccess={tierAccess}

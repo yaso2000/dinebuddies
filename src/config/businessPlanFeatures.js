@@ -46,6 +46,7 @@ export const BUSINESS_PAID_PLAN_FEATURE_KEYS = [
     ['biz_plan_paid_feat_delivery', 'Delivery & ordering links'],
     ['biz_plan_paid_feat_gallery_20', 'Photo gallery — up to 20 images'],
     ['biz_plan_paid_feat_offers', 'Special offers & premium offers'],
+    ['biz_plan_paid_feat_swipe_offer', 'Special offer banner on business swipe cards'],
     ['biz_plan_paid_feat_member_notifs', 'Member notifications & broadcasts'],
     ['biz_plan_paid_feat_analytics', 'Advanced analytics & ranking breakdown'],
     ['biz_plan_paid_feat_priority', 'Priority in business rankings & directory'],
@@ -107,6 +108,8 @@ export function getBusinessPlanAccess(subscriptionTier) {
         canManageDeliveryProfiles: isPaid,
         canCreateFeaturedPost: isPaid,
         canCreateSpecialOfferPost: isPaid,
+        /** One special offer banner on /restaurants magnetic swipe cards. */
+        canUseSwipeSpecialOffer: isPaid,
         canCreateEventPost: isPaid,
         canUseAdvancedAnalytics: isPaid,
         canUseMemberNotifications: isPaid,

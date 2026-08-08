@@ -20,13 +20,19 @@ import {
   withBusinessIdInPath,
 } from '../../utils/hostInvitationFromBusiness';
 import { formatInvitationDistanceLabel } from '../../utils/invitationSwipeLabels';
+import {
+  formatSwipeOfferDateRange,
+  getActiveSwipeSpecialOffer,
+  resolveBusinessSwipeSpecialOffer,
+} from '../../utils/businessSwipeSpecialOffer';
+import { getBusinessSubscriptionAccess } from '../../utils/businessSubscription';
 import { useMagneticCardDrag } from '../../hooks/useMagneticCardDrag';
 import CreateInvitationSelector from '../CreateInvitationSelector';
 import './discovery.css';
 import { AppText } from '../base';
 
 export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath = '/restaurants/list' }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { currentUser, isGuest, isBusiness, userProfile } = useAuth();
@@ -36,6 +42,10 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
   const [inviteSelectorState, setInviteSelectorState] = useState(null);
 
   const res = item?.raw || {};
+  const partnerPaid = getBusinessSubscriptionAccess(res.subscriptionTier).isPaid;
+  const specialOffer = partnerPaid
+    ? getActiveSwipeSpecialOffer(resolveBusinessSwipeSpecialOffer(res))
+    : null;
   const openProfile = useCallback(() => {
     navigate(item.href || `/business/${res.id}`);
   }, [item.href, navigate, res.id]);
@@ -206,6 +216,33 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
           </div>
 
           <div className="discovery-card__body">
+            {specialOffer ? (
+              <div
+                className={`discovery-card__special-offer${
+                  specialOffer.imageUrl
+                    ? ' discovery-card__special-offer--with-image'
+                    : ' discovery-card__special-offer--text-only'
+                }`}
+              >
+                {specialOffer.imageUrl ? (
+                  <img
+                    src={specialOffer.imageUrl}
+                    alt=""
+                    className="discovery-card__special-offer-img"
+                    draggable={false}
+                  />
+                ) : null}
+                <div className="discovery-card__special-offer-copy">
+                  <AppText as="span" className="discovery-card__special-offer-title">
+                    {specialOffer.title}
+                  </AppText>
+                  <AppText as="span" className="discovery-card__special-offer-dates">
+                    {formatSwipeOfferDateRange(specialOffer, i18n.language)}
+                  </AppText>
+                </div>
+              </div>
+            ) : null}
+
             <div className="discovery-card__identity discovery-card__identity--stack">
               <AppText as="h2" className="discovery-card__name-line">
                 {item.title || res.name}

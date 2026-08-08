@@ -359,7 +359,9 @@ export const InvitationProvider = ({ children }) => {
                         hours: info.hours || null,
                         openingHours: info.openingHours || null,
                         workingHours: info.workingHours || null,
+                        swipeSpecialOffer: info.swipeSpecialOffer || null,
                     },
+                    swipeSpecialOffer: info.swipeSpecialOffer || null,
                     image:
                         pickSafeDisplayImageUrl(
                             info.coverImage,
