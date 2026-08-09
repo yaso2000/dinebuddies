@@ -6730,6 +6730,10 @@ body:has(.group-chat-container .message-input:focus) .bottom-nav {
   background: linear-gradient(145deg, #0e7490 0%, #0891b2 55%, #22d3ee 100%);
 }
 
+.business-create-option__icon--offer {
+  background: linear-gradient(145deg, #0f766e 0%, #14b8a6 55%, #5eead4 100%);
+}
+
 .business-create-option__text {
   display: flex;
   flex-direction: column;

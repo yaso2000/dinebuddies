@@ -44,20 +44,6 @@ export default function CreateStage() {
     }
   }, [blockedAccount, navigate, showToast, t]);
 
-  // Business accounts use Community Chat — Stage open is personal-only.
-  useEffect(() => {
-    if (!isBusiness) return;
-    showToast(
-      t(
-        'business_cannot_create_stage',
-        'Business accounts use Community Chat instead of Stage rooms.'
-      ),
-      'error'
-    );
-    const communityId = uid || currentUser?.uid;
-    navigate(communityId ? `/community/${communityId}` : '/my-community', { replace: true });
-  }, [isBusiness, navigate, showToast, t, uid, currentUser?.uid]);
-
   useEffect(() => {
     if (isBusiness) {
       setLoadingMutuals(false);
@@ -190,32 +176,6 @@ export default function CreateStage() {
           ),
     [isBusiness, t]
   );
-
-  if (isBusiness) {
-    return (
-      <div className="create-stage-page">
-        <header className="create-stage-page__header">
-          <AppBackButton className="create-stage-page__back" />
-          <div className="create-stage-page__heading">
-            <AppText as="span" className="create-stage-page__icon" aria-hidden>
-              <FaMicrophone />
-            </AppText>
-            <div>
-              <AppText as="h1" className="create-stage-page__title">
-                {t('create_stage_open', 'Open Stage')}
-              </AppText>
-              <AppText as="p" className="create-stage-page__subtitle">
-                {t(
-                  'business_cannot_create_stage',
-                  'Business accounts use Community Chat instead of Stage rooms.'
-                )}
-              </AppText>
-            </div>
-          </div>
-        </header>
-      </div>
-    );
-  }
 
   if (liveStageLoading) {
     return (

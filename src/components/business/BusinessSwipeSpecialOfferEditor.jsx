@@ -22,8 +22,9 @@ function todayInputValue() {
 
 /**
  * Paid Business: configure the special offer shown on /restaurants swipe cards.
+ * @param {{ showHeading?: boolean }} [props]
  */
-export default function BusinessSwipeSpecialOfferEditor() {
+export default function BusinessSwipeSpecialOfferEditor({ showHeading = true } = {}) {
   const { t, i18n } = useTranslation();
   const { userProfile } = useAuth();
   const { showToast } = useToast();
@@ -121,10 +122,12 @@ export default function BusinessSwipeSpecialOfferEditor() {
   return (
     <section id="business-swipe-special-offer" className="swipe-offer-editor">
       <div className="swipe-offer-editor__head">
-        <AppText as="h3" className="swipe-offer-editor__title">
-          <FaTag aria-hidden />
-          {t('swipe_offer_title', 'Swipe card special offer')}
-        </AppText>
+        {showHeading ? (
+          <AppText as="h3" className="swipe-offer-editor__title">
+            <FaTag aria-hidden />
+            {t('swipe_offer_title', 'Swipe card special offer')}
+          </AppText>
+        ) : null}
         <AppText as="p" className="swipe-offer-editor__hint">
           {t(
             'swipe_offer_hint',

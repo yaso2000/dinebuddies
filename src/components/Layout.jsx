@@ -20,6 +20,7 @@ import {
   FaChevronRight,
   FaThLarge,
   FaMicrophone,
+  FaTag,
 } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useChat } from '../context/ChatContext';
@@ -334,13 +335,19 @@ const Layout = ({ children }) => {
 
   const businessCreateFabActive =
   location.pathname === '/create-post' ||
-  location.pathname === '/business-dashboard';
+  location.pathname === '/create-featured-post' ||
+  location.pathname === '/create-swipe-offer' ||
+  location.pathname === '/create-stage' ||
+  (businessHasLiveStage &&
+    businessLiveStageId &&
+    location.pathname === `/stage/${businessLiveStageId}`);
 
   const inviteCreateFabActive =
   location.pathname === '/create/manual' ||
   location.pathname === '/create' ||
   location.pathname === '/create-social' ||
-  location.pathname === '/create-private';
+  location.pathname === '/create-private' ||
+  location.pathname === '/create-stage';
 
   const changeLanguage = (lang) => i18n.changeLanguage(lang);
 
@@ -871,7 +878,7 @@ const Layout = ({ children }) => {
                                 <AppText as="p" className="business-create-sheet__subtitle">
                                     {t(
                                       'business_create_subtitle',
-                                      'Publish a featured post for your community.'
+                                      'Choose what you want to publish.'
                                     )}
                                 </AppText>
                             </div>
@@ -928,6 +935,72 @@ const Layout = ({ children }) => {
                                         {t(
                     'business_create_studio_desc',
                     'Animated studio post in the community feed.'
+                  )}
+                                    </AppText>
+                                </AppText>
+                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
+                            </button>
+                            <button
+              type="button"
+              className="business-create-option"
+              onClick={() => {
+                setBusinessCreateOpen(false);
+                navigate('/create-swipe-offer');
+              }}>
+              
+                                <AppText as="span" className="business-create-option__icon business-create-option__icon--offer" aria-hidden>
+                                    <FaTag />
+                                </AppText>
+                                <AppText as="span" className="business-create-option__text">
+                                    <AppText as="span" className="business-create-option__label">
+                                        {t('business_create_offer_title', 'Special offer')}
+                                    </AppText>
+                                    <AppText as="span" className="business-create-option__desc">
+                                        {t(
+                    'business_create_offer_desc',
+                    'Title and dates on your partner swipe card.'
+                  )}
+                                    </AppText>
+                                </AppText>
+                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
+                            </button>
+                            <button
+              type="button"
+              className="business-create-option"
+              disabled={businessLiveStageLoading}
+              aria-busy={businessLiveStageLoading || undefined}
+              onClick={() => {
+                if (businessLiveStageLoading) return;
+                setBusinessCreateOpen(false);
+                if (businessHasLiveStage && businessLiveStageId) {
+                  navigate(`/stage/${businessLiveStageId}`, {
+                    state: { stageHostId: currentUser?.uid || null },
+                  });
+                  return;
+                }
+                navigate('/create-stage');
+              }}>
+              
+                                <AppText as="span" className="business-create-option__icon business-create-option__icon--stage" aria-hidden>
+                                    <FaMicrophone />
+                                </AppText>
+                                <AppText as="span" className="business-create-option__text">
+                                    <AppText as="span" className="business-create-option__label">
+                                        {businessLiveStageLoading
+                  ? t('loading_stages', 'Loading stages…')
+                  : businessHasLiveStage
+                    ? t('invite_enter_stage_title', 'Enter Stage')
+                    : t('business_create_stage_title', 'Stage')}
+                                    </AppText>
+                                    <AppText as="span" className="business-create-option__desc">
+                                        {businessHasLiveStage
+                  ? t(
+                    'invite_enter_stage_desc',
+                    'You already have a live Stage. Tap to enter — it stays open for 24 hours.'
+                  )
+                  : t(
+                    'business_create_stage_desc',
+                    'Open your room for 24 hours. Only your Stage — no browsing others.'
                   )}
                                     </AppText>
                                 </AppText>

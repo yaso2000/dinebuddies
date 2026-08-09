@@ -70,7 +70,7 @@ export default function InviteCreateTypePicker({
           {
             kind: 'stage',
             className: 'social',
-            sheetIconClass: 'business-create-option__icon--private',
+            sheetIconClass: 'business-create-option__icon--stage',
             icon: FaMicrophone,
             title: hasLiveStage
               ? t('invite_enter_stage_title', 'Enter Stage')

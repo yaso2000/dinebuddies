@@ -314,14 +314,7 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
             }
             const host = hostSnap.data() || {};
             const hostIsBusiness = isBusinessUserDoc(host);
-            // Business accounts use permanent Community Chat — Stage open is personal-only.
-            if (hostIsBusiness) {
-                throw new functions.https.HttpsError(
-                    'failed-precondition',
-                    'Business accounts cannot open Stage rooms. Use Community Chat instead.'
-                );
-            }
-            const hostKind = 'people';
+            const hostKind = hostIsBusiness ? 'business' : 'people';
 
             // One live Stage per host until it expires (or is purged).
             const hostedSnap = await db
