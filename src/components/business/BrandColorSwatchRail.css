@@ -1,0 +1,70 @@
+.brand-color-rail {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 4px 2px 8px;
+    margin-top: 4px;
+    cursor: grab;
+    touch-action: pan-x;
+}
+
+.brand-color-rail::-webkit-scrollbar {
+    display: none;
+}
+
+.brand-color-rail.is-dragging {
+    cursor: grabbing;
+}
+
+.brand-color-swatch {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.28);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    padding: 0;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.brand-color-swatch:disabled {
+    cursor: wait;
+}
+
+.brand-color-swatch--active {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+    transform: scale(1.12);
+}
+
+.brand-color-swatch--more {
+    background: var(--hover-overlay);
+    color: var(--text-main);
+    border-color: var(--border-color);
+    font-weight: 900;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+}
+
+.brand-color-swatch__spinner {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #fff;
+    animation: brand-color-swatch-spin 0.7s linear infinite;
+}
+
+@keyframes brand-color-swatch-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

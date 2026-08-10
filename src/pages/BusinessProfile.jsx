@@ -57,6 +57,7 @@ import {
 '../utils/businessThemes';
 import DraftSavedModal from '../components/DraftSavedModal';
 import BrandKit from './business-pro/BrandKit';
+import BrandColorSwatchRail from '../components/business/BrandColorSwatchRail';
 import FeaturedPostSlideCard from '../components/FeaturedPostSlideCard';
 import PremiumOfferCard from '../components/PremiumOfferCard';
 import PostCard from '../components/PostCard';
@@ -338,6 +339,7 @@ const BusinessProfile = () => {
   const [paywallFeature, setPaywallFeature] = useState('');
 
   const [showBrandKitModal, setShowBrandKitModal] = useState(false);
+  const [showColorRail, setShowColorRail] = useState(false);
 
   const [coverUploading, setCoverUploading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -2175,11 +2177,15 @@ const BusinessProfile = () => {
                                 {isOwner &&
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                         <FreeBadge />
-                                        <EditActionBtn onClick={() => setShowBrandKitModal(true)} icon={<AppText as="span" style={{ fontSize: '1rem' }}>🎨</AppText>} />
+                                        <EditActionBtn onClick={() => setShowColorRail((v) => !v)} icon={<AppText as="span" style={{ fontSize: '1rem' }}>🎨</AppText>} />
                                         <EditActionBtn onClick={openBasicInfoModal} />
                                     </div>
               }
                             </div>
+
+                            {isOwner && showColorRail &&
+            <BrandColorSwatchRail onMore={() => { setShowColorRail(false); setShowBrandKitModal(true); }} />
+            }
 
                             {(businessInfo.businessType || businessInfo.cuisineType || categoryBadges.length > 0) &&
             <div

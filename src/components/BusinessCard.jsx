@@ -8,6 +8,13 @@ import { shareNativeOrFallback } from '../utils/shareNativeOrFallback';
 import { getSafeAvatar, getSafeCoverImage } from '../utils/avatarUtils';
 import { getContrastText } from '../utils/colorUtils';
 import { getTheme } from '../utils/businessThemes';
+import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
+import {
+  buildSwipeOfferAccentVars,
+  formatSwipeOfferDateRange,
+  getActiveSwipeSpecialOffer,
+  resolveBusinessSwipeSpecialOffer,
+} from '../utils/businessSwipeSpecialOffer';
 import { AppText } from "./base";
 import {
   buildHostInvitationNavigationState,
@@ -18,9 +25,14 @@ import { getBusinessCardCity } from '../utils/businessCardLocation';
 const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCount }) => {
   const navigate = useNavigate();
   const { isBusiness: viewerIsBusiness } = useAuth();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const info = business.businessInfo || {};
   const brandKit = info.brandKit || {};
+  const partnerPaid = getBusinessSubscriptionAccess(business.subscriptionTier).isPaid;
+  const specialOffer = partnerPaid
+    ? getActiveSwipeSpecialOffer(resolveBusinessSwipeSpecialOffer(business))
+    : null;
+  const offerAccentVars = specialOffer ? buildSwipeOfferAccentVars(brandKit) : undefined;
   const brandFont = 'sans-serif';
 
   // ── Theme colors (free for all businesses) ──────────────────────────────────
@@ -268,6 +280,39 @@ const BusinessCard = ({ business, averageRating: propRating, reviewCount: propCo
         gap: '10px',
         overflow: 'hidden'
       }}>
+                {/* Special offer banner (Paid businesses only) */}
+                {specialOffer &&
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: specialOffer.imageUrl ? '0.4rem 0.55rem' : '0.5rem 0.6rem',
+            borderRadius: '10px',
+            border: `1px solid ${offerAccentVars?.['--offer-accent-border'] || 'rgba(45, 212, 191, 0.42)'}`,
+            background: `linear-gradient(115deg, ${offerAccentVars?.['--offer-accent-1'] || 'rgba(13, 148, 136, 0.55)'}, ${offerAccentVars?.['--offer-accent-2'] || 'rgba(6, 28, 24, 0.72)'})`,
+            marginBottom: '4px'
+          }}>
+                        {specialOffer.imageUrl &&
+          <img
+            src={specialOffer.imageUrl}
+            alt=""
+            style={{ width: '2.1rem', height: '2.1rem', borderRadius: '7px', objectFit: 'cover', flexShrink: 0 }} />
+          }
+                        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.05rem' }}>
+                            <AppText as="span" style={{
+              fontSize: '0.82rem', fontWeight: 900, color: '#ecfdf5', lineHeight: 1.15,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+            }}>
+                                {specialOffer.title}
+                            </AppText>
+                            <AppText as="span" style={{ fontSize: '0.68rem', fontWeight: 700, color: 'rgba(236, 253, 245, 0.88)' }}>
+                                {formatSwipeOfferDateRange(specialOffer, i18n.language)}
+                            </AppText>
+                        </div>
+                    </div>
+        }
+
                 {/* Title & Type Header */}
                 <div style={{ marginBottom: '2px' }}>
                     <button

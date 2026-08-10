@@ -75,6 +75,62 @@ export function resolveBusinessSwipeSpecialOffer(business) {
   );
 }
 
+function hexToRgba(hex, alpha) {
+  const clean = String(hex || '').trim().replace('#', '');
+  const full = clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean;
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return null;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
+ * CSS custom properties for the swipe-offer banner gradient, derived from the
+ * business's brand color. Falls back to the default teal-green (no vars) when
+ * no brand color is set.
+ * @param {{ primaryColor?: string, secondaryColor?: string }|null|undefined} brandKit
+ */
+export function buildSwipeOfferAccentVars(brandKit) {
+  const primary = hexToRgba(brandKit?.primaryColor, 0.55);
+  const secondary = hexToRgba(brandKit?.secondaryColor || brandKit?.primaryColor, 0.72);
+  const border = hexToRgba(brandKit?.primaryColor, 0.42);
+  if (!primary || !secondary) return undefined;
+  return {
+    '--offer-accent-1': primary,
+    '--offer-accent-2': secondary,
+    '--offer-accent-border': border || undefined,
+  };
+}
+
+/**
+ * CSS custom properties theming the whole partner swipe card (glow, chips,
+ * join/invite/close buttons) from the business's brand color. Falls back to
+ * the default teal-green (no vars → CSS defaults) when no brand color is set.
+ * Brand Kit is free for all businesses, so this applies regardless of paid tier.
+ * @param {{ primaryColor?: string, secondaryColor?: string }|null|undefined} brandKit
+ */
+export function buildPartnerCardAccentVars(brandKit) {
+  const primaryHex = brandKit?.primaryColor;
+  const secondaryHex = brandKit?.secondaryColor || primaryHex;
+  const glow1 = hexToRgba(primaryHex, 0.38);
+  const glow2 = hexToRgba(secondaryHex, 0.22);
+  if (!glow1 || !glow2) return undefined;
+  return {
+    '--partner-accent-ring': hexToRgba(primaryHex, 0.22),
+    '--partner-accent-glow-1': glow1,
+    '--partner-accent-glow-2': glow2,
+    '--partner-accent-chip-border': hexToRgba(primaryHex, 0.35),
+    '--partner-accent-chip-bg': hexToRgba(primaryHex, 0.14),
+    '--partner-accent-join-bg': `linear-gradient(145deg, ${hexToRgba(primaryHex, 0.72)}, ${hexToRgba(secondaryHex, 0.4)})`,
+    '--partner-accent-join-border': hexToRgba(primaryHex, 0.55),
+    '--partner-accent-invite-bg': hexToRgba(primaryHex, 0.28),
+    '--partner-accent-invite-border': hexToRgba(secondaryHex, 0.48),
+    '--partner-accent-close-border': hexToRgba(primaryHex, 0.4),
+    '--partner-accent-close-bg': hexToRgba(primaryHex, 0.16),
+  };
+}
+
 /**
  * Compact date range for card UI.
  */

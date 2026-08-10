@@ -72,6 +72,10 @@ export function toPublicProfileFromUserDoc(userDocData, uid) {
                       asTrimmedString(businessInfo.country) ||
                       asTrimmedString(userData.country) ||
                       asTrimmedString(userData.countryCode),
+                  countryCode:
+                      asTrimmedString(businessInfo.countryCode) ||
+                      asTrimmedString(userData.countryCode) ||
+                      null,
                   address: asTrimmedString(businessInfo.address) || asTrimmedString(userData.location),
                   description: asTrimmedString(businessInfo.description) || asTrimmedString(userData.bio),
                   coverImage: asTrimmedString(businessInfo.coverImage),
@@ -87,6 +91,24 @@ export function toPublicProfileFromUserDoc(userDocData, uid) {
                       businessInfo.openingHours && typeof businessInfo.openingHours === 'object'
                           ? businessInfo.openingHours
                           : null,
+                  // Paid swipe-card special offer — must mirror functions/index.js toPublicProfile.
+                  swipeSpecialOffer: (() => {
+                      const offer =
+                          businessInfo.swipeSpecialOffer && typeof businessInfo.swipeSpecialOffer === 'object'
+                              ? businessInfo.swipeSpecialOffer
+                              : null;
+                      if (!offer) return null;
+                      const title = asTrimmedString(offer.title);
+                      const startDate = asTrimmedString(offer.startDate || offer.startAt);
+                      const endDate = asTrimmedString(offer.endDate || offer.endAt);
+                      if (!title || !startDate || !endDate) return null;
+                      return {
+                          title,
+                          imageUrl: asTrimmedString(offer.imageUrl || offer.mediaUrl) || null,
+                          startDate,
+                          endDate,
+                      };
+                  })(),
               }
             : null;
 

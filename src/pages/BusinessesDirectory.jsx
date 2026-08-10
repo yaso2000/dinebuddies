@@ -17,6 +17,13 @@ import { useUserPresence } from '../hooks/usePresence';
 import { resolveBusinessOpenNow } from '../utils/googlePlacesBusiness';
 import { getBusinessCardCity } from '../utils/businessCardLocation';
 import { getContrastText } from '../utils/colorUtils';
+import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
+import {
+  buildSwipeOfferAccentVars,
+  formatSwipeOfferDateRange,
+  getActiveSwipeSpecialOffer,
+  resolveBusinessSwipeSpecialOffer,
+} from '../utils/businessSwipeSpecialOffer';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import '../components/MapStyles.css';
@@ -259,334 +266,9 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
 
 };
 
-const BusinessDirectoryGridCard = React.memo(({ res, onHostInvitation }) => {
-  const navigate = useNavigate();
-  const { t } = useTranslation();
-  const { showToast } = useToast();
-  const { userProfile, currentUser: authCurrentUser, isGuest } = useAuth();
-  const context = useInvitations();
-  const currentUser = context?.currentUser || authCurrentUser || {};
-  const likeUser = authCurrentUser || currentUser;
-  const joinCommunity = context?.joinCommunity || (() => Promise.resolve(false));
-
-  const joinedCommunities = currentUser.joinedCommunities || [];
-  const communityId = resolveBusinessCommunityId(joinedCommunities, {
-    ownerId: res.ownerId,
-    businessId: res.id,
-    isVirtual: res.isVirtual === true,
-  });
-  const isJoined = isJoinedToBusinessCommunity(joinedCommunities, communityId);
-  const isOwner = currentUser?.id === res.ownerId || (currentUser?.ownedRestaurants || []).includes(res.id);
-  const isBusinessAccount = userProfile?.isBusiness || false;
-  const isOnline = useUserPresence(res.ownerId || res.id, { fallback: Boolean(res.isOnline) });
-  const isOpenNow = useMemo(
-    () =>
-      resolveBusinessOpenNow({
-        hours: res.hours || res.businessInfo?.hours,
-        openingHours: res.openingHours || res.businessInfo?.openingHours,
-        workingHours: res.workingHours || res.businessInfo?.workingHours,
-        openNow: res.openNow ?? res.businessInfo?.openNow,
-        lat: res.lat ?? res.businessInfo?.lat,
-        lng: res.lng ?? res.businessInfo?.lng,
-        countryCode: res.countryCode || res.businessInfo?.countryCode,
-        country: res.country || res.businessInfo?.country,
-        timeZone: res.timeZone || res.timezone || res.businessInfo?.timeZone,
-      }),
-    [
-      res.hours,
-      res.businessInfo?.hours,
-      res.openingHours,
-      res.businessInfo?.openingHours,
-      res.workingHours,
-      res.businessInfo?.workingHours,
-      res.openNow,
-      res.businessInfo?.openNow,
-      res.lat,
-      res.lng,
-      res.businessInfo?.lat,
-      res.businessInfo?.lng,
-      res.countryCode,
-      res.country,
-      res.businessInfo?.countryCode,
-      res.businessInfo?.country,
-      res.timeZone,
-      res.timezone,
-      res.businessInfo?.timeZone,
-    ]
-  );
-  const effectiveJoined = isJoined;
-  const chatEnabled = isBusinessCommunityChatEnabled(res.subscriptionTier);
-  const distanceLabel = formatBusinessDistanceLabel(t, res.distanceKm);
-
-  const [cardLiked, setCardLiked] = useState(false);
-  const [optimisticLiked, setOptimisticLiked] = useState(null);
-  const [likeInProgress, setLikeInProgress] = useState(false);
-
-  useEffect(() => {
-    if (!res.id || !likeUser?.uid) {
-      setCardLiked(false);
-      setOptimisticLiked(null);
-      return () => {};
-    }
-    return subscribeBusinessLiked(res.id, likeUser.uid, setCardLiked);
-  }, [res.id, likeUser?.uid]);
-
-  const effectiveLiked = optimisticLiked ?? cardLiked;
-
-  useEffect(() => {
-    if (optimisticLiked === null) return;
-    if (optimisticLiked === cardLiked) setOptimisticLiked(null);
-  }, [cardLiked, optimisticLiked]);
-
-  const categoryLabel = res.type
-    ? t(`type_${res.type.toLowerCase().replace(/\s+/g, '')}`, res.type)
-    : t('venue', 'Venue');
-
-  const ratingValue =
-    res.averageRating != null && Number.isFinite(Number(res.averageRating))
-      ? Number(res.averageRating).toFixed(1)
-      : '0.0';
-
-  const openProfile = () => navigate(`/business/${res.id}`);
-
-  const handleHostInvitation = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    onHostInvitation?.(res);
-  };
-
-  const [joinInProgress, setJoinInProgress] = useState(false);
-
-  const handleJoinOrChat = async (e) => {
-    if (joinInProgress) return;
-    setJoinInProgress(true);
-    try {
-      const result = await handleBusinessCommunityJoinClick({
-        event: e,
-        navigate,
-        goToLogin,
-        currentUser,
-        communityId,
-        isJoined: effectiveJoined,
-        joinCommunity,
-        returnPath: `/business/${res.id}`,
-        chatEnabled,
-      });
-      if (result?.reason === 'missing_community') {
-        showToast(t('community_join_failed', 'Could not join the community. Try again.'), 'error');
-      } else if (result?.reason === 'chat_disabled') {
-        showToast(
-          t(
-            'community_chat_paid_only_member_hint',
-            'Group chat is available when this business has a Paid plan.'
-          ),
-          'info'
-        );
-      }
-    } finally {
-      setJoinInProgress(false);
-    }
-  };
-
-  const handleToggleLike = async (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    if (likeInProgress) return;
-    if (!likeUser?.uid || likeUser?.isGuest) {
-      goToLogin();
-      return;
-    }
-    const businessId = res.id;
-    const userId = likeUser.uid;
-    const nextLiked = !effectiveLiked;
-    setOptimisticLiked(nextLiked);
-    setLikeInProgress(true);
-    try {
-      const businessInfoForFavorite = !effectiveLiked
-        ? {
-            businessId: res.id,
-            name: res.name || '',
-            image: res.image,
-            address: res.location || '',
-            city: '',
-          }
-        : undefined;
-      void toggleBusinessLike(businessId, userId, effectiveLiked, businessInfoForFavorite).catch((err) => {
-        setOptimisticLiked(effectiveLiked);
-        console.warn('[like] grid card toggle failed', { businessId, userId, err });
-        showToast(t('like_failed', 'Could not update like. Try again.'), 'error');
-      });
-    } finally {
-      setLikeInProgress(false);
-    }
-  };
-
-  return (
-    <article className="restaurant-grid-card">
-      <div
-        className="restaurant-grid-card__media"
-        onClick={openProfile}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            openProfile();
-          }
-        }}
-      >
-        <img
-          src={
-            resolveBusinessCoverImageUrl(res) ||
-            pickSafeDisplayImageUrl(res.image, res.businessInfo?.coverImage) ||
-            DEFAULT_BUSINESS_COVER
-          }
-          alt={res.name}
-          onError={(e) => handleBusinessCoverImageError(e, res)}
-          className="restaurant-grid-card__image"
-          loading="lazy"
-        />
-        <div className="restaurant-grid-card__scrim" aria-hidden />
-        <div className="restaurant-grid-card__top">
-          <div className="restaurant-grid-card__category-wrap">
-            <AppText as="span" className="restaurant-grid-card__category">
-              {categoryLabel}
-            </AppText>
-            <span
-              className={`restaurant-grid-card__presence-dot${isOnline ? ' restaurant-grid-card__presence-dot--online' : ' restaurant-grid-card__presence-dot--offline'}`}
-              role="status"
-              title={isOnline ? t('online', 'Online') : t('offline', 'Offline')}
-              aria-label={isOnline ? t('online', 'Online') : t('offline', 'Offline')}
-            />
-          </div>
-          <div
-            className="restaurant-grid-card__rating"
-            aria-label={t('rating', 'Rating')}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <FaStar className="restaurant-grid-card__rating-star" aria-hidden />
-            <AppText as="span" className="restaurant-grid-card__rating-value">
-              {ratingValue}
-            </AppText>
-          </div>
-        </div>
-
-        {typeof isOpenNow === 'boolean' ? (
-          <span
-            className={`restaurant-grid-card__hours-status${isOpenNow ? ' restaurant-grid-card__hours-status--open' : ' restaurant-grid-card__hours-status--closed'}`}
-            role="status"
-          >
-            <AppText as="span">{isOpenNow ? t('open', 'Open') : t('closed', 'Closed')}</AppText>
-          </span>
-        ) : null}
-
-        {isOwner ? (
-          <AppText as="span" className="restaurant-grid-card__owner-badge">
-            {t('owner', 'Owner')}
-          </AppText>
-        ) : null}
-      </div>
-
-      <div className="restaurant-grid-card__footer">
-        <button type="button" className="restaurant-grid-card__name-btn" onClick={openProfile}>
-          <AppText as="h2" className="restaurant-grid-card__name" title={res.name}>
-            {res.name}
-          </AppText>
-          <AppText as="p" className="restaurant-grid-card__city">
-            {getBusinessCardCity(res) || t('unknown_city', 'Unknown City')}
-            {distanceLabel ? (
-              <AppText as="span" className="restaurant-grid-card__distance">
-                {' · '}
-                {distanceLabel}
-              </AppText>
-            ) : null}
-          </AppText>
-        </button>
-
-        {!isOwner && !isBusinessAccount ? (
-          <div className="restaurant-grid-card__footer-actions">
-            {effectiveJoined ? (
-              <button
-                type="button"
-                className={`restaurant-grid-card__footer-btn restaurant-grid-card__footer-btn--chat${chatEnabled ? '' : ' is-joined-only'}`}
-                onClick={handleJoinOrChat}
-                disabled={joinInProgress}
-                title={
-                  chatEnabled
-                    ? t('business_grid_join_chat', 'Join chat')
-                    : t('joined', 'Joined')
-                }
-                aria-label={
-                  chatEnabled
-                    ? t('business_grid_join_chat', 'Join chat')
-                    : t('joined', 'Joined')
-                }
-              >
-                <FaComments aria-hidden />
-                <AppText as="span">
-                  {chatEnabled
-                    ? t('business_grid_join_chat', 'Join chat')
-                    : t('joined', 'Joined')}
-                </AppText>
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="restaurant-grid-card__footer-btn restaurant-grid-card__footer-btn--join"
-                onClick={handleJoinOrChat}
-                disabled={joinInProgress}
-                title={t('join_plus', '+ Join')}
-                aria-label={t('join_plus', '+ Join')}
-              >
-                <span className="restaurant-grid-card__join-icon-wrap" aria-hidden>
-                  <FaBuilding className="restaurant-grid-card__join-icon" />
-                  <FaPlus className="restaurant-grid-card__join-plus" />
-                </span>
-                <AppText as="span">{joinInProgress ? '…' : t('join_plus', '+ Join')}</AppText>
-              </button>
-            )}
-            <button
-              type="button"
-              className={`restaurant-grid-card__footer-btn restaurant-grid-card__footer-btn--like${effectiveLiked ? ' is-liked' : ''}`}
-              onClick={handleToggleLike}
-              disabled={likeInProgress}
-              title={effectiveLiked ? t('unlike', 'Unlike') : t('like', 'Like')}
-              aria-label={effectiveLiked ? t('unlike', 'Unlike') : t('like', 'Like')}
-              aria-pressed={effectiveLiked}
-            >
-              {likeInProgress ? (
-                <AppText as="span" aria-hidden>
-                  ⋯
-                </AppText>
-              ) : effectiveLiked ? (
-                <FaHeart aria-hidden />
-              ) : (
-                <FaRegHeart aria-hidden />
-              )}
-            </button>
-            {!isGuest ? (
-              <button
-                type="button"
-                className="restaurant-grid-card__footer-btn restaurant-grid-card__footer-btn--host"
-                onClick={handleHostInvitation}
-                title={t('host_invitation_here')}
-                aria-label={t('host_invitation_here')}
-              >
-                <FaStore aria-hidden />
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    </article>
-  );
-});
-
-BusinessDirectoryGridCard.displayName = 'BusinessDirectoryGridCard';
-
 const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { showToast } = useToast();
   const { userProfile, updateUserProfile, currentUser: authCurrentUser, isGuest } = useAuth();
   const context = useInvitations();
@@ -626,6 +308,11 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
     fontFamily: _ff || 'sans-serif'
   } : null;
 
+  const partnerPaid = getBusinessSubscriptionAccess(res.subscriptionTier).isPaid;
+  const specialOffer = partnerPaid
+    ? getActiveSwipeSpecialOffer(resolveBusinessSwipeSpecialOffer(res))
+    : null;
+  const offerAccentVars = specialOffer ? buildSwipeOfferAccentVars(bk) : undefined;
 
   const joinedCommunities = currentUser.joinedCommunities || [];
   const communityId = resolveBusinessCommunityId(joinedCommunities, {
@@ -946,6 +633,42 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
                 {/* Content Overlay */}
                 <div style={{ position: 'relative', zIndex: 10, padding: '20px 20px 10px 20px' }}>
 
+                    {/* Special offer banner (Paid businesses only) */}
+                    {specialOffer &&
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.65rem',
+              width: '100%',
+              marginBottom: '0.75rem',
+              padding: specialOffer.imageUrl ? '0.55rem 0.7rem' : '0.7rem',
+              borderRadius: '14px',
+              border: `1px solid ${offerAccentVars?.['--offer-accent-border'] || 'rgba(45, 212, 191, 0.42)'}`,
+              background: `linear-gradient(115deg, ${offerAccentVars?.['--offer-accent-1'] || 'rgba(13, 148, 136, 0.55)'}, ${offerAccentVars?.['--offer-accent-2'] || 'rgba(6, 28, 24, 0.72)'})`,
+              boxShadow: '0 8px 22px rgba(0, 0, 0, 0.28)',
+              boxSizing: 'border-box'
+            }}>
+                            {specialOffer.imageUrl &&
+            <img
+              src={specialOffer.imageUrl}
+              alt=""
+              style={{ width: '3.1rem', height: '3.1rem', borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }} />
+            }
+                            <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                                <AppText as="span" style={{
+                fontSize: '1.05rem', fontWeight: 900, lineHeight: 1.18, color: '#ecfdf5',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+              }}>
+                                    {specialOffer.title}
+                                </AppText>
+                                <AppText as="span" style={{ fontSize: '0.78rem', fontWeight: 700, color: 'rgba(236, 253, 245, 0.88)' }}>
+                                    {formatSwipeOfferDateRange(specialOffer, i18n.language)}
+                                </AppText>
+                            </div>
+                        </div>
+          }
+
                     {/* Title & Location */}
                     <div style={{ marginBottom: '16px' }}>
                         {typeof isOpenNow === 'boolean' ? (
@@ -1090,14 +813,13 @@ const BusinessesDirectory = () => {
   const restaurants = context?.restaurants || [];
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [locationFilter, setLocationFilter] = useState('city');
+  const [locationFilter, setLocationFilter] = useState('All');
   const [activeFilter, setActiveFilter] = useState(() => searchParams.get('category') || 'All'); // Category filter
   const [showFilters, setShowFilters] = useState(false); // Controls filter visibility
   const [viewMode, setViewMode] = useState('list');
   const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode for map
   const [userLocation, setUserLocation] = useState(null);
   const [detectedLocationContext, setDetectedLocationContext] = useState(null);
-  const defaultLocationAppliedRef = useRef(false);
   const [selectedCommunityId, setSelectedCommunityId] = useState(null);
   const [selectedCommunityMembers, setSelectedCommunityMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -1200,26 +922,6 @@ const BusinessesDirectory = () => {
     }),
     [userLocation, userProfile, detectedLocationContext]
   );
-
-  // Default to the user's area (city/region). Fall back when geo context is ready.
-  useEffect(() => {
-    if (defaultLocationAppliedRef.current) return;
-    const isStaff = ['admin', 'moderator', 'support'].includes(userProfile?.role);
-    if (isStaff) {
-      setLocationFilter('All');
-      defaultLocationAppliedRef.current = true;
-      return;
-    }
-    if (canApplyBusinessLocationFilter('city', viewerGeoContext, false)) {
-      setLocationFilter('city');
-      defaultLocationAppliedRef.current = true;
-      return;
-    }
-    if (canApplyBusinessLocationFilter('country', viewerGeoContext, false)) {
-      setLocationFilter('country');
-      defaultLocationAppliedRef.current = true;
-    }
-  }, [viewerGeoContext, userProfile?.role]);
 
   // Helper functions and constants moved outside or used directly
   const locationFilters = [
@@ -1587,7 +1289,7 @@ const BusinessesDirectory = () => {
 
 
             <div style={{ padding: '1rem 1.5rem 0' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', rowGap: 8, justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <AppText as="h1" style={{ fontSize: '1.2rem', fontWeight: '800', lineHeight: '1', margin: 0 }}>{t('business_directory', 'Business')}</AppText>
                         <button
@@ -1624,20 +1326,6 @@ const BusinessesDirectory = () => {
                       <AppText as="span">{t('user_directory_feed_view', 'Card view')}</AppText>
                     </Link>
                     <div style={{ background: 'var(--bg-card)', padding: '4px', borderRadius: '50px', display: 'flex', border: '1px solid var(--border-color)' }}>
-                        <button
-              onClick={() => setViewMode('grid')}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '50px',
-                background: viewMode === 'grid' ? 'var(--luxury-gold)' : 'transparent',
-                color: viewMode === 'grid' ? 'rgba(255, 255, 254, 1)' : 'var(--text-main)',
-                border: 'none',
-                fontSize: '0.82rem',
-                fontWeight: 600
-              }}>
-              
-                            {t('grid', 'Grid')}
-                        </button>
                         <button
               onClick={() => setViewMode('list')}
               style={{
@@ -1893,24 +1581,6 @@ const BusinessesDirectory = () => {
                             <AppText as="span">{restaurantsWithCoords.length} {t('active_businesses', { defaultValue: 'Active Businesses' })}</AppText>
                         </div>
                     </div>
-                </div>
-
-                {/* Grid View */}
-                <div
-          className="restaurant-list restaurant-list--grid"
-          style={{ display: viewMode === 'grid' ? 'grid' : 'none' }}>
-          
-                    {filteredRestaurants.map((res) =>
-          <BusinessDirectoryGridCard
-            key={res.id}
-            res={res}
-            onHostInvitation={handleHostInvitation} />
-          )}
-                    {filteredRestaurants.length === 0 && viewMode === 'grid' && (
-          <AppText as="p" className="restaurant-list--grid-empty" style={{ textAlign: 'center', opacity: 0.5 }}>
-            {t('no_results')}
-          </AppText>
-          )}
                 </div>
 
                 {/* List View (classic cards) */}

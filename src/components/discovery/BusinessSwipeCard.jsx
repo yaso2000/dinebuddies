@@ -21,6 +21,8 @@ import {
 } from '../../utils/hostInvitationFromBusiness';
 import { formatInvitationDistanceLabel } from '../../utils/invitationSwipeLabels';
 import {
+  buildPartnerCardAccentVars,
+  buildSwipeOfferAccentVars,
   formatSwipeOfferDateRange,
   getActiveSwipeSpecialOffer,
   resolveBusinessSwipeSpecialOffer,
@@ -46,6 +48,8 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
   const specialOffer = partnerPaid
     ? getActiveSwipeSpecialOffer(resolveBusinessSwipeSpecialOffer(res))
     : null;
+  const offerAccentVars = specialOffer ? buildSwipeOfferAccentVars(res.brandKit) : undefined;
+  const cardAccentVars = buildPartnerCardAccentVars(res.brandKit);
   const openProfile = useCallback(() => {
     navigate(item.href || `/business/${res.id}`);
   }, [item.href, navigate, res.id]);
@@ -174,7 +178,7 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
     <>
       <motion.article
         className="discovery-card discovery-card--magnetic discovery-card--entity discovery-card--partner"
-        style={{ ...styleMotion, zIndex: isTop ? 2 : 1, touchAction }}
+        style={{ ...cardAccentVars, ...styleMotion, zIndex: isTop ? 2 : 1, touchAction }}
         drag={drag}
         dragConstraints={dragConstraints}
         dragElastic={0.85}
@@ -223,6 +227,7 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
                     ? ' discovery-card__special-offer--with-image'
                     : ' discovery-card__special-offer--text-only'
                 }`}
+                style={offerAccentVars}
               >
                 {specialOffer.imageUrl ? (
                   <img
