@@ -146,12 +146,12 @@ try {
     await assertSucceeds(updateDoc(doc(hostDb, 'invitations/pub1'), {
         title: 'Dinner updated',
     }));
-    // Joined member can leave
-    await assertSucceeds(updateDoc(doc(aliceDb, 'invitations/pub2'), {
-        joined: [],
-    }));
     // Non-member cannot clear someone else's joined entry
     await assertFails(updateDoc(doc(malloryDb, 'invitations/pub2'), {
+        joined: [],
+    }));
+    // Joined member can leave
+    await assertSucceeds(updateDoc(doc(aliceDb, 'invitations/pub2'), {
         joined: [],
     }));
 
