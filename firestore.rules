@@ -59,6 +59,36 @@ service cloud.firestore {
       let isJoined = request.auth.uid in joined;
       return isHost || isJoined;
     }
+
+    // Paid business partner (featured elite slides). Legacy Stripe tier names map to paid.
+    function isPaidBusinessPartner() {
+      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let tier = u.get('subscriptionTier', 'free');
+      let paid = tier == 'paid' ||
+                 tier == 'elite' ||
+                 tier == 'professional' ||
+                 tier == 'premium' ||
+                 tier == 'pro';
+      return isPartner() && paid;
+    }
+
+    // Host approval: move exactly one UID from requests → joined (no fabricated members).
+    function isPublicInvitationApproveJoin() {
+      let oldJoined = resource.data.get('joined', []);
+      let newJoined = request.resource.data.get('joined', []);
+      let oldRequests = resource.data.get('requests', []);
+      let newRequests = request.resource.data.get('requests', []);
+      return oldJoined is list &&
+             newJoined is list &&
+             oldRequests is list &&
+             newRequests is list &&
+             newJoined.size() == oldJoined.size() + 1 &&
+             newJoined.hasAll(oldJoined) &&
+             oldRequests.size() == newRequests.size() + 1 &&
+             oldRequests.hasAll(newRequests) &&
+             newJoined.hasOnly(oldJoined.concat(oldRequests)) &&
+             oldRequests.hasOnly(newRequests.concat(newJoined));
+    }
     
     // Invitation chat: only host or accepted invitees (private invitations).
     // LEGACY-DATA RISK: If rsvps is missing or a user has no rsvps entry, they will be denied;
@@ -228,12 +258,33 @@ service cloud.firestore {
     match /invitations/{invitationId} {
       allow read: if true; // Allow public read
       
+      // Create must start with empty membership lists (no forced attendees / chat ACL)
       allow create: if isSignedIn() && 
-                       request.resource.data.author.id == request.auth.uid;
+                       request.resource.data.author.id == request.auth.uid &&
+                       request.resource.data.get('joined', []).size() == 0 &&
+                       request.resource.data.get('requests', []).size() == 0;
       
-      // Host can update
+      // Host can update non-membership fields
       allow update: if isSignedIn() && 
-                       resource.data.author.id == request.auth.uid;
+                       resource.data.author.id == request.auth.uid &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['joined', 'requests']);
+
+      // Host can approve: move exactly one requester into joined
+      allow update: if isSignedIn() &&
+                       resource.data.author.id == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['requests', 'joined']) &&
+                       isPublicInvitationApproveJoin();
+
+      // Host can reject: remove exactly one UID from requests
+      allow update: if isSignedIn() &&
+                       resource.data.author.id == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) &&
+                       resource.data.get('requests', []) is list &&
+                       request.resource.data.requests is list &&
+                       resource.data.requests.size() == request.resource.data.requests.size() + 1 &&
+                       resource.data.requests.hasAll(request.resource.data.requests);
       
       // Users can add themselves to requests (JOIN REQUEST)
       allow update: if isSignedIn() &&
@@ -245,6 +296,16 @@ service cloud.firestore {
       allow update: if isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) &&
                        resource.data.requests.hasAll(request.resource.data.requests);
+
+      // Joined members can leave (remove only self from joined)
+      allow update: if isSignedIn() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['joined']) &&
+                       resource.data.get('joined', []) is list &&
+                       request.resource.data.joined is list &&
+                       request.auth.uid in resource.data.joined &&
+                       !(request.auth.uid in request.resource.data.joined) &&
+                       resource.data.joined.size() == request.resource.data.joined.size() + 1 &&
+                       resource.data.joined.hasAll(request.resource.data.joined);
       
       allow update: if isAdmin();
       
@@ -501,7 +562,14 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
                       request.resource.data.userId == request.auth.uid &&
                       request.resource.data.fromUserId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Recipients may only mark read — never reassign userId/fromUserId or rewrite content
+      // (create-as-self then update userId→victim was an inbox phishing bypass).
+      allow update: if isSignedIn() &&
+                      resource.data.userId == request.auth.uid &&
+                      request.resource.data.userId == resource.data.userId &&
+                      request.resource.data.get('fromUserId', '') == resource.data.get('fromUserId', '') &&
+                      request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['read', 'readAt']);
       allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
@@ -616,9 +684,10 @@ service cloud.firestore {
       // Anyone can read (displayed publicly in the home feed)
       allow read: if true;
 
-      // Only the owning partner can create/update/delete their own posts
+      // Paid business partners only — prevents unpaid / consumer elite-feed pollution
       allow create: if isSignedIn() &&
-                       request.resource.data.partnerId == request.auth.uid;
+                       request.resource.data.partnerId == request.auth.uid &&
+                       isPaidBusinessPartner();
       allow update, delete: if isSignedIn() &&
                                (resource.data.partnerId == request.auth.uid || isAdmin());
 
