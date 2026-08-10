@@ -18,11 +18,34 @@ import { loadBusinessRankingStatsMap } from './businessRankingStats';
 
 const MAX_LOAD = 20;
 
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const rankingCache = new Map(); // topN -> { data, timestamp, promise }
 
-
-export async function loadRankedPaidBusinesses(opts = {}) {
+export function loadRankedPaidBusinesses(opts = {}) {
 
     const { limit: topN = MAX_LOAD } = opts;
+
+    const cached = rankingCache.get(topN);
+    if (cached) {
+        if (cached.promise) return cached.promise;
+        if (Date.now() - cached.timestamp < CACHE_TTL_MS) return Promise.resolve(cached.data);
+    }
+
+    const promise = fetchRankedPaidBusinesses(topN)
+        .then((data) => {
+            rankingCache.set(topN, { data, timestamp: Date.now(), promise: null });
+            return data;
+        })
+        .catch((err) => {
+            rankingCache.delete(topN);
+            throw err;
+        });
+
+    rankingCache.set(topN, { data: cached?.data, timestamp: cached?.timestamp || 0, promise });
+    return promise;
+}
+
+async function fetchRankedPaidBusinesses(topN) {
 
     const q = query(
 

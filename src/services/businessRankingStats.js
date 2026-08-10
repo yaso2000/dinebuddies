@@ -1,4 +1,4 @@
-import { collection, query, where, limit, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs, doc, getDoc, documentId } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 
 const BATCH = 10;
@@ -101,11 +101,12 @@ export async function loadBusinessRankingStatsMap(businessIds) {
     if (auth.currentUser) {
         for (let i = 0; i < ids.length; i += BATCH) {
             const chunk = ids.slice(i, i + BATCH);
-            const userSnaps = await Promise.all(chunk.map((id) => getDoc(doc(db, 'users', id)).catch(() => null)));
-            userSnaps.forEach((snap, idx) => {
-                const id = chunk[idx];
-                if (!snap?.exists()) return;
-                const data = snap.data();
+            const snap = await getDocs(
+                query(collection(db, 'users'), where(documentId(), 'in', chunk), limit(chunk.length))
+            ).catch(() => ({ docs: [] }));
+            snap.docs.forEach((userDoc) => {
+                const id = userDoc.id;
+                const data = userDoc.data();
                 const biz = data.businessInfo || {};
                 statsById[id] = {
                     ...statsById[id],
