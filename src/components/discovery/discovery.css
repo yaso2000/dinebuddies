@@ -618,6 +618,20 @@
         0 8px 22px rgba(0, 0, 0, 0.28);
 }
 
+.discovery-card__action--private-invite {
+    /* Override PrivateInviteProfileBadge's own position:absolute (designed as an
+       avatar-corner overlay) so it sits inline in the action rail like the rest. */
+    position: static;
+    inset: auto;
+    bottom: auto;
+    box-shadow: none;
+}
+
+.discovery-card__action--private-invite .private-invite-profile-badge__logo {
+    width: 26px;
+    height: 26px;
+}
+
 .discovery-card__wave-emoji {
     font-size: 1.45rem;
     line-height: 1;

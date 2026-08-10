@@ -210,6 +210,11 @@
 }
 
 .user-directory-card__private-invite {
+    /* Override PrivateInviteProfileBadge's own position:absolute (designed as an
+       avatar-corner overlay) so it sits inline with the other action buttons. */
+    position: static;
+    inset: auto;
+    bottom: auto;
     width: 36px;
     height: 36px;
 }

@@ -134,6 +134,7 @@ const BusinessDashboard = () => {
   const { showToast } = useToast();
   const { unreadBellCount } = useNotifications();
   const [loading, setLoading] = useState(true);
+  const [memberCountLoading, setMemberCountLoading] = useState(true);
   const [stats, setStats] = useState({
     memberCount: 0,
     activeInvitations: 0,
@@ -162,7 +163,8 @@ const BusinessDashboard = () => {
   }, [location.pathname, location.hash, loading]);
 
 
-  const fetchDashboardData = async () => {
+  // Fast, direct Firestore reads — gates the page's own loading state.
+  const fetchCoreStats = async () => {
     try {
       setLoading(true);
 
@@ -179,14 +181,11 @@ const BusinessDashboard = () => {
         where('partnerId', '==', currentUser.uid)
       );
 
-      const [memberResult, invitationsSnapshot, reviewsSnapshot, engagementSnapshot] = await Promise.all([
-        getCommunityMembers(currentUser.uid, { includeMembers: false, limit: 1 }),
+      const [invitationsSnapshot, reviewsSnapshot, engagementSnapshot] = await Promise.all([
         getDocs(invitationsQuery),
         getDocs(reviewsQuery),
         getDocs(engagementQuery)
       ]);
-
-      const memberCount = Number(memberResult?.memberCount || 0);
 
       // Active = not expired yet; recent activity = same docs, most recent first.
       const now = new Date();
@@ -212,19 +211,35 @@ const BusinessDashboard = () => {
         return sum + (post.likes?.length || 0) + (post.comments?.length || 0);
       }, 0);
 
-      setStats({
-        memberCount,
+      setStats((prev) => ({
+        ...prev,
         activeInvitations,
         profileViews: userProfile?.businessInfo?.profileViews || 0,
         rating,
         reviewCount,
         engagement
-      });
+      }));
       setRecentActivity(recentData);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Cloud Function callable — can cold-start slowly; never blocks the page itself.
+  const fetchMemberCount = async () => {
+    try {
+      setMemberCountLoading(true);
+      const memberResult = await getCommunityMembers(currentUser.uid, {
+        includeMembers: false,
+        limit: 1
+      });
+      setStats((prev) => ({ ...prev, memberCount: Number(memberResult?.memberCount || 0) }));
+    } catch (error) {
+      console.error('Error fetching member count:', error);
+    } finally {
+      setMemberCountLoading(false);
     }
   };
 
@@ -251,7 +266,8 @@ const BusinessDashboard = () => {
     }
 
     if (userProfile) {
-      fetchDashboardData();
+      fetchCoreStats();
+      fetchMemberCount();
     }
   }, [currentUser, userProfile, authLoading, navigate, isBusiness]);
 
@@ -685,7 +701,7 @@ const BusinessDashboard = () => {
         gap: '1rem',
         marginBottom: '1.5rem'
       }}>
-                <StatTile icon={<FaUsers />} iconColor="#22c55e" iconBg="rgba(34, 197, 94, 0.1)" value={stats.memberCount} label={t('stat_cmty_members', 'Community Members')} />
+                <StatTile icon={<FaUsers />} iconColor="#22c55e" iconBg="rgba(34, 197, 94, 0.1)" value={memberCountLoading ? '…' : stats.memberCount} label={t('stat_cmty_members', 'Community Members')} />
                 <StatTile icon={<FaUserPlus />} iconColor="var(--primary)" iconBg="rgba(139, 92, 246, 0.1)" value={stats.activeInvitations} label={t('stat_active_invites', 'Active Invitations')} />
                 <StatTile icon={<FaEye />} iconColor="#3b82f6" iconBg="rgba(59, 130, 246, 0.1)" value={stats.profileViews} label={t('stat_profile_views', 'Profile Views')} />
                 <StatTile icon={<FaStar />} iconColor="#fbbf24" iconBg="rgba(251, 191, 36, 0.1)" value={stats.rating.toFixed(1)} label={`${t('stat_rating_reviews', 'Rating')} (${stats.reviewCount} ${t('stat_reviews', 'reviews')})`} />

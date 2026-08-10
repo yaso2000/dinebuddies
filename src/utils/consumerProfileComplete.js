@@ -91,7 +91,10 @@ export function isConsumerProfileComplete(profile) {
         profile.age_category ||
         (typeof profile.age === 'string' ? profile.age : '') ||
         (typeof profile.age === 'number' && profile.age > 0 ? String(profile.age) : '');
-    return Boolean(name && profile.gender && age);
+    const hasPhoto = Boolean(
+        profile.photoURL || profile.photo_url || profile.avatar || profile.avatarUrl
+    );
+    return Boolean(name && profile.gender && age && hasPhoto);
 }
 
 export function mergeConsumerProfiles(prev, next) {

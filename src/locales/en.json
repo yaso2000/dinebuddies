@@ -3443,6 +3443,8 @@
   "profile_name": "Name",
   "profile_photo": "Profile Photo (Recommended)",
   "profile_photo_optional": "Profile photo (optional)",
+  "profile_photo_required_label": "Profile photo",
+  "profile_photo_required": "Please add a profile photo to continue.",
   "profile_saved": "Profile Saved",
   "profile_standard_account": "Standard",
   "profile_title": "My Profile",

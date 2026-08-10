@@ -3477,6 +3477,8 @@
   "profile_name": "الاسم",
   "profile_photo": "صورة البروفايل (مطلوبة)",
   "profile_photo_optional": "صورة الملف (اختياري)",
+  "profile_photo_required_label": "صورة الملف الشخصي",
+  "profile_photo_required": "الرجاء إضافة صورة للملف الشخصي للمتابعة.",
   "profile_saved": "تم حفظ الملف",
   "profile_standard_account": "عادي",
   "profile_title": "بروفايل",

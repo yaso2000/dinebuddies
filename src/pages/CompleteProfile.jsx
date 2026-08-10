@@ -74,9 +74,12 @@ const CompleteProfile = () => {
 
     console.log("Submitting profile form...", formData);
 
-    // Photo is optional — only name, age category, and gender are required
     if (!formData.displayName || !formData.ageCategory || !formData.gender) {
       showToast(t('fill_required_fields', 'Please fill in your name, age group, and gender.'), 'error');
+      return;
+    }
+    if (!formData.photoURL) {
+      showToast(t('profile_photo_required', 'Please add a profile photo to continue.'), 'error');
       return;
     }
 
@@ -270,7 +273,8 @@ const CompleteProfile = () => {
                     <div className="form-group" style={{ marginBottom: '1.1rem', textAlign: 'center' }}>
                         <label className="elegant-label" style={{ justifyContent: 'center', color: isDark ? 'var(--text-main)' : '#0f172a' }}>
                             <AppText as="span" className="label-icon" style={{ color: 'var(--primary)' }}><FaCamera /></AppText>
-                            {t('profile_photo_optional', 'Profile photo (optional)')}
+                            {t('profile_photo_required_label', 'Profile photo')}
+                            {reqStar}
                         </label>
                         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem', position: 'relative' }}>
                             <ImageUpload

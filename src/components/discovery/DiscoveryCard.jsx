@@ -24,6 +24,7 @@ import { useDiscoveryActionStatus } from '../../hooks/useDiscoveryActionStatus';
 import { useCanMessageMember } from '../../hooks/useCanMessageMember';
 import { useMatchCelebration } from '../../context/MatchCelebrationContext';
 import { useUserPresence } from '../../hooks/usePresence';
+import PrivateInviteProfileBadge from '../PrivateInviteProfileBadge';
 import InboxHubLink from './InboxHubLink';
 import './discovery.css';
 import './inbox.css';
@@ -91,6 +92,7 @@ export default function DiscoveryCard({
   const [followBusy, setFollowBusy] = useState(false);
   const [greetingBusy, setGreetingBusy] = useState(false);
   const isFollowingUser = checkIsFollowing(viewerFollowing, profile?.id);
+  const showPrivateInviteBadge = Boolean(profile?.id && profile.id !== viewerUid && isFollowingUser);
   const ageLabel = formatAgeLabel(profile);
   const locationLabel = [profile?.city, profile?.country].filter(Boolean).join(', ') || profile?.city || '';
 
@@ -443,6 +445,15 @@ export default function DiscoveryCard({
           >
             <FaGift size={22} />
           </button>
+
+          {showPrivateInviteBadge ? (
+            <PrivateInviteProfileBadge
+              user={targetUser}
+              currentUser={viewerProfile}
+              logoSrc="/db-logo-white.svg"
+              className="discovery-card__action discovery-card__action--glass discovery-card__action--private-invite"
+            />
+          ) : null}
 
           <button
             type="button"
