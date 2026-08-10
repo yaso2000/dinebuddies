@@ -103,8 +103,6 @@ const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const CommunityGuidelines = lazy(() => import('./pages/CommunityGuidelines'));
 const AccountDeletionRequest = lazy(() => import('./pages/AccountDeletionRequest'));
-const MyCommunity = lazy(() => import('./pages/MyCommunity'));
-const BusinessCommunityInbox = lazy(() => import('./pages/BusinessCommunityInbox'));
 const BusinessHostedArchive = lazy(() => import('./pages/BusinessHostedArchive'));
 const BusinessDashboardAnalytics = lazy(() => import('./pages/BusinessDashboardAnalytics'));
 const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
@@ -328,8 +326,8 @@ function App() {
                                                     <Route path="/account-deletion" element={<AccountDeletionRequest />} />
 
                                                     <Route path="/plans" element={<Navigate to="/pricing" replace />} />
-                                                    <Route path="/my-community" element={<GuestBlockedRoute><MyCommunity /></GuestBlockedRoute>} />
-                                                    <Route path="/my-community/inbox" element={<GuestBlockedRoute><BusinessCommunityInbox /></GuestBlockedRoute>} />
+                                                    <Route path="/my-community" element={<Navigate to="/business-dashboard" replace />} />
+                                                    <Route path="/my-community/inbox" element={<Navigate to="/business-dashboard#business-feedback-inbox" replace />} />
                                                     <Route path="/my-community/archive" element={<GuestBlockedRoute><BusinessHostedArchive /></GuestBlockedRoute>} />
                                                     <Route path="/my-community/analytics" element={<GuestBlockedRoute><BusinessDashboardAnalytics /></GuestBlockedRoute>} />
                                                     <Route path="/ai-marketing-studio/saved-posts" element={<GuestBlockedRoute><Navigate to="/business-dashboard" replace /></GuestBlockedRoute>} />

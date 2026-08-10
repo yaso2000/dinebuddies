@@ -182,7 +182,7 @@ export default function StagesHub() {
   // Business accounts use Community Chat — Stage open/browse is personal-only.
   useEffect(() => {
     if (!isBusiness) return;
-    navigate('/my-community', { replace: true });
+    navigate('/business-dashboard', { replace: true });
   }, [isBusiness, navigate]);
 
   const [panel, setPanel] = useState(PANEL_PEOPLE);

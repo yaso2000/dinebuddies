@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, limit, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
@@ -11,11 +11,9 @@ import BusinessMemberNotificationsPanel from '../components/business/BusinessMem
 import BusinessFeedbackInbox from '../components/BusinessFeedbackInbox';
 import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import BusinessPaidFeatureGate from '../components/business/BusinessPaidFeatureGate';
-import PremiumOfferCard from '../components/PremiumOfferCard';
-import { premiumOfferService } from '../services/premiumOfferService';
 import { syncBusinessPublicProfile } from '../services/businessPublicProfileSync';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { FaUsers, FaUserPlus, FaChartLine, FaEye, FaStar, FaEdit, FaStore, FaCalendar, FaCog, FaTrash, FaSnowflake, FaCheckCircle, FaHourglassHalf, FaDesktop, FaGlobe, FaSearch, FaBell } from 'react-icons/fa';
+import { FaUsers, FaUserPlus, FaHeart, FaComments, FaChartLine, FaArchive, FaEye, FaStar, FaEdit, FaCalendar, FaCog, FaCheckCircle, FaGlobe, FaSearch, FaBell } from 'react-icons/fa';
 import { useNotifications } from '../context/NotificationContext';
 import { hasBusinessSessionHint } from '../utils/accountRole';
 import { AppText } from "../components/base";
@@ -28,6 +26,78 @@ const DASHBOARD_LOADING_STYLE = {
   alignItems: 'center',
   justifyContent: 'center',
 };
+
+const QUICK_ACTION_BTN_STYLE = {
+  flex: '1 1 calc(50% - 5px)',
+  padding: '12px',
+  background: 'var(--bg-card)',
+  border: '1px solid var(--border-color)',
+  borderRadius: '12px',
+  color: 'var(--text-main)',
+  fontWeight: '700',
+  fontSize: '0.85rem',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '8px',
+  transition: 'all 0.2s'
+};
+
+function QuickActionButton({ icon, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={QUICK_ACTION_BTN_STYLE}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'rgba(139, 92, 246, 0.1)';
+        e.currentTarget.style.borderColor = 'var(--primary)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'var(--bg-card)';
+        e.currentTarget.style.borderColor = 'var(--border-color)';
+      }}
+    >
+      {icon} {label}
+    </button>
+  );
+}
+
+function StatTile({ icon, iconColor, iconBg, value, label, title }) {
+  return (
+    <div
+      title={title}
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '16px',
+        padding: '1.25rem',
+        textAlign: 'center'
+      }}
+    >
+      <div style={{
+        width: '50px',
+        height: '50px',
+        borderRadius: '12px',
+        background: iconBg,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        margin: '0 auto 0.75rem',
+        fontSize: '1.3rem',
+        color: iconColor
+      }}>
+        {icon}
+      </div>
+      <div style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '0.25rem' }}>
+        {value}
+      </div>
+      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+        {label}
+      </div>
+    </div>
+  );
+}
 
 function BusinessDashboardLoading({ label }) {
   return (
@@ -50,8 +120,13 @@ function BusinessDashboardLoading({ label }) {
   );
 }
 
+const PUBLISH_ANCHOR = 'business-publish-profile';
+const NOTIFICATIONS_ANCHOR = 'business-notifications';
+const FEEDBACK_INBOX_ANCHOR = 'business-feedback-inbox';
+const SCROLLABLE_ANCHORS = [PUBLISH_ANCHOR, NOTIFICATIONS_ANCHOR, FEEDBACK_INBOX_ANCHOR];
+
 const BusinessDashboard = () => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser, userProfile, loading: authLoading, isBusiness, profileServerSynced } = useAuth();
@@ -64,16 +139,12 @@ const BusinessDashboard = () => {
     activeInvitations: 0,
     profileViews: 0,
     rating: 0,
-    reviewCount: 0
+    reviewCount: 0,
+    engagement: 0
   });
   const [recentActivity, setRecentActivity] = useState([]);
-  const [publishingOffer, setPublishingOffer] = useState(false);
   const [publishingProfile, setPublishingProfile] = useState(false);
-  const [offers, setOffers] = useState([]);
-  const [offersLoading, setOffersLoading] = useState(false);
 
-  const PUBLISH_ANCHOR = 'business-publish-profile';
-  const NOTIFICATIONS_ANCHOR = 'business-notifications';
   const tierAccess = getBusinessSubscriptionAccess(userProfile?.subscriptionTier);
   const hasBusinessAccess =
     isBusiness || (currentUser?.uid && hasBusinessSessionHint(currentUser.uid));
@@ -81,7 +152,7 @@ const BusinessDashboard = () => {
   useEffect(() => {
     if (loading) return;
     const hash = location.hash?.replace('#', '');
-    if (!hash || hash !== PUBLISH_ANCHOR && hash !== NOTIFICATIONS_ANCHOR) return;
+    if (!hash || !SCROLLABLE_ANCHORS.includes(hash)) return;
     const el = document.getElementById(hash);
     if (!el) return;
     const frame = requestAnimationFrame(() => {
@@ -92,95 +163,68 @@ const BusinessDashboard = () => {
 
 
   const fetchDashboardData = async () => {
-
     try {
       setLoading(true);
-      console.log('🔄 Fetching dashboard data for:', currentUser.uid);
 
-      // Fetch community members count via trusted backend path
-      const memberResult = await getCommunityMembers(currentUser.uid, {
-        includeMembers: false,
-        limit: 1
-      });
-      const memberCount = Number(memberResult?.memberCount || 0);
-      console.log('👥 Community Members:', memberCount);
-
-      // Fetch active invitations count - FIXED: use restaurantId instead of partnerId
       const invitationsQuery = query(
         collection(db, 'invitations'),
         where('restaurantId', '==', currentUser.uid)
       );
-      const invitationsSnapshot = await getDocs(invitationsQuery);
-      console.log('📨 Total Invitations found:', invitationsSnapshot.size);
-
-      // Filter for active invitations (not expired)
-      const now = new Date();
-      const activeInvitations = invitationsSnapshot.docs.filter((doc) => {
-        const data = doc.data();
-        const inviteDate = new Date(`${data.date}T${data.time}`);
-        const isActive = inviteDate > now;
-        console.log('  - Invitation:', data.title, '| Date:', inviteDate, '| Active:', isActive);
-        return isActive;
-      }).length;
-      console.log('✅ Active Invitations:', activeInvitations);
-
-      // Fetch reviews and calculate real rating
       const reviewsQuery = query(
         collection(db, 'reviews'),
         where('partnerId', '==', currentUser.uid)
       );
-      const reviewsSnapshot = await getDocs(reviewsQuery);
-      const reviewsData = reviewsSnapshot.docs.map((doc) => doc.data());
-      const reviewCount = reviewsData.length;
-      console.log('⭐ Reviews found:', reviewCount);
-
-      let rating = 0;
-      if (reviewCount > 0) {
-        const totalRating = reviewsData.reduce((sum, review) => sum + review.rating, 0);
-        rating = totalRating / reviewCount;
-        console.log('📊 Rating calculation:', {
-          totalRating,
-          reviewCount,
-          average: rating.toFixed(1)
-        });
-      }
-
-      // Fetch recent activity (last 5 invitations) - Removed orderBy to avoid index requirement
-      const recentQuery = query(
-        collection(db, 'invitations'),
-        where('restaurantId', '==', currentUser.uid),
-        limit(5)
+      const engagementQuery = query(
+        collection(db, 'communityPosts'),
+        where('partnerId', '==', currentUser.uid)
       );
-      const recentSnapshot = await getDocs(recentQuery);
-      const recentData = recentSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      console.log('📋 Recent Activity:', recentData.length, 'items');
 
-      const finalStats = {
+      const [memberResult, invitationsSnapshot, reviewsSnapshot, engagementSnapshot] = await Promise.all([
+        getCommunityMembers(currentUser.uid, { includeMembers: false, limit: 1 }),
+        getDocs(invitationsQuery),
+        getDocs(reviewsQuery),
+        getDocs(engagementQuery)
+      ]);
+
+      const memberCount = Number(memberResult?.memberCount || 0);
+
+      // Active = not expired yet; recent activity = same docs, most recent first.
+      const now = new Date();
+      const invitations = invitationsSnapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+      const activeInvitations = invitations.filter(
+        (inv) => new Date(`${inv.date}T${inv.time}`) > now
+      ).length;
+      const recentData = [...invitations]
+        .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+        .slice(0, 5);
+
+      const reviewsData = reviewsSnapshot.docs.map((docSnap) => docSnap.data());
+      const reviewCount = reviewsData.length;
+      const rating = reviewCount > 0
+        ? reviewsData.reduce((sum, review) => sum + review.rating, 0) / reviewCount
+        : 0;
+
+      const engagement = engagementSnapshot.docs.reduce((sum, docSnap) => {
+        const post = docSnap.data();
+        return sum + (post.likes?.length || 0) + (post.comments?.length || 0);
+      }, 0);
+
+      setStats({
         memberCount,
         activeInvitations,
         profileViews: userProfile?.businessInfo?.profileViews || 0,
         rating,
-        reviewCount
-      };
-
-      console.log('✅ Final Stats:', finalStats);
-      setStats(finalStats);
-
+        reviewCount,
+        engagement
+      });
       setRecentActivity(recentData);
-
-      // Fetch offers
-      setOffersLoading(true);
-      const businessOffers = await premiumOfferService.getPartnerOffers(currentUser.uid);
-      setOffers(businessOffers);
-      setOffersLoading(false);
     } catch (error) {
-      console.error('❌ Error fetching dashboard data:', error);
+      console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
-      setOffersLoading(false);
     }
   };
 
@@ -257,61 +301,6 @@ const BusinessDashboard = () => {
 
   }
 
-
-  const handlePublishOffer = async (offerData, file, offerId = null) => {
-    try {
-      setPublishingOffer(true);
-      if (offerId) {
-        await premiumOfferService.updateOffer(offerId, offerData, file);
-        showToast(t('offer_updated', '✅ Offer updated successfully!'), 'success');
-      } else {
-        await premiumOfferService.createOffer(offerData, file);
-        showToast(t('offer_published', '✅ Offer published successfully!'), 'success');
-      }
-
-      // Refresh data
-      const businessOffers = await premiumOfferService.getPartnerOffers(currentUser.uid);
-      setOffers(businessOffers);
-      fetchDashboardData();
-    } catch (error) {
-      console.error('Error in handlePublishOffer:', error);
-      showToast(`❌ ${t('offer_published_err', 'Failed to publish offer:')} ${error.message}`, 'error');
-    } finally {
-      setPublishingOffer(false);
-    }
-  };
-
-  const handleFreezeOffer = async (offerId) => {
-    if (!window.confirm(t('offer_freeze_confirm', 'Are you sure you want to freeze this offer? It will be removed from the active carousel.'))) return;
-    try {
-      await premiumOfferService.freezeOffer(offerId);
-      const businessOffers = await premiumOfferService.getPartnerOffers(currentUser.uid);
-      setOffers(businessOffers);
-    } catch (error) {
-      showToast(t('offer_freeze_err', 'Error freezing offer: ') + error.message, 'error');
-    }
-  };
-
-  const handleRepublishOffer = async (offerId, offerData) => {
-    if (!window.confirm(t('offer_republish_confirm', 'Are you sure you want to republish this offer?'))) return;
-    try {
-      await premiumOfferService.republishOffer(offerId, currentUser.uid, offerData);
-      const businessOffers = await premiumOfferService.getPartnerOffers(currentUser.uid);
-      setOffers(businessOffers);
-    } catch (error) {
-      showToast(t('offer_republish_err', 'Could not republish: ') + error.message, 'error');
-    }
-  };
-
-  const handleDeleteOffer = async (offerId) => {
-    if (!window.confirm(t('offer_delete_confirm', 'Are you sure you want to delete this offer permanently?'))) return;
-    try {
-      await premiumOfferService.deleteOffer(offerId);
-      setOffers(offers.filter((o) => o.id !== offerId));
-    } catch (error) {
-      showToast(t('offer_delete_err', 'Error deleting offer: ') + error.message, 'error');
-    }
-  };
 
   const handlePublishProfile = async () => {
     if (!currentUser?.uid) return;
@@ -650,93 +639,41 @@ const BusinessDashboard = () => {
 
                 {/* Quick Actions */}
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                    <button
-            onClick={() => currentUser && navigate(`/business/${currentUser.uid}?preview=1`)}
-            style={{
-              flex: '1 1 calc(50% - 5px)',
-              padding: '12px',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '12px',
-              color: 'var(--text-main)',
-              fontWeight: '700',
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(139, 92, 246, 0.1)';
-              e.currentTarget.style.borderColor = 'var(--primary)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--bg-card)';
-              e.currentTarget.style.borderColor = 'var(--border-color)';
-            }}>
+                    <QuickActionButton
+            icon={<FaEye />}
+            label={t('btn_view_profile', 'View Profile')}
+            onClick={() => currentUser && navigate(`/business/${currentUser.uid}?preview=1`)} />
 
-                        <FaEye /> {t('btn_view_profile', 'View Profile')}
-                    </button>
-                    <button
-            onClick={() => currentUser && navigate(`/business/${currentUser.uid}`)}
-            style={{
-              flex: '1 1 calc(50% - 5px)',
-              padding: '12px',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '12px',
-              color: 'var(--text-main)',
-              fontWeight: '700',
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(139, 92, 246, 0.1)';
-              e.currentTarget.style.borderColor = 'var(--primary)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--bg-card)';
-              e.currentTarget.style.borderColor = 'var(--border-color)';
-            }}>
+                    <QuickActionButton
+            icon={<FaEdit />}
+            label={t('btn_edit_profile', 'Edit Profile')}
+            onClick={() => currentUser && navigate(`/business/${currentUser.uid}`)} />
 
-                        <FaEdit /> {t('btn_edit_profile', 'Edit Profile')}
-                    </button>
-                    <button
-            onClick={() => navigate('/settings')}
-            style={{
-              flex: '1 1 calc(50% - 5px)',
-              padding: '12px',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '12px',
-              color: 'var(--text-main)',
-              fontWeight: '700',
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(139, 92, 246, 0.1)';
-              e.currentTarget.style.borderColor = 'var(--primary)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--bg-card)';
-              e.currentTarget.style.borderColor = 'var(--border-color)';
-            }}>
+                    <QuickActionButton
+            icon={<FaComments />}
+            label={t('chat', 'Chat')}
+            onClick={() => {
+              if (!tierAccess.canUseCommunityGroupChat) {
+                navigate('/settings/subscription');
+                return;
+              }
+              navigate(`/community/${currentUser.uid}`);
+            }} />
 
-                        <FaCog /> {t('btn_settings', 'Settings')}
-                    </button>
+                    <QuickActionButton
+            icon={<FaChartLine />}
+            label={t('analytics', 'Analytics')}
+            onClick={() => navigate('/my-community/analytics')} />
+
+                    <QuickActionButton
+            icon={<FaArchive />}
+            label={t('archive', 'Archive')}
+            onClick={() => navigate('/my-community/archive')} />
+
+                    <QuickActionButton
+            icon={<FaCog />}
+            label={t('btn_settings', 'Settings')}
+            onClick={() => navigate('/settings')} />
 
                 </div>
             </div>
@@ -744,129 +681,15 @@ const BusinessDashboard = () => {
             {/* Stats Grid */}
             <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
         gap: '1rem',
         marginBottom: '1.5rem'
       }}>
-                {/* Community Members */}
-                <div style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-color)',
-          borderRadius: '16px',
-          padding: '1.25rem',
-          textAlign: 'center'
-        }}>
-                    <div style={{
-            width: '50px',
-            height: '50px',
-            borderRadius: '12px',
-            background: 'rgba(34, 197, 94, 0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 0.75rem',
-            fontSize: '1.3rem',
-            color: '#22c55e'
-          }}>
-                        <FaUsers />
-                    </div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '0.25rem' }}>
-                        {stats.memberCount}
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        {t('stat_cmty_members', 'Community Members')}
-                    </div>
-                </div>
-
-                {/* Active Invitations */}
-                <div style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-color)',
-          borderRadius: '16px',
-          padding: '1.25rem',
-          textAlign: 'center'
-        }}>
-                    <div style={{
-            width: '50px',
-            height: '50px',
-            borderRadius: '12px',
-            background: 'rgba(139, 92, 246, 0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 0.75rem',
-            fontSize: '1.3rem',
-            color: 'var(--primary)'
-          }}>
-                        <FaUserPlus />
-                    </div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '0.25rem' }}>
-                        {stats.activeInvitations}
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        {t('stat_active_invites', 'Active Invitations')}
-                    </div>
-                </div>
-
-                {/* Profile Views */}
-                <div style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-color)',
-          borderRadius: '16px',
-          padding: '1.25rem',
-          textAlign: 'center'
-        }}>
-                    <div style={{
-            width: '50px',
-            height: '50px',
-            borderRadius: '12px',
-            background: 'rgba(59, 130, 246, 0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 0.75rem',
-            fontSize: '1.3rem',
-            color: '#3b82f6'
-          }}>
-                        <FaEye />
-                    </div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '0.25rem' }}>
-                        {stats.profileViews}
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        {t('stat_profile_views', 'Profile Views')}
-                    </div>
-                </div>
-
-                {/* Rating */}
-                <div style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-color)',
-          borderRadius: '16px',
-          padding: '1.25rem',
-          textAlign: 'center'
-        }}>
-                    <div style={{
-            width: '50px',
-            height: '50px',
-            borderRadius: '12px',
-            background: 'rgba(251, 191, 36, 0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 0.75rem',
-            fontSize: '1.3rem',
-            color: '#fbbf24'
-          }}>
-                        <FaStar />
-                    </div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '0.25rem' }}>
-                        {stats.rating.toFixed(1)}
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        {t('stat_rating_reviews', 'Rating')} ({stats.reviewCount} {t('stat_reviews', 'reviews')})
-                    </div>
-                </div>
+                <StatTile icon={<FaUsers />} iconColor="#22c55e" iconBg="rgba(34, 197, 94, 0.1)" value={stats.memberCount} label={t('stat_cmty_members', 'Community Members')} />
+                <StatTile icon={<FaUserPlus />} iconColor="var(--primary)" iconBg="rgba(139, 92, 246, 0.1)" value={stats.activeInvitations} label={t('stat_active_invites', 'Active Invitations')} />
+                <StatTile icon={<FaEye />} iconColor="#3b82f6" iconBg="rgba(59, 130, 246, 0.1)" value={stats.profileViews} label={t('stat_profile_views', 'Profile Views')} />
+                <StatTile icon={<FaStar />} iconColor="#fbbf24" iconBg="rgba(251, 191, 36, 0.1)" value={stats.rating.toFixed(1)} label={`${t('stat_rating_reviews', 'Rating')} (${stats.reviewCount} ${t('stat_reviews', 'reviews')})`} />
+                <StatTile icon={<FaHeart />} iconColor="#ef4444" iconBg="rgba(239, 68, 68, 0.1)" value={stats.engagement} label={t('engagement', 'Engagement')} title={t('engagement_tooltip', 'Likes and comments on your community posts')} />
             </div>
 
             {/* Recent Activity */}
@@ -950,7 +773,7 @@ const BusinessDashboard = () => {
             </div>
 
             {/* Feedback Inbox */}
-            <div style={{
+            <div id={FEEDBACK_INBOX_ANCHOR} style={{
         marginTop: '1.5rem',
         marginBottom: '1.5rem',
         background: 'var(--bg-card)',

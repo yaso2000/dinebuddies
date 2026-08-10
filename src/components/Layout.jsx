@@ -303,7 +303,8 @@ const Layout = ({ children }) => {
     hideBottomNav,
     useChatMainLayout,
   } = routeShell;
-  const isDashboardRoute = location.pathname.startsWith('/my-community');
+  const isDashboardRoute =
+  location.pathname.startsWith('/my-community') || location.pathname.startsWith('/business-dashboard');
   const isStoryRoute = location.pathname === '/create-story';
   const isAiDesignRoute = location.pathname === '/ai-design-studio';
   const isAiTextRoute = location.pathname === '/ai-text-studio';
@@ -697,9 +698,9 @@ const Layout = ({ children }) => {
                                         <FaStore /><AppText as="span">{t('profile_title', 'My Profile')}</AppText>
                                     </Link>
             <Link
-              to="/my-community"
-              className={`ds-nav-item ${location.pathname.startsWith('/my-community') ? 'active' : ''}`}>
-              
+              to="/business-dashboard"
+              className={`ds-nav-item ${location.pathname.startsWith('/business-dashboard') ? 'active' : ''}`}>
+
                                         <FaThLarge /><AppText as="span">{t('business_dashboard', 'Dashboard')}</AppText>
                                     </Link>
           </DesktopNavGroup>
@@ -803,7 +804,7 @@ const Layout = ({ children }) => {
                         </Link>
         }
                     {isBusinessAccount &&
-        <Link to="/my-community" className={`nav-item ${location.pathname.startsWith('/my-community') ? 'active' : ''}`}>
+        <Link to="/business-dashboard" className={`nav-item ${location.pathname.startsWith('/business-dashboard') ? 'active' : ''}`}>
                             <div className="friend-nav-icon-container"><FaThLarge className="nav-icon" /></div>
                             <AppText as="span">{t('business_dashboard', 'Dashboard')}</AppText>
                         </Link>
