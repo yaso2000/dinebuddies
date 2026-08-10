@@ -179,6 +179,43 @@ html {
     flex-shrink: 0;
 }
 
+/* Relationship-kind theming — same palette as MatchCelebrationOverlay so a user
+   recognizes the color from the match celebration when they open the chat later. */
+.chat-header.chat-header--dating {
+    background: linear-gradient(135deg, rgba(251, 113, 133, 0.16), var(--header-bg) 65%);
+}
+
+.chat-header.chat-header--friendship {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.14), var(--header-bg) 65%);
+}
+
+.chat-header.chat-header--acquaintance {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.14), var(--header-bg) 65%);
+}
+
+.chat-relationship-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    color: #fff;
+}
+
+.chat-relationship-icon--dating {
+    background: linear-gradient(145deg, #fb7185, #e11d48);
+}
+
+.chat-relationship-icon--friendship {
+    background: linear-gradient(145deg, #38bdf8, #0284c7);
+}
+
+.chat-relationship-icon--acquaintance {
+    background: linear-gradient(145deg, #fbbf24, #ea580c);
+}
+
 @media (max-width: 1023px) {
     /* JS chat-vv-shell already pins shell.top to clear the status bar —
        do not add safe-area padding on the header again (that drops it). */

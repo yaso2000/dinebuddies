@@ -625,6 +625,10 @@
     inset: auto;
     bottom: auto;
     box-shadow: none;
+    /* .discovery-card__action--glass's translucent white background would otherwise
+       win the cascade and wash out the white logo mark — keep the badge's own dark
+       navy circle. */
+    background: rgba(15, 23, 42, 0.92) !important;
 }
 
 .discovery-card__action--private-invite .private-invite-profile-badge__logo {

@@ -42,6 +42,14 @@ import { openExternalUrl } from '../platform/externalLinks';
 import { formatAppTime } from '../utils/localeFormat';
 import { useChatTheme } from '../hooks/useChatTheme';
 import ChatThemePicker from '../components/chat/ChatThemePicker';
+import { resolveConnectionKind } from '../utils/connectConnection';
+import { FaHeart, FaHandshake, FaUserFriends } from 'react-icons/fa';
+
+const RELATIONSHIP_BADGE = {
+  dating: { icon: FaHeart, labelKey: 'chat_relationship_dating', label: 'Dating' },
+  friendship: { icon: FaUserFriends, labelKey: 'chat_relationship_friendship', label: 'Friendship' },
+  acquaintance: { icon: FaHandshake, labelKey: 'chat_relationship_acquaintance', label: 'Acquaintance' },
+};
 
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
@@ -77,11 +85,18 @@ const Chat = () => {
 
   const viewerFollowing =
     invitationUser?.following || userProfile?.following || [];
-  const { allowed: connectionAllowed, loading: connectionCheckLoading } =
+  const { allowed: connectionAllowed, loading: connectionCheckLoading, targetProfile } =
     useConversationConnectionAllowed(currentUser?.uid, userId, viewerFollowing, {
       enabled: Boolean(currentUser?.uid && userId),
       isSupportPeer,
     });
+
+  // Live — recomputes if either side's dating preference changes later.
+  const connectionKind =
+    !isSupportPeer && connectionAllowed && userProfile && targetProfile
+      ? resolveConnectionKind(userProfile, targetProfile)
+      : null;
+  const relationshipBadge = connectionKind ? RELATIONSHIP_BADGE[connectionKind] : null;
 
   useEffect(() => {
     if (connectionCheckLoading) return;
@@ -643,8 +658,8 @@ const Chat = () => {
             <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelect} />
 
             {/* Header */}
-            <div className="chat-header" style={{
-        background: 'var(--header-bg)',
+            <div className={`chat-header${connectionKind ? ` chat-header--${connectionKind}` : ''}`} style={{
+        background: connectionKind ? undefined : 'var(--header-bg)',
         borderBottom: '1px solid var(--border-color)',
         boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,0,0.06)',
         zIndex: 100
@@ -675,8 +690,22 @@ const Chat = () => {
                             {otherUser.isOnline && <div className="online-dot" style={{ position: 'absolute', bottom: -2, right: -2, width: '12px', height: '12px', background: '#10b981', borderRadius: '50%', border: '2px solid var(--bg-card)' }} />}
                         </div>
                         <div className="header-info" style={{ textAlign: 'start', minWidth: 0, flex: 1 }}>
-                            <AppText as="h3" style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0 }}>{otherUser.displayName}</AppText>
-                            <AppText as="p" className="status" style={{ fontSize: '0.8rem', opacity: 0.7 }}>{otherUserTyping ? t('typing') : otherUser.isOnline ? t('online') : formatLastSeen(otherUser.lastSeen)}</AppText>
+                            <AppText as="h3" style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                {otherUser.displayName}
+                                {relationshipBadge ? (
+                <AppText
+                  as="span"
+                  className={`chat-relationship-icon chat-relationship-icon--${connectionKind}`}
+                  title={t(relationshipBadge.labelKey, relationshipBadge.label)}
+                >
+                                        <relationshipBadge.icon size={11} aria-hidden />
+                                    </AppText>
+                ) : null}
+                            </AppText>
+                            <AppText as="p" className="status" style={{ fontSize: '0.8rem', opacity: 0.7 }}>
+                                {otherUserTyping ? t('typing') : otherUser.isOnline ? t('online') : formatLastSeen(otherUser.lastSeen)}
+                                {relationshipBadge ? ` · ${t(relationshipBadge.labelKey, relationshipBadge.label)}` : ''}
+                            </AppText>
                         </div>
                     </>
         }

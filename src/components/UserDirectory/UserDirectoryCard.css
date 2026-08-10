@@ -218,6 +218,19 @@
     bottom: auto;
     width: 36px;
     height: 36px;
+    /* .user-directory-card__action's theme-aware background would otherwise win the
+       cascade and turn light-on-light in light mode — keep the badge's own dark
+       navy circle (paired with the white logo mark, set via isDark in JS) so it's
+       never invisible. */
+    background: rgba(15, 23, 42, 0.92) !important;
+}
+
+:root[data-theme="light"] .user-directory-card__private-invite {
+    /* Light theme: match the sibling action buttons' light glass look instead of a
+       stark dark circle — pairs with the orange logo mark set via isDark in JS. */
+    background: color-mix(in srgb, var(--bg-main) 55%, var(--bg-card)) !important;
+    border: 1px solid var(--border-color);
+    box-shadow: none;
 }
 
 @media (min-width: 640px) {

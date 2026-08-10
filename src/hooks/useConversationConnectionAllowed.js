@@ -17,6 +17,7 @@ export function useConversationConnectionAllowed(
 ) {
     const [allowed, setAllowed] = useState(isSupportPeer);
     const [loading, setLoading] = useState(Boolean(enabled && viewerUid && targetUserId && !isSupportPeer));
+    const [targetProfile, setTargetProfile] = useState(null);
 
     const targetFollowingRef = useRef([]);
     const targetProfileRef = useRef(null);
@@ -70,6 +71,7 @@ export function useConversationConnectionAllowed(
                 targetFollowingRef.current = [];
                 targetProfileRef.current = { id: targetUserId };
             }
+            if (!cancelled) setTargetProfile(targetProfileRef.current);
             runCheck();
         });
 
@@ -88,5 +90,5 @@ export function useConversationConnectionAllowed(
         };
     }, [enabled, isSupportPeer, targetUserId, viewerFollowing, viewerUid]);
 
-    return { allowed, loading };
+    return { allowed, loading, targetProfile };
 }

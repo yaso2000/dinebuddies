@@ -22,6 +22,7 @@ import {
 } from '../../utils/connectConnection';
 import { useAuth } from '../../context/AuthContext';
 import { useInvitations } from '../../context/InvitationContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useToast } from '../../context/ToastContext';
 import { useDiscoveryActionStatus } from '../../hooks/useDiscoveryActionStatus';
 import { useCanMessageMember } from '../../hooks/useCanMessageMember';
@@ -44,6 +45,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { showToast, showPersistentWarning } = useToast();
+  const { isDark } = useTheme();
   const { userProfile, isGuest } = useAuth();
   const { toggleFollow, currentUser: invitationUser } = useInvitations();
   const { celebrateMatch } = useMatchCelebration();
@@ -460,7 +462,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
               <PrivateInviteProfileBadge
                 user={user}
                 currentUser={viewerProfile}
-                logoSrc="/db-logo-white.svg"
+                logoSrc={isDark ? '/db-logo-white.svg' : '/db-logo.svg'}
                 className="user-directory-card__action user-directory-card__action--private-invite user-directory-card__private-invite"
               />
             ) : null}
