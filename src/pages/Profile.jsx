@@ -25,6 +25,7 @@ import { asUidArray } from '../utils/userSocialLists';
 import { getInvitationListThumbSrc } from '../utils/privateInvitationCoverImage';
 import PrivateProfileFields from '../components/profile/PrivateProfileFields';
 import ProfileGalleryEditor from '../components/profile/ProfileGalleryEditor';
+import PersonalCardThemeRail from '../components/profile/PersonalCardThemeRail';
 import {
   normalizeProfileGallery,
   normalizeDirectoryCoverIndex,
@@ -173,6 +174,7 @@ const Profile = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [mutualFriendsCount, setMutualFriendsCount] = useState(0);
   const [visibilitySaving, setVisibilitySaving] = useState('');
+  const [showCardThemeRail, setShowCardThemeRail] = useState(false);
   const isOwnProfile = true;
 
   // Redirect guests to login - DISABLED this redirect because we want to show a guest-specific profile view
@@ -815,25 +817,52 @@ const Profile = () => {
                         </div>
 
                         {!isEditing && !userProfile?.isGuest &&
-                <button
-                  type="button"
-                  className="ui-btn ui-btn--secondary profile-edit-beside-avatar"
-                  onClick={beginProfileEdit}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontWeight: 700,
-                    padding: '10px 16px',
-                    borderRadius: '12px',
-                    flexShrink: 0
-                  }}>
-                  
-                                <FaEdit size={16} aria-hidden />
-                                {t('edit_profile') || 'Edit Profile'}
-                            </button>
+                <>
+                                <button
+                    type="button"
+                    className="ui-btn ui-btn--secondary profile-edit-beside-avatar"
+                    onClick={beginProfileEdit}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontWeight: 700,
+                      padding: '10px 16px',
+                      borderRadius: '12px',
+                      flexShrink: 0
+                    }}>
+
+                                    <FaEdit size={16} aria-hidden />
+                                    {t('edit_profile') || 'Edit Profile'}
+                                </button>
+                                <button
+                    type="button"
+                    onClick={() => setShowCardThemeRail((v) => !v)}
+                    title={t('personal_card_theme_color', 'Card color')}
+                    aria-label={t('personal_card_theme_color', 'Card color')}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      fontSize: '1.1rem'
+                    }}>
+
+                                    <AppText as="span">🎨</AppText>
+                                </button>
+                            </>
                 }
                         </div>
+
+                        {showCardThemeRail && !isEditing && !userProfile?.isGuest &&
+              <PersonalCardThemeRail />
+              }
 
                         {isEditing ?
               <div className="profile-edit-form">

@@ -9,9 +9,9 @@
     background:
         linear-gradient(
             135deg,
-            color-mix(in srgb, var(--bg-card) 92%, var(--primary) 8%) 0%,
+            color-mix(in srgb, var(--bg-card) 92%, var(--personal-accent-1, var(--primary)) 8%) 0%,
             var(--bg-card) 48%,
-            color-mix(in srgb, var(--bg-card) 94%, #0ea5e9 6%) 100%
+            color-mix(in srgb, var(--bg-card) 94%, var(--personal-accent-2, #0ea5e9) 6%) 100%
         );
     color: var(--text-main);
     text-align: start;
@@ -20,7 +20,7 @@
 }
 
 .user-directory-card:hover {
-    border-color: color-mix(in srgb, var(--primary) 42%, var(--border-color));
+    border-color: color-mix(in srgb, var(--personal-accent-1, var(--primary)) 42%, var(--border-color));
     transform: translateY(-1px);
 }
 

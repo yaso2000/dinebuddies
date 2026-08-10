@@ -618,6 +618,17 @@
         0 8px 22px rgba(0, 0, 0, 0.28);
 }
 
+.discovery-card__wave-emoji {
+    font-size: 1.45rem;
+    line-height: 1;
+}
+
+.discovery-card__action--greeted {
+    color: #facc15;
+    border-color: rgba(250, 204, 21, 0.5);
+    background: rgba(250, 204, 21, 0.18);
+}
+
 .discovery-card__action--follow {
     color: #9ad7ff;
 }
@@ -663,8 +674,8 @@
 
 .discovery-card--connect .discovery-card__glow {
     background:
-        radial-gradient(circle at 30% 20%, rgba(255, 77, 154, 0.35), transparent 45%),
-        radial-gradient(circle at 80% 70%, rgba(46, 230, 255, 0.22), transparent 50%);
+        radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--personal-accent-1, #ff4d9a) 35%, transparent), transparent 45%),
+        radial-gradient(circle at 80% 70%, color-mix(in srgb, var(--personal-accent-2, #2ee6ff) 22%, transparent), transparent 50%);
 }
 
 .discovery-card--connect .discovery-card__action--like.discovery-card__action--liked,

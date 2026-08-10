@@ -69,6 +69,7 @@ export function mapDirectoryUser(publicDoc, userDoc = null) {
         role: u.role || publicDoc.accountRole || 'user',
         accountRole: publicDoc.accountRole || u.role || 'user',
         isOnline: Boolean(u.isOnline),
+        cardTheme: u.cardTheme && typeof u.cardTheme === 'object' ? u.cardTheme : null,
         ...(getUserDocLatLng({ ...userPublic, ...u }) || getUserDocLatLng(u) || {}),
     };
 }

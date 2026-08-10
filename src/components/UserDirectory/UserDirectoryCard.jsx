@@ -363,8 +363,15 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
     </div>
   );
 
+  const cardThemeVars = user?.cardTheme?.primaryColor
+    ? {
+        '--personal-accent-1': user.cardTheme.primaryColor,
+        '--personal-accent-2': user.cardTheme.secondaryColor || user.cardTheme.primaryColor,
+      }
+    : undefined;
+
   return (
-    <article className="user-directory-card" aria-label={displayName}>
+    <article className="user-directory-card" aria-label={displayName} style={cardThemeVars}>
       {photo}
 
       <div className="user-directory-card__body">

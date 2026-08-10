@@ -53,7 +53,7 @@ export default function DiscoveryCard({
   onSkip,
   onLike,
   onSendGift,
-  onGreeting: _onGreeting,
+  onGreeting,
   isTop = true,
   listPath = '/search/list',
 }) {
@@ -77,7 +77,7 @@ export default function DiscoveryCard({
     viewerProfile: viewerProfile,
     targetProfile: targetUser,
   });
-  const { liked } = useDiscoveryActionStatus(viewerUid, profile?.id);
+  const { liked, greetedToday } = useDiscoveryActionStatus(viewerUid, profile?.id);
 
   const x = useMotionValue(0);
   const exitHandledRef = useRef(false);
@@ -89,6 +89,7 @@ export default function DiscoveryCard({
   const [likeBurst, setLikeBurst] = useState(false);
   const [canChat, setCanChat] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
+  const [greetingBusy, setGreetingBusy] = useState(false);
   const isFollowingUser = checkIsFollowing(viewerFollowing, profile?.id);
   const ageLabel = formatAgeLabel(profile);
   const locationLabel = [profile?.city, profile?.country].filter(Boolean).join(', ') || profile?.city || '';
@@ -292,6 +293,18 @@ export default function DiscoveryCard({
     onSendGift?.(profile);
   };
 
+  const handleWave = async (e) => {
+    e.stopPropagation();
+    if (!isTop || greetingBusy || greetedToday) return;
+    setGreetingBusy(true);
+    try {
+      const result = await onGreeting?.(profile);
+      if (result?.ok) showToast('👋', 'success');
+    } finally {
+      setGreetingBusy(false);
+    }
+  };
+
   const handleOpenChat = (e) => {
     e.stopPropagation();
     if (!profile?.id) return;
@@ -316,11 +329,17 @@ export default function DiscoveryCard({
   };
 
   const identityLine = ageLabel ? `${profile.name}, ${ageLabel}` : profile.name;
+  const cardThemeVars = targetUser?.cardTheme?.primaryColor
+    ? {
+        '--personal-accent-1': targetUser.cardTheme.primaryColor,
+        '--personal-accent-2': targetUser.cardTheme.secondaryColor || targetUser.cardTheme.primaryColor,
+      }
+    : undefined;
 
   return (
     <motion.article
       className="discovery-card discovery-card--magnetic discovery-card--connect"
-      style={{ x, zIndex: isTop ? 2 : 1, touchAction: 'pan-y' }}
+      style={{ ...cardThemeVars, x, zIndex: isTop ? 2 : 1, touchAction: 'pan-y' }}
       drag={isTop ? 'x' : false}
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={0.85}
@@ -423,6 +442,22 @@ export default function DiscoveryCard({
             onClick={handleGift}
           >
             <FaGift size={22} />
+          </button>
+
+          <button
+            type="button"
+            className={`discovery-card__action discovery-card__action--glass discovery-card__action--wave${
+              greetedToday ? ' discovery-card__action--greeted' : ''
+            }`}
+            disabled={greetingBusy || greetedToday}
+            aria-label={t('user_directory_greeting', 'Wave hi')}
+            title={t('user_directory_greeting', 'Wave hi')}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleWave}
+          >
+            <AppText as="span" className="discovery-card__wave-emoji" aria-hidden>
+              👋
+            </AppText>
           </button>
 
           {useDatingLike ? (

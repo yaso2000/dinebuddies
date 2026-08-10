@@ -1,0 +1,62 @@
+.personal-card-theme-rail {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 8px 2px;
+    margin: 4px auto 0;
+    max-width: 320px;
+    cursor: grab;
+    touch-action: pan-x;
+}
+
+.personal-card-theme-rail::-webkit-scrollbar {
+    display: none;
+}
+
+.personal-card-theme-rail.is-dragging {
+    cursor: grabbing;
+}
+
+.personal-card-theme-swatch {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.28);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    padding: 0;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.personal-card-theme-swatch:disabled {
+    cursor: wait;
+}
+
+.personal-card-theme-swatch--active {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+    transform: scale(1.12);
+}
+
+.personal-card-theme-swatch__spinner {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #fff;
+    animation: personal-card-theme-swatch-spin 0.7s linear infinite;
+}
+
+@keyframes personal-card-theme-swatch-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
