@@ -26,6 +26,9 @@ export default function SocialCardPreviewStage({
     themeColorHex,
     onFontChange,
     onThemeColorChange,
+    /** Simple mode: just the photo + always-on text, font, and color — no show/hide toggle,
+     * backdrop-tone picker, or position/width/scale rails. Keeps the create flow to "photo + clear text". */
+    simplified = false,
     children,
 }) {
     const { t } = useTranslation();
@@ -33,35 +36,37 @@ export default function SocialCardPreviewStage({
     return (
         <div className="social-card-preview-bundle">
             <div className="social-card-preview-stage">
-                <div className="social-card-preview-stage__top">
-                    <button
-                        type="button"
-                        className="social-card-preview-stage__text-btn"
-                        title={t('social_card_show_content_title', {
-                            defaultValue:
-                                'Off: date and place only on the card. On: show title, message, and profile photo.',
-                        })}
-                        aria-pressed={showHostAndMessage}
-                        onClick={() => onShowHostAndMessageChange?.(!showHostAndMessage)}
-                    >
-                        {showHostAndMessage
-                            ? t('social_card_hide_text', { defaultValue: 'Hide text' })
-                            : t('social_card_show_text', { defaultValue: 'Show text' })}
-                    </button>
+                {!simplified ? (
+                    <div className="social-card-preview-stage__top">
+                        <button
+                            type="button"
+                            className="social-card-preview-stage__text-btn"
+                            title={t('social_card_show_content_title', {
+                                defaultValue:
+                                    'Off: date and place only on the card. On: show title, message, and profile photo.',
+                            })}
+                            aria-pressed={showHostAndMessage}
+                            onClick={() => onShowHostAndMessageChange?.(!showHostAndMessage)}
+                        >
+                            {showHostAndMessage
+                                ? t('social_card_hide_text', { defaultValue: 'Hide text' })
+                                : t('social_card_show_text', { defaultValue: 'Show text' })}
+                        </button>
 
-                    {showHostAndMessage && editorPhotoBackgroundActive ? (
-                        <SocialCardTextBackdropTonePicker
-                            variant="icons"
-                            toneOrder={SOCIAL_TEXT_BACKDROP_ICON_ORDER}
-                            tone={textBackdropTone}
-                            onToneChange={onTextBackdropToneChange}
-                        />
-                    ) : null}
-                </div>
+                        {showHostAndMessage && editorPhotoBackgroundActive ? (
+                            <SocialCardTextBackdropTonePicker
+                                variant="icons"
+                                toneOrder={SOCIAL_TEXT_BACKDROP_ICON_ORDER}
+                                tone={textBackdropTone}
+                                onToneChange={onTextBackdropToneChange}
+                            />
+                        ) : null}
+                    </div>
+                ) : null}
 
                 {children}
 
-                {showHostAndMessage ? (
+                {showHostAndMessage && !simplified ? (
                     <>
                         <div className="social-card-preview-stage__side-rail social-card-preview-stage__side-rail--font">
                             <SocialCardCopyFontScaleRail

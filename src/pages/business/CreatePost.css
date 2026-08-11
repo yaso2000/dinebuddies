@@ -3,7 +3,7 @@
 
 .sps-page--premium {
     --sps-layout-top-h: 38px;
-    --sps-tool-rail-w: 44px;
+    --sps-tool-rail-w: 56px;
     --sps-dock-max-h: 46vh;
     display: flex;
     flex-direction: column;
@@ -46,8 +46,8 @@
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    gap: 5px;
-    padding: 6px 4px;
+    gap: 12px;
+    padding: 8px 6px;
     border-radius: 14px;
     background: var(--sps-glass);
     border: 1px solid var(--sps-glass-border);
@@ -66,8 +66,8 @@
 
 .sps-tool-rail__btn {
     flex-shrink: 0;
-    width: 34px;
-    height: 34px;
+    width: 44px;
+    height: 44px;
     border: 1px solid transparent;
     border-radius: 10px;
     background: var(--sps-control-bg);
@@ -117,8 +117,8 @@
 }
 
 .ai-floating-launcher--studio-rail .ai-floating-launcher__trigger {
-    width: 38px;
-    height: 38px;
+    width: 48px;
+    height: 48px;
     padding: 0;
     border-radius: 12px;
     border: none;
@@ -130,7 +130,7 @@
 }
 
 .ai-floating-launcher--studio-rail .ai-floating-launcher__trigger-icon {
-    font-size: 1.12rem;
+    font-size: 1.32rem;
     color: #fff;
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.28));
 }
@@ -881,19 +881,19 @@
     }
 
     .sps-tool-rail {
-        --sps-tool-rail-w: 40px;
-        padding: 4px 3px;
-        gap: 4px;
+        --sps-tool-rail-w: 50px;
+        padding: 6px 5px;
+        gap: 9px;
     }
 
     .sps-tool-rail__btn {
-        width: 30px;
-        height: 30px;
+        width: 40px;
+        height: 40px;
     }
 
     .ai-floating-launcher--studio-rail .ai-floating-launcher__trigger {
-        width: 34px;
-        height: 34px;
+        width: 44px;
+        height: 44px;
     }
 
     .sps-anim-strip__btn {
@@ -929,7 +929,7 @@
 @media (max-width: 380px) {
     .sps-page--premium {
         --sps-dock-max-h: min(56dvh, 320px);
-        --sps-tool-rail-w: 36px;
+        --sps-tool-rail-w: 46px;
         --sps-layout-top-h: 34px;
     }
 
@@ -937,14 +937,18 @@
         --sps-dock-max-h: min(62dvh, 360px);
     }
 
+    .sps-tool-rail {
+        gap: 7px;
+    }
+
     .sps-tool-rail__btn {
-        width: 28px;
-        height: 28px;
+        width: 36px;
+        height: 36px;
     }
 
     .ai-floating-launcher--studio-rail .ai-floating-launcher__trigger {
-        width: 32px;
-        height: 32px;
+        width: 40px;
+        height: 40px;
     }
 }
 

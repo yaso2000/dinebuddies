@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
-  FaCalendarAlt, FaTimes, FaCheckCircle,
+  FaCalendarAlt,
   FaClock, FaLock, FaChevronLeft,
   FaMoneyBillWave, FaUsers, FaBriefcase,
   FaBirthdayCake, FaMoon, FaUtensils, FaCoffee, FaGamepad,
   FaStar, FaHome, FaFilm, FaFutbol, FaMicrophone,
-  FaCamera, FaUpload, FaImage, FaMagic } from
+  FaUpload, FaMagic } from
 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
@@ -16,10 +16,9 @@ import InvitationVenueLocationSection from '../components/InvitationVenueLocatio
 import { commitInvitationAiCover, resolveAiGeneratedCoverPreview, verifyPublicStorageImageUrl } from '../services/mediaService';
 import { isServerPersistedAiCoverUrl } from '../utils/aiGeneratedMediaUrl';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
-import { db } from '../firebase/config';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { doc, getDoc } from 'firebase/firestore';
 import { detectUserLocationContext } from '../utils/locationUtils';
+import { todayLocalDateInputValue } from '../utils/dateInputHelpers';
 import './SocialInvitation.css';
 import { useEditorSessionAutosave } from '../hooks/useEditorSessionAutosave';
 import {
@@ -142,7 +141,7 @@ const CreateSocialInvitation = () => {
     editInvitation.cardGradientId ||
     null
   );
-  const [privateCoverTab, setPrivateCoverTab] = useState(() => editInvitation ? 'camera' : 'template');
+  const [privateCoverTab, setPrivateCoverTab] = useState('upload');
   const [cameraOpenNonce, setCameraOpenNonce] = useState(0);
   const [aiCoverSheetOpen, setAiCoverSheetOpen] = useState(false);
   const [aiCoverCommittingId, setAiCoverCommittingId] = useState(null);
@@ -392,9 +391,11 @@ const CreateSocialInvitation = () => {
   useEffect(() => {
     if (restaurantData) return;
 
+    let cancelled = false;
+
     const detectLocation = async () => {
       const detected = await detectUserLocationContext(userProfile);
-      if (!detected.success) return;
+      if (cancelled || !detected.success) return;
       setFormData((prev) => ({
         ...prev,
         city: detected.city || prev.city,
@@ -406,6 +407,10 @@ const CreateSocialInvitation = () => {
     };
 
     detectLocation();
+
+    return () => {
+      cancelled = true;
+    };
   }, [restaurantData, userProfile]);
 
   const handleLocationSelect = (placeData) => {
@@ -423,47 +428,9 @@ const CreateSocialInvitation = () => {
       country: placeData.country || prev.country,
       countryCode: placeData.countryCode || prev.countryCode,
       ...(isDbVenue ? { isDineBuddiesVenue: true } : {}),
-      title: placeData.name ? `${t('invitation_at')} ${placeData.name}` : prev.title,
+      title: prev.title?.trim() ? prev.title : placeData.name ? `${t('invitation_at')} ${placeData.name}` : prev.title,
       ...(placeData.matchedFromGoogle ? { venueMatchedFromGoogle: true } : {})
     }));
-  };
-
-  const revokeBlobPreview = (prev) => {
-    if (!prev) return;
-    const stillInStash = coverMediaStashRef.current.some((e) => isSamePrivateCoverMedia(e.media, prev));
-    if (!stillInStash) {
-      revokePrivateCoverMedia(prev);
-    }
-  };
-
-  const setCoverMedia = (next) => {
-    setMediaData((prev) => {
-      let resolved;
-      if (next === null) {
-        revokeBlobPreview(prev);
-        resolved = null;
-      } else if (typeof next === 'function') {
-        resolved = next(prev);
-        if (
-        prev?.preview &&
-        String(prev.preview).startsWith('blob:') &&
-        resolved?.preview !== prev.preview)
-        {
-          revokeBlobPreview(prev);
-        }
-      } else {
-        if (
-        prev?.preview &&
-        String(prev.preview).startsWith('blob:') &&
-        prev.preview !== next?.preview)
-        {
-          revokeBlobPreview(prev);
-        }
-        resolved = next;
-      }
-      privateCoverDraftsRef.current[privateCoverTabRef.current] = resolved;
-      return resolved;
-    });
   };
 
   const handlePrivateCoverTab = (tab) => {
@@ -1244,14 +1211,14 @@ const CreateSocialInvitation = () => {
                     <FaChevronLeft />
                 </button>
                 <div className="private-header-badge">
-                    🔒 {t('dinebuddy_private', 'DineBuddy Private')}
+                    🔒 {t('invite_create_social_title', 'Social Invite')}
                 </div>
                 <AppText as="h2" className="private-header-title">
                     <FaLock />
-                    {t('dinebuddy_private', 'DineBuddy Private')}
+                    {t('invite_create_social_title', 'Social Invite')}
                 </AppText>
                 <AppText as="p" className="private-header-desc">
-                    {t('social_invitation_desc', 'This invitation will not be visible to the public. Only people you invite can see and join.')}
+                    {t('invite_create_social_desc', 'Invite up to 30 guests — only people you choose can see and join.')}
                 </AppText>
 
                 {!quotaInfo.profileLoading &&
@@ -1297,7 +1264,7 @@ const CreateSocialInvitation = () => {
                 value={formData.date}
                 onChange={handleChange}
                 className="elegant-input"
-                min={new Date().toISOString().split('T')[0]}
+                min={todayLocalDateInputValue()}
                 required />
 
                         </div>
@@ -1464,17 +1431,6 @@ const CreateSocialInvitation = () => {
                                 <button
                   type="button"
                   role="tab"
-                  aria-selected={privateCoverTab === 'camera'}
-                  onClick={handlePrivateCoverCameraTabClick}
-                  className={`private-cover-tab${privateCoverTab === 'camera' ? ' private-cover-tab--active' : ''}`}
-                  title={t('social_cover_tab_camera_open', { defaultValue: 'Video' })}
-                  aria-label={t('social_cover_tab_camera_open', { defaultValue: 'Video' })}>
-
-                                    <FaCamera aria-hidden />
-                                </button>
-                                <button
-                  type="button"
-                  role="tab"
                   aria-selected={privateCoverTab === 'upload'}
                   onClick={handlePrivateCoverUploadTabClick}
                   className={`private-cover-tab${privateCoverTab === 'upload' ? ' private-cover-tab--active' : ''}`}
@@ -1482,17 +1438,6 @@ const CreateSocialInvitation = () => {
                   aria-label={t('social_cover_tab_upload_open', { defaultValue: 'From device' })}>
 
                                     <FaUpload aria-hidden />
-                                </button>
-                                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={privateCoverTab === 'template'}
-                  onClick={() => handlePrivateCoverTab('template')}
-                  className={`private-cover-tab${privateCoverTab === 'template' ? ' private-cover-tab--active' : ''}`}
-                  title={t('private_cover_tab_template', { defaultValue: 'Template' })}
-                  aria-label={t('private_cover_tab_template', { defaultValue: 'Template' })}>
-
-                                    <FaImage aria-hidden />
                                 </button>
                                 <button
                   type="button"
@@ -1538,7 +1483,8 @@ const CreateSocialInvitation = () => {
                     fontId={cardFontId}
                     themeColorHex={socialCardThemeColor}
                     onFontChange={setCardFontId}
-                    onThemeColorChange={setPrivateCardThemeColor}>
+                    onThemeColorChange={setPrivateCardThemeColor}
+                    simplified>
 
                                         <SocialInvitationCardPreview
                       cardTemplateSet="private"

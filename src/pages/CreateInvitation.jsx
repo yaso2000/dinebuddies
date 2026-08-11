@@ -9,8 +9,6 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import MediaSelector from '../components/Invitations/MediaSelector';
 import VenueLocationPicker from '../components/VenueLocationPicker';
-import { Country, State, City } from 'country-state-city';
-import { uploadInvitationPhoto } from '../utils/imageUpload';
 import { processInvitationMedia, uploadVideoWithThumbnail, uploadMedia, uploadGoogleImage } from '../services/mediaService';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { deleteFilesAtFirebaseDownloadUrls } from '../utils/firebaseStorageDelete';
@@ -22,6 +20,7 @@ import { detectLiveUserGps, geocode } from '../utils/locationUtils';
 import { getInvitationLatLng, resolveVenueCoordinates } from '../utils/invitationCoords';
 import { validatePublicInvitationCreate, invitationErrorI18nKey } from '../utils/invitationRules';
 import { extractCityTokenFromAddress } from '../utils/locationUtils';
+import { todayLocalDateInputValue } from '../utils/dateInputHelpers';
 import { normalizePublicCardTemplateKey } from '../utils/invitationTemplates';
 import { PUBLIC_VENUE_CATEGORIES } from '../constants/publicVenueCategories';
 import {
@@ -47,6 +46,20 @@ import { resolveHostInvitationNavigationState } from '../utils/hostInvitationFro
 
 const MAX_PUBLIC_GUESTS = 10;
 
+/** Deeply removes undefined values (keeps Firestore FieldValue instances like deleteField() intact). */
+function stripUndefined(obj) {
+  if (obj === undefined) return obj;
+  const newObj = { ...obj };
+  Object.keys(newObj).forEach((key) => {
+    if (newObj[key] === undefined) {
+      delete newObj[key];
+    } else if (newObj[key] !== null && typeof newObj[key] === 'object' && !Array.isArray(newObj[key]) && typeof newObj[key].toDate !== 'function' && typeof newObj[key].isEqual !== 'function') {
+      newObj[key] = stripUndefined(newObj[key]);
+    }
+  });
+  return newObj;
+}
+
 const CreateInvitation = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -64,7 +77,6 @@ const CreateInvitation = () => {
   }, [userProfile, currentUser, navigate]);
 
   // UI State
-  const [imageFile, setImageFile] = useState(null);
   const [mediaData, setMediaData] = useState(null); // NEW: For MediaSelector
   /** Single saved selfie / upload video (library). New recording blocked until this is deleted from Storage. */
   const [libraryVideo, setLibraryVideo] = useState(null);
@@ -427,8 +439,6 @@ const CreateInvitation = () => {
     loadDraft();
   }, [editingDraft, draftId]);
 
-  // Mutual friend fetching removed (Private-only feature)
-
   // Update title when language changes if from restaurant
   useEffect(() => {
     if (restaurantData) {
@@ -444,22 +454,6 @@ const CreateInvitation = () => {
       setFormData((prev) => ({ ...prev, type: normalizePublicVenueType(prev.type) }));
     }
   }, [formData.type]);
-
-  // Handle image selection
-  const handleImageSelect = (file) => {
-    setImageFile(file);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setFormData((prev) => ({ ...prev, image: reader.result }));
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Remove image
-  const handleRemoveImage = () => {
-    setFormData((prev) => ({ ...prev, image: null }));
-    setImageFile(null);
-  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -605,21 +599,6 @@ const CreateInvitation = () => {
         };
       }
 
-      // Helper to deeply remove undefined values
-      const stripUndefined = (obj) => {
-        if (obj === undefined) return obj;
-        const newObj = { ...obj };
-        Object.keys(newObj).forEach((key) => {
-          if (newObj[key] === undefined) {
-            delete newObj[key];
-          } else if (newObj[key] !== null && typeof newObj[key] === 'object' && !Array.isArray(newObj[key]) && typeof newObj[key].toDate !== 'function' && typeof newObj[key].isEqual !== 'function') {
-            // Skip FieldValue instances (which have isEqual method)
-            newObj[key] = stripUndefined(newObj[key]);
-          }
-        });
-        return newObj;
-      };
-
       let draftData = await applyVenueCoordinates({
         ...formData,
         templateType,
@@ -729,6 +708,8 @@ const CreateInvitation = () => {
   };
 
   // Keep original handleSubmit for backward compatibility (if needed)
+  // Only reachable while editing an already-published invitation (see the form's onSubmit gate below);
+  // creating a new invitation always goes through handlePreview's draft flow instead.
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -742,7 +723,6 @@ const CreateInvitation = () => {
       return;
     }
 
-    // Validation (This part is now handled by handlePreview, but keeping it here for direct submission if needed)
     if (!formData.title.trim()) {
       showToast(t('please_enter_title'), 'error');
       return;
@@ -766,21 +746,6 @@ const CreateInvitation = () => {
       return;
     }
 
-    // Check daily invitation limit (only if creating new)
-    if (!editingInvitation) {
-      const validation = await validateInvitationCreation(currentUser.uid);
-      if (!validation.valid) {
-        const confirmMessage = i18n.language === 'ar' ?
-        `${validation.error}\n\n${t('go_to_current_invitation')}` :
-        `${validation.error}\n\nDo you want to go to your current invitation?`;
-
-        if (window.confirm(confirmMessage)) {
-          navigate(`/invitation/${validation.existingInvitation.id}`);
-        }
-        return;
-      }
-    }
-
     setIsSubmitting(true);
     setUploadProgress(0);
 
@@ -799,15 +764,9 @@ const CreateInvitation = () => {
           mediaFields = await processInvitationMedia(mediaData, userId);
 
           if (mediaFields.mediaSource === 'restaurant' || mediaFields.mediaSource === 'google_place' || mediaData.source === 'google_place' || mediaData.source === 'venue') {
-            if (editingInvitation) {
-              mediaFields.customImage = deleteField();
-              mediaFields.customVideo = deleteField();
-              mediaFields.videoThumbnail = deleteField();
-            } else {
-              delete mediaFields.customImage;
-              delete mediaFields.customVideo;
-              delete mediaFields.videoThumbnail;
-            }
+            mediaFields.customImage = deleteField();
+            mediaFields.customVideo = deleteField();
+            mediaFields.videoThumbnail = deleteField();
             mediaFields.mediaType = 'image';
           }
 
@@ -832,40 +791,14 @@ const CreateInvitation = () => {
           mediaType: deleteField(),
           mediaSource: deleteField()
         };
-      }
-      // 2. Fallback: Legacy Image Upload (if imageFile exists and no mediaData)
-      else if (imageFile) {
-        const invitationId = editingInvitation ? editingInvitation.id : `temp_${Date.now()}`;
-        const url = await uploadInvitationPhoto(
-          imageFile,
-          invitationId,
-          currentUser?.id || authUser?.uid,
-          0,
-          (progress) => setUploadProgress(progress)
-        );
-        finalImageUrl = url;
-
-        // Construct legacy media fields
+      } else if (editingInvitation?.customImage && !mediaData) {
+        // User removed the library image and did not choose another medium
         mediaFields = {
-          mediaSource: 'custom',
-          restaurantImage: url,
-          mediaType: 'image'
+          customImage: deleteField(),
+          mediaType: deleteField(),
+          mediaSource: deleteField()
         };
       }
-
-      // Helper to deeply remove undefined values
-      const stripUndefined = (obj) => {
-        if (obj === undefined) return obj;
-        const newObj = { ...obj };
-        Object.keys(newObj).forEach((key) => {
-          if (newObj[key] === undefined) {
-            delete newObj[key];
-          } else if (newObj[key] !== null && typeof newObj[key] === 'object' && !Array.isArray(newObj[key]) && typeof newObj[key].toDate !== 'function' && typeof newObj[key].isEqual !== 'function') {
-            newObj[key] = stripUndefined(newObj[key]);
-          }
-        });
-        return newObj;
-      };
 
       let cleanData = await applyVenueCoordinates({
         ...formData,
@@ -878,31 +811,10 @@ const CreateInvitation = () => {
       cleanData = stripUndefined(cleanData);
       delete cleanData.coverAnimationType;
 
-      // Remove purely UI fields if strictly necessary, but Firestore ignores undefined usually.
-      // If mediaFields provided a video, ensure we don't accidentally keep old image as primary if unnecessary
-      if (mediaFields.mediaType === 'video') {
-        // Thumbnail comes from processInvitationMedia (restaurantImage / videoThumbnail).
-      }
-
-      if (editingInvitation) {
-        const invitationRef = doc(db, 'invitations', editingInvitation.id);
-
-        await updateDoc(invitationRef, { ...cleanData, coverAnimationType: deleteField() });
-        showToast(t('invitation_updated', { defaultValue: 'Invitation updated successfully' }), 'success');
-        navigate(`/invitation/${editingInvitation.id}`);
-      } else {
-        // This path is usually handled by handlePreview -> Draft -> Publish, but logic remains
-        const createResult = await addInvitation(cleanData);
-        const newId =
-        typeof createResult === 'object' && createResult?.ok === true ?
-        createResult.id :
-        typeof createResult === 'string' ?
-        createResult :
-        null;
-        if (newId) {
-          navigate(`/invitation/${newId}`);
-        }
-      }
+      const invitationRef = doc(db, 'invitations', editingInvitation.id);
+      await updateDoc(invitationRef, { ...cleanData, coverAnimationType: deleteField() });
+      showToast(t('invitation_updated', { defaultValue: 'Invitation updated successfully' }), 'success');
+      navigate(`/invitation/${editingInvitation.id}`);
     } catch (error) {
       console.error('❌ Error creating/upprivate invite:', error);
       showToast(t('failed_create_invitation'), 'error');
@@ -1048,9 +960,6 @@ const CreateInvitation = () => {
     []
   );
 
-  // Derived Data for UI
-  const currentCountry = Country.getCountryByCode(formData.country);
-
   const previewHeroUrl = useMemo(() => {
     if (mediaData?.type === 'video') {
       return mediaData.videoThumbnail || mediaData.preview || mediaData.url || null;
@@ -1129,7 +1038,7 @@ const CreateInvitation = () => {
   authUser?.uid]
   );
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocalDateInputValue();
 
   return (
     <>

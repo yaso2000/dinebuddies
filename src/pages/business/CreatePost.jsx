@@ -93,7 +93,7 @@ function StudioToolRail({ tools, activeTool, onToggle, t, aiSlot = null }) {
                         aria-expanded={isActive}
                         title={label}
                     >
-                        <Icon size={16} aria-hidden />
+                        <Icon size={20} aria-hidden />
                     </button>
                 );
             })}
