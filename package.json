@@ -50,6 +50,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",
+    "@firebase/rules-unit-testing": "^4.0.1",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",
@@ -58,6 +59,7 @@
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "firebase-tools": "^15.26.0",
     "sharp": "^0.34.5",
     "vite": "^7.3.1"
   }
