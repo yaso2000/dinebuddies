@@ -19,6 +19,8 @@ export default function PrivateCardCopyLayoutRail({
     onCopyWidthPctChange,
     disabled = false,
     className = '',
+    /** Set false to hide the move up/down buttons and keep only text-box width. */
+    showPosition = true,
 }) {
     const { t } = useTranslation();
     const offset = clampCardCopyOffsetY(copyOffsetY);
@@ -33,20 +35,22 @@ export default function PrivateCardCopyLayoutRail({
     };
 
     const buttons = [
-        {
-            key: 'up',
-            icon: FaArrowUp,
-            label: t('social_card_copy_move_up', { defaultValue: 'Move text up' }),
-            onClick: () => bumpOffset(-1),
-            disabled: disabled || offset <= CARD_COPY_OFFSET_MIN,
-        },
-        {
-            key: 'down',
-            icon: FaArrowDown,
-            label: t('social_card_copy_move_down', { defaultValue: 'Move text down' }),
-            onClick: () => bumpOffset(1),
-            disabled: disabled || offset >= CARD_COPY_OFFSET_MAX,
-        },
+        ...(showPosition ? [
+            {
+                key: 'up',
+                icon: FaArrowUp,
+                label: t('social_card_copy_move_up', { defaultValue: 'Move text up' }),
+                onClick: () => bumpOffset(-1),
+                disabled: disabled || offset <= CARD_COPY_OFFSET_MIN,
+            },
+            {
+                key: 'down',
+                icon: FaArrowDown,
+                label: t('social_card_copy_move_down', { defaultValue: 'Move text down' }),
+                onClick: () => bumpOffset(1),
+                disabled: disabled || offset >= CARD_COPY_OFFSET_MAX,
+            },
+        ] : []),
         {
             key: 'wider',
             icon: FaPlus,

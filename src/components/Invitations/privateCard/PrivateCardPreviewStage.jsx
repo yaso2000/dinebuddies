@@ -27,8 +27,8 @@ export default function PrivateCardPreviewStage({
     themeColorHex,
     onFontChange,
     onThemeColorChange,
-    /** Simple mode: just the photo + always-on text, font, and color — no show/hide toggle,
-     * backdrop-tone picker, or position/width/scale rails. Keeps the create flow to "photo + clear text". */
+    /** Simple mode: text is always on (no show/hide toggle) and there's no text-position
+     * (move up/down) control — but font size, text-box width, and backdrop style stay adjustable. */
     simplified = false,
     children
 }) {
@@ -65,9 +65,20 @@ export default function PrivateCardPreviewStage({
                     </div>
                 ) : null}
 
+                {simplified && showHostAndMessage && editorPhotoBackgroundActive ? (
+                    <div className="private-card-preview-stage__top private-card-preview-stage__top--simplified">
+                        <PrivateCardTextBackdropTonePicker
+                            variant="icons"
+                            toneOrder={PRIVATE_TEXT_BACKDROP_ICON_ORDER}
+                            tone={textBackdropTone}
+                            onToneChange={onTextBackdropToneChange}
+                        />
+                    </div>
+                ) : null}
+
                 {children}
 
-                {showHostAndMessage && !simplified ? (
+                {showHostAndMessage ? (
                     <>
                         <div className="private-card-preview-stage__side-rail private-card-preview-stage__side-rail--font">
                             <PrivateCardCopyFontScaleRail
@@ -81,6 +92,7 @@ export default function PrivateCardPreviewStage({
                                 copyWidthPct={copyWidthPct}
                                 onCopyOffsetYChange={onCopyOffsetYChange}
                                 onCopyWidthPctChange={onCopyWidthPctChange}
+                                showPosition={!simplified}
                             />
                         </div>
                     </>

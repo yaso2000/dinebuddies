@@ -55,6 +55,11 @@
     border-inline-start: 1px solid rgba(255, 255, 255, 0.14);
 }
 
+.private-card-preview-stage__top--simplified .private-card-text-backdrop-tone--icons {
+    padding-inline-start: 0;
+    border-inline-start: none;
+}
+
 .private-card-preview-stage .social-invitation-card-preview {
     margin-bottom: 0;
 }
