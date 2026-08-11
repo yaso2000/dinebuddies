@@ -641,6 +641,9 @@ export const InvitationProvider = ({ children }) => {
                 privacy: 'private',
                 createdAt: serverTimestamp()
             });
+            // Never client-seed RSVPs or publish markers — chat ACL + credits are server-gated.
+            delete inviteData.rsvps;
+            delete inviteData.publishedAt;
             if (inviteData.invitedFriends?.length) {
                 const { allowed, skipped } = await filterInviteesWhoAcceptAuthor(creatorUid, inviteData.invitedFriends);
                 inviteData = { ...inviteData, invitedFriends: allowed };

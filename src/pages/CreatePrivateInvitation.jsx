@@ -322,23 +322,19 @@ const CreatePrivateInvitation = () => {
                 }
             }
 
-            // Initialize RSVPs as 'pending' for all invited friends
-            const initialRsvps = {};
-            formData.invitedFriends.forEach(friendId => {
-                initialRsvps[friendId] = 'pending';
-            });
-
+            // Do not client-write rsvps: rules forbid host-forged acceptance (chat ACL).
+            // publishPrivateInvitationDraft seeds pending; invitees write their own RSVP.
             const draftData = {
                 ...formData,
                 ...mediaFields,
                 cardFrameColorId,
                 cardFontId,
                 cardBackgroundId: cardBackgroundId || null,
-                rsvps: initialRsvps,
                 type: 'Private',
                 status: 'draft',
                 createdAt: serverTimestamp()
             };
+            delete draftData.rsvps;
 
             if (existingDraftId) {
                 // UPDATE EXISTING
