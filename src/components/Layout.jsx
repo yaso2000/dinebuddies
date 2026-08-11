@@ -898,44 +898,20 @@ const Layout = ({ children }) => {
               className="business-create-option"
               onClick={() => {
                 setBusinessCreateOpen(false);
-                navigate('/create-featured-post');
-              }}>
-              
-                                <AppText as="span" className="business-create-option__icon business-create-option__icon--featured" aria-hidden>
-                                    <FaImages />
-                                </AppText>
-                                <AppText as="span" className="business-create-option__text">
-                                    <AppText as="span" className="business-create-option__label">
-                                        {t('business_create_featured_title', 'Featured Post')}
-                                    </AppText>
-                                    <AppText as="span" className="business-create-option__desc">
-                                        {t(
-                    'business_create_featured_desc',
-                    'Elite slide on the home feed for all users.'
-                  )}
-                                    </AppText>
-                                </AppText>
-                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
-                            </button>
-                            <button
-              type="button"
-              className="business-create-option"
-              onClick={() => {
-                setBusinessCreateOpen(false);
                 navigate('/create-post');
               }}>
-              
+
                                 <AppText as="span" className="business-create-option__icon business-create-option__icon--motion" aria-hidden>
                                     <FaPhotoVideo />
                                 </AppText>
                                 <AppText as="span" className="business-create-option__text">
                                     <AppText as="span" className="business-create-option__label">
-                                        {t('business_create_studio_title', 'Motion post')}
+                                        {t('business_create_post_title', 'Create Post')}
                                     </AppText>
                                     <AppText as="span" className="business-create-option__desc">
                                         {t(
-                    'business_create_studio_desc',
-                    'Animated studio post in the community feed.'
+                    'business_create_post_desc',
+                    'Add a photo, title, and message to the community feed.'
                   )}
                                     </AppText>
                                 </AppText>

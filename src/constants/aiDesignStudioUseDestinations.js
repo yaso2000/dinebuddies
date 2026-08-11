@@ -93,18 +93,6 @@ export const AI_DESIGN_USE_DESTINATIONS = [
         forBusiness: true,
     },
     {
-        id: 'featured_post',
-        kind: 'navigate',
-        labelKey: 'ai_design_use_featured_post',
-        defaultLabel: 'Featured post',
-        defaultLabelAr: 'بوست مميز',
-        icon: '⭐',
-        folder: 'featured_posts',
-        route: '/create-featured-post',
-        forConsumer: false,
-        forBusiness: true,
-    },
-    {
         id: 'invitation_public',
         kind: 'navigate',
         labelKey: 'ai_design_use_invitation_public',

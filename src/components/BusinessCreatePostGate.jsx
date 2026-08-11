@@ -5,7 +5,7 @@ import { isBusinessUser } from '../utils/accountRole';
 import BusinessPaidFeatureGate from './business/BusinessPaidFeatureGate';
 import AppRouteLoading from './AppRouteLoading';
 
-const SmartPostStudio = lazy(() => import('../pages/business/SmartPostStudio'));
+const CreatePost = lazy(() => import('../pages/business/CreatePost'));
 
 function readBusinessNavHint(uid) {
     if (!uid) return false;
@@ -17,7 +17,7 @@ function readBusinessNavHint(uid) {
 }
 
 /**
- * `/create-post` is business-only → Smart Post Studio (motion post).
+ * `/create-post` is business-only → the unified Create Post tool.
  * Regular users compose at the top of `/posts-feed` (InlinePostEditor).
  */
 export default function BusinessCreatePostGate() {
@@ -51,7 +51,7 @@ export default function BusinessCreatePostGate() {
             hintDefault="Upgrade to create and publish motion posts."
         >
             <Suspense fallback={<AppRouteLoading variant="route" fullViewport />}>
-                <SmartPostStudio />
+                <CreatePost />
             </Suspense>
         </BusinessPaidFeatureGate>
     );
