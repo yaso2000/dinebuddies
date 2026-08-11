@@ -19,6 +19,7 @@ const SESSION_TTL_MS = 30 * 60 * 1000;
  * @property {string | null} verifiedPlaceId
  * @property {string | null} matchedLocationName
  * @property {string | null} matchedLocationTitle
+ * @property {string | null} verifiedGoogleEmail Email of the Google account that completed business.manage OAuth.
  * @property {Date} expiresAt
  */
 
@@ -47,6 +48,7 @@ export async function createGoogleBusinessClaimSession(restaurantId, googlePlace
         verifiedPlaceId: null,
         matchedLocationName: null,
         matchedLocationTitle: null,
+        verifiedGoogleEmail: null,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         expiresAt: Timestamp.fromDate(expiresAt),
@@ -88,13 +90,14 @@ export async function loadGoogleBusinessClaimSession(sessionId) {
         verifiedPlaceId: data.verifiedPlaceId ? String(data.verifiedPlaceId) : null,
         matchedLocationName: data.matchedLocationName ? String(data.matchedLocationName) : null,
         matchedLocationTitle: data.matchedLocationTitle ? String(data.matchedLocationTitle) : null,
+        verifiedGoogleEmail: data.verifiedGoogleEmail ? String(data.verifiedGoogleEmail) : null,
         expiresAt: exp ? new Date(exp) : new Date(Date.now() + SESSION_TTL_MS),
     };
 }
 
 /**
  * @param {string} sessionId
- * @param {{ accessToken: string, refreshToken?: string | null, expiresIn?: number | null }} tokens
+ * @param {{ accessToken: string, refreshToken?: string | null, expiresIn?: number | null, verifiedGoogleEmail?: string | null }} tokens
  */
 export async function storeGoogleBusinessClaimTokens(sessionId, tokens) {
     ensureFirebaseAdmin();
@@ -112,6 +115,7 @@ export async function storeGoogleBusinessClaimTokens(sessionId, tokens) {
             accessToken: String(tokens.accessToken || ''),
             refreshToken: tokens.refreshToken ? String(tokens.refreshToken) : null,
             tokenExpiresAt,
+            verifiedGoogleEmail: tokens.verifiedGoogleEmail ? String(tokens.verifiedGoogleEmail) : null,
             updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },

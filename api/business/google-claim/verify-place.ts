@@ -97,6 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             placeId,
             matchedLocation: result.matchedLocation,
             locationCount: result.locations.length,
+            verifiedGoogleEmail: session.verifiedGoogleEmail,
         });
     } catch (err) {
         console.error('[google-claim/verify-place]', err);

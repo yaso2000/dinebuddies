@@ -378,6 +378,27 @@ export async function completeBusinessGoogleClaimSignup(input) {
         throw Object.assign(new Error('EMAIL_MISMATCH'), { code: 'invalid-request' });
     }
 
+    // Business and personal accounts never mix — reject if this Firebase user is already a
+    // genuine personal profile (the frontend always creates/uses a dedicated business account
+    // for a claim, but a direct API call must not be able to convert someone's personal account).
+    const existingUserSnap = await db.collection('users').doc(firebaseUid).get();
+    if (existingUserSnap.exists) {
+        const existingData = existingUserSnap.data() || {};
+        const roleLc = String(existingData.role || '').toLowerCase();
+        const accountTypeLc = String(existingData.accountType || '').toLowerCase();
+        const hasBusinessInfoDoc =
+            existingData.businessInfo &&
+            typeof existingData.businessInfo === 'object' &&
+            Object.keys(existingData.businessInfo).length > 0;
+        const isExistingBusiness =
+            roleLc === 'business' || roleLc === 'partner' || accountTypeLc === 'business' || hasBusinessInfoDoc;
+        if (!isExistingBusiness) {
+            throw Object.assign(new Error('PERSONAL_ACCOUNT_CANNOT_CLAIM'), {
+                code: 'personal-account-cannot-claim',
+            });
+        }
+    }
+
     if (!session.placeVerified || session.verifiedPlaceId !== session.googlePlaceId) {
         const accessToken = session.accessToken;
         if (!accessToken) {
@@ -431,6 +452,10 @@ export async function completeBusinessGoogleClaimSignup(input) {
             ...userPayload.businessInfo,
             google_business_verified: true,
             googleClaimSessionId: sessionId,
+            // Permanent audit record of who verified GBP admin access — independent of the
+            // business account's own login email, which may legitimately differ (see
+            // completeBusinessGoogleClaimSignup's personal-account guard above for why).
+            verifiedGoogleAdminEmail: session.verifiedGoogleEmail || null,
         },
         claimVerificationMethod: 'google_business_profile',
         created_at: FieldValue.serverTimestamp(),

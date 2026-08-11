@@ -135,7 +135,7 @@ export default function BusinessClaimPanel({
 }) {
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const { currentUser, loading: authLoading } = useAuth();
+  const { currentUser, isBusiness, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const placeId = String(googlePlaceId || restaurantId || '').trim();
@@ -148,6 +148,8 @@ export default function BusinessClaimPanel({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [googleSessionId, setGoogleSessionId] = useState('');
+  /** Email of the Google account that just proved it manages this listing — the real GBP admin. */
+  const [verifiedGoogleEmail, setVerifiedGoogleEmail] = useState('');
   /** @type {[GoogleFlowStatus, Function]} */
   const [googleFlowStatus, setGoogleFlowStatus] = useState('idle');
   const [googleError, setGoogleError] = useState('');
@@ -238,8 +240,13 @@ export default function BusinessClaimPanel({
         setGoogleFlowStatus('verified');
         autoClaimStartedRef.current = false;
 
+        const gbpEmail = String(data?.verifiedGoogleEmail || '').trim().toLowerCase();
+        setVerifiedGoogleEmail(gbpEmail);
+        // Prefill the business-account form with the verified GBP admin email — it's the
+        // identity that just proved ownership, not whatever unrelated account (if any) happens
+        // to be signed in right now.
         const signedInEmail = String(currentUser?.email || '').trim().toLowerCase();
-        if (signedInEmail) setEmail(signedInEmail);
+        setEmail(gbpEmail || signedInEmail || '');
       } catch (err) {
         setGoogleFlowStatus('error');
         setGoogleError(
@@ -254,11 +261,15 @@ export default function BusinessClaimPanel({
     [placeId, currentUser, t]
   );
 
+  // Auto-claim only when a *business* account is already signed in (e.g. adding another
+  // verified location). Personal accounts never auto-claim — business and personal accounts
+  // must not mix, so a personal session always falls through to the "create business account"
+  // form below instead, which creates a fresh, dedicated business account.
   useEffect(() => {
     if (googleFlowStatus !== 'verified' || !googleSessionId || authLoading || autoClaimStartedRef.current) {
       return;
     }
-    if (!currentUser) return;
+    if (!currentUser || !isBusiness) return;
 
     autoClaimStartedRef.current = true;
     void (async () => {
@@ -277,6 +288,7 @@ export default function BusinessClaimPanel({
     googleSessionId,
     authLoading,
     currentUser,
+    isBusiness,
     email,
     finalizeGoogleClaim,
     showToast,
@@ -474,10 +486,24 @@ export default function BusinessClaimPanel({
             </AlertBox>
           )}
 
-          {googleFlowStatus === 'verified' && !showGoogleLoading && !currentUser && !authLoading && (
+          {googleFlowStatus === 'verified' && !showGoogleLoading && (!currentUser || !isBusiness) && !authLoading && (
             <AlertBox variant="success">
               {t('claim_business_google_verify_success', 'Verification successful!')}{' '}
-              {t('claim_business_google_create_account', 'Create your business account to finish.')}
+              {currentUser
+                ? t(
+                    'claim_business_google_personal_signed_in',
+                    "You're signed in with a personal account. Create a dedicated business account below to finish — your personal account stays untouched."
+                  )
+                : t('claim_business_google_create_account', 'Create your business account to finish.')}
+              {verifiedGoogleEmail && (
+                <>
+                  <br />
+                  {t('claim_business_google_verified_as', {
+                    email: verifiedGoogleEmail,
+                    defaultValue: 'Verified Google Business admin: {{email}}',
+                  })}
+                </>
+              )}
             </AlertBox>
           )}
 
@@ -544,7 +570,7 @@ export default function BusinessClaimPanel({
             </>
           )}
 
-          {googleFlowStatus === 'verified' && !currentUser && !authLoading && !showGoogleLoading && (
+          {googleFlowStatus === 'verified' && (!currentUser || !isBusiness) && !authLoading && !showGoogleLoading && (
             <form onSubmit={handleGoogleClaimSubmit} style={{ marginTop: '1rem' }}>
               <AppText as="h3" style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 800 }}>
                 {t('claim_business_create_account', 'Create Account')}

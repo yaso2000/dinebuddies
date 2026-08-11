@@ -99,11 +99,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
     } catch (err) {
         const code = err && typeof err === 'object' && 'code' in err ? String((err as { code?: string }).code) : '';
-        if (code === 'already-claimed') {
+        if (code === 'already-claimed' || code === 'personal-account-cannot-claim') {
             return res.status(409).json({
                 status: 'error',
                 code,
-                message: err instanceof Error ? err.message : 'Already claimed',
+                message:
+                    err instanceof Error
+                        ? err.message
+                        : code === 'personal-account-cannot-claim'
+                          ? 'This account already has a personal profile. Create a dedicated business account to claim this listing.'
+                          : 'Already claimed',
             });
         }
         if (

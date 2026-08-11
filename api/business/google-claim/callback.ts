@@ -4,6 +4,7 @@
  */
 import {
     exchangeGoogleBusinessAuthCode,
+    fetchGoogleUserInfo,
     resolveGoogleBusinessOAuthRedirectUri,
 } from '../../_googleBusinessProfileOAuth.js';
 import {
@@ -94,7 +95,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
         const redirectUri = resolveGoogleBusinessOAuthRedirectUri(req);
         const tokens = await exchangeGoogleBusinessAuthCode(code, redirectUri);
-        await storeGoogleBusinessClaimTokens(sessionId, tokens);
+        const userInfo = await fetchGoogleUserInfo(tokens.accessToken);
+        await storeGoogleBusinessClaimTokens(sessionId, {
+            ...tokens,
+            verifiedGoogleEmail: userInfo.emailVerified ? userInfo.email : null,
+        });
 
         const redirect = buildReturnRedirect(origin, session.returnPath, {
             gbpClaim: 'connected',

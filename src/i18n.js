@@ -47,6 +47,21 @@ async function ensureLanguageLoaded(lng) {
     }
 }
 
+// Registered before init() — i18next can fire 'initialized' synchronously from within
+// init() itself (no async backend to wait on), so a listener attached afterward can miss
+// it entirely. That miss left the detected language set (e.g. 'ar') without ever loading
+// its translation bundle, silently stuck on the English fallback until the user re-picked
+// the language and triggered 'languageChanged' instead.
+i18n.on('initialized', () => {
+    const lng = i18n.language || 'en';
+    applyHtmlLanguage(lng);
+    ensureLanguageLoaded(lng);
+});
+i18n.on('languageChanged', (lng) => {
+    applyHtmlLanguage(lng);
+    ensureLanguageLoaded(lng);
+});
+
 i18n
     .use(LanguageDetector)
     .use(initReactI18next)
@@ -70,15 +85,5 @@ i18n
             useSuspense: false,
         },
     });
-
-i18n.on('initialized', () => {
-    const lng = i18n.language || 'en';
-    applyHtmlLanguage(lng);
-    ensureLanguageLoaded(lng);
-});
-i18n.on('languageChanged', (lng) => {
-    applyHtmlLanguage(lng);
-    ensureLanguageLoaded(lng);
-});
 
 export default i18n;

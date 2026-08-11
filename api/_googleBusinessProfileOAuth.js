@@ -3,10 +3,15 @@
  * Separate from Firebase Google sign-in — requires a dedicated OAuth client in Google Cloud.
  */
 
-export const GOOGLE_BUSINESS_OAUTH_SCOPE = 'https://www.googleapis.com/auth/business.manage';
+// openid/email/profile ride along in the same consent screen so we learn *which* Google
+// account verified business.manage access — used to identify the real GBP admin (see
+// fetchGoogleUserInfo below), not to authenticate the DineBuddies session itself.
+export const GOOGLE_BUSINESS_OAUTH_SCOPE =
+    'https://www.googleapis.com/auth/business.manage openid email profile';
 
 const AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
+const USERINFO_ENDPOINT = 'https://www.googleapis.com/oauth2/v3/userinfo';
 
 /**
  * @returns {{ clientId: string, clientSecret: string }}
@@ -109,6 +114,29 @@ export async function exchangeGoogleBusinessAuthCode(code, redirectUri) {
         expiresIn: Number.isFinite(Number(data.expires_in)) ? Number(data.expires_in) : null,
         scope: data.scope ? String(data.scope) : null,
     };
+}
+
+/**
+ * Identify which Google account just proved business.manage access — used to record the
+ * verified GBP admin, not to authenticate the DineBuddies session.
+ * @param {string} accessToken
+ * @returns {Promise<{ email: string | null, emailVerified: boolean, name: string | null }>}
+ */
+export async function fetchGoogleUserInfo(accessToken) {
+    try {
+        const res = await fetch(USERINFO_ENDPOINT, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!res.ok) return { email: null, emailVerified: false, name: null };
+        const data = await res.json().catch(() => ({}));
+        return {
+            email: data.email ? String(data.email).trim().toLowerCase() : null,
+            emailVerified: data.email_verified === true || data.email_verified === 'true',
+            name: data.name ? String(data.name) : null,
+        };
+    } catch {
+        return { email: null, emailVerified: false, name: null };
+    }
 }
 
 /**
