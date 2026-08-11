@@ -58,7 +58,21 @@
         </provider>
     </application>
 
+    <!-- Camera/mic optional — invitation cover capture is a secondary feature, not required to install. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- getUserMedia (private/social invitation cover camera) — Capacitor's BridgeWebChromeClient
+         already brokers the runtime prompt automatically; it just needs these declared here. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- navigator.geolocation (public invitation location check, nearby-business distance sort)
+         — same auto-brokered runtime prompt via Capacitor's onGeolocationPermissionsShowPrompt. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 </manifest>

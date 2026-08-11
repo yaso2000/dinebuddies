@@ -19,10 +19,12 @@ import { getFirebaseRedirectResultOnce } from './firebase/authBootstrap';
 import { clearStaleOAuthRedirectFlags } from './utils/localDevAuth';
 import { peekFacebookIosLoginPending } from './utils/facebookIosSignIn';
 import { installCryptoRandomUuidPolyfill } from './utils/cryptoPolyfill';
+import { installNativeBackButtonHandler } from './utils/nativeBackButton';
 
 installCryptoRandomUuidPolyfill();
 bootDocumentTheme();
 installFatalUiRecoveryListeners();
+installNativeBackButtonHandler();
 
 const rootEl = document.getElementById('root');
 if (!rootEl) {
