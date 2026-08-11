@@ -73,6 +73,34 @@ service cloud.firestore {
       return isHost || (invited && accepted);
     }
 
+    function isPrivateInvitationHost() {
+      return resource.data.authorId == request.auth.uid ||
+             (resource.data.author != null && resource.data.author.id == request.auth.uid);
+    }
+
+    // Host must never forge invitee acceptance (chat ACL). Draft create starts with
+    // empty rsvps; publishPrivateInvitationDraft seeds pending; only the invitee
+    // may write their own rsvps.{uid} value.
+    function privateInvitationCreateRsvpsOk() {
+      return !request.resource.data.keys().hasAny(['rsvps']) ||
+             (request.resource.data.rsvps is map &&
+              request.resource.data.rsvps.size() == 0);
+    }
+
+    function privateInvitationHostUpdateOk() {
+      return isPrivateInvitationHost() &&
+             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rsvps']);
+    }
+
+    function privateInvitationSelfRsvpUpdateOk() {
+      return request.auth.uid in resource.data.get('invitedFriends', []) &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
+             request.resource.data.rsvps is map &&
+             resource.data.get('rsvps', {}) is map &&
+             request.resource.data.rsvps.diff(resource.data.get('rsvps', {})).affectedKeys()
+               .hasOnly([request.auth.uid]);
+    }
+
     // True when Firestore doc has never stored `role` (e.g. email-only stub from auth sync).
     // Allows the first write that sets role to business during /business/signup — without allowing
     // consumer accounts (role == 'user') to change role via client (those docs always have role set).
@@ -278,19 +306,17 @@ service cloud.firestore {
                            request.auth.uid in resource.data.invitedFriends
                          );
 
-      // Any signed-in user can create (author must be self)
+      // Author-only create: draft shape only — no publishedAt, no forged RSVPs.
+      // Chat ACL depends on invitee-written acceptance; host cannot seed accepted.
       allow create: if isSignedIn() &&
                        (request.resource.data.authorId == request.auth.uid ||
-                        request.resource.data.author.id == request.auth.uid);
+                        request.resource.data.author.id == request.auth.uid) &&
+                       !request.resource.data.keys().hasAny(['publishedAt']) &&
+                       privateInvitationCreateRsvpsOk();
 
-      // Host can update freely; invited friends can update only their RSVP
+      // Host may update non-RSVP fields; only the invitee may write their own RSVP.
       allow update: if isSignedIn() &&
-                       (resource.data.authorId == request.auth.uid ||
-                        (resource.data.author != null &&
-                         resource.data.author.id == request.auth.uid) ||
-                        (request.auth.uid in resource.data.invitedFriends &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps', 'updatedAt']) &&
-                         request.resource.data.rsvps.diff(resource.data.rsvps).affectedKeys().hasOnly([request.auth.uid])));
+                       (privateInvitationHostUpdateOk() || privateInvitationSelfRsvpUpdateOk());
 
       // Only host or admin can delete
       allow delete: if isSignedIn() &&

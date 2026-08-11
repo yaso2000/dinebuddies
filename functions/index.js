@@ -651,12 +651,11 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
                 return { alreadyPublished: true, chargedSource: null };
             }
 
-            const currentRsvps = inv.rsvps && typeof inv.rsvps === 'object' ? inv.rsvps : {};
+            // Always seed pending on publish. Never preserve draft/client-forged
+            // accepted/declined — that would grant private chat ACL without consent.
             const nextRsvps = {};
             filteredFriends.forEach((fid) => {
-                const raw = currentRsvps[fid];
-                const normalized = typeof raw === 'string' ? raw.toLowerCase() : 'pending';
-                nextRsvps[fid] = normalized === 'accepted' || normalized === 'declined' ? normalized : 'pending';
+                nextRsvps[fid] = 'pending';
             });
 
             const isBypassUser = user.role === 'admin';
