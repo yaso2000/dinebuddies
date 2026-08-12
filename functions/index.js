@@ -9,6 +9,7 @@ admin.initializeApp();
 const stripeModule = require('./stripe');
 const webhookModule = require('./webhook');
 const { runSuggestInvitationMessages } = require('./suggestInvitationMessages');
+const { isMessagingRestrictedBetweenUserDocs } = require('./messagingRestriction');
 const functions = require('firebase-functions');
 const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functions/v2/https');
 const db = admin.firestore();
@@ -253,10 +254,6 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
 
     return false;
 }
-
-const {
-    isMessagingRestrictedBetweenUserDocs,
-} = require('./messagingRestriction');
 
 async function isMessagingRestrictedBetweenUsers(uidA, uidB) {
     if (!uidA || !uidB || uidA === uidB) return true;
