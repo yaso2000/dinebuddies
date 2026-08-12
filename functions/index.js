@@ -244,10 +244,29 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
     }
 
     if (type === 'message' || type === 'reminder') {
+        // Honor block/mute even when a conversation already exists (client UI alone is bypassable).
+        if (await isMessagingRestrictedBetweenUsers(senderId, userId)) {
+            return false;
+        }
         return true;
     }
 
     return false;
+}
+
+const {
+    isMessagingRestrictedBetweenUserDocs,
+} = require('./messagingRestriction');
+
+async function isMessagingRestrictedBetweenUsers(uidA, uidB) {
+    if (!uidA || !uidB || uidA === uidB) return true;
+    const [aSnap, bSnap] = await Promise.all([
+        db.collection('users').doc(uidA).get(),
+        db.collection('users').doc(uidB).get(),
+    ]);
+    const a = aSnap.exists ? (aSnap.data() || {}) : {};
+    const b = bSnap.exists ? (bSnap.data() || {}) : {};
+    return isMessagingRestrictedBetweenUserDocs(a, b, uidA, uidB);
 }
 
 async function assertAdminContext(context) {

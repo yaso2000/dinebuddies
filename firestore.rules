@@ -73,6 +73,23 @@ service cloud.firestore {
       return isHost || (invited && accepted);
     }
 
+    // True when uidA has blocked or muted uidB (client-writable lists on users/{uidA}).
+    function userBlocksOrMutes(uidA, uidB) {
+      let a = get(/databases/$(database)/documents/users/$(uidA)).data;
+      return uidB in a.get('blockedUserIds', []) || uidB in a.get('mutedUserIds', []);
+    }
+
+    // 1:1 DM messaging is allowed only when neither participant has blocked/muted the other.
+    // Client UI already enforces this; rules must too so SDK bypass cannot continue harassment.
+    function dmMessagingAllowed(conversationId) {
+      let parts = get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+      return parts is list &&
+             parts.size() == 2 &&
+             request.auth.uid in parts &&
+             !userBlocksOrMutes(parts[0], parts[1]) &&
+             !userBlocksOrMutes(parts[1], parts[0]);
+    }
+
     // True when Firestore doc has never stored `role` (e.g. email-only stub from auth sync).
     // Allows the first write that sets role to business during /business/signup — without allowing
     // consumer accounts (role == 'user') to change role via client (those docs always have role set).
@@ -367,8 +384,32 @@ service cloud.firestore {
                       request.resource.data.participants.size() == 2 &&
                       request.auth.uid in request.resource.data.participants;
       
-      // Only participants can update (lastMessage, unreadBy, typing)
-      allow update: if isSignedIn() && request.auth.uid in resource.data.participants;
+      // Participants may update metadata only while messaging is allowed (blocks/mutes honored).
+      // participants must stay immutable so a blocked user cannot rewrite membership.
+      allow update: if isSignedIn() &&
+                       request.auth.uid in resource.data.participants &&
+                       request.resource.data.participants == resource.data.participants &&
+                       dmMessagingAllowed(conversationId);
+
+      // After block/mute: allow clearing own unread badge only (cannot add the other user).
+      allow update: if isSignedIn() &&
+                       request.auth.uid in resource.data.participants &&
+                       request.resource.data.participants == resource.data.participants &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadBy']) &&
+                       request.auth.uid in resource.data.get('unreadBy', []) &&
+                       !(request.auth.uid in request.resource.data.get('unreadBy', [])) &&
+                       resource.data.get('unreadBy', []).hasAll(request.resource.data.get('unreadBy', [])) &&
+                       resource.data.get('unreadBy', []).size() ==
+                         request.resource.data.get('unreadBy', []).size() + 1;
+
+      // After block/mute: allow clearing/setting own typing indicator only.
+      allow update: if isSignedIn() &&
+                       request.auth.uid in resource.data.participants &&
+                       request.resource.data.participants == resource.data.participants &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['typing']) &&
+                       request.resource.data.get('typing', {})
+                         .diff(resource.data.get('typing', {})).affectedKeys()
+                         .hasOnly([request.auth.uid]);
       
       // Participants or Admin can delete
       allow delete: if isSignedIn() && (request.auth.uid in resource.data.participants || isAdmin());
@@ -376,13 +417,14 @@ service cloud.firestore {
       // MESSAGES SUBCOLLECTION
       match /messages/{messageId} {
         allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
-        // Security: constrain message create schema and sender ownership
+        // Security: constrain message create schema and sender ownership; honor block/mute.
         allow create: if isSignedIn() && 
                          request.resource.data.senderId == request.auth.uid &&
                          request.resource.data.keys().hasOnly(['senderId', 'text', 'type', 'createdAt', 'status', 'reactions', 'replyTo', 'audioUrl', 'imageUrl', 'fileUrl', 'duration', 'sharedContent']) &&
-                         request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+                         dmMessagingAllowed(conversationId);
         allow update: if isSignedIn() && 
-                         resource.data.senderId == request.auth.uid;
+                         resource.data.senderId == request.auth.uid &&
+                         dmMessagingAllowed(conversationId);
         allow delete: if isSignedIn() && 
                          (resource.data.senderId == request.auth.uid || isAdmin());
       }
