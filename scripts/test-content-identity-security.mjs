@@ -27,6 +27,8 @@ try {
 
     await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
+        await setDoc(doc(db, 'users/mallory'), { role: 'user' });
+        await setDoc(doc(db, 'users/victim'), { role: 'user' });
         await setDoc(doc(db, 'communityPosts/owned'), {
             authorId: 'mallory',
             author: { id: 'mallory', name: 'Mallory' },

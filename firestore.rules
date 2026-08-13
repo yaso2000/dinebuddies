@@ -105,53 +105,45 @@ service cloud.firestore {
     // Feed/story authorship: every present identity field must be the caller.
     // OR-matching let attackers set userId=self and partnerId/authorId=victim;
     // PostCard prefers partnerId, StoriesBar prefers userId/uid.
-    function identityFieldIsSelfOrAbsent(field) {
-      return !request.resource.data.keys().hasAny([field]) ||
-             request.resource.data[field] == request.auth.uid;
-    }
-
-    function authorMapIsSelfOrAbsent() {
-      return !request.resource.data.keys().hasAny(['author']) ||
-             (request.resource.data.author != null &&
-              request.resource.data.author.id == request.auth.uid);
-    }
-
-    function hasAnyContentIdentity() {
-      return request.resource.data.keys().hasAny(['userId']) ||
-             request.resource.data.keys().hasAny(['uid']) ||
-             request.resource.data.keys().hasAny(['authorId']) ||
-             request.resource.data.keys().hasAny(['partnerId']) ||
-             (request.resource.data.keys().hasAny(['author']) &&
-              request.resource.data.author != null);
-    }
-
     function contentIdentityIsSelf() {
+      let d = request.resource.data;
       return isSignedIn() &&
-             hasAnyContentIdentity() &&
-             identityFieldIsSelfOrAbsent('userId') &&
-             identityFieldIsSelfOrAbsent('uid') &&
-             identityFieldIsSelfOrAbsent('authorId') &&
-             identityFieldIsSelfOrAbsent('partnerId') &&
-             authorMapIsSelfOrAbsent();
+             (d.keys().hasAny(['userId']) ||
+              d.keys().hasAny(['uid']) ||
+              d.keys().hasAny(['authorId']) ||
+              d.keys().hasAny(['partnerId']) ||
+              (d.keys().hasAny(['author']) && d.author != null)) &&
+             (!d.keys().hasAny(['userId']) || d.userId == request.auth.uid) &&
+             (!d.keys().hasAny(['uid']) || d.uid == request.auth.uid) &&
+             (!d.keys().hasAny(['authorId']) || d.authorId == request.auth.uid) &&
+             (!d.keys().hasAny(['partnerId']) || d.partnerId == request.auth.uid) &&
+             (!d.keys().hasAny(['author']) ||
+              (d.author != null && d.author.id == request.auth.uid));
     }
 
     function isContentAuthor(data) {
-      return data.authorId == request.auth.uid ||
-             data.userId == request.auth.uid ||
-             data.uid == request.auth.uid ||
-             data.partnerId == request.auth.uid ||
-             (data.author != null && data.author.id == request.auth.uid);
+      return (data.keys().hasAny(['authorId']) && data.authorId == request.auth.uid) ||
+             (data.keys().hasAny(['userId']) && data.userId == request.auth.uid) ||
+             (data.keys().hasAny(['uid']) && data.uid == request.auth.uid) ||
+             (data.keys().hasAny(['partnerId']) && data.partnerId == request.auth.uid) ||
+             (data.keys().hasAny(['author']) && data.author != null &&
+              data.author.id == request.auth.uid);
     }
 
-    function contentIdentityIdsUnchanged() {
+    // Existing IDs stay put; newly added identity fields must match the original owner
+    // (blocks create-as-self then updateDoc partnerId=victim).
+    function contentIdentityNotReassigned() {
       let old = resource.data;
       let neu = request.resource.data;
-      return (!old.keys().hasAny(['userId']) || neu.userId == old.userId) &&
-             (!old.keys().hasAny(['uid']) || neu.uid == old.uid) &&
-             (!old.keys().hasAny(['authorId']) || neu.authorId == old.authorId) &&
-             (!old.keys().hasAny(['partnerId']) || neu.partnerId == old.partnerId) &&
-             (!old.keys().hasAny(['author']) ||
-              (neu.author != null && neu.author.id == old.author.id));
+      let owner = old.get('authorId', old.get('userId', old.get('uid', old.get('partnerId', old.get(['author', 'id'], '')))));
+      return owner is string &&
+             owner.size() > 0 &&
+             (!neu.keys().hasAny(['userId']) || neu.userId == owner) &&
+             (!neu.keys().hasAny(['uid']) || neu.uid == owner) &&
+             (!neu.keys().hasAny(['authorId']) || neu.authorId == owner) &&
+             (!neu.keys().hasAny(['partnerId']) || neu.partnerId == owner) &&
+             (!neu.keys().hasAny(['author']) ||
+              (neu.author != null && neu.author.id == owner));
     }
     
     // ============================================
@@ -492,7 +484,7 @@ service cloud.firestore {
       // Author/admin can update content but cannot reassign authorship
       allow update: if isSignedIn() &&
         (isContentAuthor(resource.data) || isAdmin()) &&
-        contentIdentityIdsUnchanged();
+        contentIdentityNotReassigned();
       allow delete: if isSignedIn() && (isContentAuthor(resource.data) || isAdmin());
       // Any signed-in user can like, repost, or comment (social interactions only)
       allow update: if isSignedIn() &&
@@ -508,7 +500,7 @@ service cloud.firestore {
       // Author/admin can update content but cannot reassign authorship
       allow update: if isSignedIn() &&
         (isContentAuthor(resource.data) || isAdmin()) &&
-        contentIdentityIdsUnchanged();
+        contentIdentityNotReassigned();
       allow delete: if isSignedIn() && (isContentAuthor(resource.data) || isAdmin());
       // Any signed-in user can add their reaction / like / view (append-only fields)
       allow update: if isSignedIn() &&
