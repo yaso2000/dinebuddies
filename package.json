@@ -15,7 +15,8 @@
     "preview": "vite preview",
     "preview:live": "npx --yes serve dist -p 4173",
     "wipe-firebase-user-data": "node scripts/wipe-firebase-user-data.mjs",
-    "wipe-firebase-user-data:execute": "node scripts/wipe-firebase-user-data.mjs --execute"
+    "wipe-firebase-user-data:execute": "node scripts/wipe-firebase-user-data.mjs --execute",
+    "test:content-identity-security": "firebase emulators:exec --only firestore --project demo-dinebuddies-content-identity \"node scripts/test-content-identity-security.mjs\""
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
