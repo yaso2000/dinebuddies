@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaLock, FaShieldAlt } from 'react-icons/fa';
+import { FaLock } from 'react-icons/fa';
+import { GiHoneyJar } from 'react-icons/gi';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import {
@@ -70,7 +71,7 @@ export default function GiftShieldSection({ userId, totalSavedCreditsEarned: tot
 
     const activeVisualTheme = getGiftShieldVisualTheme(progress.activeTierId);
     const badgeTier = GIFT_SHIELD_TIERS.find((tier) => tier.labelKey === headerBadge.labelKey);
-    const badgeLabel = t(headerBadge.labelKey, badgeTier?.defaultLabel || 'Shield');
+    const badgeLabel = t(headerBadge.labelKey, badgeTier?.defaultLabel || 'Jar');
     const badgeText = headerBadge.multiplier
         ? t('gift_shield_badge_multi', '{{tier}} ×{{count}}', {
               tier: badgeLabel,
@@ -85,7 +86,7 @@ export default function GiftShieldSection({ userId, totalSavedCreditsEarned: tot
         <section className="gift-shield-section" aria-labelledby="gift-shield-section-title">
             <div className="gift-shield-section__header">
                 <AppText as="h3" id="gift-shield-section-title" className="gift-shield-section__title">
-                    <FaShieldAlt className="gift-shield-section__title-icon" aria-hidden />
+                    <GiHoneyJar className="gift-shield-section__title-icon" aria-hidden />
                     {t('gift_shields_title', 'Gift shields')}
                 </AppText>
                 <AppText as="span" className="gift-shield-section__badge">
