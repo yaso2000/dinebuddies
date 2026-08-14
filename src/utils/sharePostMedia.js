@@ -2,11 +2,15 @@
  * Fetch a post image for native share (WhatsApp, system share sheet).
  */
 
+import { getAppOrigin } from './appOrigin';
+
 const getProxyImageUrl = (imageUrl) => {
     if (!imageUrl || typeof imageUrl !== 'string') return null;
     if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) return null;
     try {
-        const base = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+        // In the native app, window.location.origin is the local WebView host —
+        // /api/proxy only exists on the real deployed site.
+        const base = import.meta.env.DEV ? window.location.origin : getAppOrigin();
         const endpoint = import.meta.env.DEV ? '/__dev/proxy-image' : '/api/proxy';
         return `${base}${endpoint}?url=${encodeURIComponent(imageUrl)}`;
     } catch {
@@ -22,8 +26,8 @@ const resolveImageUrl = (src) => {
     if (s.startsWith('//') && typeof window !== 'undefined' && window.location?.protocol) {
         return `${window.location.protocol}${s}`;
     }
-    if (s.startsWith('/') && typeof window !== 'undefined' && window.location?.origin) {
-        return `${window.location.origin}${s}`;
+    if (s.startsWith('/')) {
+        return `${getAppOrigin()}${s}`;
     }
     return s;
 };

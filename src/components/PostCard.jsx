@@ -13,6 +13,7 @@ import { IoShareSocialOutline } from 'react-icons/io5';
 import TikTokEmbed from './TikTokEmbed';
 import ShareButtons from './ShareButtons';
 import { getSafeAvatar, resolveFeedAuthorAvatar } from '../utils/avatarUtils';
+import { getAppOrigin } from '../utils/appOrigin';
 import UserAvatar from './UserAvatar';
 import FeaturedPostSlideCard from './FeaturedPostSlideCard';
 import MotionPostBody from './MotionPostBody';
@@ -1311,13 +1312,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
 
                         <AppText as="h3" style={{ textAlign: 'center', marginBottom: '16px', color: 'var(--text-main)' }}>{t('share_post')}</AppText>
                         <ShareButtons
-            url={
-            typeof window !== 'undefined' ?
-            `${window.location.origin}${
-            post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`}` :
-
-            ''
-            }
+            url={`${getAppOrigin()}${post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`}`}
             title={`Post by ${authorName}`}
             description={
             typeof displayPost.content === 'string' ?
@@ -1344,12 +1339,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
               mediaType: displayPost.mediaType || 'image',
               authorName: authorName,
               authorAvatar: authorAvatar,
-              url:
-              typeof window !== 'undefined' ?
-              `${window.location.origin}${
-              post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`}` :
-
-              ''
+              url: `${getAppOrigin()}${post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`}`
             }}
             storyData={{
               title: `Post by ${authorName}`,

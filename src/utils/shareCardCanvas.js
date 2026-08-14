@@ -5,6 +5,7 @@
 
 import { getAppTextDirection } from './bidiText';
 import i18n from '../i18n';
+import { getAppOrigin } from './appOrigin';
 
 const CARD_W = 1080;
 const CARD_H = 1080;
@@ -43,7 +44,9 @@ const getProxyImageUrl = (imageUrl) => {
     if (!imageUrl || typeof imageUrl !== 'string') return null;
     if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) return null;
     try {
-        const base = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+        // In the native app, window.location.origin is the local WebView host —
+        // /api/proxy only exists on the real deployed site.
+        const base = import.meta.env.DEV ? window.location.origin : getAppOrigin();
         const endpoint = import.meta.env.DEV ? '/__dev/proxy-image' : '/api/proxy';
         return `${base}${endpoint}?url=${encodeURIComponent(imageUrl)}`;
     } catch (_) {
@@ -60,8 +63,8 @@ const resolveImageUrl = (src) => {
     if (s.startsWith('//') && typeof window !== 'undefined' && window.location?.protocol) {
         return `${window.location.protocol}${s}`;
     }
-    if (s.startsWith('/') && typeof window !== 'undefined' && window.location?.origin) {
-        return `${window.location.origin}${s}`;
+    if (s.startsWith('/')) {
+        return `${getAppOrigin()}${s}`;
     }
     return s;
 };

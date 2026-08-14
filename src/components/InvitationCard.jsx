@@ -12,6 +12,7 @@ import UserAvatar from './UserAvatar';
 const INVITATION_CARD_IMAGE_FALLBACK =
 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
 import { buildInvitationFeedAttachment } from '../utils/invitationFeedAttachment';
+import { getAppOrigin } from '../utils/appOrigin';
 import ShareButtons from './ShareButtons';
 import { goToLogin } from '../utils/goToLogin';
 import { AppText } from "./base";
@@ -187,7 +188,7 @@ const InvitationCard = ({ invitation }) => {
   `${invitation.distance.toFixed(1)} ${t('km_away', { defaultValue: 'km away' })}` :
   null;
 
-  const shareUrl = `${window.location.origin}/invitation/${id}`;
+  const shareUrl = `${getAppOrigin()}/invitation/${id}`;
   const cardVariant = templateStyles.layout?.cardVariant ?? 'photoBottom';
   const shareMeta = {
     dateLine: formatInviteDate(),

@@ -4,6 +4,7 @@ import { resolvePrivateCardBackgroundUrlCandidates } from '../components/Invitat
 import { sanitizeNextPath } from './safeInternalPath';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { getAppOrigin } from './appOrigin';
 
 const PENDING_SHARE_TOKEN_KEY = 'dinebuddies_pending_private_invite_token';
 const DEFAULT_SITE_ORIGIN = 'https://www.dinebuddies.com';
@@ -62,8 +63,8 @@ export function buildPrivateInvitationSharePath(token) {
 /** @param {string} token */
 export function buildPrivateInvitationShareUrl(token) {
     const path = buildPrivateInvitationSharePath(token);
-    if (!path || typeof window === 'undefined') return path || '';
-    return `${window.location.origin}${path}`;
+    if (!path) return '';
+    return `${getAppOrigin()}${path}`;
 }
 
 /** @param {string | undefined} dateRaw @param {string} [language] */
@@ -93,8 +94,7 @@ function absoluteShareAssetUrl(url) {
     const trimmed = url.trim();
     if (!trimmed || trimmed.startsWith('data:')) return null;
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
-    if (typeof window === 'undefined') return trimmed;
-    return `${window.location.origin}${trimmed.startsWith('/') ? trimmed : `/${trimmed}`}`;
+    return `${getAppOrigin()}${trimmed.startsWith('/') ? trimmed : `/${trimmed}`}`;
 }
 
 /**
