@@ -24,6 +24,7 @@ import { useDiscoveryActionStatus } from '../../hooks/useDiscoveryActionStatus';
 import { useCanMessageMember } from '../../hooks/useCanMessageMember';
 import { useMatchCelebration } from '../../context/MatchCelebrationContext';
 import { useUserPresence } from '../../hooks/usePresence';
+import { getDefaultAvatar } from '../../utils/avatarUtils';
 import PrivateInviteProfileBadge from '../PrivateInviteProfileBadge';
 import InboxHubLink from './InboxHubLink';
 import './discovery.css';
@@ -67,7 +68,7 @@ export default function DiscoveryCard({
   const targetUser = profile?.user || profile;
   const isOnline = useUserPresence(profile?.id, { fallback: Boolean(targetUser?.isOnline) });
   const viewerProfile = userProfile || currentUser || invitationUser;
-  const useDatingLike = profileShowsLikeButton(targetUser);
+  const useDatingLike = profileShowsLikeButton(viewerProfile);
   const viewerUid = currentUser?.uid || currentUser?.id;
   const viewerFollowing = useMemo(
     () => invitationUser?.following || [],
@@ -91,6 +92,11 @@ export default function DiscoveryCard({
   const [canChat, setCanChat] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
   const [greetingBusy, setGreetingBusy] = useState(false);
+  const [photoFailed, setPhotoFailed] = useState(false);
+
+  useEffect(() => {
+    setPhotoFailed(false);
+  }, [profile?.profilePhoto]);
   const isFollowingUser = checkIsFollowing(viewerFollowing, profile?.id);
   const showPrivateInviteBadge = Boolean(profile?.id && profile.id !== viewerUid && isFollowingUser);
   const ageLabel = formatAgeLabel(profile);
@@ -363,10 +369,11 @@ export default function DiscoveryCard({
 
       <div className="discovery-card__frame">
         <img
-          src={profile.profilePhoto}
+          src={photoFailed ? getDefaultAvatar(profile.name) : profile.profilePhoto}
           alt=""
           className="discovery-card__photo discovery-card__photo--profile"
           draggable={false}
+          onError={() => setPhotoFailed(true)}
         />
 
         <div className="discovery-card__gradient" aria-hidden />

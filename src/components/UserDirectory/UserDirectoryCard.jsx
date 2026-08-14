@@ -58,7 +58,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
     live: false,
   });
   const profilePath = profileUid ? `/profile/${profileUid}` : null;
-  const useDatingLike = profileShowsLikeButton(user);
+  const useDatingLike = profileShowsLikeButton(userProfile || invitationUser || currentUser);
   const { liked, greetedToday } = useDiscoveryActionStatus(viewerUid, profileUid);
 
   const [likeBusy, setLikeBusy] = useState(false);

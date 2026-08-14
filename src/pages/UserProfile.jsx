@@ -12,7 +12,18 @@ import {
   FaFlag,
   FaChevronRight,
   FaBan,
-  FaVolumeMute } from
+  FaVolumeMute,
+  FaStar,
+  FaEnvelope,
+  FaHandshake,
+  FaUsers,
+  FaHeart,
+  FaRegHeart,
+  FaCheck,
+  FaCommentDots,
+  FaPaperPlane,
+  FaClipboardList,
+  FaCompass } from
 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { getMutualFollowers } from '../utils/followHelpers';
@@ -90,17 +101,24 @@ function ProfilePersonaSkeleton() {
         <div className="h-24 w-24 rounded-full border-4 border-[var(--bg-body)] user-profile-skeleton-block" />
       </div>
       <div className="mx-auto mt-14 h-7 w-48 rounded-lg user-profile-skeleton-block" />
-      <div className="mx-auto mt-5 flex justify-center gap-10 px-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-10 w-16 rounded-lg user-profile-skeleton-block" />
-        ))}
-      </div>
-      <div className="mx-4 mt-6 flex gap-3">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-10 flex-1 rounded-2xl user-profile-skeleton-block" />
-        ))}
-      </div>
+      <div className="mx-4 mt-6 h-28 rounded-2xl user-profile-skeleton-block" />
+      <div className="mx-4 mt-4 h-40 rounded-2xl user-profile-skeleton-block" />
     </div>
+  );
+}
+
+/** Unified card wrapper — one consistent visual language for every profile section. */
+function SectionCard({ icon, title, children, className = '' }) {
+  return (
+    <section className={`user-profile-card ${className}`}>
+      {title ? (
+        <AppText as="h3" className="user-profile-card__heading">
+          {icon ? <span className="user-profile-card__heading-icon" aria-hidden>{icon}</span> : null}
+          {title}
+        </AppText>
+      ) : null}
+      {children}
+    </section>
   );
 }
 
@@ -245,114 +263,75 @@ function formatAgeRange(age) {
   return '45+';
 }
 
-function ProfileDetailsSection({ profile, galleryTheme }) {
-  const { t } = useTranslation();
-  const {
-    uid,
-    diningPersona,
-    joinReasons = [],
-    lookingFor = [],
-    firstDatePlaceHint,
-    shortBio,
-    acceptsPrivateInvite,
-    profileGallery,
-    directoryCoverIndex
-  } = profile;
-
+/** "Looking for" + "Join reasons" + "Vibe & Interests" grouped into one preferences card. */
+function ProfilePreferencesCard({ profile, t }) {
+  const { diningPersona, joinReasons = [], lookingFor = [] } = profile;
   const showLookingFor = lookingFor.length > 0;
   const showJoinReasons = joinReasons.length > 0;
   const showTasteSection = diningPersona.length > 0;
 
+  if (!showLookingFor && !showJoinReasons && !showTasteSection) return null;
+
   return (
-    <div className="user-profile-details mt-8 space-y-8 px-5">
-      {showLookingFor ?
-      <div className="user-profile-section">
-        <AppText as="h3" className="user-profile-section__title">
-          {t('profile_looking_for_title', 'Looking for')}
-        </AppText>
-        <LookingForChips
-          ids={lookingFor}
-          includeDating
-          className="flex flex-wrap gap-2"
-          chipClassName="user-profile-looking-pill" />
-      </div> :
-      null}
-
-      {showJoinReasons ?
-      <div className="user-profile-section">
-        <AppText as="h3" className="user-profile-section__title">
-          {t('join_reason_title', 'What are you looking for here?')}
-        </AppText>
-        <div className="flex flex-col gap-3">
-          {joinReasons.map((id) =>
-          <AppText as="div"
-            key={id}
-            className="user-profile-reason-card">
-            {getJoinReasonLabel(id, t)}
+    <SectionCard icon={<FaCompass />} title={t('user_profile_preferences_title', 'Preferences & vibe')}>
+      <div className="user-profile-preferences-stack">
+        {showLookingFor ?
+        <div className="user-profile-subsection">
+          <AppText as="h4" className="user-profile-subsection__title">
+            {t('profile_looking_for_title', 'Looking for')}
           </AppText>
-          )}
-        </div>
-      </div> :
-      null}
+          <LookingForChips
+            ids={lookingFor}
+            includeDating
+            className="flex flex-wrap gap-2"
+            chipClassName="user-profile-looking-pill" />
+        </div> :
+        null}
 
-      {showTasteSection ?
-      <div className="user-profile-section">
-        <AppText as="h3" className="user-profile-section__title">
-          {t('private_profile_taste_title', 'Vibe & Interests')}
-        </AppText>
-        <div className="flex flex-wrap gap-2" dir="ltr">
-          {diningPersona.map((tag, index) =>
-          <AppText as="span"
-            key={`${tag}-${index}`}
-            className={`user-profile-taste-pill ${index === 0 ? 'user-profile-taste-pill--highlight' : ''}`}>
-            {tag}
+        {showJoinReasons ?
+        <div className="user-profile-subsection">
+          <AppText as="h4" className="user-profile-subsection__title">
+            {t('join_reason_title', 'What are you looking for here?')}
           </AppText>
-          )}
-        </div>
-      </div> :
-      null}
+          <div className="flex flex-col gap-2">
+            {joinReasons.map((id) =>
+            <AppText as="div"
+              key={id}
+              className="user-profile-reason-card">
+              {getJoinReasonLabel(id, t)}
+            </AppText>
+            )}
+          </div>
+        </div> :
+        null}
 
-      {firstDatePlaceHint ?
-      <AppText as="p" className="user-profile-meetup-hint">
-        <AppText as="span" className="user-profile-meetup-hint__label">
-          {t('private_meetup_spot_title', 'Ideal meetup spot')}:{' '}
-        </AppText>
-        {firstDatePlaceHint}
-      </AppText> :
-      null}
-
-      {uid ?
-      <div className="user-profile-section user-profile-gallery">
-        <ProfileGalleryEditor
-          userId={uid}
-          slots={profileGallery}
-          directoryCoverIndex={directoryCoverIndex}
-          editable={false}
-          theme={galleryTheme} />
-      </div> :
-      null}
-
-      {shortBio ?
-      <AppText as="p" className="user-profile-bio">
-        {shortBio}
-      </AppText> :
-      null}
-    </div>
+        {showTasteSection ?
+        <div className="user-profile-subsection">
+          <AppText as="h4" className="user-profile-subsection__title">
+            {t('private_profile_taste_title', 'Vibe & Interests')}
+          </AppText>
+          <div className="flex flex-wrap gap-2" dir="ltr">
+            {diningPersona.map((tag, index) =>
+            <AppText as="span"
+              key={`${tag}-${index}`}
+              className={`user-profile-taste-pill ${index === 0 ? 'user-profile-taste-pill--highlight' : ''}`}>
+              {tag}
+            </AppText>
+            )}
+          </div>
+        </div> :
+        null}
+      </div>
+    </SectionCard>
   );
 }
 
-const InvitationListItem = ({ inv, navigate, t, showToast }) => {
+const InvitationListItem = ({ inv, navigate, t }) => {
   const isArchived = Boolean(inv.isArchived);
   const isGuestArchive = isArchived && inv.role === 'guest';
   const handleOpen = () => {
     if (isArchived) {
-      if (showToast) {
-        const dates = formatArchiveDateRange(inv, t);
-        const roleLabel = isGuestArchive
-          ? t('invitation_archive_guest_badge', 'Joined as guest')
-          : t('invitation_archive_host_badge', 'Hosted');
-        showToast(`${inv.title || t('invitation', 'Invitation')}\n${dates}\n${roleLabel}`, 'info');
-      }
+      navigate(`/invitation/archived/${inv.id}`);
       return;
     }
     navigate(
@@ -372,7 +351,7 @@ const InvitationListItem = ({ inv, navigate, t, showToast }) => {
           handleOpen();
         }
       }}>
-      
+
         <img
         className="profile-invitation-item__thumb"
         src={getInvitationListThumbSrc(inv)}
@@ -380,7 +359,7 @@ const InvitationListItem = ({ inv, navigate, t, showToast }) => {
           e.target.src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400';
         }}
         alt={inv.title} />
-      
+
         <div className="profile-invitation-item__content">
             <div className="profile-invitation-item__title-row">
                 <AppText as="h4" className="profile-invitation-item__title">{inv.title}</AppText>
@@ -409,7 +388,7 @@ const InvitationListItem = ({ inv, navigate, t, showToast }) => {
                 {isArchived ? formatArchiveDateRange(inv, t) : inv.date ? inv.date.split('T')[0] : t('soon')}
             </AppText>
         </div>
-        {!isArchived && <FaChevronRight style={{ opacity: 0.3, flexShrink: 0 }} />}
+        {!isArchived && <FaChevronRight className="profile-invitation-item__chevron" aria-hidden />}
     </div>);
 
 };
@@ -446,7 +425,7 @@ const UserProfile = () => {
 
   const myUid = currentUser?.uid || currentUser?.id;
   const viewerProfile = userProfile || currentUser;
-  const useDatingLike = profileShowsLikeButton(user);
+  const useDatingLike = profileShowsLikeButton(viewerProfile);
   const { liked } = useDiscoveryActionStatus(myUid, userId);
 
   const profileModel = useMemo(() => mapUserDocToProfileModel(user), [user]);
@@ -1013,7 +992,7 @@ const UserProfile = () => {
         className="btn btn-primary"
         disabled={socialBusy}
         onClick={handleToggleBlock}>
-        
+
                 {t('unblock_user', 'Unblock')}
             </button>
     );
@@ -1038,90 +1017,121 @@ const UserProfile = () => {
         menuPanel={profileMenuPanel}
         showMenu={Boolean(myUid && !currentUser?.isGuest)} />
 
-      <div className="user-profile-stats mt-5 flex justify-center gap-10 px-4 text-sm">
-        <div className="flex flex-col items-center text-center">
-          <AppText as="span" className="user-profile-stat-value user-profile-stat-value--reputation">
-            {user.reputation || 0} ⭐
-          </AppText>
-          <AppText as="span" className="user-profile-stats__label">{t('reputation_points')}</AppText>
-        </div>
-        {showInvitationHistory ? (
-          <>
-            <div className="flex flex-col items-center text-center">
-              <AppText as="span" className="user-profile-stat-value">
-                {publicInvitations.length} 💌
+      <div className="user-profile-body px-4" onClick={(e) => e.stopPropagation()}>
+        <SectionCard className="user-profile-summary-card">
+          <div className="user-profile-stats">
+            <div className="user-profile-stat">
+              <AppText as="span" className="user-profile-stat-value user-profile-stat-value--reputation">
+                <FaStar aria-hidden /> {user.reputation || 0}
               </AppText>
-              <AppText as="span" className="user-profile-stats__label">{t('invitations')}</AppText>
+              <AppText as="span" className="user-profile-stats__label">{t('reputation_points')}</AppText>
             </div>
-            <div className="flex flex-col items-center text-center">
-              <AppText as="span" className="user-profile-stat-value">
-                {joinedInvitations.length} 🤝
-              </AppText>
-              <AppText as="span" className="user-profile-stats__label">{t('joined')}</AppText>
-            </div>
-          </>
-        ) : null}
-        {showFriendsList ? (
-          <div className="flex flex-col items-center text-center">
-            <AppText as="span" className="user-profile-stat-value">
-              {mutualFriendsCount} 👥
-            </AppText>
-            <AppText as="span" className="user-profile-stats__label">{t('friends', 'Friends')}</AppText>
+            {showInvitationHistory ? (
+              <>
+                <div className="user-profile-stat">
+                  <AppText as="span" className="user-profile-stat-value">
+                    <FaEnvelope aria-hidden /> {publicInvitations.length}
+                  </AppText>
+                  <AppText as="span" className="user-profile-stats__label">{t('invitations')}</AppText>
+                </div>
+                <div className="user-profile-stat">
+                  <AppText as="span" className="user-profile-stat-value">
+                    <FaHandshake aria-hidden /> {joinedInvitations.length}
+                  </AppText>
+                  <AppText as="span" className="user-profile-stats__label">{t('joined')}</AppText>
+                </div>
+              </>
+            ) : null}
+            {showFriendsList ? (
+              <div className="user-profile-stat">
+                <AppText as="span" className="user-profile-stat-value">
+                  <FaUsers aria-hidden /> {mutualFriendsCount}
+                </AppText>
+                <AppText as="span" className="user-profile-stats__label">{t('friends', 'Friends')}</AppText>
+              </div>
+            ) : null}
           </div>
+
+          <div className="user-profile-actions">
+            {userProfile?.role !== 'business' && canBeFollowed ?
+            useDatingLike ?
+            <button
+              type="button"
+              onClick={handleToggleLike}
+              disabled={likeBusy}
+              aria-pressed={liked}
+              className={`user-profile-action user-profile-action--like ${liked ? 'is-liked' : ''}`}>
+              {liked ? <FaHeart aria-hidden /> : <FaRegHeart aria-hidden />}
+              {liked ? t('liked', 'Liked') : t('user_directory_like', 'Like')}
+            </button> :
+            <button
+              type="button"
+              onClick={handleConnectFollow}
+              disabled={followBusy}
+              aria-pressed={isFollowing}
+              className={`user-profile-action user-profile-action--follow ${isFollowing ? 'is-following' : ''}`}>
+              {isFollowing ? <FaCheck aria-hidden /> : null}
+              {isFollowing ? t('following') : t('follow')}
+            </button> :
+            null}
+            {currentUser?.isGuest ?
+            <button
+              type="button"
+              onClick={() => goToLogin({ returnPath: `/profile/${userId}` })}
+              className="user-profile-action user-profile-action--message">
+              <FaCommentDots aria-hidden /> {t('message')}
+            </button> :
+            canChat && !canChatLoading && user?.role !== 'business' ?
+            <button
+              type="button"
+              onClick={() => navigate(`/chat/${userId}`)}
+              className="user-profile-action user-profile-action--message">
+              <FaCommentDots aria-hidden /> {t('message')}
+            </button> :
+            null}
+            {canPrivateInvite ?
+            <button
+              type="button"
+              onClick={handlePrivateInvite}
+              className="user-profile-action user-profile-action--invite">
+              <FaPaperPlane aria-hidden /> {t('user_directory_send_dating_invite', 'Private invite')}
+            </button> :
+            null}
+          </div>
+        </SectionCard>
+
+        {profileModel.shortBio ? (
+          <SectionCard className="user-profile-bio-card">
+            <AppText as="p" className="user-profile-bio">
+              {profileModel.shortBio}
+            </AppText>
+          </SectionCard>
         ) : null}
-      </div>
 
-      <div className="user-profile-actions mt-6 flex px-4" onClick={(e) => e.stopPropagation()}>
-        {userProfile?.role !== 'business' && canBeFollowed ?
-        <>
-        {useDatingLike ?
-        <button
-          type="button"
-          onClick={handleToggleLike}
-          disabled={likeBusy}
-          aria-pressed={liked}
-          className={`user-profile-action user-profile-action--like ${liked ? 'is-liked' : ''}`}>
-          {liked ? `❤️ ${t('liked', 'Liked')}` : `🤍 ${t('user_directory_like', 'Like')}`}
-        </button> :
-        null}
-        <button
-          type="button"
-          onClick={handleConnectFollow}
-          disabled={followBusy}
-          aria-pressed={isFollowing}
-          className={`user-profile-action user-profile-action--follow ${isFollowing ? 'is-following' : ''}`}>
-          {isFollowing ? `✔️ ${t('following')}` : t('follow')}
-        </button>
-        </> :
-        null}
-        {currentUser?.isGuest ?
-        <button
-          type="button"
-          onClick={() => goToLogin({ returnPath: `/profile/${userId}` })}
-          className="user-profile-action user-profile-action--message">
-          💬 {t('message')}
-        </button> :
-        canChat && !canChatLoading && user?.role !== 'business' ?
-        <button
-          type="button"
-          onClick={() => navigate(`/chat/${userId}`)}
-          className="user-profile-action user-profile-action--message">
-          💬 {t('message')}
-        </button> :
-        null}
-        {canPrivateInvite ?
-        <button
-          type="button"
-          onClick={handlePrivateInvite}
-          className="user-profile-action user-profile-action--invite">
-          💌 {t('user_directory_send_dating_invite', 'Private invite')}
-        </button> :
-        null}
-      </div>
+        <ProfilePreferencesCard profile={profileModel} t={t} />
 
-      <ProfileDetailsSection profile={profileModel} galleryTheme={galleryTheme} />
+        {profileModel.firstDatePlaceHint ? (
+          <SectionCard className="user-profile-meetup-card">
+            <AppText as="p" className="user-profile-meetup-hint">
+              <AppText as="span" className="user-profile-meetup-hint__label">
+                {t('private_meetup_spot_title', 'Ideal meetup spot')}:{' '}
+              </AppText>
+              {profileModel.firstDatePlaceHint}
+            </AppText>
+          </SectionCard>
+        ) : null}
 
-      <div className="space-y-5 px-5 pb-24" onClick={(e) => e.stopPropagation()}>
+        {profileModel.uid ? (
+          <SectionCard className="user-profile-gallery-card">
+            <ProfileGalleryEditor
+              userId={profileModel.uid}
+              slots={profileModel.profileGallery}
+              directoryCoverIndex={profileModel.directoryCoverIndex}
+              editable={false}
+              theme={galleryTheme} />
+          </SectionCard>
+        ) : null}
+
         {stayOnProfileAfterBlock && iBlockedThem &&
         <AppText as="p" className="user-profile-block-banner">
           {t(
@@ -1142,10 +1152,10 @@ const UserProfile = () => {
         }
 
         {showInvitationHistory ? (
-        <div className="user-profile-extra-section">
-          <AppText as="h3" className="user-profile-section__heading">
-            📋 {t('invitation_history', 'Invitation History')}
-          </AppText>
+        <SectionCard
+          icon={<FaClipboardList />}
+          title={t('invitation_history', 'Invitation History')}
+          className="user-profile-extra-section">
           <div className="user-profile-tabs mb-4">
             <button
               type="button"
@@ -1165,7 +1175,7 @@ const UserProfile = () => {
             role="region"
             aria-label={t('invitation_history', 'Invitation History')}>
             {displayedInvitations.map((inv) =>
-            <InvitationListItem key={inv.id} inv={inv} navigate={navigate} t={t} showToast={showToast} />
+            <InvitationListItem key={inv.id} inv={inv} navigate={navigate} t={t} />
             )}
             {activeList.length === 0 &&
             <AppText as="p" className="py-8 text-center user-profile-empty-text">{t('nothing_to_show')}</AppText>
@@ -1179,12 +1189,14 @@ const UserProfile = () => {
             {t('view_more', 'View More')} (+{activeList.length - PROFILE_SECTION_PREVIEW_MAX})
           </button>
           }
-        </div>
+        </SectionCard>
         ) : null}
 
         {showFriendsList ? (
-        <div className="user-profile-extra-section">
-          <AppText as="h3" className="user-profile-section__heading">👥 {t('friends', 'Friends')}</AppText>
+        <SectionCard
+          icon={<FaUsers />}
+          title={t('friends', 'Friends')}
+          className="user-profile-extra-section">
           {networkLoading ?
           <div className="flex justify-center py-6">
             <div className="h-7 w-7 animate-spin rounded-full border-2 border-neutral-600 border-t-violet-400" />
@@ -1229,7 +1241,7 @@ const UserProfile = () => {
             }
           </>
           }
-        </div>
+        </SectionCard>
         ) : null}
       </div>
     </div>);
