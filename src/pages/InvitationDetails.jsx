@@ -7,7 +7,6 @@ import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import ShareButtons from '../components/ShareButtons';
 import CancellationModal from '../components/CancellationModal';
 // Added Import
 import { updateGuestCount } from '../utils/invitationEditHelpers';
@@ -51,6 +50,7 @@ const InvitationDetails = () => {
   const [isCompleting, setIsCompleting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [fetchedInvitation, setFetchedInvitation] = useState(null);
+  const [accessRestricted, setAccessRestricted] = useState(false);
   const [locationStatus, setLocationStatus] = useState('');
   const [showShare, setShowShare] = useState(false);
   const [sharingCard, setSharingCard] = useState(false);
@@ -162,21 +162,30 @@ const InvitationDetails = () => {
   useEffect(() => {
     invitationDocSeenRef.current = false;
     setFetchedInvitation(null);
+    setAccessRestricted(false);
   }, [id]);
   useEffect(() => {
     if (!id) return undefined;
     const invRef = doc(db, 'invitations', id);
-    const unsubscribe = onSnapshot(invRef, (snapshot) => {
+    const unsubscribe = onSnapshot(invRef, async (snapshot) => {
       if (snapshot.exists()) {
         invitationDocSeenRef.current = true;
         setFetchedInvitation({ id: snapshot.id, ...snapshot.data() });
         return;
       }
-      if (!snapshot.exists() && invitationDocSeenRef.current) {
+      const archiveSnap = await getDoc(doc(db, 'invitation_archives', id));
+      if (archiveSnap.exists()) {
+        navigate(`/invitation/archived/${id}`, { replace: true });
+        return;
+      }
+      if (invitationDocSeenRef.current) {
         navigate('/', { replace: true, state: { message: 'This invitation has ended.' } });
       }
     }, (err) => {
       console.error('Invitation snapshot error:', err);
+      if (err?.code === 'permission-denied') {
+        setAccessRestricted(true);
+      }
     });
     return () => unsubscribe();
   }, [id, navigate]);
@@ -554,6 +563,16 @@ const InvitationDetails = () => {
                 <AppText as="p" style={{ marginTop: '1rem', color: 'var(--text-muted)' }}>
                     {t('loading')}
                 </AppText>
+            </div>);
+
+  }
+
+  if (accessRestricted) {
+    return (
+      <div className="page-container" style={{ padding: '2rem', textAlign: 'center' }}>
+                <AppText as="h2" style={{ marginBottom: '1rem' }}>{t('invitation_followers_only_title', { defaultValue: 'Followers only' })}</AppText>
+                <AppText as="p" style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>{t('invitation_followers_only_hint', { defaultValue: "This invitation is only visible to the host's followers." })}</AppText>
+                <button type="button" onClick={() => navigate('/')} className="ui-btn ui-btn--primary">{t('nav_home')}</button>
             </div>);
 
   }

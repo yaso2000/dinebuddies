@@ -11,9 +11,8 @@ import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 const INVITATION_CARD_IMAGE_FALLBACK =
 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
-import { generateShareCardBlob } from '../utils/shareCardCanvas';
-import { shareNativeOrFallback } from '../utils/shareNativeOrFallback';
 import { buildInvitationFeedAttachment } from '../utils/invitationFeedAttachment';
+import ShareButtons from './ShareButtons';
 import { goToLogin } from '../utils/goToLogin';
 import { AppText } from "./base";
 
@@ -24,9 +23,7 @@ const InvitationCard = ({ invitation }) => {
   const { userProfile } = useAuth();
   const { showToast } = useToast();
   const [showReportModal, setShowReportModal] = useState(false);
-  const [sharingCard, setSharingCard] = useState(false);
-  const [cardPreviewUrl, setCardPreviewUrl] = useState(null); // desktop fallback
-  const shareCardFileRef = useRef(null);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [isPlayingVideo, setIsPlayingVideo] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const videoRef = useRef(null);
@@ -220,55 +217,9 @@ const InvitationCard = ({ invitation }) => {
     videoDurationLabel: isVideo ? videoDurationLabel : ''
   };
 
-  // Direct image share — generates card and opens native share sheet (Windows/Mobile)
-  const handleShare = async (e) => {
+  const handleShare = (e) => {
     e.stopPropagation();
-    if (sharingCard) return;
-    try {
-      setSharingCard(true);
-      setCardPreviewUrl(null);
-      shareCardFileRef.current = null;
-      const blob = await generateShareCardBlob(storyData);
-      if (!blob) throw new Error('No blob');
-      const file = new File([blob], 'invitation-card.png', { type: 'image/png' });
-      shareCardFileRef.current = file;
-      const textWithLink = `${title}${description ? `\n\n${description}` : ''}\n\n🔗 ${shareUrl}`;
-      const result = await shareNativeOrFallback({
-        file,
-        title,
-        text: textWithLink,
-        url: shareUrl,
-        skipExternalFallback: true
-      });
-      if (result === 'native' || result === 'aborted') {
-        shareCardFileRef.current = null;
-        return;
-      }
-      setCardPreviewUrl(URL.createObjectURL(blob));
-    } catch (err) {
-      if (err?.name !== 'AbortError') console.error('Share error:', err);
-    } finally {
-      setSharingCard(false);
-    }
-  };
-
-  const closeCardPreview = () => {
-    if (cardPreviewUrl) URL.revokeObjectURL(cardPreviewUrl);
-    setCardPreviewUrl(null);
-    shareCardFileRef.current = null;
-  };
-
-  const handleShareFromCardPreview = async (e) => {
-    e.stopPropagation();
-    const file = shareCardFileRef.current;
-    const textWithLink = `${title}${description ? `\n\n${description}` : ''}\n\n🔗 ${shareUrl}`;
-    await shareNativeOrFallback({
-      file,
-      title,
-      text: textWithLink,
-      url: shareUrl,
-      skipExternalFallback: false
-    });
+    setShowShareModal(true);
   };
 
   /** Share invitation on the main home feed (communityPosts), not business featured slides. */
@@ -997,39 +948,38 @@ const InvitationCard = ({ invitation }) => {
             </>
       }
 
-            {/* Desktop fallback: card preview + share + download */}
-            {cardPreviewUrl &&
+            {/* Share panel — WhatsApp/Native/Instagram/Socials/Send-in-Chat */}
+            {showShareModal &&
       <div
-        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.88)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        onClick={closeCardPreview}>
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        onClick={(e) => {e.stopPropagation();setShowShareModal(false);}}>
 
                     <div
-          style={{ width: 320, padding: 16, borderRadius: 20, background: '#111', border: '1px solid rgba(255,255,255,0.1)', position: 'relative' }}
+          style={{ width: 320, maxWidth: '90%', padding: 20, borderRadius: 16, background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
           onClick={(e) => e.stopPropagation()}>
 
-                        <a href={shareUrl} target="_blank" rel="noopener noreferrer">
-                            <img src={cardPreviewUrl} alt="Share Card" style={{ width: '100%', borderRadius: 10, display: 'block', cursor: 'pointer' }} />
-                        </a>
-                        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                            <button
-              type="button"
-              onClick={handleShareFromCardPreview}
-              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 0', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#8b5cf6,#ec4899)', color: 'white', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}>
+                        <AppText as="h3" style={{ textAlign: 'center', marginBottom: 16 }}>{t('share_invitation', { defaultValue: 'Share Invitation' })}</AppText>
+                        <ShareButtons
+            title={title}
+            description={description}
+            url={shareUrl}
+            type="invitation"
+            storyData={storyData}
+            sharedData={{
+              type: 'invitation',
+              id,
+              title,
+              description,
+              image: storyData.image,
+              authorName: author?.name,
+              authorAvatar: storyData.hostImage,
+              url: shareUrl
+            }} />
 
-                                <FaShareAlt size={14} /> {t('share', { defaultValue: 'Share' })}
-                            </button>
-                            <a
-              href={cardPreviewUrl}
-              download="invitation-card.png"
-              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 0', borderRadius: 10, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'white', fontWeight: 700, textDecoration: 'none', fontSize: '0.9rem' }}>
-
-                                {t('download', { defaultValue: 'Download' })}
-                            </a>
-                        </div>
                         <button
             type="button"
-            onClick={closeCardPreview}
-            style={{ width: '100%', marginTop: 8, padding: '8px 0', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', borderRadius: 10, cursor: 'pointer', fontSize: '0.82rem' }}>
+            onClick={(e) => {e.stopPropagation();setShowShareModal(false);}}
+            style={{ width: '100%', marginTop: 16, padding: 10, background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', borderRadius: 8, cursor: 'pointer' }}>
 
                             {t('close')}
                         </button>

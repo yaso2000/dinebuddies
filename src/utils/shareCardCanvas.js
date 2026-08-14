@@ -3,6 +3,9 @@
  * Kept minimal for WhatsApp / social: hero image + title + copy — no fake buttons or UI chrome.
  */
 
+import { getAppTextDirection } from './bidiText';
+import i18n from '../i18n';
+
 const CARD_W = 1080;
 const CARD_H = 1080;
 const HERO_H = 640;
@@ -12,7 +15,16 @@ const BUSINESS_CARD_H = 1080;
 const BUSINESS_HERO_H = 640;
 /** Hero height for selfie-video split layout (~top half) */
 const VIDEO_SPLIT_HERO_H = 520;
-const PADDING = 48;
+const PADDING = 56;
+
+/** Mirrors title/body/meta text anchoring for RTL (Arabic/Hebrew/Farsi/Urdu). */
+function getAnchor(isRtl, width, padding = PADDING) {
+    return isRtl ? { align: 'right', x: width - padding } : { align: 'left', x: padding };
+}
+
+function isCurrentLanguageRtl() {
+    return getAppTextDirection(i18n.language) === 'rtl';
+}
 
 /** Shorten URL for bottom bar */
 function shortenUrlForBar(url, maxLen = 52) {
@@ -116,10 +128,13 @@ const loadImg = async (src) => {
     return null;
 };
 
-/** Word-wrap and draw; returns next Y */
-function drawWrappedTitle(ctx, text, x, y, maxW, fontSize, lineHeight, maxLines) {
+/** Word-wrap and draw; returns next Y. `align` mirrors anchoring for RTL text. */
+function drawWrappedTitle(ctx, text, x, y, maxW, fontSize, lineHeight, maxLines, align = 'left') {
     ctx.fillStyle = '#ffffff';
     ctx.font = `bold ${fontSize}px "Arial", sans-serif`;
+    ctx.textAlign = align;
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 12;
     const words = String(text || '').split(/\s+/).filter(Boolean);
     let line = '';
     let cy = y;
@@ -139,13 +154,17 @@ function drawWrappedTitle(ctx, text, x, y, maxW, fontSize, lineHeight, maxLines)
         ctx.fillText(line, x, cy);
         cy += lineHeight;
     }
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.textAlign = 'left';
     return cy;
 }
 
-function drawWrappedBody(ctx, text, x, y, maxW, fontSize, lineHeight, maxLines, color) {
+function drawWrappedBody(ctx, text, x, y, maxW, fontSize, lineHeight, maxLines, color, align = 'left') {
     if (!text || !String(text).trim()) return y;
     ctx.fillStyle = color;
     ctx.font = `${fontSize}px "Arial", sans-serif`;
+    ctx.textAlign = align;
     const words = String(text).split(/\s+/);
     let line = '';
     let cy = y;
@@ -165,13 +184,15 @@ function drawWrappedBody(ctx, text, x, y, maxW, fontSize, lineHeight, maxLines, 
         ctx.fillText(line, x, cy);
         cy += lineHeight;
     }
+    ctx.textAlign = 'left';
     return cy;
 }
 
-function drawMetaLine(ctx, text, x, y, maxW, fontSize, color) {
+function drawMetaLine(ctx, text, x, y, maxW, fontSize, color, align = 'left') {
     if (!text) return y;
     ctx.fillStyle = color;
     ctx.font = `${fontSize}px "Arial", sans-serif`;
+    ctx.textAlign = align;
     const words = String(text).split(/\s+/);
     let line = '';
     let cy = y;
@@ -189,6 +210,7 @@ function drawMetaLine(ctx, text, x, y, maxW, fontSize, color) {
         ctx.fillText(line, x, cy);
         cy += fontSize + 14;
     }
+    ctx.textAlign = 'left';
     return cy;
 }
 
@@ -240,6 +262,14 @@ function roundRectPath(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
+/** Thin inset rounded-corner frame — subtle "designed" finish on every card. */
+function drawInsetBorder(ctx, w, h) {
+    roundRectPath(ctx, 2, 2, w - 4, h - 4, 24);
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+}
+
 function drawBottomBrandAndLink(ctx, shareUrl, titleFallback) {
     const linkBarLabel = (shareUrl && shortenUrlForBar(shareUrl)) || (titleFallback && String(titleFallback).trim());
     const LINK_BAR_H = 48;
@@ -275,9 +305,12 @@ export async function generateBusinessShareCard({
     averageRating,
     reviewCount,
 } = {}) {
+    title = title || i18n.t('share_card_default_business_title', { defaultValue: 'DineBuddies Partner' });
+    const isRtl = isCurrentLanguageRtl();
     const W = BUSINESS_CARD_W;
     const H = BUSINESS_CARD_H;
     const heroH = BUSINESS_HERO_H;
+    const { align, x: contentX } = getAnchor(isRtl, W);
 
     const canvas = document.createElement('canvas');
     canvas.width = W;
@@ -317,24 +350,24 @@ export async function generateBusinessShareCard({
     let curY = heroH + 44;
     const titleSize = title.length > 28 ? 52 : 60;
     const titleLH = title.length > 28 ? 62 : 72;
-    curY = drawWrappedTitle(ctx, title, PADDING, curY, maxW, titleSize, titleLH, 2);
+    curY = drawWrappedTitle(ctx, title, contentX, curY, maxW, titleSize, titleLH, 2, align);
     curY += 8;
 
-    curY = drawWrappedBody(ctx, description, PADDING, curY, maxW, 30, 42, 3, 'rgba(255,255,255,0.65)');
+    curY = drawWrappedBody(ctx, description, contentX, curY, maxW, 30, 42, 3, 'rgba(255,255,255,0.65)', align);
     curY += 10;
 
     const displayLocation = location || city || '';
     if (displayLocation) {
-        curY = drawMetaLine(ctx, `📍 ${displayLocation}`, PADDING, curY, maxW, 26, 'rgba(255,255,255,0.78)');
+        curY = drawMetaLine(ctx, `📍 ${displayLocation}`, contentX, curY, maxW, 26, 'rgba(255,255,255,0.78)', align);
     }
 
     if (averageRating != null || reviewCount != null) {
         const rating = Number(averageRating) || 0;
         const count = Number(reviewCount) || 0;
         const ratingText = count > 0
-            ? `⭐ ${rating.toFixed(1)} · ${count} ${count === 1 ? 'review' : 'reviews'}`
+            ? `⭐ ${rating.toFixed(1)} · ${count} ${i18n.t('reviews_count', { defaultValue: 'reviews' })}`
             : '⭐ —';
-        curY = drawMetaLine(ctx, ratingText, PADDING, curY, maxW, 24, 'rgba(253,224,71,0.9)');
+        curY = drawMetaLine(ctx, ratingText, contentX, curY, maxW, 24, 'rgba(253,224,71,0.9)', align);
     }
 
     const linkBarLabel = (shareUrl && shortenUrlForBar(shareUrl)) || (title && String(title).trim());
@@ -357,6 +390,7 @@ export async function generateBusinessShareCard({
     ctx.fillText('DineBuddies', W / 2, brandY);
     ctx.textAlign = 'left';
 
+    drawInsetBorder(ctx, W, H);
     return canvas;
 }
 
@@ -379,6 +413,9 @@ export async function generateShareCard({
     /** e.g. "0:09" — shown on video-split hero */
     videoDurationLabel = '',
 } = {}) {
+    title = title || i18n.t('share_card_default_invitation_title', { defaultValue: 'DineBuddies Event' });
+    const isRtl = isCurrentLanguageRtl();
+    const { align, x: contentX } = getAnchor(isRtl, CARD_W);
     const canvas = document.createElement('canvas');
     canvas.width = CARD_W;
     canvas.height = CARD_H;
@@ -409,6 +446,8 @@ export async function generateShareCard({
         ctx.fillStyle = gBot;
         ctx.fillRect(0, VIDEO_SPLIT_HERO_H - 150, CARD_W, 150);
 
+        // Video-length badge stays pinned top-right regardless of reading direction
+        // (a corner indicator, not reading-direction text — YouTube/Instagram convention).
         const dur = String(videoDurationLabel || '').trim();
         if (dur) {
             const label = `🎥 ${dur}`;
@@ -429,13 +468,12 @@ export async function generateShareCard({
         }
 
         let ty = VIDEO_SPLIT_HERO_H - 108;
-        ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         const titleSize = title.length > 28 ? 40 : 48;
         const titleLH = title.length > 28 ? 48 : 56;
-        ty = drawWrappedTitle(ctx, title, PADDING, ty, maxW, titleSize, titleLH, 2);
+        ty = drawWrappedTitle(ctx, title, contentX, ty, maxW, titleSize, titleLH, 2, align);
         if (description) {
-            drawWrappedBody(ctx, description, PADDING, ty + 6, maxW, 22, 30, 2, 'rgba(255,255,255,0.92)');
+            drawWrappedBody(ctx, description, contentX, ty + 6, maxW, 22, 30, 2, 'rgba(255,255,255,0.92)', align);
         }
 
         ctx.fillStyle = '#ffffff';
@@ -444,7 +482,7 @@ export async function generateShareCard({
         let my = VIDEO_SPLIT_HERO_H + 32;
         ctx.fillStyle = '#111827';
         ctx.font = '26px "Arial", sans-serif';
-        ctx.textAlign = 'left';
+        ctx.textAlign = align;
         ctx.textBaseline = 'top';
 
         const rows = [
@@ -455,7 +493,7 @@ export async function generateShareCard({
         if (meta.distanceLine) rows.push(`📍 ${meta.distanceLine}`);
 
         rows.forEach((row, idx) => {
-            ctx.fillText(row, PADDING, my);
+            ctx.fillText(row, contentX, my);
             my += 40;
             if (idx < rows.length - 1) {
                 ctx.strokeStyle = '#e5e7eb';
@@ -471,68 +509,127 @@ export async function generateShareCard({
         if (hostName) {
             ctx.fillStyle = '#6b7280';
             ctx.font = '22px "Arial", sans-serif';
-            ctx.fillText(String(hostName), PADDING, my + 8);
+            ctx.fillText(String(hostName), contentX, my + 8);
         }
+        ctx.textAlign = 'left';
 
         drawBottomBrandAndLink(ctx, shareUrl, title);
+        drawInsetBorder(ctx, CARD_W, CARD_H);
         return canvas;
     }
 
     drawInvitationFullBleed(ctx, heroImg);
 
     if (layout === 'photoBottom') {
-        ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         let ty = 88;
         const titleSize = title.length > 30 ? 46 : 54;
         const titleLH = title.length > 30 ? 56 : 64;
-        ty = drawWrappedTitle(ctx, title, PADDING, ty, maxW, titleSize, titleLH, 2);
+        ty = drawWrappedTitle(ctx, title, contentX, ty, maxW, titleSize, titleLH, 2, align);
         ty += 10;
         if (description) {
-            ty = drawWrappedBody(ctx, description, PADDING, ty, maxW, 26, 36, 2, 'rgba(255,255,255,0.88)');
+            ty = drawWrappedBody(ctx, description, contentX, ty, maxW, 26, 36, 2, 'rgba(255,255,255,0.88)', align);
         }
 
-        const g2 = ctx.createLinearGradient(0, CARD_H - 340, 0, CARD_H);
+        const g2 = ctx.createLinearGradient(0, CARD_H - 380, 0, CARD_H);
         g2.addColorStop(0, 'rgba(0,0,0,0)');
         g2.addColorStop(1, 'rgba(0,0,0,0.9)');
         ctx.fillStyle = g2;
-        ctx.fillRect(0, CARD_H - 340, CARD_W, 340);
+        ctx.fillRect(0, CARD_H - 380, CARD_W, 380);
 
         let my = CARD_H - 210;
         ctx.fillStyle = '#ffffff';
         ctx.font = '26px "Arial", sans-serif';
-        ctx.fillText('📅 ' + meta.dateLine + '    ·    🕐 ' + meta.timeLine, PADDING, my);
+        ctx.textAlign = align;
+        ctx.fillText('📅 ' + meta.dateLine + '    ·    🕐 ' + meta.timeLine, contentX, my);
         my += 44;
-        ctx.fillText('👥 ' + meta.guestsLine + '    ·    💳 ' + (meta.paymentLine || '—'), PADDING, my);
+        ctx.fillText('👥 ' + meta.guestsLine + '    ·    💳 ' + (meta.paymentLine || '—'), contentX, my);
         my += 44;
         if (meta.distanceLine) {
-            ctx.fillText('📍 ' + meta.distanceLine, PADDING, my);
+            ctx.fillText('📍 ' + meta.distanceLine, contentX, my);
             my += 40;
         }
         if (hostName) {
             ctx.fillStyle = 'rgba(255,255,255,0.55)';
             ctx.font = '22px "Arial", sans-serif';
-            ctx.fillText(hostName, PADDING, my);
+            ctx.fillText(hostName, contentX, my);
         }
+        ctx.textAlign = 'left';
     }
 
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     drawBottomBrandAndLink(ctx, shareUrl, title);
+    drawInsetBorder(ctx, CARD_W, CARD_H);
 
     return canvas;
 }
 
+// ─────────────────────────────────────────────
+//  POST — hero + title + description (no invitation-only date/time/guests meta)
+// ─────────────────────────────────────────────
+export async function generatePostShareCard({
+    title = 'DineBuddies Post',
+    image,
+    description,
+    hostName,
+    shareUrl,
+} = {}) {
+    title = title || i18n.t('share_card_default_post_title', { defaultValue: 'DineBuddies Post' });
+    const isRtl = isCurrentLanguageRtl();
+    const { align, x: contentX } = getAnchor(isRtl, CARD_W);
+    const canvas = document.createElement('canvas');
+    canvas.width = CARD_W;
+    canvas.height = CARD_H;
+    const ctx = canvas.getContext('2d');
+
+    const heroImg = await loadImg(image);
+    drawInvitationFullBleed(ctx, heroImg);
+
+    const maxW = CARD_W - PADDING * 2;
+    ctx.textBaseline = 'top';
+    let ty = 88;
+    const titleSize = title.length > 30 ? 46 : 54;
+    const titleLH = title.length > 30 ? 56 : 64;
+    ty = drawWrappedTitle(ctx, title, contentX, ty, maxW, titleSize, titleLH, 2, align);
+    ty += 10;
+    if (description) {
+        ty = drawWrappedBody(ctx, description, contentX, ty, maxW, 26, 36, 2, 'rgba(255,255,255,0.88)', align);
+    }
+
+    const g2 = ctx.createLinearGradient(0, CARD_H - 260, 0, CARD_H);
+    g2.addColorStop(0, 'rgba(0,0,0,0)');
+    g2.addColorStop(1, 'rgba(0,0,0,0.9)');
+    ctx.fillStyle = g2;
+    ctx.fillRect(0, CARD_H - 260, CARD_W, 260);
+
+    if (hostName) {
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = '24px "Arial", sans-serif';
+        ctx.textAlign = align;
+        ctx.fillText(String(hostName), contentX, CARD_H - 100);
+        ctx.textAlign = 'left';
+    }
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    drawBottomBrandAndLink(ctx, shareUrl, title);
+    drawInsetBorder(ctx, CARD_W, CARD_H);
+
+    return canvas;
+}
+
+const CARD_GENERATORS = {
+    business: generateBusinessShareCard,
+    post: generatePostShareCard,
+};
+
 export const generateShareCardBlob = async (data, type = 'invitation') => {
-    const canvas = type === 'business'
-        ? await generateBusinessShareCard(data)
-        : await generateShareCard(data);
+    const canvas = await (CARD_GENERATORS[type] || generateShareCard)(data);
     return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
 };
 
 export const generateShareCardDataUrl = async (data, type = 'invitation') => {
-    const canvas = type === 'business'
-        ? await generateBusinessShareCard(data)
-        : await generateShareCard(data);
+    const canvas = await (CARD_GENERATORS[type] || generateShareCard)(data);
     return canvas.toDataURL('image/png');
 };

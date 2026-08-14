@@ -46,13 +46,16 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation',
     });
   };
 
-  /** Share post photo + caption via OS sheet (WhatsApp attaches image on mobile). */
+  /**
+   * Share post photo + caption via OS sheet (WhatsApp attaches image on mobile).
+   * @returns {Promise<'shared'|'cancelled'|'unavailable'|'failed'>}
+   */
   const shareWithPostImage = async () => {
-    if (!shareImageUrl || isVideoShare) return false;
+    if (!shareImageUrl || isVideoShare) return 'unavailable';
     setSharingImage(true);
     try {
       const file = await fetchPostImageFile(shareImageUrl);
-      if (!file) return false;
+      if (!file) return 'unavailable';
 
       const shared = await nativeShareWithImage({
         file,
@@ -60,19 +63,18 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation',
         text: shareText,
         url
       });
-      if (shared) return true;
+      if (shared) return 'shared';
 
       setCardPreviewUrl(URL.createObjectURL(file));
       showToast(
         t('share_image_download_hint', 'Download the image, then attach it in WhatsApp with the link.'),
         'info'
       );
-      return true;
+      return 'shared';
     } catch (err) {
-      if (err?.name !== 'AbortError') {
-        console.error('Image share error:', err);
-      }
-      return false;
+      if (err?.name === 'AbortError') return 'cancelled';
+      console.error('Image share error:', err);
+      return 'failed';
     } finally {
       setSharingImage(false);
     }
@@ -80,20 +82,18 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation',
 
   const handleWhatsAppShare = async () => {
     if (shareImageUrl && !isVideoShare) {
-      const ok = await shareWithPostImage();
-      if (ok) return;
+      const result = await shareWithPostImage();
+      // User already saw and dismissed a share sheet — don't force wa.me on top of that.
+      if (result === 'shared' || result === 'cancelled') return;
     }
     openTextOnlyWhatsApp();
   };
 
   const handleNativeShare = async () => {
     if (shareImageUrl && !isVideoShare) {
-      try {
-        const ok = await shareWithPostImage();
-        if (ok) return;
-      } catch {
-
-        /* fall through */}
+      const result = await shareWithPostImage();
+      // User already saw and dismissed a share sheet — don't pop a second one.
+      if (result === 'shared' || result === 'cancelled') return;
     }
     if (navigator.share) {
       try {
@@ -293,7 +293,7 @@ const ShareButtons = ({ title, description, url, storyData, type = 'invitation',
         onClose={() => setShowInternalShare(false)}
         shareData={sharedData || {
           type,
-          id: url.split('/').pop(),
+          id: url.split(/[?#]/)[0].split('/').filter(Boolean).pop(),
           title,
           description,
           image: shareImageUrl || storyData?.mainImage || null,

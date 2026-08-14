@@ -83,20 +83,8 @@ service cloud.firestore {
       return request.auth.uid in muted;
     }
 
-    // Community group chat is Paid Business only. Membership/join stays allowed on Free.
-    function communityOwnerHasPaidPlan(partnerId) {
-      let partner = communityOwnerDoc(partnerId).data;
-      let tier = partner.get('subscriptionTier', 'free');
-      return tier == 'paid' ||
-             tier == 'elite' ||
-             tier == 'professional' ||
-             tier == 'pro' ||
-             tier == 'business';
-    }
-
     function canWriteCommunityChat(partnerId) {
-      return communityOwnerHasPaidPlan(partnerId) &&
-             (isCommunityMember(partnerId) || isAdmin()) &&
+      return (isCommunityMember(partnerId) || isAdmin()) &&
              (request.auth.uid == partnerId || !isCommunityChatMuted(partnerId));
     }
 
@@ -108,11 +96,10 @@ service cloud.firestore {
 
     function canReadCommunityChat(partnerId) {
       return isAdmin() ||
-             (communityOwnerHasPaidPlan(partnerId) &&
-              (isCommunityChatDisplay(partnerId) ||
-               (isSignedIn() &&
-                exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                isCommunityMember(partnerId))));
+             isCommunityChatDisplay(partnerId) ||
+             (isSignedIn() &&
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              isCommunityMember(partnerId));
     }
 
     // Consumer Stage rooms (event chat; host picks mutual follows)
@@ -155,8 +142,25 @@ service cloud.firestore {
              (!(me in untilMap) || untilMap[me] > request.time);
     }
 
+    // Business-hosted Stages are Paid Business only; personal/consumer Stages stay free for everyone.
+    function stageHostTierIsPaid(stageHostId) {
+      let host = get(/databases/$(database)/documents/users/$(stageHostId)).data;
+      let tier = host.get('subscriptionTier', 'free');
+      return tier == 'paid' ||
+             tier == 'elite' ||
+             tier == 'professional' ||
+             tier == 'pro' ||
+             tier == 'business';
+    }
+
+    function stageHostHasPaidPlan(stage) {
+      return stage.get('hostKind', 'people') != 'business' ||
+             stageHostTierIsPaid(stage.get('hostId', ''));
+    }
+
     function canWriteStageChat(stageId) {
       return stageExists(stageId) &&
+             stageHostHasPaidPlan(stageDoc(stageId)) &&
              (isStageMember(stageId) || isAdmin()) &&
              (request.auth.uid == stageDoc(stageId).get('hostId', '') || !isStageChatMuted(stageId)) &&
              stageDoc(stageId).get('status', 'active') == 'active';
@@ -164,7 +168,8 @@ service cloud.firestore {
 
     function canReadStageChat(stageId) {
       return isAdmin() ||
-             (isSignedIn() &&
+             (stageHostHasPaidPlan(stageDoc(stageId)) &&
+              isSignedIn() &&
               exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
               isStageMember(stageId));
     }
@@ -181,6 +186,14 @@ service cloud.firestore {
       let joined = inv.get('joined', []);
       let isJoined = request.auth.uid in joined;
       return isHost || isJoined;
+    }
+
+    // Archived invitations: the messages subcollection survives after the live
+    // doc is deleted, so read access is re-authorized via the viewer's own
+    // per-user archive record (written for host + every guest at archive time)
+    // instead of the now-missing parent doc's participant lists.
+    function isArchivedInvitationParticipant(invitationId) {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)/invitation_archives/$(invitationId));
     }
     
     // Invitation chat: only host or accepted invitees (private invitations).
@@ -205,6 +218,27 @@ service cloud.firestore {
              isPrivateInvitationHost(data) ||
              isUidInPrivateInviteList(data.get('invitedFriends', [])) ||
              hasPrivateInvitationRsvp(data);
+    }
+
+    // Public `invitations` collection: followers-only doc-level (get) gate.
+    function invitationAuthorId(data) {
+      return data.get('author', {}).get('id', data.get('authorId', ''));
+    }
+
+    // No reverse "followers" array exists — only users/{uid}.following. Check the
+    // VIEWER's own following array (one get() on their own doc), mirroring how the
+    // client feed filter already reasons (Home.jsx / useInvitationSwipeDeck.js:
+    // following.includes(author.id)).
+    function isFollowingInvitationAuthor(data) {
+      let authorId = invitationAuthorId(data);
+      return isSignedIn() && authorId != '' &&
+             authorId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('following', []);
+    }
+
+    function canReadInvitationDoc(data) {
+      return data.get('privacy', 'public') != 'followers' ||
+             isPrivateInvitationHost(data) ||
+             isFollowingInvitationAuthor(data);
     }
 
     // List queries: only host + invitedFriends branches (must match client where() filters).
@@ -517,8 +551,19 @@ service cloud.firestore {
     // ============================================
     
     match /invitations/{invitationId} {
-      allow read: if true; // Allow public read
-      
+      // List/feed queries stay open — InvitationContext.jsx's main onSnapshot has no
+      // where() on privacy/author, and a privacy-gated list rule would reject the
+      // ENTIRE feed query for everyone (see social_invitations above for the same
+      // constraint). Followers-only invitations are already hidden from feed UI
+      // client-side. Closing raw list enumeration needs a feed query rewrite
+      // (bounded by Firestore's ~30-item `in` cap against `following` arrays) —
+      // a materially bigger change, intentionally out of scope here.
+      allow list: if true;
+
+      // Direct get() by ID: closes the actual leak — a shared link to a
+      // followers-only invitation was previously readable by anyone.
+      allow get: if canReadInvitationDoc(resource.data);
+
       allow create: if isSignedIn() && 
                        request.resource.data.author.id == request.auth.uid;
       
@@ -562,7 +607,9 @@ service cloud.firestore {
       
       // MESSAGES SUBCOLLECTION (Community Chat) — only host or joined participants
       match /messages/{messageId} {
-        allow read: if isSignedIn() && isPublicInvitationChatParticipant(invitationId);
+        allow read: if isSignedIn() &&
+                       (isPublicInvitationChatParticipant(invitationId) ||
+                        isArchivedInvitationParticipant(invitationId));
         allow create: if isSignedIn() &&
                          request.resource.data.senderId == request.auth.uid &&
                          isPublicInvitationChatParticipant(invitationId);
@@ -621,7 +668,9 @@ service cloud.firestore {
 
       // MESSAGES SUBCOLLECTION (Private Group Chat) — only host or accepted invitees
       match /messages/{messageId} {
-        allow read: if isSignedIn() && isPrivateInvitationChatParticipant(invitationId);
+        allow read: if isSignedIn() &&
+                       (isPrivateInvitationChatParticipant(invitationId) ||
+                        isArchivedInvitationParticipant(invitationId));
         allow create: if isSignedIn() &&
                          request.resource.data.senderId == request.auth.uid &&
                          canPostPrivateInvitationMessage(invitationId);
@@ -667,7 +716,9 @@ service cloud.firestore {
                        (isPrivateInvitationHost(resource.data) || isAdminOrPanelStaff());
 
       match /messages/{messageId} {
-        allow read: if isSignedIn() && isSocialInvitationChatParticipant(invitationId);
+        allow read: if isSignedIn() &&
+                       (isSocialInvitationChatParticipant(invitationId) ||
+                        isArchivedInvitationParticipant(invitationId));
         allow create: if isSignedIn() &&
                          request.resource.data.senderId == request.auth.uid &&
                          canPostSocialInvitationMessage(invitationId);
