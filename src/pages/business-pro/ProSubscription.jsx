@@ -23,7 +23,10 @@ import {
 import { useToast } from '../../context/ToastContext';
 import StripeTestModeBanner from '../../components/StripeTestModeBanner';
 import { isAppleStoreCommerce } from '../../utils/commercePlatform';
-import { purchaseBusinessSubscriptionViaAppleStore } from '../../utils/appStoreBillingClient';
+import {
+  purchaseBusinessSubscriptionViaAppleStore,
+  restoreBusinessSubscriptionViaAppleStore,
+} from '../../utils/appStoreBillingClient';
 import { AppText } from "../../components/base";
 
 const IS_APPLE_STORE = isAppleStoreCommerce();
@@ -36,6 +39,7 @@ const ProSubscription = () => {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(null);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState(() => {
     if (STRIPE_PUBLISHABLE_CONFIGURED) return 'stripe';
     if (PAYPAL_CLIENT_CONFIGURED) return 'paypal';
@@ -99,6 +103,27 @@ const ProSubscription = () => {
       );
     } finally {
       setLoading(null);
+    }
+  };
+
+  const handleAppleRestore = async () => {
+    setRestoring(true);
+    try {
+      const result = await restoreBusinessSubscriptionViaAppleStore();
+      if (result.restored) {
+        showToast(t('biz_plan_restore_success', 'Subscription restored.'), 'success');
+        window.location.reload();
+      } else {
+        showToast(t('biz_plan_restore_none_found', 'No active subscription found for this Apple ID.'), 'info');
+      }
+    } catch (e) {
+      console.error('Apple restore error:', e);
+      showToast(
+        t('biz_plan_restore_error', 'Could not restore purchases: ') + (e.message || String(e)),
+        'error'
+      );
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -382,6 +407,30 @@ const ProSubscription = () => {
           tierKey: 'paid'
         })}
             </div>
+
+            {IS_APPLE_STORE ? (
+              <div style={{ textAlign: 'center', marginTop: 16 }}>
+                <button
+                  type="button"
+                  onClick={handleAppleRestore}
+                  disabled={restoring}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    color: 'var(--text-secondary)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    font: 'inherit',
+                    opacity: restoring ? 0.6 : 1,
+                  }}>
+                  {restoring
+                    ? t('biz_plan_restore_working', 'Restoring…')
+                    : t('biz_plan_restore_cta', 'Restore purchases')}
+                </button>
+              </div>
+            ) : null}
 
             <AppText as="p" style={{ marginTop: 24, fontSize: '0.9rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
                 {t('biz_plan_credits_lead', 'Need AI?')}{' '}

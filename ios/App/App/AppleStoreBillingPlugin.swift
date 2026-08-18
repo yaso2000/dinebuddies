@@ -15,7 +15,8 @@ public class AppleStoreBillingPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "AppleStoreBillingPlugin"
     public let jsName = "AppleStoreBilling"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "launchBillingFlow", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "launchBillingFlow", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "restorePurchases", returnType: CAPPluginReturnPromise)
     ]
 
     @objc func launchBillingFlow(_ call: CAPPluginCall) {
@@ -31,6 +32,44 @@ public class AppleStoreBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         } else {
             call.reject("UNSUPPORTED_IOS_VERSION", "StoreKit 2 requires iOS 15 or later")
         }
+    }
+
+    /**
+     * Restore-purchases entry point for renewable subscriptions (the Business plan).
+     * Consumables (Dine Credits) intentionally do not appear in `currentEntitlements` —
+     * StoreKit only tracks ongoing entitlement for non-consumables/subscriptions, which is
+     * exactly the "restore" semantics Apple review expects (Guideline 3.1.2).
+     */
+    @objc func restorePurchases(_ call: CAPPluginCall) {
+        if #available(iOS 15.0, *) {
+            Task {
+                await self.restore(call: call)
+            }
+        } else {
+            call.reject("UNSUPPORTED_IOS_VERSION", "StoreKit 2 requires iOS 15 or later")
+        }
+    }
+
+    @available(iOS 15.0, *)
+    private func restore(call: CAPPluginCall) async {
+        // Ask StoreKit to refresh from the App Store first, in case the local cache is
+        // stale (e.g. the subscription was purchased on a different device).
+        try? await AppStore.sync()
+
+        for await result in Transaction.currentEntitlements {
+            guard case .verified(let transaction) = result else { continue }
+            guard transaction.productType == .autoRenewable else { continue }
+
+            let payload: [String: Any] = [
+                "signedTransactionInfo": result.jwsRepresentation,
+                "transactionId": String(transaction.id),
+                "productId": transaction.productID
+            ]
+            call.resolve(payload)
+            return
+        }
+
+        call.reject("NO_ACTIVE_SUBSCRIPTION", "No active subscription found to restore")
     }
 
     @available(iOS 15.0, *)

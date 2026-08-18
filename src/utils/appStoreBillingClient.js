@@ -85,3 +85,38 @@ export async function purchaseBusinessSubscriptionViaAppleStore() {
   const { data } = await verifyFn({ signedTransactionInfo });
   return { paidUntil: data?.paidUntil || null };
 }
+
+/**
+ * Apple review (Guideline 3.1.2) requires a restore-purchases affordance for
+ * renewable subscriptions — re-syncs StoreKit's local entitlement state and,
+ * if an active Business subscription is found, re-verifies it server-side.
+ * @returns {Promise<{ paidUntil: string | null, restored: boolean }>}
+ */
+export async function restoreBusinessSubscriptionViaAppleStore() {
+  const plugin = getBillingPlugin();
+
+  if (!plugin?.restorePurchases) {
+    const err = new Error('APPLE_STORE_BILLING_UNAVAILABLE');
+    err.code = 'APPLE_STORE_BILLING_UNAVAILABLE';
+    throw err;
+  }
+
+  let restoreResult;
+  try {
+    restoreResult = await plugin.restorePurchases();
+  } catch (e) {
+    if (e?.code === 'NO_ACTIVE_SUBSCRIPTION') {
+      return { paidUntil: null, restored: false };
+    }
+    throw e;
+  }
+
+  const signedTransactionInfo = restoreResult?.signedTransactionInfo;
+  if (!signedTransactionInfo) {
+    return { paidUntil: null, restored: false };
+  }
+
+  const verifyFn = httpsCallable(getFunctions(app, FUNCTIONS_REGION), 'verifyAppleBusinessSubscription');
+  const { data } = await verifyFn({ signedTransactionInfo });
+  return { paidUntil: data?.paidUntil || null, restored: true };
+}
