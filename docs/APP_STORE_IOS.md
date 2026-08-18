@@ -9,13 +9,14 @@ requires Apple's own IAP for anything unlocked inside the app.
 
 | Step | Status |
 |------|--------|
-| Capacitor iOS platform (`ios/`) | Done (was untracked in git — see step 0 below) |
-| Codemagic CI → TestFlight (`codemagic.yaml`) | Done (was untracked in git — see step 0 below) |
+| Capacitor iOS platform (`ios/`) | Done — committed and pushed |
+| Codemagic CI → TestFlight (`codemagic.yaml`) | Done — committed and pushed, not yet triggered |
 | Apple IAP native plugin (`AppleStoreBillingPlugin`) | Done |
-| App Store Connect app + IAP products | You |
-| App Store Server API key | You |
-| Apple Root CA certificates on disk | You |
-| Cloud Functions env vars | You |
+| App Store Connect app (`com.dinebuddies.app`, Apple ID 6802827926) | Done |
+| 4 credit IAP products + 1 business subscription | Done |
+| App Store Server API key (Key ID `C2346QQ4K2`) | Done |
+| Apple Root CA certificates (`functions/apple-certs/`) | Done |
+| Cloud Functions env vars | Done — deployed |
 | Signed build → TestFlight | You (via Codemagic) |
 | Sandbox purchase test | You |
 
@@ -64,8 +65,9 @@ Apple's root certificates on disk to validate the signature chain of every purch
 
 1. Download from <https://www.apple.com/certificateauthority/> (the current **G3** root, plus
    the older Apple Inc. Root cert for compatibility): `AppleRootCA-G3.cer`, `AppleIncRootCertificate.cer`.
-2. Place them in `functions/apple-certs/` (create the folder; it's a good idea to add
-   `functions/apple-certs/` to version control since these are public certificates, not secrets).
+2. Place them in `functions/apple-certs/`. `functions/appStoreEnv.js`'s `resolveAppleRootCertPaths()`
+   reads every `.cer` file in that folder automatically (no path env var needed) — these are
+   public certificates, not secrets, so `functions/apple-certs/` is committed to version control.
 
 ## 3. Cloud Functions env vars
 
@@ -76,7 +78,6 @@ APPLE_IAP_BUNDLE_ID=com.dinebuddies.app
 APPLE_IAP_KEY_ID=<Key ID from step 1.4>
 APPLE_IAP_ISSUER_ID=<Issuer ID from step 1.4>
 APPLE_IAP_PRIVATE_KEY_BASE64=<base64 of the .p8 file — run: base64 -w0 AuthKey_XXXX.p8>
-APPLE_IAP_ROOT_CERT_PATHS=/workspace/functions/apple-certs/AppleRootCA-G3.cer,/workspace/functions/apple-certs/AppleIncRootCertificate.cer
 APPLE_IAP_APP_APPLE_ID=<numeric App Store Connect app id, production only — omit for sandbox testing>
 APPLE_IAP_MODE=sandbox
 ```

@@ -1,7 +1,11 @@
 /**
  * Apple App Store Server API env/config status — mirrors functions/googlePlayEnv.js.
  */
+const fs = require('fs');
+const path = require('path');
 const { listAppleCreditProducts, resolveAppleBundleId, APPLE_BUSINESS_SUBSCRIPTION_PRODUCT_ID } = require('./appStoreCatalog');
+
+const APPLE_CERTS_DIR = path.join(__dirname, 'apple-certs');
 
 function hasAppleIapKey() {
     const keyId = String(process.env.APPLE_IAP_KEY_ID || '').trim();
@@ -21,11 +25,19 @@ function resolveAppleIapPrivateKey() {
     }
 }
 
-/** Local file paths (comma-separated in env) to Apple's Root CA .cer files, required by SignedDataVerifier. */
+/**
+ * Apple's Root CA .cer files, bundled with the function code at functions/apple-certs/
+ * (public certificates, not secrets — safe to commit). Required by SignedDataVerifier.
+ */
 function resolveAppleRootCertPaths() {
-    const raw = String(process.env.APPLE_IAP_ROOT_CERT_PATHS || '').trim();
-    if (!raw) return [];
-    return raw.split(',').map((p) => p.trim()).filter(Boolean);
+    try {
+        return fs
+            .readdirSync(APPLE_CERTS_DIR)
+            .filter((f) => f.toLowerCase().endsWith('.cer'))
+            .map((f) => path.join(APPLE_CERTS_DIR, f));
+    } catch {
+        return [];
+    }
 }
 
 function appleCommerceStatus() {
