@@ -1,0 +1,55 @@
+workflows:
+  ios-testflight:
+    name: DineBuddies iOS (TestFlight)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: dinebuddies_asc
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.dinebuddies.app
+      vars:
+        APP_STORE_APPLE_ID: 0000000000
+      node: 20
+      xcode: latest
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+      - name: Build web assets
+        script: npm run build
+      - name: Sync Capacitor iOS
+        script: npx cap sync ios
+      - name: Write GoogleService-Info.plist from secure env var
+        script: |
+          echo $GOOGLE_SERVICE_INFO_PLIST_BASE64 | base64 --decode > ios/App/App/GoogleService-Info.plist
+      - name: Add GoogleService-Info.plist to Xcode project
+        script: |
+          cd ios/App
+          gem install xcodeproj --no-document
+          ruby -e '
+            require "xcodeproj"
+            project = Xcodeproj::Project.open("App.xcodeproj")
+            target = project.targets.first
+            group = project.main_group.find_subpath("App", true)
+            already_added = group.files.any? { |f| f.path == "GoogleService-Info.plist" }
+            unless already_added
+              file_ref = group.new_reference("App/GoogleService-Info.plist")
+              target.add_resources([file_ref])
+            end
+            project.save
+          '
+      - name: Set up code signing
+        script: xcode-project use-profiles
+      - name: Build ipa
+        script: |
+          xcode-project build-ipa \
+            --workspace "ios/App/App.xcodeproj/project.xcworkspace" \
+            --scheme "App"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true

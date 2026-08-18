@@ -14,7 +14,6 @@ import {
   FaLock,
   FaHeart,
   FaInfoCircle,
-  FaPiggyBank,
   FaShieldAlt,
   FaCreditCard,
 } from 'react-icons/fa';
@@ -70,14 +69,22 @@ const PACKS = DINE_CREDIT_PACKS.map((p) => ({
 export default function CreditsWallet() {
   const { t } = useTranslation();
   const { userProfile } = useAuth();
-  const { buyPack, loadingId, isGooglePlay } = useCreditsPurchase();
+  const { buyPack, loadingId, isGooglePlay, isAppleStore } = useCreditsPurchase();
   const { showToast } = useToast();
   const [restoringPayPal, setRestoringPayPal] = useState(false);
 
-  const showStripeOnWeb = !isGooglePlay && STRIPE_PUBLISHABLE_CONFIGURED;
-  const showPayPalOnWeb = !isGooglePlay && PAYPAL_CLIENT_CONFIGURED;
+  const showStripeOnWeb = !isGooglePlay && !isAppleStore && STRIPE_PUBLISHABLE_CONFIGURED;
+  const showPayPalOnWeb = !isGooglePlay && !isAppleStore && PAYPAL_CLIENT_CONFIGURED;
 
-  const defaultPayMethod = isGooglePlay ? 'play' : showStripeOnWeb ? 'card' : showPayPalOnWeb ? 'paypal' : 'card';
+  const defaultPayMethod = isGooglePlay
+    ? 'play'
+    : isAppleStore
+    ? 'apple'
+    : showStripeOnWeb
+    ? 'card'
+    : showPayPalOnWeb
+    ? 'paypal'
+    : 'card';
   const [selectedPackId, setSelectedPackId] = useState(
     () => PACKS.find((p) => p.highlight)?.id || PACKS[0]?.id || ''
   );
@@ -194,12 +201,17 @@ export default function CreditsWallet() {
         })}
       </div>
 
-      {(showStripeOnWeb || showPayPalOnWeb || isGooglePlay) && selectedPack ? (
+      {(showStripeOnWeb || showPayPalOnWeb || isGooglePlay || isAppleStore) && selectedPack ? (
         <div className="credits-wallet__checkout-bar">
           <div className="credits-wallet__pay-methods" role="group" aria-label={t('payment_method', 'Payment method')}>
             {isGooglePlay ? (
               <AppText as="span" className="credits-wallet__pay-chip is-active">
                 Google Play
+              </AppText>
+            ) : null}
+            {isAppleStore ? (
+              <AppText as="span" className="credits-wallet__pay-chip is-active">
+                Apple
               </AppText>
             ) : null}
             {showStripeOnWeb ? (
@@ -321,7 +333,7 @@ export default function CreditsWallet() {
           <section className="settings-card credits-wallet__balance credits-wallet__balance--savings">
             <div className="credits-wallet__balance-top">
               <div className="credits-wallet__hero-ring credits-wallet__hero-ring--savings" aria-hidden>
-                <FaPiggyBank className="credits-wallet__hero-wallet" />
+                <img src="/gift-shields/Cherry.png" alt="" className="credits-wallet__hero-wallet credits-wallet__hero-wallet--cherry" />
               </div>
               <div className="credits-wallet__hero-copy">
                 <AppText as="h2" className="credits-wallet__balance-heading">
@@ -332,13 +344,13 @@ export default function CreditsWallet() {
                     {savedBalance}
                   </AppText>
                   <AppText as="span" className="credits-wallet__total-suffix">
-                    {t('credits_unit', 'credits')}
+                    {t('cherries_unit', 'cherries')}
                   </AppText>
                 </div>
                 <AppText as="p" className="credits-wallet__wallet-desc">
                   {t(
                     'savings_wallet_desc',
-                    'Gifts you receive are saved here at {{percent}}% of the amount sent. Spendable on invites, AI, and gifts after purchase credits.',
+                    'Gifts you receive are saved here as Cherries, at {{percent}}% of the amount sent. Spendable on invites, AI, and gifts after purchase credits.',
                     { percent: giftPercent }
                   )}
                 </AppText>

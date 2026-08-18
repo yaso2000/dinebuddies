@@ -22,7 +22,11 @@ import {
 '../../utils/businessSubscription';
 import { useToast } from '../../context/ToastContext';
 import StripeTestModeBanner from '../../components/StripeTestModeBanner';
+import { isAppleStoreCommerce } from '../../utils/commercePlatform';
+import { purchaseBusinessSubscriptionViaAppleStore } from '../../utils/appStoreBillingClient';
 import { AppText } from "../../components/base";
+
+const IS_APPLE_STORE = isAppleStoreCommerce();
 
 const ProSubscription = () => {
   const { t } = useTranslation();
@@ -73,6 +77,22 @@ const ProSubscription = () => {
       if (result.data?.url) window.location.href = result.data.url;
     } catch (e) {
       console.error('Checkout error:', e);
+      showToast(
+        t('biz_plan_checkout_error', 'Could not start checkout: ') + (e.message || String(e)),
+        'error'
+      );
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleAppleUpgrade = async () => {
+    setLoading('paid');
+    try {
+      await purchaseBusinessSubscriptionViaAppleStore();
+      window.location.reload();
+    } catch (e) {
+      console.error('Apple subscription error:', e);
       showToast(
         t('biz_plan_checkout_error', 'Could not start checkout: ') + (e.message || String(e)),
         'error'
@@ -168,6 +188,22 @@ const ProSubscription = () => {
                     </button> :
         showUpgradeOnPaidCard ?
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {IS_APPLE_STORE ? (
+            <button
+              type="button"
+              onClick={handleAppleUpgrade}
+              disabled={loading === 'paid'}
+              className="ui-btn ui-btn--primary"
+              style={{
+                padding: '12px',
+                fontSize: '0.875rem',
+                fontWeight: 800,
+                opacity: loading === 'paid' ? 0.65 : 1,
+              }}>
+              {loading === 'paid' ? t('loading', 'Loading...') : `${t('biz_plan_upgrade_cta', 'Upgrade to Paid')} →`}
+            </button>
+          ) : (
+          <>
           {upgradePaymentMethods.length > 1 ?
           <div
             style={{
@@ -246,6 +282,8 @@ const ProSubscription = () => {
             {t('biz_plan_paypal_monthly_note', 'PayPal pays for one month. Renew manually each month or use Card for auto-billing.')}
           </AppText> :
           null}
+          </>
+          )}
         </div> :
 
         <button

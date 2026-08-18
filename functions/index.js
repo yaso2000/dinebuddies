@@ -136,6 +136,13 @@ function isPrivateInvitationDocForBilling(inv) {
     return isPrivateInviteDoc(inv);
 }
 
+/** UTC calendar-day key, e.g. "2026-08-15". Server-computed only — never trust a client date. */
+function currentUtcDayKey() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+const PRIVATE_INVITE_DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
 const USER_WEEKLY_PRIVATE_QUOTAS = {
     free: 0,
     pro: 2,
@@ -743,6 +750,10 @@ exports.createPortalSession = stripeModule.createPortalSession;
 exports.createCreditsCheckoutSession = stripeModule.createCreditsCheckoutSession;
 exports.createBusinessSubscriptionCheckout = stripeModule.createBusinessSubscriptionCheckout;
 exports.getStripeCommerceStatus = stripeModule.getStripeCommerceStatus;
+exports.createSetupIntent = stripeModule.createSetupIntent;
+exports.listPaymentMethods = stripeModule.listPaymentMethods;
+exports.setDefaultPaymentMethod = stripeModule.setDefaultPaymentMethod;
+exports.deletePaymentMethod = stripeModule.deletePaymentMethod;
 exports.createPayPalCreditsOrder = paypalModule.createPayPalCreditsOrder;
 exports.capturePayPalCreditsOrder = paypalModule.capturePayPalCreditsOrder;
 exports.reconcilePayPalCreditsOrder = paypalModule.reconcilePayPalCreditsOrder;
@@ -753,6 +764,11 @@ exports.getPayPalCommerceStatus = paypalModule.getPayPalCommerceStatus;
 const googlePlayModule = require('./googlePlayBilling');
 exports.verifyGooglePlayCreditsPurchase = googlePlayModule.verifyGooglePlayCreditsPurchase;
 exports.getGooglePlayCommerceStatus = googlePlayModule.getGooglePlayCommerceStatus;
+
+const appStoreModule = require('./appStoreBilling');
+exports.verifyAppleCreditsPurchase = appStoreModule.verifyAppleCreditsPurchase;
+exports.verifyAppleBusinessSubscription = appStoreModule.verifyAppleBusinessSubscription;
+exports.getAppleCommerceStatus = appStoreModule.getAppleCommerceStatus;
 
 // ─── Webhook Handler ────────────────────────────────────
 exports.stripeWebhook = webhookModule.stripeWebhook;
@@ -1209,8 +1225,21 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
             cooldownMs: 1500, // P0: faster re-share without 429 (was 3000)
         });
 
+        const isPrivateBillPre = isPrivateInvitationDocForBilling(invPre);
+        const declineRecipientId = isPrivateBillPre && filteredFriends.length === 1 ? filteredFriends[0] : null;
+        const declineDocRef = declineRecipientId
+            ? db.collection('private_invite_declines').doc(`${uid}_${declineRecipientId}`)
+            : null;
+        const dayKey = currentUtcDayKey();
+        const dailyUsageRef = db.collection('invitation_daily_usage').doc(`${uid}_${dayKey}`);
+
         const result = await db.runTransaction(async (tx) => {
-            const [invSnap, userSnap] = await Promise.all([tx.get(invitationRef), tx.get(userRef)]);
+            const [invSnap, userSnap, declineSnap, dailyUsageSnap] = await Promise.all([
+                tx.get(invitationRef),
+                tx.get(userRef),
+                declineDocRef ? tx.get(declineDocRef) : Promise.resolve(null),
+                tx.get(dailyUsageRef),
+            ]);
             if (!invSnap.exists) {
                 throw new functions.https.HttpsError('not-found', 'Private invitation draft not found.');
             }
@@ -1230,6 +1259,23 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
                 return { alreadyPublished: true, chargedSource: null, shareToken: inv.shareToken || null };
             }
 
+            // Decline cooldown: recipient who declined this sender can be blocked for 7 days,
+            // unless they manually unlocked it. Applies even to admin senders (safety, not billing).
+            if (declineSnap && declineSnap.exists) {
+                const decline = declineSnap.data() || {};
+                if (!decline.unlockedAt && decline.declinedAt) {
+                    const declinedAtMs = decline.declinedAt.toMillis
+                        ? decline.declinedAt.toMillis()
+                        : Number(decline.declinedAt) || 0;
+                    if (Date.now() - declinedAtMs < PRIVATE_INVITE_DECLINE_COOLDOWN_MS) {
+                        throw new functions.https.HttpsError(
+                            'failed-precondition',
+                            'This person previously declined your invitation and has not re-opened invites from you yet.'
+                        );
+                    }
+                }
+            }
+
             const currentRsvps = inv.rsvps && typeof inv.rsvps === 'object' ? inv.rsvps : {};
             const nextRsvps = {};
             filteredFriends.forEach((fid) => {
@@ -1242,9 +1288,20 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
 
             const isBypassUser = user.role === 'admin';
             let chargedSource = null;
+            const isPrivateBill = isPrivateInvitationDocForBilling(inv);
+            const dailyUsage = dailyUsageSnap.exists ? dailyUsageSnap.data() || {} : {};
+            const dailyUsageField = isPrivateBill ? 'privateUsed' : 'socialUsed';
+            const freeToday = !dailyUsage[dailyUsageField];
 
-            if (!isBypassUser) {
-                const isPrivateBill = isPrivateInvitationDocForBilling(inv);
+            if (!isBypassUser && freeToday) {
+                chargedSource = 'daily_free';
+                tx.set(dailyUsageRef, {
+                    uid,
+                    dayKey,
+                    [dailyUsageField]: true,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
+            } else if (!isBypassUser) {
                 const cost = isPrivateBill
                     ? CREDIT_COSTS.PRIVATE_INVITATION
                     : CREDIT_COSTS.SOCIAL_INVITATION;
@@ -2988,96 +3045,6 @@ exports.resetWeeklyPrivateCredits = functions.pubsub
         return null;
     });
 
-// ─── Scheduled: Delete expired invitations (completed 24+ hours ago) ─
-// Deletes Firestore doc + messages subcollection + all associated Storage files (cost-efficient: by path, no list)
-// Runs every hour
-exports.deleteExpiredInvitations = functions.pubsub
-    .schedule('every 1 hours')
-    .timeZone('UTC')
-    .onRun(async () => {
-        const db = admin.firestore();
-        const bucket = admin.storage().bucket();
-
-        const now = admin.firestore.Timestamp.now();
-        const twentyFourHoursAgo = new Date(now.toMillis() - 24 * 60 * 60 * 1000);
-        const cutoff = admin.firestore.Timestamp.fromDate(twentyFourHoursAgo);
-
-        function extractStoragePath(url) {
-            if (!url || typeof url !== 'string' || !url.includes('firebasestorage') || !url.includes('/o/')) return null;
-            try {
-                const part = url.split('/o/')[1];
-                if (!part) return null;
-                return decodeURIComponent(part.split('?')[0]);
-            } catch (e) {
-                return null;
-            }
-        }
-
-        function getInvitationMediaUrls(data) {
-            if (!data) return [];
-            const urls = [];
-            ['customImage', 'customVideo', 'videoThumbnail', 'image', 'restaurantImage'].forEach(f => {
-                if (data[f] && typeof data[f] === 'string' && data[f].includes('firebasestorage')) urls.push(data[f]);
-            });
-            return urls;
-        }
-
-        function getMessageMediaUrls(data) {
-            if (!data) return [];
-            const urls = [];
-            ['imageUrl', 'audioUrl', 'fileUrl'].forEach(f => {
-                if (data[f] && typeof data[f] === 'string' && data[f].includes('firebasestorage')) urls.push(data[f]);
-            });
-            if (data.attachment && data.attachment.url && typeof data.attachment.url === 'string' && data.attachment.url.includes('firebasestorage')) {
-                urls.push(data.attachment.url);
-            }
-            return urls;
-        }
-
-        try {
-            const expiredSnap = await db.collection('invitations')
-                .where('meetingStatus', '==', 'completed')
-                .where('completedAt', '<=', cutoff)
-                .get();
-
-            if (expiredSnap.empty) {
-                console.log('deleteExpiredInvitations: no expired invitations.');
-                return null;
-            }
-
-            console.log(`deleteExpiredInvitations: found ${expiredSnap.size} expired invitation(s).`);
-
-            for (const invDoc of expiredSnap.docs) {
-                const invId = invDoc.id;
-                const invData = invDoc.data();
-                const messagesSnap = await db.collection('invitations').doc(invId).collection('messages').get();
-
-                const urls = [...getInvitationMediaUrls(invData)];
-                messagesSnap.docs.forEach(d => urls.push(...getMessageMediaUrls(d.data())));
-
-                const paths = [...new Set(urls)].map(extractStoragePath).filter(Boolean);
-                for (const path of paths) {
-                    try {
-                        await bucket.file(path).delete();
-                    } catch (err) {
-                        if (err.code !== 404) console.warn('Storage delete failed:', path, err.message);
-                    }
-                }
-
-                const batch = db.batch();
-                messagesSnap.docs.forEach(d => batch.delete(d.ref));
-                batch.delete(invDoc.ref);
-                await batch.commit();
-            }
-
-            console.log(`deleteExpiredInvitations: deleted ${expiredSnap.size} invitation(s) and their Storage files.`);
-        } catch (error) {
-            console.error('deleteExpiredInvitations error:', error);
-        }
-
-        return null;
-    });
-
 exports.archiveExpiredSocialInvitations = functions.pubsub
     .schedule('every 30 minutes')
     .timeZone('UTC')
@@ -3102,17 +3069,6 @@ exports.archiveExpiredPublicInvitations = functions.pubsub
         } catch (error) {
             console.error('archiveExpiredPublicInvitations error:', error);
         }
-        return null;
-    });
-
-// ─── Scheduled: Archive + delete expired invitation chats (1 day post-endDate) ───
-// Runs daily at 03:00 UTC. Invitations whose endDate/date is > 1 day ago
-// get archived (stats only) then their Firestore doc + Storage files are removed.
-exports.archiveAndDeleteExpiredInvitationChats = functions.pubsub
-    .schedule('0 3 * * *')
-    .timeZone('UTC')
-    .onRun(async () => {
-        console.log('archiveAndDeleteExpiredInvitationChats: disabled — use invitationArchiveCore schedulers.');
         return null;
     });
 
@@ -3448,12 +3404,24 @@ exports.deleteExpiredStories = functions.pubsub.schedule('every 1 hours').onRun(
             const batch = db.batch();
             for (const doc of chunk) {
                 const data = doc.data();
-                if (data.url && data.url.includes('firebasestorage')) {
-                    const path = extractStoragePath(data.url);
-                    if (path) {
-                        try { await bucket.file(path).delete(); }
-                        catch (err) { if (err.code !== 404) console.warn('Storage delete failed:', path, err.message); }
+                for (const mediaUrl of [data.url, data.posterUrl]) {
+                    if (mediaUrl && mediaUrl.includes('firebasestorage')) {
+                        const path = extractStoragePath(mediaUrl);
+                        if (path) {
+                            try { await bucket.file(path).delete(); }
+                            catch (err) { if (err.code !== 404) console.warn('Storage delete failed:', path, err.message); }
+                        }
                     }
+                }
+                // Firestore does not cascade-delete subcollections — reactions must be
+                // removed explicitly or they'd be orphaned forever once the parent is gone.
+                const reactionsSnap = await doc.ref.collection('reactions').get();
+                for (let i = 0; i < reactionsSnap.docs.length; i += 400) {
+                    const reactionsBatch = db.batch();
+                    for (const reactionDoc of reactionsSnap.docs.slice(i, i + 400)) {
+                        reactionsBatch.delete(reactionDoc.ref);
+                    }
+                    await reactionsBatch.commit();
                 }
                 batch.delete(doc.ref);
             }
