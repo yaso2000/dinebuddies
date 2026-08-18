@@ -10,7 +10,7 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.dinebuddies.app
       vars:
-        APP_STORE_APPLE_ID: 0000000000
+        APP_STORE_APPLE_ID: 6802827926
       node: 20
       xcode: latest
     scripts:
