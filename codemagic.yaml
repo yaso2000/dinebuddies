@@ -3,8 +3,6 @@ workflows:
     name: DineBuddies iOS (TestFlight)
     max_build_duration: 60
     instance_type: mac_mini_m2
-    integrations:
-      app_store_connect: dinebuddies_asc
     environment:
       groups:
         - ios_secrets
@@ -45,6 +43,9 @@ workflows:
         script: |
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
             --create
       - name: Set up code signing
         script: xcode-project use-profiles
@@ -58,5 +59,7 @@ workflows:
       - /tmp/xcodebuild_logs/*.log
     publishing:
       app_store_connect:
-        auth: integration
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
