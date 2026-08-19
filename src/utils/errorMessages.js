@@ -123,11 +123,18 @@ export function getAuthErrorMessage(error) {
         );
     }
     if (!error?.code) {
-        const detail = String(error?.message || '').trim();
+        const detail = String(error?.message || error?.name || '').trim();
         if (detail && detail.length < 160) {
             return detail;
         }
-        return tAuth('auth_error_fallback', 'Something went wrong. Please try again.');
+        const fallback = tAuth('auth_error_fallback', 'Something went wrong. Please try again.');
+        if (detail) return `${fallback} (${detail.slice(0, 140)})`;
+        try {
+            const raw = JSON.stringify(error, Object.getOwnPropertyNames(error || {})).slice(0, 140);
+            return raw && raw !== '{}' ? `${fallback} [${raw}]` : fallback;
+        } catch {
+            return fallback;
+        }
     }
     const i18nKey = CODE_TO_I18N_KEY[error.code];
     if (i18nKey === '') return '';
