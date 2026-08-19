@@ -76,5 +76,32 @@
 	<string>DineBuddies needs access to your photo library to let you choose photos and videos to share.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>DineBuddies saves photos and videos to your photo library when you download shared content.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.686703042572-0kum3bnnluvleotgu1l7u9uu3l2ohd7e</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fb1718617005774108</string>
+			</array>
+		</dict>
+	</array>
+	<key>FacebookAppID</key>
+	<string>1718617005774108</string>
+	<key>FacebookClientToken</key>
+	<string>afd4d90a55519ec63a8f4575c2a2cdf4</string>
+	<key>FacebookDisplayName</key>
+	<string>DineBuddies</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>fbapi</string>
+		<string>fbauthapi</string>
+		<string>fb-messenger-share-api</string>
+	</array>
 </dict>
 </plist>

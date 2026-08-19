@@ -6,12 +6,12 @@ import {
   reauthenticateWithCredential,
   signInWithCredential,
 } from 'firebase/auth';
-import { isNativeAndroid } from './runtime';
+import { isNativeAndroid, isNativeIos } from './runtime';
 
 const AppSigningInfo = registerPlugin('AppSigningInfo');
 
 export function isNativeGoogleSignInAvailable() {
-  return isNativeAndroid();
+  return isNativeAndroid() || isNativeIos();
 }
 
 function isNoCredentialsError(err) {

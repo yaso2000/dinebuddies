@@ -4,10 +4,10 @@ import {
   reauthenticateWithCredential,
   signInWithCredential,
 } from 'firebase/auth';
-import { isNativeAndroid } from './runtime';
+import { isNativeAndroid, isNativeIos } from './runtime';
 
 export function isNativeFacebookSignInAvailable() {
-  return isNativeAndroid();
+  return isNativeAndroid() || isNativeIos();
 }
 
 async function obtainNativeFacebookAccessToken() {

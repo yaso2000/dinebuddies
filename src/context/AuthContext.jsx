@@ -78,6 +78,10 @@ import {
     reauthenticateWithNativeFacebook,
     signInWithNativeFacebookCredential,
 } from '../platform/nativeFacebookAuth';
+import {
+    isNativeAppleSignInAvailable,
+    signInWithNativeAppleCredential,
+} from '../platform/nativeAppleAuth';
 import { adminSecurityService } from '../services/adminSecurityService';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
@@ -1070,12 +1074,17 @@ export const AuthProvider = ({ children }) => {
             }
             return null;
         }
-        const provider = new OAuthProvider('apple.com');
-        provider.addScope('email');
-        provider.addScope('name');
-        const oauth = await firebaseOAuthPopupOrRedirect(provider);
-        if (oauth?.__oauthRedirect) return { __oauthRedirect: true };
-        const result = oauth?.result;
+        let result;
+        if (isNativeAppleSignInAvailable()) {
+            result = await signInWithNativeAppleCredential(auth);
+        } else {
+            const provider = new OAuthProvider('apple.com');
+            provider.addScope('email');
+            provider.addScope('name');
+            const oauth = await firebaseOAuthPopupOrRedirect(provider);
+            if (oauth?.__oauthRedirect) return { __oauthRedirect: true };
+            result = oauth?.result;
+        }
         if (!result?.user?.uid) {
             const err = new Error('Apple sign-in did not return a user');
             err.code = 'auth/no-user';

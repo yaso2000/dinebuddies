@@ -19,6 +19,9 @@ requires Apple's own IAP for anything unlocked inside the app.
 | Cloud Functions env vars | Done — deployed |
 | Signed build → TestFlight | You (via Codemagic) |
 | Sandbox purchase test | You |
+| Native iOS sign-in (Google/Facebook/Apple) code | Done |
+| Enable "Sign In with Apple" capability on `com.dinebuddies.app` | You (Apple Developer Portal) |
+| Add iOS platform to Facebook app in Meta Developer Console | You |
 
 ## What is already in the repo
 
@@ -120,7 +123,34 @@ Do **not** offer Stripe/PayPal checkout inside the native iOS app for Dine Credi
 Business subscription — use Apple In-App Purchase only. Web (`dinebuddies.com`) keeps
 Stripe + PayPal. Android keeps Google Play Billing (see `docs/GOOGLE_PLAY_ANDROID.md`).
 
-## 7. Known gaps / follow-ups (not built in this pass)
+## 7. Native iOS sign-in (Google / Facebook / Apple)
+
+The web `signInWithRedirect` OAuth flow does not work inside the native iOS WKWebView — it
+requires a full-page browser navigation that cannot round-trip back into the app. All three
+sign-in buttons now use the native `@capacitor-firebase/authentication` plugin on iOS instead
+(same plugin Android already used for Google/Facebook), gated by `isNativeIos()` in
+`src/platform/nativeGoogleAuth.js`, `nativeFacebookAuth.js`, and the new `nativeAppleAuth.js`.
+
+Two manual, one-time steps are required in Apple/Meta's own consoles before this works — the
+code alone is not enough:
+
+1. **Apple Developer Portal** → Certificates, Identifiers & Profiles → Identifiers →
+   `com.dinebuddies.app` → check **Sign In with Apple** → Save. The provisioning profile used
+   by Codemagic (the one manually registered earlier in Codemagic's code-signing vault) must
+   then be regenerated so it includes the new capability — go to Profiles, select the App Store
+   profile for this app, click Edit → Save (or Generate a fresh one) so it picks up the updated
+   capability list.
+2. **Meta Developer Console** (developers.facebook.com) → your app (App ID `1718617005774108`) →
+   Settings → Basic → scroll to Platforms → Add Platform → iOS → Bundle ID `com.dinebuddies.app`
+   → Save Changes. Mirrors the existing Android platform entry for the same app
+   (see `docs/GOOGLE_PLAY_ANDROID.md`).
+
+Until step 1 is done, native Apple sign-in will fail even though the app code and entitlement
+file (`ios/App/App/App.entitlements`) are correctly in place — Apple rejects the sign-in request
+server-side if the capability isn't enabled for the bundle ID. Google sign-in has no extra
+manual step (the reversed client ID URL scheme is already wired into `Info.plist`).
+
+## 8. Known gaps / follow-ups (not built in this pass)
 
 - **Android Business subscription still uses Stripe** (`docs/GOOGLE_PLAY_ANDROID.md` §6) — a
   pre-existing gap, not fixed by this iOS work. Recommended follow-up for full Play Store
