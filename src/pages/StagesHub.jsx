@@ -12,6 +12,7 @@ import {
 } from 'react-icons/fa';
 import AppBackButton from '../components/AppBackButton';
 import UserAvatar from '../components/UserAvatar';
+import PullToRefresh from '../components/PullToRefresh';
 import { AppText } from '../components/base';
 import { useAuth } from '../context/AuthContext';
 import { useLiveStagesDiscover } from '../hooks/useLiveStagesDiscover';
@@ -247,6 +248,7 @@ export default function StagesHub() {
     );
 
   return (
+    <PullToRefresh onRefresh={refresh}>
     <div className="stages-hub">
       <div className="stages-hub__glow" aria-hidden />
       <header className="stages-hub__header">
@@ -445,5 +447,6 @@ export default function StagesHub() {
         )}
       </main>
     </div>
+    </PullToRefresh>
   );
 }

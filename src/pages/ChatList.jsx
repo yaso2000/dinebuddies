@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,7 @@ import { useUserPresence } from '../hooks/usePresence';
 import CommunitiesChatPanel from '../components/Messages/CommunitiesChatPanel';
 import StagesChatPanel from '../components/Messages/StagesChatPanel';
 import NotificationsPanel from '../components/Messages/NotificationsPanel';
+import PullToRefresh from '../components/PullToRefresh';
 import { useJoinedCommunities } from '../hooks/useJoinedCommunities';
 import { useJoinedStages } from '../hooks/useJoinedStages';
 import AppBackButton from '../components/AppBackButton';
@@ -255,7 +256,13 @@ const ChatList = () => {
     );
   }
 
+  const handleRefresh = useCallback(async () => {
+    document.querySelector('.app-main')?.scrollTo({ top: 0, behavior: 'smooth' });
+    await new Promise((resolve) => window.setTimeout(resolve, 400));
+  }, []);
+
   const hubShell = (body) => (
+    <PullToRefresh onRefresh={handleRefresh}>
     <div className="chat-list-container messages-page">
       <div className="messages-page__top">
         <header className="messages-page__header">
@@ -365,6 +372,7 @@ const ChatList = () => {
         {body}
       </div>
     </div>
+    </PullToRefresh>
   );
 
   if (isLoading) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
@@ -11,6 +11,7 @@ import UserAvatar from '../components/UserAvatar';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { AppText } from "../components/base";
+import PullToRefresh from '../components/PullToRefresh';
 import './FollowersList.css';
 
 const FollowersList = () => {
@@ -37,11 +38,10 @@ const FollowersList = () => {
   const [activeTab, setActiveTab] = useState(!isOwnProfile ? 'mutual' : location.state?.activeTab || 'mutual');
 
 
-  useEffect(() => {
+  const fetchFollowData = useCallback(async () => {
     if (!viewedUserId) return;
 
-    const fetchFollowData = async () => {
-      setLoading(true);
+    setLoading(true);
       try {
         // If viewing another user, get their following list from Firestore
         let viewedFollowingIds = [];
@@ -124,18 +124,19 @@ const FollowersList = () => {
           mutualFollowersCount: getMutualFollowersCount(myFollowingIds, user.following || [])
         }));
 
-        setFollowers(followersProcessed);
-        setFollowing(followingProcessed);
-        setMutualFollowers(mutualProcessed);
-      } catch (error) {
-        console.error('Error fetching follow data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+      setFollowers(followersProcessed);
+      setFollowing(followingProcessed);
+      setMutualFollowers(mutualProcessed);
+    } catch (error) {
+      console.error('Error fetching follow data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [viewedUserId, currentUser, isOwnProfile]);
 
+  useEffect(() => {
     fetchFollowData();
-  }, [viewedUserId, currentUser]);
+  }, [fetchFollowData]);
 
   // Filter users based on active tab
   const filteredUsers = useMemo(() => {
@@ -184,6 +185,7 @@ const FollowersList = () => {
   const canChatWithUser = (user) => chatAllowedMap[user.id] === true;
 
   return (
+    <PullToRefresh onRefresh={fetchFollowData}>
     <div className="page-container friends-list-page">
             <div className="friends-list-page__header">
                 <button
@@ -364,7 +366,8 @@ const FollowersList = () => {
                     </div>
         )}
             </div>
-        </div>);
+        </div>
+    </PullToRefresh>);
 
 };
 

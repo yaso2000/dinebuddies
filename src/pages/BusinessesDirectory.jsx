@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { LuSparkles } from 'react-icons/lu';
 import { useInvitations } from '../context/InvitationContext';
@@ -48,6 +48,7 @@ import {
 import { formatBiDiText, escapeHtmlText } from '../utils/formatBiDiText';
 import { AppText, AppTextInput } from "../components/base";
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
+import PullToRefresh from '../components/PullToRefresh';
 import {
   buildHostInvitationNavigationState,
   withBusinessIdInPath,
@@ -1299,7 +1300,13 @@ const BusinessesDirectory = () => {
   }, [isFullscreen]);
 
 
+  const handleRefresh = useCallback(async () => {
+    document.querySelector('.app-main')?.scrollTo({ top: 0, behavior: 'smooth' });
+    await new Promise((resolve) => window.setTimeout(resolve, 400));
+  }, []);
+
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <div className="directory-page" style={{ paddingBottom: '100px', minHeight: '100%' }}>
 
 
@@ -1667,7 +1674,8 @@ const BusinessesDirectory = () => {
               }}
               navigationState={inviteSelectorState}
             />
-        </div>);
+        </div>
+    </PullToRefresh>);
 
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { LuSparkles } from 'react-icons/lu';
 import InvitationCard from '../components/InvitationCard';
@@ -19,6 +19,7 @@ import {
   ensureLeafletMapDetachedIfOrphan } from
 '../utils/leafletMapLifecycle';
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
+import PullToRefresh from '../components/PullToRefresh';
 import { useTheme } from '../context/ThemeContext';
 import { getSafeAvatar, getGenderBorderColor, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import { getInvitationLatLng, enrichInvitationCoords } from '../utils/invitationCoords';
@@ -697,8 +698,14 @@ const Home = () => {
     }
   };
 
+  const handleRefresh = useCallback(async () => {
+    document.querySelector('.app-main')?.scrollTo({ top: 0, behavior: 'smooth' });
+    await new Promise((resolve) => window.setTimeout(resolve, 400));
+  }, []);
+
   // Return statement
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <div className="home-page" style={{ minHeight: '100%', animation: 'fadeIn 0.5s ease-out' }}>
 
             <style>{`
@@ -1147,8 +1154,9 @@ const Home = () => {
             <CreateInvitationSelector
         isOpen={showSelector}
         onClose={() => setShowSelector(false)} />
-      
-        </div>);
+
+        </div>
+    </PullToRefresh>);
 
 };
 
