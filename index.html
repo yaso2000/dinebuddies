@@ -15,11 +15,15 @@
         render();
       }
       window.addEventListener('error', function (e) {
-        record((e.error && (e.error.stack || e.error.message)) || e.message || String(e));
+        var msg = (e.error && e.error.message) || e.message || String(e);
+        var stack = (e.error && e.error.stack) || '';
+        record('MESSAGE: ' + msg + (stack ? '\n\nSTACK:\n' + stack : ''));
       });
       window.addEventListener('unhandledrejection', function (e) {
         var r = e.reason;
-        record('UnhandledRejection: ' + ((r && (r.stack || r.message)) || String(r)));
+        var msg = (r && r.message) || String(r);
+        var stack = (r && r.stack) || '';
+        record('UnhandledRejection MESSAGE: ' + msg + (stack ? '\n\nSTACK:\n' + stack : ''));
       });
       function render() {
         var root = document.getElementById('root');
@@ -33,7 +37,9 @@
             'white-space:pre-wrap;margin:0;';
           document.body.appendChild(pre);
         }
-        pre.textContent = 'BOOT DIAGNOSTICS\n\n' + window.__bootErrors.join('\n\n---\n\n');
+        pre.textContent = 'BOOT DIAGNOSTICS\nlocation.href: ' + location.href +
+          '\nCapacitor scheme detected: ' + location.protocol + '//' + location.host +
+          '\n\n' + window.__bootErrors.join('\n\n---\n\n');
       }
       setTimeout(function () {
         var root = document.getElementById('root');
