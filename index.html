@@ -4,6 +4,48 @@
 <head>
   <meta charset="UTF-8" />
   <script>
+    // TEMPORARY boot diagnostics: if the app fails to render (blank screen), show the
+    // actual JS error directly on screen instead of leaving a silent black void — lets
+    // us debug native-shell issues (iOS TestFlight etc.) without Xcode/Safari attached.
+    // Remove once the native black-screen issue is confirmed fixed.
+    (function () {
+      window.__bootErrors = [];
+      function record(msg) {
+        window.__bootErrors.push(msg);
+        render();
+      }
+      window.addEventListener('error', function (e) {
+        record((e.error && (e.error.stack || e.error.message)) || e.message || String(e));
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        var r = e.reason;
+        record('UnhandledRejection: ' + ((r && (r.stack || r.message)) || String(r)));
+      });
+      function render() {
+        var root = document.getElementById('root');
+        if (!root || root.children.length > 0) return;
+        var pre = document.getElementById('__boot_diag');
+        if (!pre) {
+          pre = document.createElement('pre');
+          pre.id = '__boot_diag';
+          pre.style.cssText = 'position:fixed;inset:0;background:#000;color:#0f0;' +
+            'font:11px/1.4 monospace;padding:14px;overflow:auto;z-index:999999;' +
+            'white-space:pre-wrap;margin:0;';
+          document.body.appendChild(pre);
+        }
+        pre.textContent = 'BOOT DIAGNOSTICS\n\n' + window.__bootErrors.join('\n\n---\n\n');
+      }
+      setTimeout(function () {
+        var root = document.getElementById('root');
+        if (root && root.children.length === 0) {
+          record(window.__bootErrors.length
+            ? '(app still not mounted after 6s — see errors above)'
+            : 'App did not render after 6s and NO error was caught.\nScript may be hung, or blocked before executing.');
+        }
+      }, 6000);
+    })();
+  </script>
+  <script>
     (function () {
       try {
         var key = 'theme';
