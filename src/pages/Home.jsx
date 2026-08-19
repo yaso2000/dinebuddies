@@ -577,6 +577,13 @@ const Home = () => {
     return { eligible: true };
   };
 
+  // Business identity color — teal/emerald (matches the swipe deck's
+  // discovery-card--partner theme), kept distinct from invitation cards'
+  // host-chosen colorScheme palette so the two never visually collide
+  // when interleaved in this same feed.
+  const BUSINESS_ACCENT = '#14b8a6';
+  const BUSINESS_ACCENT_2 = '#34d399';
+
   const RestaurantAdCard = ({ restaurant }) => {
     if (!restaurant) return null;
     return (
@@ -584,8 +591,7 @@ const Home = () => {
         onClick={() => navigate(`/restaurant/${restaurant.id}`)}
         className="business-ad-card smart-invitation-card"
         style={{
-          // Add border gold/distinctive for business
-          border: '2px solid #f59e0b',
+          border: `2px solid ${BUSINESS_ACCENT}`,
           position: 'relative',
           overflow: 'hidden',
           cursor: 'pointer'
@@ -606,13 +612,13 @@ const Home = () => {
                 alt={restaurant.name}
                 style={{
                   width: '55px', height: '55px', borderRadius: '50%',
-                  border: '2px solid var(--luxury-gold)', objectFit: 'cover',
+                  border: `2px solid ${BUSINESS_ACCENT}`, objectFit: 'cover',
                   padding: '2px', background: 'var(--bg-card)'
                 }} />
-              
+
                             <div style={{
                 position: 'absolute', bottom: '-2px', right: '-2px',
-                background: 'var(--luxury-gold)', color: 'black', borderRadius: '50%',
+                background: BUSINESS_ACCENT, color: 'black', borderRadius: '50%',
                 width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '10px', fontWeight: 'bold', border: '2px solid var(--bg-card)'
               }}>
@@ -626,7 +632,7 @@ const Home = () => {
                 display: 'flex', alignItems: 'center', gap: '6px'
               }}>
                                 {restaurant.name}
-                                <AppText as="span" style={{ fontSize: '0.7em', background: 'var(--luxury-gold)', color: 'black', padding: '1px 6px', borderRadius: '6px' }}>AD</AppText>
+                                <AppText as="span" style={{ fontSize: '0.7em', background: BUSINESS_ACCENT, color: 'black', padding: '1px 6px', borderRadius: '6px' }}>AD</AppText>
                             </div>
                             <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', gap: '5px' }}>
                                 <FaStar style={{ color: '#fbbf24' }} /> {restaurant.rating} • {t('partner', { defaultValue: 'business' })}
@@ -676,11 +682,11 @@ const Home = () => {
                     <div className="footer-actions" style={{ pointerEvents: 'auto' }}>
                         <button style={{
               width: '100%', padding: '14px', borderRadius: '30px', border: 'none',
-              background: 'var(--luxury-gold)', // Gold for business action
+              background: `linear-gradient(135deg, ${BUSINESS_ACCENT}, ${BUSINESS_ACCENT_2})`,
               color: 'black',
               fontWeight: '800', fontSize: '1rem', cursor: 'pointer',
               display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px',
-              boxShadow: '0 4px 15px rgba(251, 191, 36, 0.4)'
+              boxShadow: '0 4px 15px rgba(20, 184, 166, 0.4)'
             }}>
                             {t('view_profile', { defaultValue: 'View Profile' })}
                         </button>

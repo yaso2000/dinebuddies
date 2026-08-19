@@ -25,6 +25,7 @@ import {
   formatInviteDateTime,
 } from '../../utils/invitationSwipeLabels';
 import { useMagneticCardDrag } from '../../hooks/useMagneticCardDrag';
+import UserAvatar from '../UserAvatar';
 import './discovery.css';
 import { AppText } from '../base';
 
@@ -235,10 +236,18 @@ export default function InvitationSwipeCard({ item, isTop = true, onSkip, listPa
               {item.title || inv.title}
             </AppText>
             {hostName ? (
-              <AppText as="p" className="discovery-card__host">
-                {hostName}
-                {inv.type ? ` · ${inv.type}` : ''}
-              </AppText>
+              <div className="discovery-card__host-row">
+                <UserAvatar
+                  user={inv.author}
+                  alt={hostName}
+                  className="discovery-card__host-avatar"
+                  style={{ width: 44, height: 44 }}
+                />
+                <AppText as="p" className="discovery-card__host">
+                  {hostName}
+                  {inv.type ? ` · ${inv.type}` : ''}
+                </AppText>
+              </div>
             ) : null}
             {address ? (
               <AppText as="p" className="discovery-card__address">
