@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { FaArrowRight, FaStar, FaMapMarkerAlt, FaPhone, FaClock, FaGlobe, FaArrowLeft, FaComments, FaUserPlus } from 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
@@ -35,9 +37,6 @@ const RestaurantDetails = () => {
   // Initial map setup
   useEffect(() => {
     if (restaurant && mapRef.current && !mapInstance.current) {
-      const L = window.L;
-      if (!L) return;
-
       try {
         mapInstance.current = L.map(mapRef.current, {
           zoomControl: false,
