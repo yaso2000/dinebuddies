@@ -9,7 +9,11 @@
   "plugins": {
     "FirebaseAuthentication": {
       "skipNativeAuth": true,
-      "providers": ["google.com", "facebook.com"]
+      "providers": ["google.com", "facebook.com", "apple.com"]
+    },
+    "Keyboard": {
+      "resize": "native",
+      "resizeOnFullScreen": true
     }
   }
 }

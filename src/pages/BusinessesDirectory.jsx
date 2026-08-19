@@ -814,6 +814,7 @@ const BusinessesDirectory = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('All');
+  const [countryFilter, setCountryFilter] = useState('All');
   const [activeFilter, setActiveFilter] = useState(() => searchParams.get('category') || 'All'); // Category filter
   const [showFilters, setShowFilters] = useState(false); // Controls filter visibility
   const [viewMode, setViewMode] = useState('list');
@@ -941,6 +942,15 @@ const BusinessesDirectory = () => {
   { id: 'Fast Food', label: t('type_fastfood', 'Fast Food'), icon: '🍟' }];
 
 
+  const availableCountries = useMemo(() => {
+    const set = new Set();
+    for (const res of restaurants) {
+      const country = String(res?.country || res?.businessInfo?.country || '').trim();
+      if (country) set.add(country);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [restaurants]);
+
   const filteredRestaurants = useMemo(() => {
     let filtered = restaurants.filter((res) => {
       if (!res) return false;
@@ -953,7 +963,12 @@ const BusinessesDirectory = () => {
       // Category filter
       const matchesCategory = activeFilter === 'All' || res.type === activeFilter;
 
-      return matchesSearch && matchesCategory;
+      // Country filter
+      const matchesCountry =
+      countryFilter === 'All' ||
+      String(res.country || res.businessInfo?.country || '').trim() === countryFilter;
+
+      return matchesSearch && matchesCategory && matchesCountry;
     });
 
     const isStaff = ['admin', 'moderator', 'support'].includes(userProfile?.role);
@@ -1000,7 +1015,7 @@ const BusinessesDirectory = () => {
     });
 
     return filtered;
-  }, [restaurants, searchQuery, locationFilter, activeFilter, viewerGeoContext, userProfile?.role]);
+  }, [restaurants, searchQuery, locationFilter, countryFilter, activeFilter, viewerGeoContext, userProfile?.role]);
 
   const restaurantsWithCoords = useMemo(() => {
     return filteredRestaurants.filter((res) => {
@@ -1405,10 +1420,13 @@ const BusinessesDirectory = () => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
           marginBottom: '0.75rem'
         }}>
-                    {/* Row 1: Search + Location Filter */}
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        {/* Search Input - Narrower */}
-                        <div style={{ position: 'relative', flex: '1 1 auto', minWidth: '150px' }}>
+                    {/* Row 1: Search + Filters — one horizontally-scrollable row so filters
+                        never overlap/truncate on narrow screens. */}
+                    <div
+            className="category-icons-scroll"
+            style={{ display: 'flex', gap: '8px', alignItems: 'center', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                        {/* Search Input */}
+                        <div style={{ position: 'relative', flex: '0 0 auto', width: '190px' }}>
                             <FaSearch style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.85rem' }} />
                             <AppTextInput
                 type="text"
@@ -1450,6 +1468,32 @@ const BusinessesDirectory = () => {
                 )}
                             </select>
                         </div>
+
+                        {/* Country Filter */}
+                        {availableCountries.length > 1 &&
+            <div style={{ flex: '0 0 auto' }}>
+                                <select
+                value={countryFilter}
+                onChange={(e) => setCountryFilter(e.target.value)}
+                className="filter-select"
+                style={{
+                  width: 'auto',
+                  minWidth: '110px',
+                  padding: '10px 28px 10px 10px',
+                  height: '38px',
+                  background: 'var(--bg-card)',
+                  color: 'var(--text-main)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '12px'
+                }}>
+
+                                    <option value="All">🌐 {t('all_countries', 'All countries')}</option>
+                                    {availableCountries.map((c) =>
+                <option key={c} value={c}>{c}</option>
+                )}
+                                </select>
+                            </div>
+            }
                     </div>
 
                     {/* Row 2: Category Icons - Show when search is focused */}

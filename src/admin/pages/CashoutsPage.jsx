@@ -101,11 +101,11 @@ export default function CashoutsPage() {
 
   return (
     <div className="db-page">
-      <AppText as="h1">{t('admin_cashout_title', 'Shield cash-outs')}</AppText>
+      <AppText as="h1">{t('admin_cashout_title', 'Jar cash-outs')}</AppText>
       <AppText as="p" style={{ opacity: 0.75, marginTop: 0 }}>
         {t(
           'admin_cashout_subtitle',
-          'Pending Shield package redemptions from savings. Review ledger before paying via PayPal.'
+          'Pending Jar package redemptions from Cherry savings. Review ledger before paying via PayPal.'
         )}
       </AppText>
 
@@ -137,8 +137,15 @@ export default function CashoutsPage() {
                   {t('admin_cashout_user', 'User')}: {row.userId}
                 </div>
                 <div style={{ fontSize: 13, opacity: 0.8 }}>
-                  {t('admin_cashout_shield', 'Shield')}: {String(row.shieldType || '').toUpperCase()} ·{' '}
-                  {Number(row.amountCredits || 0).toLocaleString()} credits · ${Number(row.amountFiat || 0)} USD
+                  {t('admin_cashout_jars', 'Jars')}:{' '}
+                  {Array.isArray(row.items) && row.items.length
+                    ? row.items
+                        .map((it) => `${it.count}× ${String(it.shieldType || '').toUpperCase()}`)
+                        .join(', ')
+                    : String(row.shieldType || '').toUpperCase()}
+                  {' · '}
+                  {Number(row.amountCredits || 0).toLocaleString()} cherries · $
+                  {Number(row.amountFiat || 0)} USD
                 </div>
                 <div style={{ fontSize: 13, opacity: 0.8 }}>
                   PayPal: <strong>{row.paypalEmail || '—'}</strong>

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -6,6 +6,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useMyLiveStage } from './useMyLiveStage';
 import { blockPublicInviteFromBusinessVenue } from '../utils/publicInviteVenueGate';
+import { getInvitationDailyFreeStatus } from '../utils/privateInvitationCredits';
 import {
   resolveHostInvitationNavigationState,
   withBusinessIdInPath,
@@ -28,6 +29,22 @@ export function useInviteCreateNavigation({
   const { canCreateSocialInvitation, restaurants: restaurantsFromContext } = useInvitations();
   const { stageId: liveStageId, hasLiveStage, loading: liveStageLoading } = useMyLiveStage();
   const [publicGateChecking, setPublicGateChecking] = useState(false);
+  const [dailyFreeStatus, setDailyFreeStatus] = useState(null);
+
+  useEffect(() => {
+    const uid = currentUser?.uid || currentUser?.id;
+    if (!uid) {
+      setDailyFreeStatus(null);
+      return;
+    }
+    let cancelled = false;
+    getInvitationDailyFreeStatus(uid).then((status) => {
+      if (!cancelled) setDailyFreeStatus(status);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.uid, currentUser?.id]);
 
   const restaurants = restaurantsProp ?? restaurantsFromContext;
 
@@ -102,7 +119,9 @@ export function useInviteCreateNavigation({
       }
 
       if (kind === 'social') {
-        const quotaInfo = canCreateSocialInvitation('social');
+        const quotaInfo = canCreateSocialInvitation('social', {
+          freeSlotAvailable: Boolean(dailyFreeStatus?.socialFree),
+        });
         if (!quotaInfo.profileLoading && !quotaInfo.canCreate) {
           showToast(
             t(
@@ -121,7 +140,9 @@ export function useInviteCreateNavigation({
       }
 
       if (kind === 'private' || kind === 'dating') {
-        const quotaInfo = canCreateSocialInvitation('private');
+        const quotaInfo = canCreateSocialInvitation('private', {
+          freeSlotAvailable: Boolean(dailyFreeStatus?.privateFree),
+        });
         if (!quotaInfo.profileLoading && !quotaInfo.canCreate) {
           showToast(
             t(
@@ -143,6 +164,7 @@ export function useInviteCreateNavigation({
       canCreateSocialInvitation,
       cannotCreateInvitations,
       currentUser?.uid,
+      dailyFreeStatus,
       hasLiveStage,
       isBusiness,
       liveStageId,

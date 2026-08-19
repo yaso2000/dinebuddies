@@ -118,7 +118,7 @@ const SharedContentBubble = ({ data }) => {
                     </AppText>
         }
                 <div style={{ marginTop: '8px', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>
-                    View {data.type === 'post' ? 'Post' : data.type === 'invitation' ? 'Invitation' : data.type === 'business' ? 'Profile' : 'Content'} →
+                    View {data.type === 'post' ? 'Post' : data.type === 'invitation' ? 'Invitation' : data.type === 'business' ? 'Profile' : data.type === 'story' ? 'Story' : 'Content'} →
                 </div>
             </div>
         </div>);

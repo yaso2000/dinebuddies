@@ -38,6 +38,7 @@ import i18n from '../i18n';
 import { getInvitationLatLng } from '../utils/invitationCoords';
 import { followUser, unfollowUser } from '../utils/followHelpers';
 import { showFollowCooldownWarning } from '../utils/connectionActionCooldown';
+import { recordPrivateInviteDecline } from '../utils/privateInviteDeclineCooldown';
 import {
     isConnectionComplete,
     resolveConnectionKind,
@@ -1025,7 +1026,7 @@ export const InvitationProvider = ({ children }) => {
 
     // ── Private / social drafts: spendable = paidCredits + savedCredits; admins bypass. ──
 
-    const canCreateSocialInvitation = (kind = 'social') => {
+    const canCreateSocialInvitation = (kind = 'social', opts = {}) => {
         if (!currentUser || isGuest) return { canCreate: false, reason: 'guest' };
 
         if (cannotCreateInvitations(getInvitationCreatorProfile())) {
@@ -1053,6 +1054,12 @@ export const InvitationProvider = ({ children }) => {
                 profileLoading: true,
                 source: 'dine_credits'
             };
+        }
+
+        // Today's free slot (if unused) covers the publish regardless of wallet balance —
+        // the server enforces the real check; this just keeps the client gate in sync with it.
+        if (opts.freeSlotAvailable) {
+            return { canCreate: true, quota: 'daily_free', cost, source: 'daily_free' };
         }
 
         const balance = getTotalDineCredits(firebaseProfile);
@@ -1117,6 +1124,7 @@ export const InvitationProvider = ({ children }) => {
                 shareToken: result?.data?.shareToken || null,
                 notificationsSent,
                 notifyError: result?.data?.notifyError || null,
+                chargedSource: result?.data?.chargedSource || null,
             };
         } catch (error) {
             const reason = getCallableErrorReason(error);
@@ -1355,6 +1363,14 @@ export const InvitationProvider = ({ children }) => {
                 [`rsvps.${me}`]: status,
                 updatedAt: serverTimestamp(),
             });
+
+            if (status === 'declined' && isDating && hostId) {
+                try {
+                    await recordPrivateInviteDecline(hostId, me);
+                } catch (declineErr) {
+                    console.error('Failed to record private invite decline cooldown:', declineErr);
+                }
+            }
 
             setPrivateInvitations((prev) =>
                 prev.map((inv) =>

@@ -8,9 +8,11 @@ import {
     parseYoutubeEmbedMessage,
     postYoutubeEmbedCommand,
     postYoutubeEmbedListening,
+    requestYoutubeEmbedCurrentTime,
     softSeekYoutubeEmbed,
     syncMemberYoutubeToHost,
     syncYoutubeEmbedPlayback,
+    YOUTUBE_DRIFT_RESYNC_MS,
     YOUTUBE_DRIFT_TOLERANCE_SEC,
     YOUTUBE_EMBED_ALLOW,
     YOUTUBE_PLAYER_STATE,
@@ -342,6 +344,31 @@ function MemberYoutubeEmbed({
         applyHostSync(false);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- apply on host clock fields only
     }, [syncAtMs, positionSec, paused, isLive, playbackEnabled]);
+
+    // Periodic drift check while playing: applyHostSync above only reacts to
+    // the host's anchor changing, so a member whose local playhead quietly
+    // falls behind (tab throttling, a buffering hiccup) between host actions
+    // never gets corrected without this. Poll the real player position and
+    // soft-seek if it strays past tolerance. Live streams self-manage the
+    // live edge — nothing to correct there.
+    useEffect(() => {
+        if (!playbackEnabled || paused || isLive) return undefined;
+        const interval = window.setInterval(async () => {
+            const iframe = localIframeRef.current;
+            if (!iframe) return;
+            const actualSec = await requestYoutubeEmbedCurrentTime(iframe);
+            if (actualSec == null) return;
+            const expectedSec = computeYoutubeMemberStartSec(syncAtMs, {
+                positionSec,
+                paused,
+                isLive,
+            });
+            if (Math.abs(actualSec - expectedSec) > YOUTUBE_DRIFT_TOLERANCE_SEC) {
+                softSeekYoutubeEmbed(iframe, expectedSec);
+            }
+        }, YOUTUBE_DRIFT_RESYNC_MS);
+        return () => window.clearInterval(interval);
+    }, [playbackEnabled, paused, isLive, syncAtMs, positionSec]);
 
     useEffect(() => {
         const iframe = localIframeRef.current;

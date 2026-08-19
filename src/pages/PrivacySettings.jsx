@@ -26,6 +26,7 @@ const PrivacySettings = () => {
     allowInvitations: true,
     showActivity: true,
     allowFollowing: true,
+    allowGifts: true,
   });
 
   useEffect(() => {
@@ -35,6 +36,7 @@ const PrivacySettings = () => {
         ...prev,
         ...saved,
         allowFollowing: saved.allowFollowing !== false,
+        allowGifts: saved.allowGifts !== false,
       }));
     }
   }, [userProfile]);
@@ -248,6 +250,21 @@ const PrivacySettings = () => {
                                         </label>
                                     </div>
               }
+
+                            <div className="notification-item">
+                                <div className="notification-info">
+                                    <AppText as="h3">{t('allow_gifts', 'Allow Gifts')}</AppText>
+                                    <AppText as="p">{t('allow_gifts_desc', 'Let others send you paid gifts. When off, gift buttons are hidden on your profile.')}</AppText>
+                                </div>
+                                <label className="toggle-switch">
+                                    <input
+                    type="checkbox"
+                    checked={privacy.allowGifts !== false}
+                    onChange={() => handleToggle('allowGifts')} />
+
+                                    <AppText as="span" className="toggle-slider"></AppText>
+                                </label>
+                            </div>
                         </div>
                     </div>
 

@@ -1,11 +1,12 @@
 /**
  * Stage rooms for people and business hosts.
- * Always free (no credits / day pricing). Fixed 24h TTL then hard-delete
- * Firestore + Storage media + invite notifications.
+ * No credits / day pricing. Fixed 24h TTL then hard-delete Firestore + Storage
+ * media + invite notifications. Business-hosted Stages require a Paid Business
+ * plan; personal Stages stay free for everyone.
  * Permanent business Community Chat is separate; business Stages are ephemeral.
  */
 const functions = require('firebase-functions');
-const { isBusinessUserDoc } = require('./creditsCore');
+const { isBusinessUserDoc, normalizeBusinessSubscriptionTier } = require('./creditsCore');
 
 const MAX_INVITEES = 40;
 const TITLE_MAX = 80;
@@ -315,6 +316,13 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
             const host = hostSnap.data() || {};
             const hostIsBusiness = isBusinessUserDoc(host);
             const hostKind = hostIsBusiness ? 'business' : 'people';
+
+            if (hostIsBusiness && normalizeBusinessSubscriptionTier(host.subscriptionTier) !== 'paid') {
+                throw new functions.https.HttpsError(
+                    'failed-precondition',
+                    'Business Stage requires a Paid Business plan.'
+                );
+            }
 
             // One live Stage per host until it expires (or is purged).
             const hostedSnap = await db

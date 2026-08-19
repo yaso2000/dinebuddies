@@ -306,6 +306,52 @@ async function getVertexAuthClient() {
     return auth.getClient();
 }
 
+/**
+ * Fallback image generator when Vertex Imagen isn't enabled/accessible for
+ * this GCP project (e.g. Model Garden access not granted yet) — reuses the
+ * OpenAI key already configured for invitation-card image generation
+ * (OPENAI_API_KEY / OPENAI_IMAGE_MODEL in functions/.env). DALL-E has no
+ * reference-image "same subject" capability like Imagen's subject
+ * customization, so this only ever produces a standalone image from a text
+ * prompt — callers needing avatar/cover consistency degrade to independent
+ * generations rather than a true character pair.
+ */
+async function callOpenAiImage(prompt, aspectRatio) {
+    const apiKey = process.env.OPENAI_API_KEY?.trim();
+    if (!apiKey) {
+        const err = new Error('OPENAI_API_KEY is not configured.');
+        err.code = 'openai-not-configured';
+        throw err;
+    }
+    const model = process.env.OPENAI_IMAGE_MODEL?.trim() || 'gpt-image-1';
+    // gpt-image-1 only supports 1024x1024 / 1024x1536 / 1536x1024 (not dall-e-3's
+    // sizes), and always returns b64_json — it doesn't accept response_format.
+    const size = aspectRatio === '16:9' ? '1536x1024' : '1024x1024';
+
+    const res = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            model,
+            prompt: prompt.slice(0, 4000),
+            size,
+            n: 1,
+        }),
+    });
+
+    if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`OpenAI image generation failed (${res.status}): ${body.slice(0, 300)}`);
+    }
+    const json = await res.json();
+    const b64 = json?.data?.[0]?.b64_json;
+    if (!b64) throw new Error('OpenAI returned no image data.');
+    return { buffer: Buffer.from(b64, 'base64'), mimeType: 'image/png', model };
+}
+
 async function callVertexImagen(prompt, aspectRatio, kind) {
     const projectId = resolveProjectId();
     const location = process.env.GEMINI_VERTEX_LOCATION?.trim() || 'us-central1';
@@ -351,6 +397,14 @@ async function callVertexImagen(prompt, aspectRatio, kind) {
             lastError = err?.response?.data?.error?.message || err?.message || lastError;
             console.warn('[demoUsersImagen] model failed', modelName, lastError);
         }
+    }
+
+    try {
+        const fallback = await callOpenAiImage(prompt, aspectRatio);
+        console.warn('[demoUsersImagen] Vertex Imagen unavailable, used OpenAI fallback:', lastError);
+        return fallback;
+    } catch (fallbackErr) {
+        console.warn('[demoUsersImagen] OpenAI fallback also failed:', fallbackErr?.message);
     }
 
     const err = new Error(lastError);

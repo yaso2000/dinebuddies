@@ -2,7 +2,8 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage, auth } from '../firebase/config';
 import { generateThumbnail } from '../utils/thumbnailGenerator';
 import { compressImage } from '../utils/imageUpload';
-import { uploadImageWithModeration } from './moderatedImageUpload';
+import { uploadImageWithModeration, isImageModerationRejected } from './moderatedImageUpload';
+import { deleteFilesAtFirebaseDownloadUrls } from '../utils/firebaseStorageDelete';
 import { folderToImageZone } from './imageUploadZones';
 import {
     beginImageUploadSession,
@@ -109,9 +110,14 @@ export const uploadMedia = async (file, userId, type, folder = 'invitations') =>
  * @param {File} videoFile - Video file
  * @param {string} userId - User ID
  * @param {string} folder - Folder name
+ * @param {{ enforceThumbnailModeration?: boolean }} [opts] — when true, a Vision Safe Search
+ *   rejection on the poster thumbnail aborts the whole upload (and removes the already-uploaded
+ *   video) instead of silently falling back to an unmoderated thumbnail. Defaults to false to
+ *   preserve existing behavior for callers that haven't opted in.
  * @returns {Promise<{videoUrl: string, thumbnailUrl: string}>}
  */
-export const uploadVideoWithThumbnail = async (videoFile, userId, folder = 'invitations') => {
+export const uploadVideoWithThumbnail = async (videoFile, userId, folder = 'invitations', opts = {}) => {
+    const { enforceThumbnailModeration = false } = opts;
     try {
 
         // Upload video first
@@ -126,6 +132,13 @@ export const uploadVideoWithThumbnail = async (videoFile, userId, folder = 'invi
             const thumbnailFile = new File([thumbnailBlob], 'thumbnail.jpg', { type: 'image/jpeg' });
             thumbnailUrl = await uploadMedia(thumbnailFile, userId, 'thumbnail', folder);
         } catch (thumbError) {
+            if (enforceThumbnailModeration && isImageModerationRejected(thumbError)) {
+                // Content policy violation on the poster frame — the video body itself isn't
+                // scanned, so this is the only moderation signal available. Don't silently
+                // continue with an unchecked video; remove what was already uploaded.
+                try { await deleteFilesAtFirebaseDownloadUrls([videoUrl]); } catch { /* best effort */ }
+                throw thumbError;
+            }
             console.warn('⚠️ Thumbnail generation failed, using default:', thumbError);
             // Use a default thumbnail or the video URL itself
             thumbnailUrl = videoUrl; // Browser will show first frame

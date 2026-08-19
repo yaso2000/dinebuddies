@@ -25,7 +25,8 @@ export default function BusinessHostedArchive() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { currentUser, userProfile } = useAuth();
-  const [items, setItems] = useState([]);
+  const [liveItems, setLiveItems] = useState([]);
+  const [archivedItems, setArchivedItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const isBusinessAccount = userProfile?.isBusiness;
@@ -36,26 +37,58 @@ export default function BusinessHostedArchive() {
       return;
     }
 
-    const q = query(
+    const liveQ = query(
       collection(db, 'invitations'),
       where('restaurantId', '==', currentUser.uid)
     );
+    const archiveQ = query(
+      collection(db, 'invitation_archives'),
+      where('restaurantId', '==', currentUser.uid)
+    );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs.
-      map((d) => ({ id: d.id, ...d.data() })).
-      filter(isPastOrCompleted).
-      sort((a, b) => {
-        const aTime = a.completedAt?.toMillis?.() || new Date(a.date || 0).getTime();
-        const bTime = b.completedAt?.toMillis?.() || new Date(b.date || 0).getTime();
-        return bTime - aTime;
-      });
-      setItems(list);
-      setLoading(false);
-    }, () => setLoading(false));
+    let liveLoaded = false;
+    let archiveLoaded = false;
+    const markLoaded = () => {
+      if (liveLoaded && archiveLoaded) setLoading(false);
+    };
 
-    return () => unsubscribe();
+    const unsubLive = onSnapshot(liveQ, (snapshot) => {
+      setLiveItems(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isPastOrCompleted));
+      liveLoaded = true;
+      markLoaded();
+    }, () => {
+      liveLoaded = true;
+      markLoaded();
+    });
+
+    const unsubArchive = onSnapshot(archiveQ, (snapshot) => {
+      setArchivedItems(
+        snapshot.docs.map((d) => ({ id: d.id, ...d.data(), _archived: true }))
+      );
+      archiveLoaded = true;
+      markLoaded();
+    }, () => {
+      archiveLoaded = true;
+      markLoaded();
+    });
+
+    return () => {
+      unsubLive();
+      unsubArchive();
+    };
   }, [currentUser?.uid, isBusinessAccount, navigate]);
+
+  const items = [...liveItems, ...archivedItems].sort((a, b) => {
+    const aTime =
+      a.completedAt?.toMillis?.() ||
+      a.archivedAt?.toMillis?.() ||
+      new Date(a.date || a.startDate || 0).getTime();
+    const bTime =
+      b.completedAt?.toMillis?.() ||
+      b.archivedAt?.toMillis?.() ||
+      new Date(b.date || b.startDate || 0).getTime();
+    return bTime - aTime;
+  });
 
   if (!isBusinessAccount) return null;
 
@@ -75,17 +108,21 @@ export default function BusinessHostedArchive() {
             type="button"
             className="my-community-card"
             style={{ width: '100%', textAlign: 'start', cursor: 'pointer', border: 'none' }}
-            onClick={() => navigate(`/invitation/${inv.id}`)}>
-            
+            onClick={() => navigate(inv._archived ? `/invitation/archived/${inv.id}` : `/invitation/${inv.id}`)}>
+
                                 <div style={{ fontWeight: 800, fontSize: '0.95rem', marginBottom: '6px', color: 'var(--text-main)' }}>
                                     {inv.title || t('invitation', 'Invitation')}
                                 </div>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                    {inv.date &&
-              <AppText as="span"><FaCalendarAlt style={{ marginInlineEnd: 4 }} />{inv.date}{inv.time ? ` · ${inv.time}` : ''}</AppText>
+                                    {(inv.date || inv.startDate) &&
+              <AppText as="span"><FaCalendarAlt style={{ marginInlineEnd: 4 }} />{inv.date || inv.startDate}{(inv.time || inv.startTime) ? ` · ${inv.time || inv.startTime}` : ''}</AppText>
               }
-                                    <AppText as="span"><FaUsers style={{ marginInlineEnd: 4 }} />{(inv.participants?.length || 0) + 1}</AppText>
-                                    {inv.status === 'completed' &&
+                                    {!inv._archived &&
+              <AppText as="span"><FaUsers style={{ marginInlineEnd: 4 }} />{(inv.participants?.length || 0) + 1}</AppText>
+              }
+                                    {inv._archived ?
+              <AppText as="span" style={{ color: 'var(--text-muted)', fontWeight: 700 }}>{t('invitation_archived_badge', 'Archived')}</AppText> :
+              inv.status === 'completed' &&
               <AppText as="span" style={{ color: 'var(--primary)', fontWeight: 700 }}>{t('completed', 'Completed')}</AppText>
               }
                                 </div>

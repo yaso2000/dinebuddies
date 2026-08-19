@@ -138,8 +138,14 @@ export function clampBannerDraggablePosition({
     const widthPct = (px) => (px / bannerRect.width) * 100;
     const heightPct = (px) => (px / bannerRect.height) * 100;
 
-    const minX = BANNER_AXIS_EDGE_MARGIN + widthPct(halfW);
-    const maxX = 100 - BANNER_AXIS_EDGE_MARGIN - widthPct(halfW);
+    let minX = BANNER_AXIS_EDGE_MARGIN + widthPct(halfW);
+    let maxX = 100 - BANNER_AXIS_EDGE_MARGIN - widthPct(halfW);
+    if (minX > maxX) {
+        // Element wider than the safe zone (long title text on a narrow
+        // banner) — center it instead of clamping to an inverted range.
+        minX = 50;
+        maxX = 50;
+    }
 
     let minY;
     let maxY;
@@ -899,6 +905,49 @@ export function buildBannerUpdate({
 
 /** @deprecated Use buildBannerUpdate */
 export const buildBannerTextUpdate = buildBannerUpdate;
+
+/**
+ * YouTube sync-epoch bookkeeping shared by every banner write path (plain
+ * `setDoc` and transactional). Only stamps a new sync epoch when the caller
+ * explicitly signals new media via `banner_youtube_sync_client_ms` in
+ * `fields` — title/text/background edits must never reset playback sync.
+ * `serverTimestampValue` is passed in (rather than imported here) so this
+ * util stays free of a firebase/firestore dependency.
+ */
+export function resolveBannerYoutubeSyncFields(fields, serverTimestampValue) {
+    if (
+        !Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_id') &&
+        !Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_playlist_id')
+    ) {
+        return {};
+    }
+    const ytId = String(fields.banner_youtube_id || '').trim();
+    const listId = String(fields.banner_youtube_playlist_id || '').trim();
+    const hasYt =
+        /^[a-zA-Z0-9_-]{11}$/.test(ytId) ||
+        (/^[a-zA-Z0-9_-]{10,64}$/.test(listId) &&
+            !(listId.length === 11 && !/^(PL|UU|RD|OL|LL|FL|WL)/i.test(listId)));
+    const extra = {};
+    if (hasYt) {
+        const refreshSync = Object.prototype.hasOwnProperty.call(
+            fields,
+            'banner_youtube_sync_client_ms'
+        );
+        if (refreshSync) {
+            extra.banner_youtube_sync_at = serverTimestampValue;
+            if (!Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_paused')) {
+                extra.banner_youtube_paused = false;
+            }
+            if (!Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_position_sec')) {
+                extra.banner_youtube_position_sec = 0;
+            }
+        }
+    } else if (!ytId && !listId) {
+        extra.banner_youtube_sync_at = null;
+        extra.banner_youtube_sync_client_ms = 0;
+    }
+    return extra;
+}
 
 /** Merge a partial patch onto the current normalized banner (for split host tools). */
 export function mergeBannerPatch(current, patch = {}) {

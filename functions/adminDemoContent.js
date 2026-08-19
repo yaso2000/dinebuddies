@@ -201,6 +201,11 @@ async function createDemoUserPublicInvitation(db, admin, input, adminUid) {
         ageRange: 'custom',
         paymentType: asTrimmedString(input.paymentType) || 'Split',
         privacy: 'public',
+        // Demo hosts have no real followers, so a request to join can never be
+        // approved — restricting joins (not visibility) keeps the invitation
+        // showing up in feeds as real-looking activity without leaving a real
+        // user stuck waiting on a request nobody will ever act on.
+        joinRestriction: input.joinRestriction === false ? '' : 'followers_only',
         type: asTrimmedString(input.type) || 'Restaurant',
         inviteMood: asTrimmedString(input.inviteMood) || 'social',
         templateType: asTrimmedString(input.templateType) || 'hero_4_5',

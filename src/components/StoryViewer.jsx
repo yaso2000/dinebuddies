@@ -1,14 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { doc, updateDoc, arrayUnion, arrayRemove, onSnapshot } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, deleteField, serverTimestamp, addDoc, collection, query, orderBy, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
+import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import { FaHeart, FaRegHeart, FaTimes, FaPaperPlane, FaRegCommentDots, FaRegSmile } from 'react-icons/fa';
+import { FaHeart, FaRegHeart, FaTimes, FaPaperPlane, FaRegCommentDots, FaRegSmile, FaShareAlt, FaDownload, FaTrashAlt } from 'react-icons/fa';
 import StoryCommentStream from './StoryCommentStream';
 import './StoryViewer.css';
 import { handleEmojiButtonClick, shouldUseAppEmojiPicker, showComposerEmojiButton } from '../utils/emojiInputMode';
+import { isAppleWebKitTouch } from '../utils/chatVisualViewportLock';
+import { deleteFilesAtFirebaseDownloadUrls } from '../utils/firebaseStorageDelete';
+import { downloadStoryMedia } from '../utils/storyMediaExport';
+import { getAppOrigin } from '../utils/appOrigin';
+import ShareButtons from './ShareButtons';
 
 /** Shown inline in the footer bar (Instagram-style). */import { AppText, AppTextInput } from "./base";
 const INLINE_EMOJIS = ['😂', '🥰', '🥺'];
@@ -39,6 +45,7 @@ function getReactionId(reaction) {
 const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
   const { currentUser, userProfile } = useAuth();
   const { sendMessage, getOrCreateConversation } = useChat();
+  const { showToast } = useToast();
   const { t } = useTranslation();
 
   const { allUserStories, initialUserIndex } = viewingData;
@@ -51,6 +58,8 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [touchStartX, setTouchStartX] = useState(0);
+  const [touchStartY, setTouchStartY] = useState(0);
+  const [verticalDragOffset, setVerticalDragOffset] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Pausing Logic
@@ -86,12 +95,27 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
   const ownerCommentsFocusRef = useRef(false);
   const ownerCommentsFocusStartedRef = useRef(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
-  const STORY_DURATION = 10000;
+  const DEFAULT_STORY_DURATION_MS = 5000;
+  const LEGACY_STORY_DURATION_MS = 10000; // pre-Phase-1 docs have no mediaDurationMs field
+  const MAX_VIDEO_DURATION_MS = 15000;
+
+  /** Video/photo/text each carry their own timing hint; legacy docs fall back to the old flat value. */
+  const getStoryDurationMs = (story) => {
+    if (!story) return LEGACY_STORY_DURATION_MS;
+    if (typeof story.mediaDurationMs === 'number' && story.mediaDurationMs > 0) {
+      return story.type === 'video' ?
+      Math.min(story.mediaDurationMs, MAX_VIDEO_DURATION_MS) :
+      story.mediaDurationMs;
+    }
+    return story.type ? DEFAULT_STORY_DURATION_MS : LEGACY_STORY_DURATION_MS;
+  };
 
   const currentUserStories = allUserStories[currentUserGroupIndex];
   const initialStory = currentUserStories?.stories[currentStoryIndex];
   const [realTimeStory, setRealTimeStory] = useState(initialStory);
+  const [storyReactions, setStoryReactions] = useState([]);
 
   // Effect 1: Real-time listener
   useEffect(() => {
@@ -105,6 +129,45 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
   }, [initialStory?.id]);
 
   const currentStory = realTimeStory || initialStory;
+
+  // Video stories play with sound like Instagram; if the browser's autoplay policy blocks
+  // sound (no prior interaction in this session), fall back to muted so playback still starts.
+  const activeVideoRef = useRef(null);
+  const [videoMuted, setVideoMuted] = useState(false);
+  useEffect(() => {
+    if (currentStory?.type !== 'video') return;
+    setVideoMuted(false);
+    const el = activeVideoRef.current;
+    if (!el) return;
+    el.muted = false;
+    const playPromise = el.play?.();
+    if (playPromise?.catch) {
+      playPromise.catch(() => {
+        setVideoMuted(true);
+        if (activeVideoRef.current) {
+          activeVideoRef.current.muted = true;
+          activeVideoRef.current.play?.().catch(() => {});
+        }
+      });
+    }
+  }, [currentStory?.id, currentStory?.type]);
+
+  // Effect 1b: Reactions now live in a subcollection (map/subcollection security model)
+  // instead of an array field on the story doc — separate live listener, ordered by creation.
+  useEffect(() => {
+    if (!initialStory?.id) {
+      setStoryReactions([]);
+      return undefined;
+    }
+    const q = query(collection(db, 'stories', initialStory.id, 'reactions'), orderBy('createdAt', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setStoryReactions(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.error('Error listening to story reactions:', error);
+    });
+    return () => unsubscribe();
+  }, [initialStory?.id]);
+
   const activeStoryOwnerId = String(currentUserStories?.userId || '');
   const isOwnStory = Boolean(currentUser?.uid) && activeStoryOwnerId === String(currentUser.uid);
 
@@ -151,6 +214,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     elapsedRef.current = 0;
     setProgress(0);
     setRealTimeStory(null);
+    setStoryReactions([]);
     setStreamItems([]);
     setShowCommentsPanel(false);
     setOwnerWaterfallVisible(true);
@@ -193,7 +257,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
   useEffect(() => {
     if (!isOwnStory || !currentStory?.id) return;
 
-    const sorted = [...(currentStory.reactions || [])].sort(
+    const sorted = [...storyReactions].sort(
       (a, b) => reactionCreatedMs(a) - reactionCreatedMs(b)
     );
 
@@ -215,7 +279,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
       enqueuedReactionIdsRef.current.add(id);
       reactionQueueRef.current.push(reaction);
     }
-  }, [currentStory?.reactions, currentStory?.id, isOwnStory]);
+  }, [storyReactions, currentStory?.id, isOwnStory]);
 
   // Owner: drain queue — one comment starts rising every STORY_STREAM_SPAWN_MS
   useEffect(() => {
@@ -252,7 +316,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
   }, []);
 
   const handleOwnerCommentsClick = () => {
-    const reactionCount = currentStory?.reactions?.length || 0;
+    const reactionCount = storyReactions.length || 0;
     if (!reactionCount) return;
 
     if (ownerCommentsFocus) {
@@ -271,7 +335,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     setStreamItems([]);
     streamSpawnSeqRef.current = 0;
 
-    const sorted = [...(currentStory.reactions || [])].sort(
+    const sorted = [...storyReactions].sort(
       (a, b) => reactionCreatedMs(a) - reactionCreatedMs(b)
     );
     enqueuedReactionIdsRef.current = new Set();
@@ -302,7 +366,25 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     }
     const vv = window.visualViewport;
     const update = () => {
-      const lift = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      // iOS keeps window.innerHeight fixed and shrinks visualViewport.height instead —
+      // the keyboard opening can also scroll the document itself, which throws this off,
+      // so reset scroll before reading (mirrors the chat keyboard shell's approach).
+      if (isAppleWebKitTouch()) {
+        window.scrollTo(0, 0);
+        if (document.documentElement) document.documentElement.scrollTop = 0;
+        if (document.body) document.body.scrollTop = 0;
+      }
+      // `window.innerHeight` and `document.documentElement.clientHeight` can disagree for a
+      // moment right as the keyboard opens on iOS Safari — especially with the
+      // interactive-widget=resizes-content meta tag (index.html), which shrinks one before
+      // the other repaints. Taking the larger of the two avoids under-lifting (composer left
+      // hidden behind the keyboard) if either reading is momentarily stale — same class of
+      // fix already applied to the chat composer in chatVisualViewportLock.js.
+      const referenceHeight = Math.max(
+        window.innerHeight,
+        document.documentElement?.clientHeight || 0
+      );
+      const lift = Math.max(0, referenceHeight - vv.height - vv.offsetTop);
       setKeyboardLift(lift);
       if (lift > 24) {
         setViewportRect({ height: vv.height, offsetTop: vv.offsetTop });
@@ -313,9 +395,21 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     update();
     vv.addEventListener('resize', update);
     vv.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+
+    // iOS: a single synchronous read right when the field focuses is unreliable — the
+    // viewport hasn't finished animating yet, so `resize` alone can arrive late or not at
+    // all inside this portaled overlay. Re-read a few more times as the keyboard settles.
+    let staggeredTimers = [];
+    if (isAppleWebKitTouch()) {
+      staggeredTimers = [0, 50, 120, 280, 500, 800].map((ms) => window.setTimeout(update, ms));
+    }
+
     return () => {
       vv.removeEventListener('resize', update);
       vv.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+      staggeredTimers.forEach((id) => window.clearTimeout(id));
     };
   }, [isInputFocused, showEmojiPicker]);
 
@@ -323,7 +417,8 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
   const startTimer = () => {
     clearTimers();
     startTimeRef.current = Date.now();
-    const remainingTime = STORY_DURATION - elapsedRef.current;
+    const storyDurationMs = getStoryDurationMs(currentStory);
+    const remainingTime = storyDurationMs - elapsedRef.current;
 
     if (remainingTime <= 0) {
       handleNext();
@@ -332,7 +427,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
 
     progressIntervalRef.current = setInterval(() => {
       const currentElapsed = elapsedRef.current + (Date.now() - startTimeRef.current);
-      const newProgress = currentElapsed / STORY_DURATION * 100;
+      const newProgress = currentElapsed / storyDurationMs * 100;
 
       if (newProgress >= 100) {
         setProgress(100);
@@ -364,8 +459,10 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     if (!currentUser) return;
     try {
       const storyRef = doc(db, 'stories', storyId);
+      // `views` is now a {uid: timestamp} map — dot-path update sets only this caller's
+      // own key, matching the security rules (each viewer may only touch their own entry).
       await updateDoc(storyRef, {
-        views: arrayUnion(currentUser.uid)
+        [`views.${currentUser.uid}`]: serverTimestamp()
       });
     } catch (error) {
       console.error('Error marking story as viewed:', error);
@@ -376,31 +473,82 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     if (!currentUser || !currentStory) return;
     try {
       const storyRef = doc(db, 'stories', currentStory.id);
-      const hasLiked = currentStory.likes?.includes(currentUser.uid);
+      const hasLiked = Boolean(currentStory.likes?.[currentUser.uid]);
       if (hasLiked) {
-        await updateDoc(storyRef, { likes: arrayRemove(currentUser.uid) });
+        await updateDoc(storyRef, { [`likes.${currentUser.uid}`]: deleteField() });
       } else {
+        await updateDoc(storyRef, { [`likes.${currentUser.uid}`]: true });
         // Record reaction only if the liker is NOT the story owner
         if (!isOwnStory) {
-          const reaction = {
-            id: `${currentUser.uid}_like_${Date.now()}`,
+          await addDoc(collection(storyRef, 'reactions'), {
             userId: currentUser.uid,
             userName: userProfile?.name || userProfile?.displayName || currentUser.displayName || 'User',
             userPhoto: userProfile?.photo || currentUser.photoURL || '',
             content: '❤️',
             type: 'like',
-            createdAt: Date.now()
-          };
-          await updateDoc(storyRef, {
-            likes: arrayUnion(currentUser.uid),
-            reactions: arrayUnion(reaction)
+            createdAt: serverTimestamp()
           });
-        } else {
-          await updateDoc(storyRef, { likes: arrayUnion(currentUser.uid) });
         }
       }
     } catch (error) {
       console.error('Error toggling like:', error);
+    }
+  };
+
+  const handleShareStory = () => {
+    if (!currentStory) return;
+    setIsPaused(true);
+    setShowShareModal(true);
+  };
+
+  const closeShareModal = () => {
+    setShowShareModal(false);
+    setIsPaused(false);
+  };
+
+  const handleDownloadStory = async () => {
+    if (!currentStory?.url) return;
+    setIsPaused(true);
+    const result = await downloadStoryMedia({
+      mediaUrl: currentStory.url,
+      kind: currentStory.type === 'video' ? 'video' : 'image',
+      text: currentStory.text || ''
+    });
+    setIsPaused(false);
+    if (result === 'downloaded') {
+      showToast(t('story_download_started', 'Download started.'), 'success');
+    } else if (result === 'failed' || result === 'unavailable') {
+      showToast(t('story_download_failed', 'Could not download this story.'), 'error');
+    }
+  };
+
+  const handleDeleteStory = async () => {
+    if (!currentStory?.id || !isOwnStory) return;
+    const confirmed = window.confirm(
+      t('story_delete_confirm', 'Delete this story? This cannot be undone.')
+    );
+    if (!confirmed) return;
+    try {
+      const storyId = currentStory.id;
+      const storyRef = doc(db, 'stories', storyId);
+      const reactionsSnap = await getDocs(collection(storyRef, 'reactions'));
+      await Promise.all(reactionsSnap.docs.map((d) => deleteDoc(d.ref)));
+      await deleteDoc(storyRef);
+      const mediaUrls = [currentStory.url, currentStory.posterUrl].filter(Boolean);
+      if (mediaUrls.length) {
+        deleteFilesAtFirebaseDownloadUrls(mediaUrls).catch(() => {});
+      }
+      const hasMoreInTray = currentStoryIndex < currentUserStories.stories.length - 1;
+      if (hasMoreInTray) {
+        handleNext();
+      } else if (allUserStories.length > 1) {
+        handleNextUser();
+      } else {
+        onClose();
+      }
+    } catch (error) {
+      console.error('Error deleting story:', error);
+      showToast(t('story_delete_failed', 'Could not delete this story.'), 'error');
     }
   };
 
@@ -441,31 +589,93 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
   };
 
   // --- Interactive Swipe Tracking ---
+  // A gesture starts undecided; the first move past AXIS_LOCK_PX picks horizontal
+  // (switch user) or vertical-down (dismiss) so the two never fight each other.
+  // A touch that never moves past that threshold and lingers becomes tap-and-hold-to-pause.
+  const AXIS_LOCK_PX = 8;
+  const HOLD_THRESHOLD_MS = 220;
+  const gestureAxisRef = useRef(null); // null | 'horizontal' | 'vertical'
+  const holdTimerRef = useRef(null);
+  const isHoldingRef = useRef(false);
+  const justReleasedHoldRef = useRef(false);
+
+  const clearHoldTimer = () => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  };
+
   const onTouchStart = (e) => {
     if (isInputFocused || isStoryChromeTarget(e)) return;
     setTouchStartX(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
     setIsDragging(true);
     setDragOffset(0);
+    setVerticalDragOffset(0);
+    gestureAxisRef.current = null;
+    clearHoldTimer();
+    holdTimerRef.current = setTimeout(() => {
+      isHoldingRef.current = true;
+      setIsPaused(true);
+    }, HOLD_THRESHOLD_MS);
   };
 
   const onTouchMove = (e) => {
     if (!isDragging || isStoryChromeTarget(e)) return;
     const currentX = e.targetTouches[0].clientX;
-    const diff = currentX - touchStartX;
+    const currentY = e.targetTouches[0].clientY;
+    const diffX = currentX - touchStartX;
+    const diffY = currentY - touchStartY;
+
+    if (!gestureAxisRef.current && (Math.abs(diffX) > AXIS_LOCK_PX || Math.abs(diffY) > AXIS_LOCK_PX)) {
+      gestureAxisRef.current = Math.abs(diffY) > Math.abs(diffX) && diffY > 0 ? 'vertical' : 'horizontal';
+      clearHoldTimer();
+    }
+
+    if (gestureAxisRef.current === 'vertical') {
+      setVerticalDragOffset(Math.max(0, diffY));
+      return;
+    }
 
     // Prevent swiping before first or after last user group with resistance
-    if (currentUserGroupIndex === 0 && diff > 0) {
-      setDragOffset(diff * 0.3);
-    } else if (currentUserGroupIndex === allUserStories.length - 1 && diff < 0) {
-      setDragOffset(diff * 0.3);
+    if (currentUserGroupIndex === 0 && diffX > 0) {
+      setDragOffset(diffX * 0.3);
+    } else if (currentUserGroupIndex === allUserStories.length - 1 && diffX < 0) {
+      setDragOffset(diffX * 0.3);
     } else {
-      setDragOffset(diff);
+      setDragOffset(diffX);
     }
   };
 
   const onTouchEnd = () => {
     if (!isDragging) return;
     setIsDragging(false);
+    clearHoldTimer();
+
+    if (gestureAxisRef.current === 'vertical') {
+      const dismissThreshold = window.innerHeight * 0.15;
+      gestureAxisRef.current = null;
+      if (verticalDragOffset > dismissThreshold) {
+        onClose();
+        return;
+      }
+      setIsTransitioning(true);
+      setVerticalDragOffset(0);
+      setTimeout(() => setIsTransitioning(false), 250);
+      return;
+    }
+    gestureAxisRef.current = null;
+
+    if (isHoldingRef.current) {
+      isHoldingRef.current = false;
+      setIsPaused(false);
+      justReleasedHoldRef.current = true;
+      setTimeout(() => {
+        justReleasedHoldRef.current = false;
+      }, 50);
+      return;
+    }
 
     const threshold = window.innerWidth * 0.2; // 20% of screen
 
@@ -489,6 +699,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
 
   const handleTap = (e) => {
     if (isStoryChromeTarget(e)) return;
+    if (justReleasedHoldRef.current) return;
     if (isInputFocused || isDragging || Math.abs(dragOffset) > 5) return;
 
     const now = Date.now();
@@ -496,7 +707,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
 
     if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
       clearTimeout(singleTapTimerRef.current);
-      const alreadyLiked = currentStory.likes?.includes(currentUser?.uid);
+      const alreadyLiked = Boolean(currentUser?.uid && currentStory.likes?.[currentUser.uid]);
       if (!alreadyLiked) {
         handleLike();
       }
@@ -555,17 +766,15 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
 
       // 2. Save as a reaction on the story — only when VIEWER (not owner)
       if (!isOwnStory) {
-        const reaction = {
-          id: `${currentUser.uid}_${Date.now()}`,
+        const storyRef = doc(db, 'stories', currentStory.id);
+        await addDoc(collection(storyRef, 'reactions'), {
           userId: currentUser.uid,
           userName: userProfile?.name || userProfile?.displayName || currentUser.displayName || 'User',
           userPhoto: userProfile?.photo || currentUser.photoURL || '',
           content: textToSend,
           type: content ? 'emoji' : 'text',
-          createdAt: Date.now()
-        };
-        const storyRef = doc(db, 'stories', currentStory.id);
-        await updateDoc(storyRef, { reactions: arrayUnion(reaction) });
+          createdAt: serverTimestamp()
+        });
       }
 
       setReplyText('');
@@ -598,9 +807,9 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
 
   if (!currentStory) return null;
 
-  const hasLiked = currentStory.likes?.includes(currentUser?.uid);
-  const likesCount = currentStory.likes?.length || 0;
-  const textReactions = (currentStory.reactions || []).filter((r) => r.type === 'text' && String(r.content || '').trim());
+  const hasLiked = Boolean(currentUser?.uid && currentStory.likes?.[currentUser.uid]);
+  const likesCount = currentStory.likes ? Object.keys(currentStory.likes).length : 0;
+  const textReactions = storyReactions.filter((r) => r.type === 'text' && String(r.content || '').trim());
   const privateThread = isOwnStory ?
   textReactions :
   textReactions.filter((r) => r.userId === currentUser?.uid);
@@ -713,10 +922,10 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
 
   // --- Prepare interactions overview for Owner ---
   let uniqueInteractors = [];
-  if (isOwnStory && currentStory?.reactions) {
+  if (isOwnStory && storyReactions.length) {
     const uniqueUsersMap = new Map();
-    for (let i = currentStory.reactions.length - 1; i >= 0; i--) {
-      const r = currentStory.reactions[i];
+    for (let i = storyReactions.length - 1; i >= 0; i--) {
+      const r = storyReactions[i];
       if (!uniqueUsersMap.has(r.userId)) {
         uniqueUsersMap.set(r.userId, r);
       }
@@ -724,7 +933,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
     uniqueInteractors = Array.from(uniqueUsersMap.values()).reverse();
   }
 
-  const ownerReactionCount = currentStory?.reactions?.length || 0;
+  const ownerReactionCount = storyReactions.length || 0;
 
   const shrinkFrameForKeyboard =
   isComposerOpen && viewportRect.height > 0 && keyboardLift > 24;
@@ -735,15 +944,25 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
       
             <div
         className="story-viewer-portal__frame"
-        style={
-        shrinkFrameForKeyboard ?
-        {
-          height: `${viewportRect.height}px`,
-          marginTop: `${viewportRect.offsetTop}px`,
-          maxWidth: '100vw'
-        } :
-        undefined
-        }>
+        style={{
+          ...(shrinkFrameForKeyboard ?
+          {
+            height: `${viewportRect.height}px`,
+            marginTop: `${viewportRect.offsetTop}px`,
+            maxWidth: '100vw'
+          } :
+          null),
+          ...(verticalDragOffset > 0 ?
+          {
+            transform: `translateY(${verticalDragOffset}px) scale(${Math.max(0.85, 1 - verticalDragOffset / 1400)})`,
+            opacity: Math.max(0.4, 1 - verticalDragOffset / 500),
+            transition: isTransitioning ? 'transform 0.25s ease, opacity 0.25s ease' : 'none',
+            borderRadius: '20px'
+          } :
+          isTransitioning ?
+          { transition: 'transform 0.25s ease, opacity 0.25s ease' } :
+          null)
+        }}>
         
                 {/* Sliding Container that holds ALL users */}
                 <div style={{
@@ -766,7 +985,8 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
 
                             {/* Progress Bars (Only visible for active group) */}
                             <div style={{
-              display: 'flex', gap: '4px', padding: '12px 10px',
+              display: 'flex', gap: '4px',
+              padding: 'max(12px, calc(env(safe-area-inset-top, 0px) + 8px)) 10px 0',
               position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
               pointerEvents: 'none',
               opacity: groupIndex === currentUserGroupIndex ? 1 : 0
@@ -820,8 +1040,35 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
               
                                 {/* Render only stories for current and adjacent users for performance */}
                                 {Math.abs(groupIndex - currentUserGroupIndex) <= 1 && (() => {
-                const storyToRender = groupIndex === currentUserGroupIndex ? currentStory : userGroup.stories[0];
+                const isActiveGroup = groupIndex === currentUserGroupIndex;
+                const storyToRender = isActiveGroup ? currentStory : userGroup.stories[0];
                 if (!storyToRender) return null;
+
+                if (storyToRender.type === 'video' && storyToRender.url) {
+                  if (isActiveGroup) {
+                    return (
+                      <video
+                        key={storyToRender.id}
+                        ref={activeVideoRef}
+                        src={storyToRender.url}
+                        poster={storyToRender.posterUrl || undefined}
+                        muted={videoMuted}
+                        autoPlay
+                        playsInline
+                        onEnded={handleNext}
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }} />);
+
+
+                  }
+                  // Neighboring user's tray preview — poster only, no autoplay/audio.
+                  return (
+                    <img
+                      src={storyToRender.posterUrl || storyToRender.url}
+                      alt="Story"
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }} />);
+
+                }
+
                 return storyToRender.url || storyToRender.image ?
                 <img
                   src={storyToRender.url || storyToRender.image}
@@ -833,6 +1080,19 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                   width: '100%', height: '100%',
                   background: storyToRender.backgroundColor || 'linear-gradient(135deg, #8b5cf6, #ec4899)'
                 }} />;
+
+              })()}
+
+                                {/* Preload the NEXT item in this user's own tray (not just the neighbor's first item)
+                                    so tapping/advancing to it is instant instead of a blank flash. */}
+                                {groupIndex === currentUserGroupIndex && (() => {
+                const nextItem = currentUserStories?.stories?.[currentStoryIndex + 1];
+                if (!nextItem?.url) return null;
+                const hiddenStyle = { position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' };
+                return nextItem.type === 'video' ?
+                <video key={`preload-${nextItem.id}`} src={nextItem.url} preload="auto" muted style={hiddenStyle} /> :
+
+                <img key={`preload-${nextItem.id}`} src={nextItem.url} alt="" style={hiddenStyle} />;
 
               })()}
 
@@ -954,8 +1214,20 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                     openComposer();
                   }}
                   aria-label={t('send', 'Send')}>
-                  
+
                                                     <FaPaperPlane size={20} />
+                                                </button>
+
+                                                <button
+                  type="button"
+                  className="story-footer__action story-footer__action--share"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleShareStory();
+                  }}
+                  aria-label={t('share', 'Share')}>
+
+                                                    <FaShareAlt size={19} />
                                                 </button>
                                             </div> :
               null :
@@ -963,7 +1235,36 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
               <div
                 className="story-footer story-footer--owner"
                 onClick={(e) => e.stopPropagation()}>
-                
+
+                                            <div className="story-footer__owner-actions">
+                                                <button
+                  type="button"
+                  className="story-footer__action story-footer__action--share"
+                  onClick={handleShareStory}
+                  aria-label={t('share', 'Share')}>
+
+                                                    <FaShareAlt size={17} />
+                                                </button>
+                                                {currentStory?.url ?
+                <button
+                  type="button"
+                  className="story-footer__action story-footer__action--download"
+                  onClick={handleDownloadStory}
+                  aria-label={t('download', 'Download')}>
+
+                                                        <FaDownload size={17} />
+                                                    </button> :
+                null}
+                                                <button
+                  type="button"
+                  className="story-footer__action story-footer__action--delete"
+                  onClick={handleDeleteStory}
+                  aria-label={t('delete', 'Delete')}>
+
+                                                    <FaTrashAlt size={16} />
+                                                </button>
+                                            </div>
+
                                             <button
                   type="button"
                   className={`story-footer__owner-comments${ownerCommentsFocus ? ' is-active' : ''}`}
@@ -1034,8 +1335,48 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
       <div
         className="story-double-tap-heart"
         style={{ left: heartPos.x, top: heartPos.y }}>
-        
+
                     ❤️
+                </div>
+      }
+
+            {showShareModal && currentStory &&
+      <div
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        onClick={(e) => {e.stopPropagation();closeShareModal();}}>
+
+                    <div
+          style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border-color)', maxWidth: '90%', width: '320px' }}
+          onClick={(e) => e.stopPropagation()}>
+
+                        <AppText as="h3" style={{ textAlign: 'center', marginBottom: '16px', color: 'var(--text-main)' }}>
+                            {t('share_story', 'Share Story')}
+                        </AppText>
+                        <ShareButtons
+            url={`${getAppOrigin()}/story/${currentStory.id}`}
+            title={t('story_share_title', { defaultValue: "{{name}}'s Story", name: storyOwnerName })}
+            description={currentStory.text || ''}
+            type="story"
+            storyData={{
+              title: t('story_share_title', { defaultValue: "{{name}}'s Story", name: storyOwnerName }),
+              image: currentStory.type === 'video' ? currentStory.posterUrl : currentStory.url || currentStory.posterUrl,
+              description: currentStory.text || '',
+              hostName: storyOwnerName,
+              shareUrl: `${getAppOrigin()}/story/${currentStory.id}`
+            }}
+            sharedData={{
+              type: 'story',
+              id: currentStory.id,
+              title: t('story_share_title', { defaultValue: "{{name}}'s Story", name: storyOwnerName }),
+              description: currentStory.text || '',
+              image: currentStory.type === 'video' ? currentStory.posterUrl : currentStory.url || currentStory.posterUrl,
+              mediaType: 'image',
+              authorName: storyOwnerName,
+              authorAvatar: currentUserStories?.partnerLogo || '',
+              url: `${getAppOrigin()}/story/${currentStory.id}`
+            }} />
+
+                    </div>
                 </div>
       }
         </div>,

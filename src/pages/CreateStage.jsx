@@ -13,6 +13,7 @@ import app from '../firebase/config';
 import { getMutualFollowers } from '../utils/followHelpers';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { isVirtualUser } from '../utils/accountRole';
+import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import './CreateStage.css';
 
 const MAX_INVITEES = 40;
@@ -36,6 +37,8 @@ export default function CreateStage() {
 
   const uid = currentUser?.uid || userProfile?.id;
   const blockedAccount = isVirtualUser(userProfile);
+  const businessStageBlocked =
+    isBusiness && !getBusinessSubscriptionAccess(userProfile?.subscriptionTier).canCreateBusinessStage;
 
   useEffect(() => {
     if (blockedAccount) {
@@ -97,7 +100,11 @@ export default function CreateStage() {
 
   const blockedByExisting = Boolean(hasLiveStage && liveStageId);
   const canSubmit =
-    !submitting && !blockedAccount && !blockedByExisting && !liveStageLoading;
+    !submitting &&
+    !blockedAccount &&
+    !blockedByExisting &&
+    !businessStageBlocked &&
+    !liveStageLoading;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -198,6 +205,39 @@ export default function CreateStage() {
             </div>
           </div>
         </header>
+      </div>
+    );
+  }
+
+  if (businessStageBlocked) {
+    return (
+      <div className="create-stage-page">
+        <header className="create-stage-page__header">
+          <AppBackButton className="create-stage-page__back" />
+          <div className="create-stage-page__heading">
+            <AppText as="span" className="create-stage-page__icon" aria-hidden>
+              <FaMicrophone />
+            </AppText>
+            <div>
+              <AppText as="h1" className="create-stage-page__title">
+                {t('create_business_stage_title', 'Open business Stage')}
+              </AppText>
+              <AppText as="p" className="create-stage-page__subtitle">
+                {t(
+                  'business_stage_paid_only_hint',
+                  'Business Stage requires a Paid Business plan.'
+                )}
+              </AppText>
+            </div>
+          </div>
+        </header>
+        <Link
+          to="/settings/subscription"
+          className="create-stage-page__submit"
+          style={{ display: 'inline-flex', justifyContent: 'center', textDecoration: 'none' }}
+        >
+          {t('upgrade_plan_btn', 'Upgrade Plan')}
+        </Link>
       </div>
     );
   }

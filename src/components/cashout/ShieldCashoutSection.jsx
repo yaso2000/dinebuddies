@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaShieldAlt, FaTimes } from 'react-icons/fa';
+import { FaMinus, FaPlus, FaShieldAlt, FaTimes } from 'react-icons/fa';
 import { AppText } from '../base';
-import { CASHOUT_SHIELD_TIERS, canCashoutShield } from '../../utils/cashoutShieldTiers';
+import { CASHOUT_SHIELD_TIERS, computeJarBreakdown } from '../../utils/cashoutShieldTiers';
 import {
   getGiftShieldVisualTheme,
-  getGiftShieldImageSrc,
+  getGiftJarImageSrc,
 } from '../../constants/giftShieldVisualThemes';
 import { requestCashout } from '../../utils/requestCashout';
 import { useToast } from '../../context/ToastContext';
@@ -14,7 +14,8 @@ import './ShieldCashoutSection.css';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * Shield-package cash-out grid (savings balance only; no free-form amount).
+ * Jar-package cash-out picker (savings balance only; no free-form amount).
+ * Lets the user pick several Jars across sizes and submit one combined request.
  */
 export default function ShieldCashoutSection({
   savedBalance = 0,
@@ -23,42 +24,55 @@ export default function ShieldCashoutSection({
 }) {
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const [selectedId, setSelectedId] = useState(null);
+  const [selection, setSelection] = useState({});
+  const [modalOpen, setModalOpen] = useState(false);
   const [paypalEmail, setPaypalEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  const selected = useMemo(
-    () => CASHOUT_SHIELD_TIERS.find((x) => x.id === selectedId) || null,
-    [selectedId]
-  );
 
   const hasPending = Boolean(pendingRequestId);
   const blocked = disabled || hasPending || submitting;
 
+  // Default selection = the natural largest-first breakdown of the current balance.
+  useEffect(() => {
+    if (blocked) return;
+    const breakdown = computeJarBreakdown(savedBalance);
+    const next = {};
+    for (const item of breakdown.items) next[item.id] = item.count;
+    setSelection(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedBalance]);
+
+  const selectedItems = useMemo(
+    () =>
+      CASHOUT_SHIELD_TIERS.map((tier) => ({ tier, count: selection[tier.id] || 0 })).filter(
+        (x) => x.count > 0
+      ),
+    [selection]
+  );
+
+  const totalCredits = selectedItems.reduce((sum, x) => sum + x.tier.amountCredits * x.count, 0);
+  const totalFiat = selectedItems.reduce((sum, x) => sum + x.tier.amountFiatUsd * x.count, 0);
+  const remaining = Math.max(0, savedBalance - totalCredits);
+
+  const adjust = (tierId, delta) => {
+    if (blocked) return;
+    setSelection((prev) => {
+      const tier = CASHOUT_SHIELD_TIERS.find((t) => t.id === tierId);
+      const current = prev[tierId] || 0;
+      if (delta > 0 && remaining < tier.amountCredits) return prev;
+      const next = Math.max(0, current + delta);
+      return { ...prev, [tierId]: next };
+    });
+  };
+
   const closeModal = () => {
     if (submitting) return;
-    setSelectedId(null);
+    setModalOpen(false);
     setPaypalEmail('');
   };
 
-  const onPick = (tier) => {
-    if (blocked) return;
-    if (!canCashoutShield(savedBalance, tier.id)) {
-      showToast(
-        t(
-          'cashout_need_more_savings',
-          'You need {{credits}} savings credits to cash out this Shield.',
-          { credits: tier.amountCredits.toLocaleString() }
-        ),
-        'error'
-      );
-      return;
-    }
-    setSelectedId(tier.id);
-  };
-
   const onConfirm = async () => {
-    if (!selected || submitting) return;
+    if (submitting || !selectedItems.length) return;
     const email = paypalEmail.trim().toLowerCase();
     if (!EMAIL_RE.test(email)) {
       showToast(t('cashout_invalid_paypal', 'Enter a valid PayPal email.'), 'error');
@@ -66,7 +80,10 @@ export default function ShieldCashoutSection({
     }
     setSubmitting(true);
     try {
-      await requestCashout({ shieldType: selected.id, paypalEmail: email });
+      await requestCashout({
+        items: selectedItems.map((x) => ({ shieldType: x.tier.id, count: x.count })),
+        paypalEmail: email,
+      });
       showToast(
         t(
           'cashout_request_submitted',
@@ -74,8 +91,9 @@ export default function ShieldCashoutSection({
         ),
         'success'
       );
-      setSelectedId(null);
+      setModalOpen(false);
       setPaypalEmail('');
+      setSelection({});
     } catch (err) {
       const msg =
         err?.message ||
@@ -90,12 +108,12 @@ export default function ShieldCashoutSection({
     <section className="settings-card shield-cashout">
       <div className="credits-wallet__hints-title">
         <FaShieldAlt aria-hidden />
-        {t('cashout_shields_title', 'Cash out Shields')}
+        {t('cashout_jars_title', 'Cash out Jars')}
       </div>
       <AppText as="p" className="shield-cashout__lead">
         {t(
-          'cashout_shields_lead',
-          'Redeem a fixed Shield package from your savings wallet — not an arbitrary amount. Purchase credits cannot be cashed out. Lifetime shield progress stays intact.'
+          'cashout_jars_lead',
+          'Redeem Jars from your Cherry balance — not an arbitrary amount. Purchase credits cannot be cashed out. Lifetime shield progress stays intact.'
         )}
       </AppText>
 
@@ -110,17 +128,11 @@ export default function ShieldCashoutSection({
 
       <div className="shield-cashout__grid">
         {CASHOUT_SHIELD_TIERS.map((tier) => {
-          const affordable = canCashoutShield(savedBalance, tier.id);
-          const enabled = affordable && !blocked;
-          const img = getGiftShieldImageSrc(getGiftShieldVisualTheme(tier.id));
+          const count = selection[tier.id] || 0;
+          const canIncrement = !blocked && remaining >= tier.amountCredits;
+          const img = getGiftJarImageSrc(getGiftShieldVisualTheme(tier.id));
           return (
-            <button
-              key={tier.id}
-              type="button"
-              className={`shield-cashout__card${enabled ? '' : ' shield-cashout__card--disabled'}`}
-              disabled={!enabled}
-              onClick={() => onPick(tier)}
-            >
+            <div key={tier.id} className="shield-cashout__card">
               {img ? (
                 <img src={img} alt="" className="shield-cashout__img" />
               ) : (
@@ -133,15 +145,56 @@ export default function ShieldCashoutSection({
                 ${tier.amountFiatUsd} USD
               </AppText>
               <AppText as="span" className="shield-cashout__credits">
-                {tier.amountCredits.toLocaleString()}{' '}
-                {t('credits_unit', 'credits')}
+                {tier.amountCredits.toLocaleString()} {t('cherries_unit', 'cherries')}
               </AppText>
-            </button>
+              <div className="shield-cashout__stepper">
+                <button
+                  type="button"
+                  className="shield-cashout__stepper-btn"
+                  onClick={() => adjust(tier.id, -1)}
+                  disabled={blocked || count === 0}
+                  aria-label={t('decrease', 'Decrease')}
+                >
+                  <FaMinus aria-hidden />
+                </button>
+                <AppText as="span" className="shield-cashout__stepper-count">
+                  {count}
+                </AppText>
+                <button
+                  type="button"
+                  className="shield-cashout__stepper-btn"
+                  onClick={() => adjust(tier.id, 1)}
+                  disabled={!canIncrement}
+                  aria-label={t('increase', 'Increase')}
+                >
+                  <FaPlus aria-hidden />
+                </button>
+              </div>
+            </div>
           );
         })}
       </div>
 
-      {selected ? (
+      {selectedItems.length ? (
+        <div className="shield-cashout__summary">
+          <AppText as="span">
+            {t('cashout_selection_total', 'Total: {{credits}} cherries · ${{amount}} USD', {
+              credits: totalCredits.toLocaleString(),
+              amount: totalFiat.toLocaleString(),
+            })}
+          </AppText>
+          <button
+            type="button"
+            className="shield-cashout__btn shield-cashout__btn--primary"
+            onClick={() => setModalOpen(true)}
+            disabled={blocked}
+          >
+            {t('cashout_submit', 'Request cash-out')}
+          </button>
+        </div>
+      ) : null}
+
+      {modalOpen ? (
         <div className="shield-cashout__modal-backdrop" role="presentation" onClick={closeModal}>
           <div
             className="shield-cashout__modal"
@@ -160,21 +213,21 @@ export default function ShieldCashoutSection({
               <FaTimes aria-hidden />
             </button>
             <AppText as="h3" id="cashout-modal-title" className="shield-cashout__modal-title">
-              {t(
-                'cashout_confirm_title',
-                'You are cashing out your {{shield}} for {{amount}} USD. This will deduct {{credits}} credits from your saved balance.',
-                {
-                  shield: t(selected.labelKey, selected.defaultLabel),
-                  amount: `$${selected.amountFiatUsd}`,
-                  credits: selected.amountCredits.toLocaleString(),
-                }
-              )}
+              {t('cashout_confirm_title_multi', 'Confirm your cash-out')}
             </AppText>
+            <ul className="shield-cashout__modal-items">
+              {selectedItems.map((x) => (
+                <li key={x.tier.id}>
+                  {x.count}× {t(x.tier.labelKey, x.tier.defaultLabel)} — $
+                  {(x.tier.amountFiatUsd * x.count).toLocaleString()}
+                </li>
+              ))}
+            </ul>
             <AppText as="p" className="shield-cashout__modal-body">
               {t(
-                'cashout_confirm_body',
-                'This will deduct {{credits}} credits from your savings balance. Lifetime shield progress will not decrease. Enter your PayPal email to continue.',
-                { credits: selected.amountCredits.toLocaleString() }
+                'cashout_confirm_body_multi',
+                'This will deduct {{credits}} cherries from your savings balance (${{amount}} USD total). Lifetime shield progress will not decrease. Enter your PayPal email to continue.',
+                { credits: totalCredits.toLocaleString(), amount: totalFiat.toLocaleString() }
               )}
             </AppText>
             <label className="shield-cashout__label" htmlFor="cashout-paypal">

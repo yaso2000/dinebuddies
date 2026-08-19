@@ -11,6 +11,7 @@ import {
 } from '../../utils/communityChatBanner';
 
 const DRAG_THRESHOLD_PX = 8;
+const KEYBOARD_NUDGE_PERCENT = 1;
 
 /** Draggable banner body text — host can drag within the body zone. */
 export default function CommunityBannerDraggableBody({
@@ -190,6 +191,39 @@ export default function CommunityBannerDraggableBody({
     void onDelete?.();
   };
 
+  const handleKeyDown = useCallback(
+    (event) => {
+      if (!editable) return;
+      switch (event.key) {
+        case 'ArrowUp':
+        case 'ArrowDown':
+        case 'ArrowLeft':
+        case 'ArrowRight': {
+          event.preventDefault();
+          const dx = event.key === 'ArrowLeft' ? -KEYBOARD_NUDGE_PERCENT : event.key === 'ArrowRight' ? KEYBOARD_NUDGE_PERCENT : 0;
+          const dy = event.key === 'ArrowUp' ? -KEYBOARD_NUDGE_PERCENT : event.key === 'ArrowDown' ? KEYBOARD_NUDGE_PERCENT : 0;
+          const next = applyClampedPosition(posRef.current.x + dx, posRef.current.y + dy);
+          void onPositionChange?.(next.x, next.y);
+          break;
+        }
+        case 'Enter':
+        case ' ':
+          event.preventDefault();
+          setSelected((prev) => !prev);
+          break;
+        case 'Delete':
+        case 'Backspace':
+          event.preventDefault();
+          setSelected(false);
+          void onDelete?.();
+          break;
+        default:
+          break;
+      }
+    },
+    [editable, applyClampedPosition, onPositionChange, onDelete]
+  );
+
   if (!text) return null;
   // External link CTA buttons are disabled — never render them.
   if (isBannerBodyLinkSlot(slotStyle)) return null;
@@ -210,6 +244,7 @@ export default function CommunityBannerDraggableBody({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onKeyDown={handleKeyDown}
       role={editable ? 'button' : undefined}
       tabIndex={editable ? 0 : undefined}
       aria-label={t('community_banner_body_tool', 'Banner text')}

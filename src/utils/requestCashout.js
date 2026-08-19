@@ -2,11 +2,11 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../firebase/config';
 
 /**
- * @param {{ shieldType: string, paypalEmail: string }} args
+ * @param {{ items: Array<{ shieldType: string, count: number }>, paypalEmail: string }} args
  */
-export async function requestCashout({ shieldType, paypalEmail }) {
+export async function requestCashout({ items, paypalEmail }) {
     const fn = httpsCallable(getFunctions(app, 'us-central1'), 'requestCashout');
-    const result = await fn({ shieldType, paypalEmail });
+    const result = await fn({ items, paypalEmail });
     return result?.data || null;
 }
 

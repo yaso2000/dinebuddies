@@ -14,7 +14,8 @@ import { cancelInvitation } from '../utils/invitationCancellation';
 import { completeInvitation, canCompleteInvitation } from '../utils/invitationCompletion';
 import { updateSocialMetaTags, generateInvitationMetaTags, resetSocialMetaTags } from '../utils/socialMetaTags';
 import { db } from '../firebase/config';
-import { doc, getDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { publishContentAsStory } from '../utils/publishAutoStory';
 import MembersList from '../components/Invitation/MembersList';
 import InvitationHeader from '../components/Invitation/InvitationHeader';
 import InvitationInfoGrid from '../components/Invitation/InvitationInfoGrid';
@@ -429,6 +430,7 @@ const InvitationDetails = () => {
   };
 
   const [showInternalShare, setShowInternalShare] = useState(false);
+  const [publishingStory, setPublishingStory] = useState(false);
 
   const handleShareNativeFromModal = async () => {
     const shareUrl = window.location.href;
@@ -604,6 +606,45 @@ const InvitationDetails = () => {
   const isPending = Boolean(myUid && requests.includes(myUid));
   const spotsLeft = guestsNeeded - joined.length;
 
+  // Story expires in 24h, so a single publish at creation goes stale fast —
+  // this lets the host re-push it as a fresh story once a day for as long
+  // as the invitation stays open, capped client-side by lastAutoStoryAt.
+  const lastAutoStoryMs = invitation?.lastAutoStoryAt?.toMillis?.() ??
+    (invitation?.lastAutoStoryAt ? new Date(invitation.lastAutoStoryAt).getTime() : null);
+  const canPublishStoryToday = !lastAutoStoryMs || (Date.now() - lastAutoStoryMs) > 24 * 60 * 60 * 1000;
+
+  const handlePublishStoryAgain = async () => {
+    if (!isHost || !invitation || publishingStory || !canPublishStoryToday) return;
+    setPublishingStory(true);
+    try {
+      const storyImage = customImage || restaurantImage || image;
+      const formattedDate = date ?
+        new Date(date).toLocaleDateString(i18n.language === 'ar' ? 'ar-u-nu-latn' : undefined, { weekday: 'short', month: 'short', day: 'numeric' }) :
+        null;
+      await publishContentAsStory({
+        currentUser: { uid: myUid, displayName: currentUser?.name || currentUser?.displayName },
+        title,
+        image: storyImage,
+        description,
+        date: formattedDate,
+        time,
+        location,
+        maxGuests: guestsNeeded,
+        paymentLine: invitation?.paymentType ?
+          t(`payment_type_${String(invitation.paymentType).toLowerCase().replace(/ /g, '_')}`, { defaultValue: invitation.paymentType }) :
+          null,
+        sourceType: 'invitation',
+      });
+      await updateDoc(doc(db, 'invitations', id), { lastAutoStoryAt: serverTimestamp() });
+      showToast(t('story_published', { defaultValue: 'Story published!' }), 'success');
+    } catch (err) {
+      console.error('[InvitationDetails] publish story again', err);
+      showToast(t('failed_publish_story', { defaultValue: 'Failed to publish story' }), 'error');
+    } finally {
+      setPublishingStory(false);
+    }
+  };
+
 
 
   // Determine current user's specific status for the timeline
@@ -654,6 +695,17 @@ const InvitationDetails = () => {
     // Business accounts cannot join invitations
     if (userProfile?.isBusiness) {
       return { eligible: false, reason: t('business_cannot_join', { defaultValue: 'Business accounts cannot join invitations' }) };
+    }
+
+    // Visible to everyone, but only the host's followers may join.
+    const hostId = invitation?.author?.id || invitation?.hostId || invitation?.authorId;
+    if (
+      invitation?.joinRestriction === 'followers_only' &&
+      hostId &&
+      currentUser?.id !== hostId &&
+      !currentUser?.following?.includes(hostId)
+    ) {
+      return { eligible: false, reason: t('followers_only_join', { defaultValue: 'Only the host’s followers can join this invitation.' }) };
     }
 
     // Check gender preference
@@ -904,6 +956,49 @@ const InvitationDetails = () => {
                                             </div>
                                         </div>
                                         <FaArrowRight color="var(--text-muted)" />
+                                    </button>
+                                </div>
+            }
+
+                            {/* Re-publish as Story — stories expire in 24h, host can push a fresh one daily */}
+                            {isHost &&
+            <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem' }}>
+                                    <button
+                type="button"
+                onClick={handlePublishStoryAgain}
+                disabled={publishingStory || !canPublishStoryToday}
+                className="ui-btn ui-btn--ghost"
+                style={{
+                  width: '100%',
+                  justifyContent: 'flex-start',
+                  gap: '12px',
+                  padding: '1rem',
+                  background: 'var(--hover-overlay)',
+                  textAlign: 'left',
+                  opacity: !canPublishStoryToday ? 0.5 : 1,
+                  cursor: !canPublishStoryToday ? 'not-allowed' : 'pointer'
+                }}>
+
+                                        <div style={{
+                  width: '45px', height: '45px', borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 4px 10px rgba(236, 72, 153, 0.3)'
+                }}>
+                                            <FaImage color="white" size={20} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ color: 'var(--text-main)', fontWeight: '800', fontSize: '1rem' }}>
+                                                {publishingStory ?
+                    t('publishing') || 'Publishing...' :
+                    t('publish_story_again', { defaultValue: 'Publish as Story' })}
+                                            </div>
+                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                                {canPublishStoryToday ?
+                    t('publish_story_again_hint', { defaultValue: 'Re-promote this invitation — once a day' }) :
+                    t('publish_story_again_cooldown', { defaultValue: 'Already published today — come back tomorrow' })}
+                                            </div>
+                                        </div>
                                     </button>
                                 </div>
             }

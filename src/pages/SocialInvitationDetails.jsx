@@ -190,6 +190,12 @@ const SocialInvitationDetails = () => {
               if (!cancelled) setInvitedUsers(hydrated);
             }
           } else {
+            const archiveSnap = await getDoc(doc(db, 'invitation_archives', id));
+            if (!cancelled && archiveSnap.exists()) {
+              setLoading(false);
+              navigate(`/invitation/archived/${id}`, { replace: true });
+              return;
+            }
             setInvitation(null);
             setAccessError('not_found');
           }

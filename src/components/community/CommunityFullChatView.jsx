@@ -8,8 +8,13 @@ import CommunityGuestChatBody from './CommunityGuestChatBody';
  * top panel (media) · bubbles · text editor
  */
 export default function CommunityFullChatView({ room, bannerMediaActive = true }) {
-  const { messages, partnerId, pendingReplyTo, isHost, unpinHostMessage } = room;
+  const { messages, pendingReplyTo, isHost, unpinHostMessage } = room;
   const showTop = room.bannerVisible !== false;
+  // Stage rooms: `partnerId` is the stage document id, not the host's user id
+  // — `hostId` (only present on the Stage hook) is the correct id to match
+  // `message.senderId` against. Community Chat has no `hostId`, where
+  // `partnerId` already equals the host's uid.
+  const hostMessageOwnerId = room.hostId || room.partnerId;
 
   return (
     <div className="community-chat-layout community-full-chat">
@@ -18,7 +23,7 @@ export default function CommunityFullChatView({ room, bannerMediaActive = true }
           <CommunityTopMediaPanel room={room} bannerMediaActive={bannerMediaActive} />
           <CommunityPinnedHostBar
             messages={messages}
-            partnerId={partnerId}
+            partnerId={hostMessageOwnerId}
             pendingReplyTo={pendingReplyTo}
             isHost={isHost}
             onUnpinHostMessage={isHost ? unpinHostMessage : undefined}

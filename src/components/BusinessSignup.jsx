@@ -741,38 +741,38 @@ const BusinessSignup = () => {
 
   return (
     <BusinessAuthShell>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '2rem', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', justifyContent: 'center' }}>
                 <div style={{ height: '4px', width: '40px', background: step >= 1 ? 'var(--primary)' : 'var(--border-color)', borderRadius: '2px' }} />
                 <div style={{ height: '4px', width: '40px', background: step >= 2 ? 'var(--primary)' : 'var(--border-color)', borderRadius: '2px' }} />
             </div>
 
             {step === STEPS.AUTH &&
       <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                    <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                        <div style={{ width: '80px', height: '80px', background: 'linear-gradient(135deg, var(--primary), #f97316)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem', fontSize: '2.5rem' }}>
+                    <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+                        <div style={{ width: '56px', height: '56px', background: 'linear-gradient(135deg, var(--primary), #f97316)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem', fontSize: '1.8rem' }}>
                             <HiBuildingStorefront style={{ color: 'white' }} />
                         </div>
-                        <AppText as="h1" style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '0.5rem', background: 'linear-gradient(135deg, var(--primary), #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                        <AppText as="h1" style={{ fontSize: '1.5rem', fontWeight: '900', marginBottom: '0.35rem', background: 'linear-gradient(135deg, var(--primary), #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                             {t('business_signup_title', 'Grow Your Business')}
                         </AppText>
                     </div>
 
                     <form onSubmit={handleNext}>
-                        <div style={{ marginBottom: '1.25rem' }}>
+                        <div style={{ marginBottom: '1rem' }}>
                             <label style={labelStyle}>{t('email', 'Business Email')}</label>
                             <div style={{ position: 'relative' }}>
                                 <FaEnvelope style={fieldIconStyle} />
                                 <AppTextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={inputStyleWithIcon} />
                             </div>
                         </div>
-                        <div style={{ marginBottom: '1.25rem' }}>
+                        <div style={{ marginBottom: '1rem' }}>
                             <label style={labelStyle}>{t('password', 'Password')}</label>
                             <div style={{ position: 'relative' }}>
                                 <FaLock style={fieldIconStyle} />
                                 <AppTextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} style={inputStyleWithIcon} />
                             </div>
                         </div>
-                        <div style={{ marginBottom: '2rem' }}>
+                        <div style={{ marginBottom: '1.25rem' }}>
                             <label style={labelStyle}>{t('confirm_password', 'Confirm Password')}</label>
                             <div style={{ position: 'relative' }}>
                                 <FaLock style={fieldIconStyle} />
@@ -790,22 +790,22 @@ const BusinessSignup = () => {
 
             {step === STEPS.DETAILS &&
       <div style={{ animation: 'slideInRight 0.4s ease-out' }}>
-                    <button type="button" onClick={handleBack} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                    <button type="button" onClick={handleBack} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', marginBottom: '0.75rem', fontSize: '0.9rem' }}>
                         <FaChevronLeft /> {t('back', 'Back')}
                     </button>
 
-                    <div style={{ marginBottom: '1.5rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--text-main)', marginBottom: 0 }}>
+                    <div style={{ marginBottom: '1rem' }}>
+                        <AppText as="h2" style={{ fontSize: '1.3rem', fontWeight: '800', color: 'var(--text-main)', marginBottom: 0 }}>
                             {t('business_signup_step2_title', 'Business information')}
                         </AppText>
                     </div>
 
                     <div style={{
           background: 'var(--bg-body)',
-          padding: '1.15rem',
+          padding: '0.85rem',
           borderRadius: '16px',
           border: '1px solid var(--border-color)',
-          marginBottom: '1.35rem'
+          marginBottom: '1rem'
         }}>
                         <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.35rem' }}>
                             {t('business_onboarding_detected_city_label')}
@@ -838,7 +838,7 @@ const BusinessSignup = () => {
 
                     </div>
 
-                    <div style={{ marginBottom: '1.25rem' }}>
+                    <div style={{ marginBottom: '1rem' }}>
                         <label style={labelStyle}>{t('business_signup_business_name_label', 'Business name')}</label>
                         <div style={{ position: 'relative' }}>
                             <FaStore style={fieldIconStyle} />
@@ -855,7 +855,7 @@ const BusinessSignup = () => {
                         </div>
                     </div>
 
-                    <div className="venue-search-stack" style={{ marginBottom: '1.25rem' }}>
+                    <div className="venue-search-stack" style={{ marginBottom: '1rem' }}>
                         <label style={labelStyle}>
                           {t(
                             'business_signup_google_search_label',
@@ -892,7 +892,7 @@ const BusinessSignup = () => {
                 </div>
       }
 
-            <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)', textAlign: 'center' }}>
+            <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)', textAlign: 'center' }}>
                 <AppText as="p" style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
                     {t('already_have_account', 'Already have an account?')}{' '}
                     <button type="button" onClick={() => navigate('/login?tab=business')} style={{ border: 'none', background: 'none', padding: 0, color: 'var(--primary)', fontWeight: '600', cursor: 'pointer', font: 'inherit', fontSize: 'inherit' }}>

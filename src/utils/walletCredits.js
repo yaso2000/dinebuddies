@@ -1,5 +1,5 @@
 /** Fraction of gift face value credited to recipient savings wallet (server-enforced). */
-export const GIFT_RECIPIENT_VALUE_RATE = 0.5;
+export const GIFT_RECIPIENT_VALUE_RATE = 0.3;
 
 /** Purchased balance (`users.paidCredits`) — spent first for invites, AI, and gifts. */
 export function getPurchaseCredits(userProfile) {

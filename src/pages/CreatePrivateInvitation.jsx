@@ -23,7 +23,8 @@ import './SocialInvitation.css';
 import { resolveVenueCountryIso } from '../utils/countryIso';
 import { getAppBidiFieldProps } from '../utils/bidiText';
 import { buildPrivateInvitationAiUserPrompt } from '../utils/aiPromptLocale';
-import { getTotalDineCredits, PRIVATE_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
+import { getTotalDineCredits, PRIVATE_INVITATION_PUBLISH_CREDITS, getInvitationDailyFreeStatus } from '../utils/privateInvitationCredits';
+import { checkPrivateInviteAllowed } from '../utils/privateInviteDeclineCooldown';
 import SocialInvitationCardPreview from '../components/Invitations/socialCard/SocialInvitationCardPreview';
 import {
   INVITATION_CARD_MESSAGE_MAX,
@@ -128,8 +129,6 @@ const CreatePrivateInvitation = () => {
   const { showToast } = useToast();
   const { currentUser: authUser, userProfile } = useAuth();
 
-  const quotaInfo = canCreateSocialInvitation('private');
-
   const hostNavState = useMemo(
     () =>
       resolveHostInvitationNavigationState({
@@ -144,6 +143,26 @@ const CreatePrivateInvitation = () => {
   const preselectedInvitee = location.state?.preselectedInvitee;
 
   const [privateInviteeProfile, setDatingInviteeProfile] = useState(null);
+  const [dailyFreeStatus, setDailyFreeStatus] = useState(null);
+
+  useEffect(() => {
+    const uid = authUser?.id || authUser?.uid;
+    if (!uid) {
+      setDailyFreeStatus(null);
+      return;
+    }
+    let cancelled = false;
+    getInvitationDailyFreeStatus(uid).then((status) => {
+      if (!cancelled) setDailyFreeStatus(status);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.id, authUser?.uid]);
+
+  const quotaInfo = canCreateSocialInvitation('private', {
+    freeSlotAvailable: Boolean(dailyFreeStatus?.privateFree),
+  });
 
   const [mediaData, setMediaData] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1476,7 +1495,25 @@ const CreatePrivateInvitation = () => {
   const handlePreview = useCallback(async () => {
     if (!validateEditorRequiredFields()) return;
 
-    const quota = canCreateSocialInvitation('private');
+    const recipientId = formData.invitedFriends?.[0];
+    const senderUid = authUser?.id || authUser?.uid;
+    if (recipientId && senderUid) {
+      const cooldown = await checkPrivateInviteAllowed(senderUid, recipientId);
+      if (!cooldown.ok && cooldown.reason === 'cooldown') {
+        showToast(
+          t(
+            'private_invite_decline_cooldown_blocked',
+            'This person previously declined your invitation. They can allow invites from you again from their settings.'
+          ),
+          'error'
+        );
+        return;
+      }
+    }
+
+    const quota = canCreateSocialInvitation('private', {
+      freeSlotAvailable: Boolean(dailyFreeStatus?.privateFree),
+    });
     if (!editInvitation && !quota.profileLoading && !quota.canCreate) {
       showToast(
         t(
@@ -1543,6 +1580,7 @@ const CreatePrivateInvitation = () => {
   persistEditorDraft,
   navigate,
   showToast,
+  dailyFreeStatus,
   t]
   );
 
@@ -1551,7 +1589,8 @@ const CreatePrivateInvitation = () => {
   const profilePending = Boolean(quotaInfo.profileLoading) || quota === 'pending';
   const dineBalance = getTotalDineCredits(userProfile);
   const publishCost = PRIVATE_INVITATION_PUBLISH_CREDITS;
-  const lowCredits = !isUnlimited && !profilePending && dineBalance < publishCost;
+  const freeInviteToday = Boolean(dailyFreeStatus?.privateFree);
+  const lowCredits = !isUnlimited && !profilePending && !freeInviteToday && dineBalance < publishCost;
 
   const datingCoverTabLabel = useMemo(() => {
     const labels = {
@@ -1586,12 +1625,19 @@ const CreatePrivateInvitation = () => {
         <div
           className={`private-invite-header__credits${
           lowCredits ? ' private-invite-header__credits--low' : ''}${
-          isUnlimited ? ' private-invite-header__credits--unlimited' : ''}`}>
+          isUnlimited ? ' private-invite-header__credits--unlimited' : ''}${
+          freeInviteToday && !isUnlimited ? ' private-invite-header__credits--free' : ''}`}>
 
-                        <AppText as="span">{isUnlimited ? '∞' : `${dineBalance}`}</AppText>
+                        <AppText as="span">{isUnlimited ? '∞' : freeInviteToday ? t('free_today_badge', 'Free') : `${dineBalance}`}</AppText>
                         <AppText as="span" className="private-invite-header__credits-text">
                             {isUnlimited ?
             t('unlimited_date_invitations', 'Unlimited private invites') :
+            freeInviteToday ?
+            t(
+              'private_invitation_free_today_banner',
+              'Your first personal invite today is free. After that, publishing uses {{cost}} credits.',
+              { cost: publishCost }
+            ) :
             t(
               'dine_credits_dating_banner',
               '{{balance}} Dine Credits — publishing uses {{cost}} credits.',

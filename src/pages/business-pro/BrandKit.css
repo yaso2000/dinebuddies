@@ -14,7 +14,7 @@
     width: 100%;
     max-width: var(--max-width);
     margin-inline: auto;
-    padding: 1rem;
+    padding: max(1rem, env(safe-area-inset-top, 0px)) 1rem 1rem;
     box-sizing: border-box;
     position: relative;
     min-height: 100%;

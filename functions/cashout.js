@@ -1,16 +1,16 @@
 /**
- * Shield-package cash-out (gift savings only).
- * - User requests a fixed shield tier (not an arbitrary amount).
- * - Deducts exact package cost from savedCredits; never touches totalSavedCreditsEarned.
- * - Creates pending cashout_requests; admin marks paid or rejects (refund on reject).
+ * Jar-package cash-out (gift savings only).
+ * - User requests one or more Jar sizes (never an arbitrary amount) in a single combined request.
+ * - Deducts exact total package cost from savedCredits; never touches totalSavedCreditsEarned.
+ * - Creates one pending cashout_requests doc with an itemized breakdown; admin marks paid or rejects (refund on reject).
  * - No automatic PayPal transfer (store-safe: earnings review, then manual payout).
  */
 const functions = require('firebase-functions');
-const admin = require('firebase-admin');
 const { getCashoutShieldTier } = require('./cashoutShieldTiers');
 const { isBusinessUserDoc, FieldValue, db } = require('./creditsCore');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_JAR_COUNT_PER_TIER = 50;
 
 function cashoutEnabled() {
     // Default OFF for store launch — set CASHOUT_ENABLED=true to reopen.
@@ -32,6 +32,52 @@ function normalizePaypalEmail(raw) {
         .slice(0, 200);
     if (!EMAIL_RE.test(email)) return '';
     return email;
+}
+
+/**
+ * Validate and price the requested Jar items.
+ * @param {unknown} rawItems
+ * @returns {Array<{ shieldType: string, count: number, amountCredits: number, amountFiatUsd: number }>}
+ */
+function resolveCashoutItems(rawItems) {
+    const list = Array.isArray(rawItems) ? rawItems : [];
+    const seen = new Set();
+    const items = [];
+
+    for (const raw of list) {
+        const tier = getCashoutShieldTier(raw?.shieldType);
+        if (!tier) {
+            throw new functions.https.HttpsError('invalid-argument', 'Choose valid Jar packages.');
+        }
+        if (seen.has(tier.id)) {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                'Each Jar size may only appear once per request.'
+            );
+        }
+        seen.add(tier.id);
+
+        const count = Math.floor(Number(raw?.count));
+        if (!Number.isFinite(count) || count < 1 || count > MAX_JAR_COUNT_PER_TIER) {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                `Jar quantity must be between 1 and ${MAX_JAR_COUNT_PER_TIER}.`
+            );
+        }
+
+        items.push({
+            shieldType: tier.id,
+            count,
+            amountCredits: tier.amountCredits * count,
+            amountFiatUsd: Math.round(tier.amountFiatUsd * count * 100) / 100,
+        });
+    }
+
+    if (!items.length) {
+        throw new functions.https.HttpsError('invalid-argument', 'Choose at least one Jar to cash out.');
+    }
+
+    return items;
 }
 
 async function writeUserNotification(uid, payload) {
@@ -59,7 +105,7 @@ function registerCashoutCallables(exportsMap, deps) {
     const { assertAdminContext } = deps;
 
     /**
-     * requestCashout({ shieldType, paypalEmail })
+     * requestCashout({ items: [{ shieldType, count }], paypalEmail })
      */
     exportsMap.requestCashout = functions.https.onCall(async (data, context) => {
         if (!cashoutEnabled()) {
@@ -70,13 +116,9 @@ function registerCashoutCallables(exportsMap, deps) {
         }
 
         const uid = requireAuthUid(context);
-        const tier = getCashoutShieldTier(data?.shieldType);
-        if (!tier) {
-            throw new functions.https.HttpsError(
-                'invalid-argument',
-                'Choose a valid Shield package (silver, gold, platinum, or diamond).'
-            );
-        }
+        const items = resolveCashoutItems(data?.items);
+        const totalCredits = items.reduce((sum, it) => sum + it.amountCredits, 0);
+        const totalFiat = Math.round(items.reduce((sum, it) => sum + it.amountFiatUsd, 0) * 100) / 100;
 
         const paypalEmail = normalizePaypalEmail(data?.paypalEmail);
         if (!paypalEmail) {
@@ -111,14 +153,14 @@ function registerCashoutCallables(exportsMap, deps) {
             }
 
             const saved = Math.max(0, Math.floor(Number(user.savedCredits) || 0));
-            if (saved < tier.amountCredits) {
+            if (saved < totalCredits) {
                 throw new functions.https.HttpsError(
                     'failed-precondition',
-                    `Insufficient savings credits. Need ${tier.amountCredits} for ${tier.defaultLabel} Shield.`
+                    `Insufficient savings credits. Need ${totalCredits}.`
                 );
             }
 
-            const nextSaved = saved - tier.amountCredits;
+            const nextSaved = saved - totalCredits;
 
             // STRICT: do not touch totalSavedCreditsEarned (visual shield progress).
             tx.update(userRef, {
@@ -127,29 +169,32 @@ function registerCashoutCallables(exportsMap, deps) {
                 updatedAt: FieldValue.serverTimestamp(),
             });
 
-            const ledgerRef = db.collection('credit_transactions').doc();
-            tx.set(ledgerRef, {
-                userId: uid,
-                accountRole: 'user',
-                type: 'cashout_request',
-                amount: -tier.amountCredits,
-                balanceType: 'saved',
-                wallet: 'savings',
-                reason: `cashout_shield_${tier.id}`,
-                relatedId: requestRef.id,
-                createdAt: FieldValue.serverTimestamp(),
-                paidUsed: 0,
-                savedUsed: tier.amountCredits,
-                freeUsed: 0,
-                shieldType: tier.id,
-                amountFiatUsd: tier.amountFiatUsd,
-            });
+            for (const it of items) {
+                const ledgerRef = db.collection('credit_transactions').doc();
+                tx.set(ledgerRef, {
+                    userId: uid,
+                    accountRole: 'user',
+                    type: 'cashout_request',
+                    amount: -it.amountCredits,
+                    balanceType: 'saved',
+                    wallet: 'savings',
+                    reason: `cashout_jar_${it.shieldType}`,
+                    relatedId: requestRef.id,
+                    createdAt: FieldValue.serverTimestamp(),
+                    paidUsed: 0,
+                    savedUsed: it.amountCredits,
+                    freeUsed: 0,
+                    shieldType: it.shieldType,
+                    jarCount: it.count,
+                    amountFiatUsd: it.amountFiatUsd,
+                });
+            }
 
             tx.set(requestRef, {
                 userId: uid,
-                shieldType: tier.id,
-                amountCredits: tier.amountCredits,
-                amountFiat: tier.amountFiatUsd,
+                items,
+                amountCredits: totalCredits,
+                amountFiat: totalFiat,
                 currency: 'USD',
                 paypalEmail,
                 status: 'pending',
@@ -166,16 +211,16 @@ function registerCashoutCallables(exportsMap, deps) {
         functions.logger.info('[requestCashout] created', {
             uid,
             requestId: requestRef.id,
-            shieldType: tier.id,
-            amountCredits: tier.amountCredits,
+            items: items.map((it) => `${it.shieldType}x${it.count}`),
+            amountCredits: totalCredits,
         });
 
         return {
             ok: true,
             requestId: requestRef.id,
-            shieldType: tier.id,
-            amountCredits: tier.amountCredits,
-            amountFiat: tier.amountFiatUsd,
+            items,
+            amountCredits: totalCredits,
+            amountFiat: totalFiat,
             status: 'pending',
         };
     });
@@ -222,7 +267,9 @@ function registerCashoutCallables(exportsMap, deps) {
 
             const uid = String(req.userId || '');
             const amountCredits = Math.max(0, Math.floor(Number(req.amountCredits) || 0));
-            const shieldType = String(req.shieldType || '');
+            const itemsSummary = Array.isArray(req.items)
+                ? req.items.map((it) => `${it.count}× ${it.shieldType}`).join(', ')
+                : String(req.shieldType || '');
             notifyUid = uid;
 
             if (action === 'reject') {
@@ -252,7 +299,6 @@ function registerCashoutCallables(exportsMap, deps) {
                             paidUsed: 0,
                             savedUsed: 0,
                             freeUsed: 0,
-                            shieldType,
                         });
                     }
                 }
@@ -269,9 +315,9 @@ function registerCashoutCallables(exportsMap, deps) {
                     type: 'cashout_rejected',
                     title: 'Cash-out declined',
                     message: rejectReason
-                        ? `Your ${shieldType} Shield cash-out was declined: ${rejectReason}`
-                        : `Your ${shieldType} Shield cash-out was declined. Savings credits were restored.`,
-                    meta: { requestId, shieldType, action: 'reject' },
+                        ? `Your Jar cash-out (${itemsSummary}) was declined: ${rejectReason}`
+                        : `Your Jar cash-out (${itemsSummary}) was declined. Savings credits were restored.`,
+                    meta: { requestId, items: req.items || null, action: 'reject' },
                 };
                 return;
             }
@@ -299,8 +345,8 @@ function registerCashoutCallables(exportsMap, deps) {
             notifyPayload = {
                 type: 'cashout_paid',
                 title: 'Cash-out approved',
-                message: `Your ${shieldType} Shield cash-out ($${Number(req.amountFiat) || 0} USD) was marked as paid.`,
-                meta: { requestId, shieldType, action: 'paid' },
+                message: `Your Jar cash-out (${itemsSummary}, $${Number(req.amountFiat) || 0} USD) was marked as paid.`,
+                meta: { requestId, items: req.items || null, action: 'paid' },
             };
         });
 

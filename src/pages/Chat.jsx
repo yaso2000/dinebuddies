@@ -25,10 +25,18 @@ import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import NewReportModal from '../components/NewReportModal';
 import SharedContentBubble from '../components/SharedContentBubble';
 import EmojiPickerPortal from '../components/EmojiPickerPortal';
-import { handleEmojiButtonClick, shouldUseAppEmojiPicker, showComposerEmojiButton } from '../utils/emojiInputMode';
+import {
+  DEFAULT_MOBILE_EMOJI_PANEL_HEIGHT,
+  MOBILE_EMOJI_SHEET_ANIM_MS,
+  handleChatEmojiToggle,
+  shouldUseAppEmojiPicker,
+  getPersistedKeyboardHeightPx,
+  setPersistedKeyboardHeightPx,
+  subscribeNativeKeyboardHeight,
+} from '../utils/emojiInputMode';
 import './Chat.css';
 import '../styles/chatReferenceTheme.css';
-import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
+import { attachChatShellToVisualViewport, shouldApplyChatVisualViewportLock } from '../utils/chatVisualViewportLock';
 import { AppText, AppTextInput } from "../components/base";
 import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
 import {
@@ -168,13 +176,54 @@ const Chat = () => {
   const emojiBtnRef = useRef(null);
   const containerRef = useRef(null);
   const composerRef = useRef(null);
+  // Last shell height seen while the OS keyboard was open — reused so the
+  // in-app emoji picker takes over that exact slot instead of the whole
+  // chat shell reflowing when switching between keyboard and picker. Falls
+  // back to a typical keyboard height when the emoji button is tapped before
+  // the composer was ever focused (no real keyboard height observed yet).
+  const lastKeyboardShellHeightRef = useRef(getPersistedKeyboardHeightPx());
+  const [emojiPanelHeight, setEmojiPanelHeight] = useState(() =>
+    Math.max(220, Math.round(getPersistedKeyboardHeightPx() || DEFAULT_MOBILE_EMOJI_PANEL_HEIGHT))
+  );
 
+  const applyKeyboardHeight = useCallback((px) => {
+    lastKeyboardShellHeightRef.current = px;
+    setPersistedKeyboardHeightPx(px);
+    setEmojiPanelHeight(Math.max(220, Math.round(px)));
+  }, []);
+
+  // The shell only ever follows the real OS keyboard via visualViewport — it
+  // has no notion of the in-app emoji picker at all. The picker is a plain
+  // fixed-position sheet (see EmojiPickerPortal) that overlays the bottom of
+  // the shell, so there is nothing to override or keep in sync here; that
+  // override plumbing was the source of every keyboard/emoji race so far.
   useEffect(() => {
     const { detach } = attachChatShellToVisualViewport(() => containerRef.current, {
-      onViewportChange: () => pinMessagesToBottom(),
+      onViewportChange: (vv) => {
+        if (vv && window.innerHeight - vv.height > 100) {
+          applyKeyboardHeight(Math.round(vv.height));
+        }
+        pinMessagesToBottom();
+      },
     });
     return detach;
-  }, [pinMessagesToBottom]);
+  }, [pinMessagesToBottom, applyKeyboardHeight]);
+
+  // Android's windowSoftInputMode="adjustResize" resizes the WebView's own
+  // window with the keyboard, so window.innerHeight shrinks along with
+  // visualViewport.height and the diffing above never detects the keyboard —
+  // this listens to the native height directly instead. See
+  // subscribeNativeKeyboardHeight's doc comment for the full explanation.
+  useEffect(() => subscribeNativeKeyboardHeight(applyKeyboardHeight), [applyKeyboardHeight]);
+
+  useEffect(() => {
+    // Keep the last visible messages above the sheet instead of hidden behind
+    // it. The sheet's own height animates in (see EmojiPickerPortal), so
+    // re-settle once more after that transition finishes.
+    pinMessagesToBottom();
+    const t = window.setTimeout(pinMessagesToBottom, MOBILE_EMOJI_SHEET_ANIM_MS);
+    return () => window.clearTimeout(t);
+  }, [emojiPickerOpen, pinMessagesToBottom]);
 
   const handleEmojiClick = (emojiData) => {
     const emoji = emojiData.emoji;
@@ -450,6 +499,10 @@ const Chat = () => {
     if (composerBlocked) return;
     if (!newMessage.trim()) return;
     if (!conversationId) return;
+    // Sending must not switch the composer's input mode: if the emoji picker
+    // was open, it stays open (and visually unchanged) after send — the user
+    // returns to the OS keyboard only by explicitly tapping the keyboard icon.
+    const wasEmojiPickerOpen = emojiPickerOpen;
 
     const messageData = {
       type: 'text',
@@ -461,7 +514,9 @@ const Chat = () => {
     if (messageId) {
       setNewMessage('');
       setReplyTo(null);
-      setTimeout(() => inputRef.current?.focus(), 100);
+      if (!wasEmojiPickerOpen) {
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
     }
     setTypingStatus(conversationId, false);
   };
@@ -1019,6 +1074,10 @@ const Chat = () => {
                   onChange={(e) => handleTyping(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
                   onFocus={() => {
+                    // The OS keyboard and the in-app emoji picker can never be
+                    // open together — whatever refocuses the field (tapping
+                    // it, sending a message, anything) must close the picker.
+                    setEmojiPickerOpen(false);
                     pinnedToBottomRef.current = true;
                     pinMessagesToBottom();
                     window.setTimeout(() => pinMessagesToBottom(), 120);
@@ -1026,17 +1085,21 @@ const Chat = () => {
                   }}
                   className="chat-input-field" />
                 
-                {showComposerEmojiButton() ?
                 <button
                   ref={emojiBtnRef}
                   type="button"
                   className="composer-icon-btn chat-composer-icon-btn composer-icon-btn--emoji"
-                  onClick={() => handleEmojiButtonClick({ inputRef, setPickerOpen: setEmojiPickerOpen })}
+                  onClick={() =>
+                    handleChatEmojiToggle({
+                      inputRef,
+                      pickerOpen: emojiPickerOpen,
+                      setPickerOpen: setEmojiPickerOpen,
+                    })
+                  }
                   title="Emoji">
-                  
-                                    😊
+
+                                    {emojiPickerOpen ? '⌨️' : '😊'}
                                 </button>
-                : null}
                             <button
                   type="button"
                   className="composer-icon-btn chat-composer-icon-btn"
@@ -1062,6 +1125,8 @@ const Chat = () => {
             open={emojiPickerOpen}
             onClose={() => setEmojiPickerOpen(false)}
             anchorRef={emojiBtnRef}
+            panelHeight={emojiPanelHeight}
+            forceMobile={shouldApplyChatVisualViewportLock()}
             onEmojiClick={(data) => {
               handleEmojiClick(data);
             }} />

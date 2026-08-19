@@ -1,4 +1,6 @@
+import { StatusBar, Style } from '@capacitor/status-bar';
 import { buildTheme } from './buildTheme';
+import { getRuntime } from '../platform/runtime';
 
 export const THEME_STORAGE_KEY = 'theme';
 
@@ -46,11 +48,21 @@ export function readBootAccountTheme() {
     return 'personal';
 }
 
+/** Native status bar icon color must track theme — light bg needs dark icons and vice versa. */
+function syncNativeStatusBar(themeMode) {
+    if (!getRuntime().isNative) return;
+    void StatusBar.setStyle({ style: themeMode === 'dark' ? Style.Dark : Style.Light }).catch(() => {
+        /* status bar plugin unavailable on this platform — ignore */
+    });
+}
+
 /**
  * Apply theme tokens to <html> synchronously (before paint when called from boot).
  */
 export function applyDocumentTheme({ themeMode, accountTheme, brandColor = null }) {
     if (typeof document === 'undefined') return;
+
+    syncNativeStatusBar(themeMode);
 
     const isBusinessTheme = accountTheme === 'business';
     const isAffiliateTheme = accountTheme === 'affiliate';

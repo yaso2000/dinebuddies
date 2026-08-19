@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   registerPushDeviceFromUserGesture,
@@ -45,6 +45,7 @@ const PushNotificationPrompt = () => {
   const [tokenCount, setTokenCount] = useState(0);
   const [registerDetail, setRegisterDetail] = useState('');
   const [bootstrapReady, setBootstrapReady] = useState(false);
+  const autoRequestedRef = useRef({});
 
   const refreshPushState = useCallback(async () => {
     if (!currentUser?.uid || isGuest) return;
@@ -59,6 +60,30 @@ const PushNotificationPrompt = () => {
     if (!mode) {
       setShowPrompt(false);
       setPromptMode(null);
+      return;
+    }
+
+    // Android + Desktop web: skip our custom "allow notifications" card and go straight to
+    // the browser/OS's own native permission prompt — iOS never shows this card either
+    // (it gets the 'install' hint instead), so this keeps both platforms app-UI-free.
+    if ((mode === 'allow' || mode === 'register') && !isIOS()) {
+      setShowPrompt(false);
+      setPromptMode(null);
+      const autoKey = `${uid}:${mode}`;
+      if (!autoRequestedRef.current[autoKey]) {
+        autoRequestedRef.current[autoKey] = true;
+        void registerPushDeviceFromUserGesture(uid, {
+          requestPermissionIfNeeded: mode === 'allow',
+        })
+          .then((result) => {
+            if (result?.ok) {
+              localStorage.setItem(pushDismissKey(uid), 'true');
+            }
+          })
+          .catch((error) => {
+            console.error('[Push] native permission request failed:', error);
+          });
+      }
       return;
     }
 

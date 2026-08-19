@@ -6,7 +6,7 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase/config';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun, FaUsers, FaDownload, FaQuestionCircle, FaBan, FaCrown, FaCreditCard, FaFileInvoice, FaWallet, FaBullhorn } from 'react-icons/fa';
+import { FaArrowLeft, FaUser, FaEnvelope, FaLock, FaBell, FaShieldAlt, FaSignOutAlt, FaTrash, FaStore, FaChevronRight, FaFileContract, FaMoon, FaSun, FaUsers, FaDownload, FaQuestionCircle, FaBan, FaCrown, FaCreditCard, FaFileInvoice, FaWallet, FaBullhorn, FaUserClock, FaChild } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import './Settings.css';
 import { goToLogin } from '../utils/goToLogin';
@@ -181,6 +181,12 @@ const Settings = () => {
       t('none', 'None'),
       onClick: () => navigate('/settings/blocked-users'),
       color: '#b91c1c'
+    },
+    {
+      icon: <FaUserClock />,
+      label: t('settings_declined_invitations', 'Declined invitations'),
+      onClick: () => navigate('/settings/declined-invitations'),
+      color: '#8b5cf6'
     }]
 
   },
@@ -210,6 +216,12 @@ const Settings = () => {
       label: t('community_guidelines', 'Community Guidelines'),
       onClick: () => navigate('/guidelines'),
       color: '#8b5cf6'
+    },
+    {
+      icon: <FaChild />,
+      label: t('child_safety_standards', 'Child Safety Standards'),
+      onClick: () => navigate('/child-safety'),
+      color: '#f97316'
     },
     {
       icon: <FaTrash />,
@@ -312,10 +324,10 @@ const Settings = () => {
         color: '#0ea5e9'
       },
       {
-        icon: '📋',
-        label: t('top_up_dine_credits', 'Top up Dine Credits'),
+        icon: <FaCreditCard />,
+        label: t('payment_methods', 'Payment Methods'),
         value: t('view_inline', 'View'),
-        onClick: () => navigate('/settings/credits'),
+        onClick: () => navigate('/settings/payment-methods'),
         color: '#8b5cf6'
       }]
 

@@ -558,6 +558,13 @@
     opacity: 0.95;
 }
 
+.credits-wallet__hero-wallet--cherry {
+    width: 42px;
+    height: 42px;
+    object-fit: contain;
+    opacity: 1;
+}
+
 .credits-wallet__hero-copy {
     flex: 1;
     min-width: 0;

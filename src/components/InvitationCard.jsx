@@ -148,6 +148,16 @@ const InvitationCard = ({ invitation }) => {
       return { eligible: false, reason: t('business_cannot_join', { defaultValue: 'Business accounts cannot join invitations' }) };
     }
 
+    // Visible to everyone, but only the host's followers may join.
+    if (
+      invitation?.joinRestriction === 'followers_only' &&
+      author?.id &&
+      currentUser?.id !== author.id &&
+      !isFollowing
+    ) {
+      return { eligible: false, reason: t('followers_only_join', { defaultValue: 'Only the host’s followers can join this invitation.' }) };
+    }
+
     // Check gender preference
     // Check gender preference (Unified)
     if (invitation.genderGroups && invitation.genderGroups.length > 0 && !invitation.genderGroups.includes('any')) {

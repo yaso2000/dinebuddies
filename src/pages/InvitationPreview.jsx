@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FaEdit, FaCheckCircle, FaExclamationTriangle, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaUsers, FaMoneyBillWave, FaLock, FaGlobe, FaUserFriends } from 'react-icons/fa';
+import { FaEdit, FaCheckCircle, FaExclamationTriangle, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaUsers, FaMoneyBillWave, FaLock, FaGlobe, FaUserFriends, FaCamera } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, getDocFromServer } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -12,11 +12,12 @@ import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { AppText } from "../components/base";
 import { scheduleScrollPageToTop } from '../utils/scrollPageToTop';
+import { publishContentAsStory } from '../utils/publishAutoStory';
 
 const InvitationPreview = () => {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
-  const { isBusiness } = useAuth();
+  const { isBusiness, currentUser } = useAuth();
   const { publishPublicInvitationDraft } = useInvitations();
   const isBusinessRef = useRef(isBusiness);
   isBusinessRef.current = isBusiness;
@@ -28,6 +29,7 @@ const InvitationPreview = () => {
   const [invitation, setInvitation] = useState(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [alsoPublishStory, setAlsoPublishStory] = useState(false);
 
   useEffect(() => {
     if (loading || !invitation?.id) return undefined;
@@ -128,6 +130,28 @@ const InvitationPreview = () => {
       }
 
       console.log('✅ Invitation published successfully!');
+      if (alsoPublishStory) {
+        const storyImage = invitation?.customImage || invitation?.restaurantImage || invitation?.image;
+        const formattedDate = invitation?.date ?
+          new Date(invitation.date).toLocaleDateString(i18n.language === 'ar' ? 'ar-u-nu-latn' : undefined, { weekday: 'short', month: 'short', day: 'numeric' }) :
+          null;
+        // Best-effort — the invitation itself already published successfully,
+        // so a story-image failure here shouldn't block or error out the flow.
+        publishContentAsStory({
+          currentUser,
+          title: invitation?.title,
+          image: storyImage,
+          description: invitation?.description,
+          date: formattedDate,
+          time: invitation?.time,
+          location: invitation?.location,
+          maxGuests: invitation?.guestsNeeded,
+          paymentLine: invitation?.paymentType ?
+            t(`payment_type_${String(invitation.paymentType).toLowerCase().replace(/ /g, '_')}`, { defaultValue: invitation.paymentType }) :
+            null,
+          sourceType: 'invitation',
+        }).catch((err) => console.error('[InvitationPreview] auto-story', err));
+      }
       navigate(`/invitation/${draftId}`);
     } catch (error) {
       console.error('❌ Error publishing invitation:', error);
@@ -151,6 +175,10 @@ const InvitationPreview = () => {
   if (!invitation) {
     return null;
   }
+
+  const paymentTypeLabel = invitation.paymentType ?
+    t(`payment_type_${String(invitation.paymentType).toLowerCase().replace(/ /g, '_')}`, { defaultValue: invitation.paymentType }) :
+    null;
 
   const getPrivacyIcon = () => {
     switch (invitation.privacy) {
@@ -400,49 +428,59 @@ const InvitationPreview = () => {
                             <FaMoneyBillWave style={{ color: templateStyles?.badge?.color || 'var(--primary)' }} />
                             <div>
                                 <div style={{ fontSize: '0.7rem', color: previewSubtleColor, opacity: 1 }}>{t('payment')}</div>
-                                <div style={{ fontWeight: '700', fontSize: '0.85rem' }}>{invitation.paymentType}</div>
+                                <div style={{ fontWeight: '700', fontSize: '0.85rem' }}>{paymentTypeLabel}</div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* ACTION BUTTONS */}
+            {/* ACTION ROW — story toggle + edit + publish, all in one compact line */}
             <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 2fr',
-        gap: '1rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.6rem',
         marginBottom: '2rem'
       }}>
-                {/* Edit Button */}
+                <label
+          title={t('also_publish_as_story', { defaultValue: 'Also publish as a Story' })}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            flexShrink: 0,
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            color: 'var(--text-main)',
+            cursor: isPublishing ? 'not-allowed' : 'pointer',
+            opacity: isPublishing ? 0.5 : 1
+          }}>
+                    <input
+            type="checkbox"
+            checked={alsoPublishStory}
+            disabled={isPublishing}
+            onChange={(e) => setAlsoPublishStory(e.target.checked)}
+            style={{ width: '16px', height: '16px', cursor: 'inherit' }} />
+
+                    <FaCamera style={{ fontSize: '0.9rem' }} />
+                </label>
+
                 <button
           type="button"
           onClick={handleEdit}
           disabled={isPublishing}
           className="ui-btn ui-btn--secondary"
+          title={t('edit_details') || 'Edit Details'}
+          aria-label={t('edit_details') || 'Edit Details'}
           style={{
-            /* ui-btn ui-btn--secondary provides base; keep preview-specific overrides */
-            padding: '1.25rem',
-            borderRadius: '16px',
+            flexShrink: 0,
+            padding: '0.7rem',
+            borderRadius: '12px',
             fontSize: '1rem',
             opacity: isPublishing ? 0.5 : 1,
             boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-          }}
-          onMouseEnter={(e) => {
-            if (!isPublishing) {
-              e.currentTarget.style.borderColor = templateStyles?.badge?.color || 'var(--primary)';
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 15px rgba(0,0,0,0.1)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = 'var(--border-color)';
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
           }}>
-          
                     <FaEdit style={{ color: templateStyles?.badge?.color || 'var(--primary)' }} />
-                    {t('edit_details') || 'Edit Details'}
                 </button>
 
                 {/* Publish Button */}
@@ -453,29 +491,19 @@ const InvitationPreview = () => {
           className="ui-btn ui-btn--primary"
           style={{
             ...(templateStyles?.button || {}),
-            padding: '1.25rem',
-            fontSize: '1.1rem',
+            flex: 1,
+            minWidth: 0,
+            padding: '0.7rem 0.9rem',
+            fontSize: '0.9rem',
             fontWeight: '800',
             cursor: isPublishing ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '0.75rem',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            width: '100%',
+            gap: '0.5rem',
             border: templateStyles?.button?.border || 'none'
-          }}
-          onMouseEnter={(e) => {
-            if (!isPublishing) {
-              e.currentTarget.style.transform = 'translateY(-3px) scale(1.02)';
-              e.currentTarget.style.boxShadow = templateStyles?.button?.boxShadow || '0 12px 25px rgba(0,0,0,0.3)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0) scale(1)';
-            e.currentTarget.style.boxShadow = templateStyles?.button?.boxShadow || 'none';
           }}>
-          
+
                     <FaCheckCircle />
                     {isPublishing ?
           t('publishing') || 'Publishing...' :

@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaCrown, FaLock } from 'react-icons/fa';
+import { FaCheckCircle, FaCrown, FaLock } from 'react-icons/fa';
 
 /**
  * A small badge to indicate a premium feature.
@@ -38,5 +38,20 @@ const PremiumBadge = ({ mode = 'pro', text = 'PRO' }) => {
         </AppText>);
 
 };
+
+/** Sibling of PremiumBadge for the free-tier equivalent — same pill geometry/weight, green instead of gold. */
+export const FreeFeatureBadge = ({ text = 'FREE' }) => (
+  <AppText as="span" style={{
+    display: 'inline-flex', alignItems: 'center', gap: '4px',
+    background: 'color-mix(in srgb, var(--color-success) 15%, transparent)',
+    border: '1.5px solid var(--color-success)',
+    color: 'var(--color-success)',
+    padding: '2px 7px', borderRadius: '6px',
+    fontSize: '0.65rem', fontWeight: '800', letterSpacing: '0.5px',
+    marginLeft: '6px', verticalAlign: 'middle'
+  }}>
+    <FaCheckCircle size={9} /> {text}
+  </AppText>
+);
 
 export default PremiumBadge;

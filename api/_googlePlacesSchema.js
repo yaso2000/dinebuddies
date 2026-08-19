@@ -62,11 +62,25 @@ export function googleLocationToCoordinates(location) {
 export function parseCityCountryFromGoogleAddress(address) {
     const raw = String(address || '').trim();
     if (!raw) return { city: '', country: '' };
-    const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+
+    // Google separates address segments with commas for most regions, but
+    // uses " - " for some Gulf-region addresses (UAE, etc.) — sometimes even
+    // mixed within the same address, e.g. "The Fountains, Yas Mall - جزيرة
+    // ياس - أبو ظبي - الإمارات العربية المتحدة" — and Arabic-language
+    // results (languageCode: 'ar') use the Arabic comma (،, U+060C) instead
+    // of the ASCII comma, e.g. "طريق الأمير محمد بن عبدالعزيز، العليا،
+    // الرياض 12331، السعودية". Splitting on any of these delimiters
+    // uniformly means the last two segments are always city/country
+    // regardless of which one a given address happens to use.
+    const parts = raw.split(/,|،| - /).map((s) => s.trim()).filter(Boolean);
     if (parts.length < 2) return { city: '', country: '' };
+
     const country = parts[parts.length - 1] || '';
     const cityPart = parts[parts.length - 2] || '';
-    const city = cityPart.replace(/\s+(QLD|NSW|VIC|SA|WA|TAS|NT|ACT)\s*\d*$/i, '').trim() || cityPart;
+    const city = cityPart
+        .replace(/\s+(QLD|NSW|VIC|SA|WA|TAS|NT|ACT)\s*\d*$/i, '')
+        .replace(/\s+\d{4,6}$/, '') // trailing postal code, e.g. "الرياض 12331"
+        .trim() || cityPart;
     return { city, country };
 }
 

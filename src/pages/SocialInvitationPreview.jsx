@@ -352,12 +352,21 @@ const SocialInvitationPreview = () => {
       }
 
       setHasSentToMembers(true);
-      showToast(
-        t('social_invite_sent_to_members', {
-          defaultValue: 'Invitation sent to selected members.'
-        }),
-        'success'
-      );
+      if (publishResult.chargedSource === 'daily_free') {
+        showToast(
+          t('social_invite_sent_free_today', {
+            defaultValue: 'Invitation sent using your free invite today.'
+          }),
+          'success'
+        );
+      } else {
+        showToast(
+          t('social_invite_sent_to_members', {
+            defaultValue: 'Invitation sent to selected members.'
+          }),
+          'success'
+        );
+      }
 
       const current = invitationRef.current;
       navigate(

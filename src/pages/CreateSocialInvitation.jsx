@@ -70,7 +70,7 @@ import {
 '../components/Invitations/socialCard/socialCardGradientBackgrounds';
 import { getPrivateHeroCoverFromMediaData } from '../components/Invitations/privateCard/privateCardBackgrounds';
 import PrivateCoverCameraPanel from '../components/Invitations/privateCard/PrivateCoverCameraPanel';
-import { getTotalDineCredits, SOCIAL_INVITATION_PUBLISH_CREDITS } from '../utils/privateInvitationCredits';
+import { getTotalDineCredits, SOCIAL_INVITATION_PUBLISH_CREDITS, getInvitationDailyFreeStatus } from '../utils/privateInvitationCredits';
 import {
   createPrivateCoverStashId,
   isCoverStashKindAtLimit,
@@ -105,7 +105,25 @@ const CreateSocialInvitation = () => {
   const { showToast } = useToast();
   const { currentUser: authUser, userProfile } = useAuth();
 
-  const quotaInfo = canCreateSocialInvitation('social');
+  const [dailyFreeStatus, setDailyFreeStatus] = useState(null);
+  useEffect(() => {
+    const uid = authUser?.id || authUser?.uid;
+    if (!uid) {
+      setDailyFreeStatus(null);
+      return;
+    }
+    let cancelled = false;
+    getInvitationDailyFreeStatus(uid).then((status) => {
+      if (!cancelled) setDailyFreeStatus(status);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.id, authUser?.uid]);
+
+  const quotaInfo = canCreateSocialInvitation('social', {
+    freeSlotAvailable: Boolean(dailyFreeStatus?.socialFree),
+  });
 
   const hostNavState = useMemo(
     () =>
@@ -1127,7 +1145,9 @@ const CreateSocialInvitation = () => {
   const handlePreview = useCallback(async () => {
     if (!validateEditorRequiredFields()) return;
 
-    const quota = canCreateSocialInvitation('social');
+    const quota = canCreateSocialInvitation('social', {
+      freeSlotAvailable: Boolean(dailyFreeStatus?.socialFree),
+    });
     if (!editInvitation && !quota.profileLoading && !quota.canCreate) {
       showToast(
         t(
@@ -1194,6 +1214,7 @@ const CreateSocialInvitation = () => {
   persistEditorDraft,
   navigate,
   showToast,
+  dailyFreeStatus,
   t]
   );
 
@@ -1202,7 +1223,8 @@ const CreateSocialInvitation = () => {
   const profilePending = Boolean(quotaInfo.profileLoading) || quota === 'pending';
   const dineBalance = getTotalDineCredits(userProfile);
   const publishCost = SOCIAL_INVITATION_PUBLISH_CREDITS;
-  const lowCredits = !isUnlimited && !profilePending && dineBalance < publishCost;
+  const freeInviteToday = Boolean(dailyFreeStatus?.socialFree);
+  const lowCredits = !isUnlimited && !profilePending && !freeInviteToday && dineBalance < publishCost;
 
   return (
     <div className="private-create-wrapper private-theme">
@@ -1228,21 +1250,29 @@ const CreateSocialInvitation = () => {
           borderRadius: '12px',
           background: isUnlimited ?
           'rgba(72,187,120,0.1)' :
+          freeInviteToday ?
+          'rgba(72,187,120,0.1)' :
           lowCredits ?
           'rgba(239,68,68,0.1)' :
           'rgba(139,92,246,0.1)',
-          border: `1px solid ${isUnlimited ? 'rgba(72,187,120,0.3)' : lowCredits ? 'rgba(239,68,68,0.3)' : 'rgba(139,92,246,0.3)'}`,
+          border: `1px solid ${isUnlimited || freeInviteToday ? 'rgba(72,187,120,0.3)' : lowCredits ? 'rgba(239,68,68,0.3)' : 'rgba(139,92,246,0.3)'}`,
           display: 'flex',
           alignItems: 'center',
           gap: 8,
           fontSize: '0.875rem',
-          color: isUnlimited ? '#4ade80' : lowCredits ? '#f87171' : '#a78bfa',
+          color: isUnlimited || freeInviteToday ? '#4ade80' : lowCredits ? '#f87171' : '#a78bfa',
           fontWeight: 600
         }}>
-                        <AppText as="span">{isUnlimited ? '∞' : `${dineBalance}`}</AppText>
+                        <AppText as="span">{isUnlimited ? '∞' : freeInviteToday ? t('free_today_badge', 'Free') : `${dineBalance}`}</AppText>
                         <AppText as="span" style={{ opacity: 0.85, fontWeight: 400 }}>
                             {isUnlimited ?
             t('unlimited_private_invitations', 'Unlimited private invitations') :
+            freeInviteToday ?
+            t(
+              'social_invitation_free_today_banner',
+              'Your first social invite today is free. After that, publishing uses {{cost}} credits.',
+              { cost: publishCost }
+            ) :
             t(
               'dine_credits_private_banner',
               '{{balance}} Dine Credits — publishing uses {{cost}} credits from your wallet.',

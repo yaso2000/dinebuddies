@@ -3,6 +3,9 @@
  * Spending uses the purchase wallet (`paidCredits`) only.
  * Public invitations (`invitations` collection) = 0 credits (not listed here).
  */
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
+
 export { getTotalDineCredits, getPurchaseCredits, getSpendableCredits } from './walletCredits';
 
 export const SOCIAL_INVITATION_PUBLISH_CREDITS = 90;
@@ -37,6 +40,31 @@ export function isPrivateInvitationDoc(inv) {
 
 export function getPrivateInvitationPublishCost(inv) {
     return isPrivateInvitationDoc(inv) ? PRIVATE_INVITATION_PUBLISH_CREDITS : SOCIAL_INVITATION_PUBLISH_CREDITS;
+}
+
+/** UTC calendar-day key, matches the server's `currentUtcDayKey()` in functions/index.js. */
+function currentUtcDayKey() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Whether today's free private/social invitation slot is still unused for this user.
+ * Display-only hint — the server (`publishPrivateInvitationDraft`) is the source of truth.
+ * @param {string|null|undefined} uid
+ */
+export async function getInvitationDailyFreeStatus(uid) {
+    if (!uid) return { privateFree: false, socialFree: false };
+    try {
+        const dayKey = currentUtcDayKey();
+        const snap = await getDoc(doc(db, 'invitation_daily_usage', `${uid}_${dayKey}`));
+        const data = snap.exists() ? snap.data() || {} : {};
+        return {
+            privateFree: !data.privateUsed,
+            socialFree: !data.socialUsed,
+        };
+    } catch {
+        return { privateFree: false, socialFree: false };
+    }
 }
 
 /** @param {Record<string, unknown>|null|undefined} inv */

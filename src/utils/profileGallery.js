@@ -1,4 +1,5 @@
 import { resolveDefaultProfileCover } from '../constants/defaultProfileMedia';
+import { upsizeProviderPhotoUrl } from './providerPhotoSize';
 
 /** Max portrait slots on dating profiles (9:16). */
 export const PROFILE_GALLERY_MAX_SLOTS = 3;
@@ -194,7 +195,7 @@ export function resolveProfileAvatarUrl(user = {}) {
     const uploaded = candidates.find((url) => isUpload(url) && !isStockOrGenerated(url));
     if (uploaded) return uploaded;
     const oauth = candidates.find((url) => isOAuth(url));
-    if (oauth) return oauth;
+    if (oauth) return upsizeProviderPhotoUrl(oauth);
     return null;
 }
 

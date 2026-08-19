@@ -94,6 +94,18 @@ export default function InvitationSwipeCard({ item, isTop = true, onSkip, listPa
         reason: t('business_cannot_join', 'Business accounts cannot join invitations'),
       };
     }
+    // Visible to everyone, but only the host's followers may join.
+    if (
+      inv?.joinRestriction === 'followers_only' &&
+      inv.author?.id &&
+      !isHost &&
+      !currentUser?.following?.includes(inv.author.id)
+    ) {
+      return {
+        eligible: false,
+        reason: t('followers_only_join', 'Only the host’s followers can join this invitation.'),
+      };
+    }
     if (inv.genderGroups?.length > 0 && !inv.genderGroups.includes('any')) {
       if (currentUser?.gender && !inv.genderGroups.includes(currentUser.gender)) {
         return { eligible: false, reason: t('gender_mismatch') };

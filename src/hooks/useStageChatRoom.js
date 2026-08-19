@@ -9,6 +9,7 @@ import {
     onSnapshot,
     orderBy,
     query,
+    runTransaction,
     serverTimestamp,
     setDoc,
     Timestamp,
@@ -23,6 +24,7 @@ import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import { uploadImage, uploadVoiceMessage } from '../utils/mediaUtils';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { createNotification } from '../utils/notificationHelpers';
@@ -37,6 +39,7 @@ import {
     buildBannerUpdate,
     mergeBannerPatch,
     normalizeCommunityBanner,
+    resolveBannerYoutubeSyncFields,
     sanitizeBannerAxis,
     BANNER_VOICE_MAX_DURATION_SEC,
 } from '../utils/communityChatBanner';
@@ -147,6 +150,11 @@ export function useStageChatRoom(stageId) {
         hostId,
     ]);
 
+    /** Business Stages need the host's Paid plan; messages are rules-blocked otherwise. */
+    const isBusinessStageUnpaid =
+        String(partner?.hostKind || '').toLowerCase() === 'business' &&
+        !getBusinessSubscriptionAccess(partner?.subscriptionTier).canCreateBusinessStage;
+
     useEffect(() => {
         setIsDisplaySession(false);
     }, []);
@@ -172,7 +180,13 @@ export function useStageChatRoom(stageId) {
     );
 
     const hostBannerVisible = useMemo(() => resolveCommunityChatBannerVisible(partner), [partner]);
-    const [guestBannerLocalVisible, setGuestBannerLocalVisible] = useState(true);
+    // Lazy-init from the persisted pref when uid/partnerId are already known
+    // at mount (the common case — auth + route param are synchronous here)
+    // so a guest who previously hid the banner doesn't see it flash visible
+    // for one render before the effect below corrects it.
+    const [guestBannerLocalVisible, setGuestBannerLocalVisible] = useState(() =>
+        uid && partnerId ? readGuestCommunityBannerVisible(uid, partnerId) : true
+    );
 
     useEffect(() => {
         if (!partnerId || !uid || isHost) return;
@@ -411,7 +425,7 @@ export function useStageChatRoom(stageId) {
 
     // Messages subcollection — retry on permission-denied (join race / rules lag)
     useEffect(() => {
-        if (!isMember || !partnerId) {
+        if (!isMember || !partnerId || isBusinessStageUnpaid) {
             setMessages([]);
             return undefined;
         }
@@ -479,7 +493,7 @@ export function useStageChatRoom(stageId) {
                 /* ignore */
             }
         };
-    }, [partnerId, isMember, uid]);
+    }, [partnerId, isMember, uid, isBusinessStageUnpaid]);
 
     useEffect(() => {
         if (readReceiptTimeoutRef.current) {
@@ -647,46 +661,10 @@ export function useStageChatRoom(stageId) {
             if (!isHost || !partnerId) return;
             const payload = {
                 ...fields,
+                ...resolveBannerYoutubeSyncFields(fields, serverTimestamp()),
                 banner_updated_at: serverTimestamp(),
                 ownerId: hostId || partnerId,
             };
-            if (
-                Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_id') ||
-                Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_playlist_id')
-            ) {
-                const ytId = String(fields.banner_youtube_id || '').trim();
-                const listId = String(fields.banner_youtube_playlist_id || '').trim();
-                const hasYt =
-                    /^[a-zA-Z0-9_-]{11}$/.test(ytId) ||
-                    (/^[a-zA-Z0-9_-]{10,64}$/.test(listId) &&
-                        !(listId.length === 11 && !/^(PL|UU|RD|OL|LL|FL|WL)/i.test(listId)));
-                if (hasYt) {
-                    // Only stamp a new sync epoch when the caller asks for it
-                    // (new YouTube media / explicit syncYoutubePlayback). Title/text
-                    // edits must NOT reset sync_at — that made guest start= huge/broken.
-                    const refreshSync = Object.prototype.hasOwnProperty.call(
-                        fields,
-                        'banner_youtube_sync_client_ms'
-                    );
-                    if (refreshSync) {
-                        payload.banner_youtube_sync_at = serverTimestamp();
-                        if (!Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_paused')) {
-                            payload.banner_youtube_paused = false;
-                        }
-                        if (
-                            !Object.prototype.hasOwnProperty.call(
-                                fields,
-                                'banner_youtube_position_sec'
-                            )
-                        ) {
-                            payload.banner_youtube_position_sec = 0;
-                        }
-                    }
-                } else if (!ytId && !listId) {
-                    payload.banner_youtube_sync_at = null;
-                    payload.banner_youtube_sync_client_ms = 0;
-                }
-            }
             await setDoc(doc(db, 'stages', partnerId), payload, { merge: true });
         },
         [hostId, isHost, partnerId]
@@ -856,13 +834,34 @@ export function useStageChatRoom(stageId) {
             if (!isHost || !partnerId) return false;
             if (!patch || Object.keys(patch).length === 0) return false;
 
-            const merged = mergeBannerPatch(banner, patch);
-
             try {
                 if (clearSpotlight) {
                     await unpinAllHostMessages();
                 }
-                await replaceBanner(buildBannerUpdate(merged));
+                // Read-modify-write inside a transaction: buildBannerUpdate()
+                // always serializes the FULL banner shape, so merging the
+                // patch onto a stale local `banner` snapshot and writing it
+                // all back would silently revert any field another
+                // session/tab changed in between. Reading the doc fresh here
+                // (instead of using the locally cached `banner` state) closes
+                // that lost-update race.
+                const stageRef = doc(db, 'stages', partnerId);
+                await runTransaction(db, async (tx) => {
+                    const snap = await tx.get(stageRef);
+                    const current = normalizeCommunityBanner(snap.exists() ? snap.data() : null);
+                    const merged = mergeBannerPatch(current, patch);
+                    const fields = buildBannerUpdate(merged);
+                    tx.set(
+                        stageRef,
+                        {
+                            ...fields,
+                            ...resolveBannerYoutubeSyncFields(fields, serverTimestamp()),
+                            banner_updated_at: serverTimestamp(),
+                            ownerId: hostId || partnerId,
+                        },
+                        { merge: true }
+                    );
+                });
                 return true;
             } catch (err) {
                 console.error('[useStageChatRoom] banner update', err);
@@ -870,7 +869,7 @@ export function useStageChatRoom(stageId) {
                 return false;
             }
         },
-        [banner, isHost, partnerId, replaceBanner, unpinAllHostMessages, showToast, t]
+        [hostId, isHost, partnerId, unpinAllHostMessages, showToast, t]
     );
 
     const detectBigEmoji = useCallback((text) => {
@@ -1543,6 +1542,11 @@ export function useStageChatRoom(stageId) {
         participants,
         participantsLoading,
         partnerId,
+        // `partnerId` here is the stage document id, NOT the host's user id
+        // (unlike the older Community Chat hook, where they're the same
+        // value) — shared components that match `message.senderId` against
+        // "the host" need this instead.
+        hostId,
         zoneThemeId,
         zoneThemeInlineStyle,
         saveCommunityChatZoneThemeSettings,

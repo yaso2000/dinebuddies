@@ -28,6 +28,7 @@ export default function CommunityBannerYoutubeHostControls({
     isLive = false,
     onPlaybackSync,
     visible = false,
+    layout = 'overlay',
 }) {
     const { t } = useTranslation();
     const [isPaused, setIsPaused] = useState(Boolean(paused));
@@ -227,6 +228,44 @@ export default function CommunityBannerYoutubeHostControls({
     );
 
     if (!visible) return null;
+
+    if (layout === 'toolbar') {
+        return (
+            <div
+                className="community-banner-host-tools community-banner-host-tools--inline community-banner-host-tools--youtube-toolbar"
+                role="toolbar"
+                aria-label={t('community_banner_youtube_host_controls', 'Video controls')}
+            >
+                <button
+                    type="button"
+                    className="community-banner-host-tools__btn community-banner-host-tools__btn--youtube"
+                    onClick={handleTogglePlayPause}
+                    aria-label={
+                        isPaused
+                            ? t('community_banner_youtube_play', 'Play from here (sync everyone)')
+                            : t('community_banner_youtube_pause', 'Pause here (sync everyone)')
+                    }
+                    title={
+                        isPaused
+                            ? t('community_banner_youtube_play', 'Play from here (sync everyone)')
+                            : t('community_banner_youtube_pause', 'Pause here (sync everyone)')
+                    }
+                >
+                    {isPaused ? <FaPlay size={18} aria-hidden /> : <FaPause size={18} aria-hidden />}
+                </button>
+
+                <button
+                    type="button"
+                    className="community-banner-host-tools__btn community-banner-host-tools__btn--youtube"
+                    onClick={handleHardStop}
+                    aria-label={t('community_banner_youtube_hard_stop', 'Stop and restart from beginning')}
+                    title={t('community_banner_youtube_hard_stop', 'Stop and restart from beginning')}
+                >
+                    <FaStop size={15} aria-hidden />
+                </button>
+            </div>
+        );
+    }
 
     const showChrome = chromeOpen || isPaused;
 

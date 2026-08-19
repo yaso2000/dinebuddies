@@ -1,226 +1,27 @@
-# 🗑️ حذف الدعوات المكتملة تلقائياً - Cloud Function
+# 🗄️ أرشفة الدعوات المنتهية تلقائياً — Cloud Functions
 
-## 📋 المنطق الجديد
+> **محدَّث**: هذا المستند وصف سابقاً مهمة `deleteExpiredInvitations` (حذف كامل بلا أرشفة). تلك المهمة **أُزيلت** لأنها كانت تُفقِد بيانات الدعوات نهائياً دون أثر، وتتعارض مع مهمة الأرشفة الأحدث. الآن **كل** الدعوات المنتهية (عامة، اجتماعية، خاصة) تمرّ عبر نفس مسار الأرشفة الموحّد أدناه.
 
-### 1️⃣ عند اكتمال الدعوة (Completed)
-- ✅ تظهر في الصفحة الرئيسية بعنوان "مكتملة" لمدة **ساعة واحدة**
-- ✅ الشات يبقى نشطاً
-- ✅ يمكن الوصول للدعوة بالرابط
+## المنطق الحالي
 
-### 2️⃣ بعد ساعة من الاكتمال
-- ❌ **تختفي** من الصفحة الرئيسية
-- ✅ لكن تبقى موجودة (يمكن الوصول بالرابط)
-- ✅ الشات يبقى نشطاً
+### 1️⃣ أثناء الحدث وحتى 24 ساعة بعد انتهائه
+- ✅ الدعوة حية بالكامل بروابطها المعتادة، والشات نشط.
 
-### 3️⃣ بعد 24 ساعة من الاكتمال
-- ❌ **حذف كامل** للدعوة
-- ❌ حذف الشات والرسائل
-- ❌ حذف كل البيانات
+### 2️⃣ بعد 24 ساعة من انتهاء الحدث (+ حتى 30 دقيقة انتظار للفحص الدوري)
+مهمتان مجدولتان كل 30 دقيقة (`archiveExpiredPublicInvitations` و`archiveExpiredSocialInvitations` في `functions/index.js`، والمنطق الفعلي في `functions/invitationArchiveCore.js`) تقوم لكل دعوة مستحقة بـ:
+- كتابة سجل أرشيف مصغّر للمضيف ولكل ضيف (`users/{uid}/invitation_archives/{id}`) + سجل عام قابل للقراءة من الجميع (`invitation_archives/{id}`).
+- الاحتفاظ بصورة غلاف واحدة فقط، وحذف باقي الصور/الفيديوهات ومرفقات المحادثة (صور/رسائل صوتية) من Storage.
+- **الإبقاء على نص المحادثة كاملاً** (تكلفته ضئيلة جداً في Firestore، ويُتيح عرض سجل الدردشة لاحقاً).
+- حذف مستند الدعوة الحي نفسه فقط.
 
----
+### 3️⃣ فتح الرابط القديم بعد الأرشفة
+`InvitationDetails.jsx` و`SocialInvitationDetails.jsx` يتحققان تلقائياً من وجود سجل أرشيف عند اختفاء المستند الحي، ويُعاد توجيه المستخدم بسلاسة لصفحة أرشيف مخصّصة (`/invitation/archived/:id`، المكوّن `InvitationArchiveDetails.jsx`) بدل عرض "غير موجود".
 
-## ✅ ما تم تنفيذه
+## أين يظهر الأرشيف للمستخدم
+- تبويب الدعوات بصفحة البروفايل (`Profile.jsx` / `UserProfile.jsx`) — الضغط على عنصر مؤرشف ينقل الآن لصفحة الأرشيف الفعلية (لم يعد مجرد Toast).
+- أرشيف البزنس (`/my-community/archive`، `BusinessHostedArchive.jsx`) — يدمج الدعوات المنتهية غير المؤرشفة بعد مع السجلات المؤرشفة فعلياً، فلا تختفي أي دعوة من القائمة بعد الأرشفة.
 
-### 1. تحديث `updateMeetingStatus`
-```javascript
-// في InvitationContext.jsx
-const updateMeetingStatus = async (id, status) => {
-    const updateData = {
-        meetingStatus: status
-    };
-    
-    // حفظ وقت الاكتمال
-    if (status === 'completed') {
-        updateData.completedAt = serverTimestamp();
-    }
-    
-    await updateDoc(invitationRef, updateData);
-};
-```
-
-### 2. تحديث منطق الصفحة الرئيسية
-```javascript
-// في Home.jsx
-// إخفاء الدعوات المكتملة بعد ساعة
-if (inv.meetingStatus === 'completed' && inv.completedAt) {
-    const completedTime = inv.completedAt.toDate();
-    const oneHourAfterCompletion = new Date(completedTime.getTime() + 60 * 60 * 1000);
-    if (now > oneHourAfterCompletion) return false;
-}
-```
-
-### 3. إزالة منطق إغلاق الشات
-- ✅ الشات يبقى نشطاً دائماً
-- ✅ يُحذف فقط عند حذف الدعوة
-
----
-
-## 🔧 الخطوة التالية: Cloud Function للحذف التلقائي
-
-### إعداد Cloud Function
-
-#### 1. تثبيت Firebase Functions
-```bash
-cd c:\Users\yaser\inebuddies\dinebuddies
-firebase init functions
-```
-
-اختر:
-- Language: **JavaScript**
-- ESLint: **Yes**
-- Install dependencies: **Yes**
-
-#### 2. إنشاء الدالة
-
-في ملف `functions/index.js`:
-
-```javascript
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
-admin.initializeApp();
-
-const db = admin.firestore();
-
-// تشغيل كل ساعة
-exports.deleteExpiredInvitations = functions.pubsub
-    .schedule('every 1 hours')
-    .onRun(async (context) => {
-        const now = admin.firestore.Timestamp.now();
-        const twentyFourHoursAgo = new Date(now.toDate().getTime() - (24 * 60 * 60 * 1000));
-
-        try {
-            // البحث عن الدعوات المكتملة منذ أكثر من 24 ساعة
-            const expiredInvitations = await db.collection('invitations')
-                .where('meetingStatus', '==', 'completed')
-                .where('completedAt', '<=', admin.firestore.Timestamp.fromDate(twentyFourHoursAgo))
-                .get();
-
-            console.log(`Found ${expiredInvitations.size} expired invitations to delete`);
-
-            const batch = db.batch();
-            let deleteCount = 0;
-
-            for (const doc of expiredInvitations.docs) {
-                // حذف الرسائل أولاً
-                const messagesSnapshot = await db.collection('invitations')
-                    .doc(doc.id)
-                    .collection('messages')
-                    .get();
-
-                messagesSnapshot.forEach(msgDoc => {
-                    batch.delete(msgDoc.ref);
-                });
-
-                // حذف الدعوة
-                batch.delete(doc.ref);
-                deleteCount++;
-
-                // Firestore batch limit is 500
-                if (deleteCount >= 500) {
-                    await batch.commit();
-                    deleteCount = 0;
-                }
-            }
-
-            if (deleteCount > 0) {
-                await batch.commit();
-            }
-
-            console.log(`Successfully deleted ${expiredInvitations.size} expired invitations`);
-            return null;
-        } catch (error) {
-            console.error('Error deleting expired invitations:', error);
-            return null;
-        }
-    });
-```
-
-#### 3. نشر Cloud Function
-```bash
-firebase deploy --only functions
-```
-
----
-
-## 🧪 الاختبار
-
-### اختبار سريع (للتطوير):
-
-1. **أنشئ دعوة**
-2. **اجعلها مكتملة** (Mark as Completed)
-3. **تحقق من Firestore** - يجب أن ترى `completedAt` timestamp
-4. **انتظر ساعة** - يجب أن تختفي من الصفحة الرئيسية
-5. **افتح بالرابط** - يجب أن تكون موجودة
-6. **انتظر 24 ساعة** - يجب أن تُحذف تماماً
-
-### اختبار Cloud Function يدوياً:
-
-```bash
-# في Firebase Console
-# اذهب إلى Functions
-# اضغط على "deleteExpiredInvitations"
-# اضغط "Test function"
-```
-
----
-
-## 📊 مراقبة الحذف
-
-### في Firebase Console:
-1. اذهب إلى **Functions**
-2. اختر `deleteExpiredInvitations`
-3. اضغط **Logs**
-4. ستر ى:
-   - عدد الدعوات المحذوفة
-   - أي أخطاء
-
----
-
-## ⚙️ إعدادات إضافية (اختيارية)
-
-### تغيير التوقيت:
-
-```javascript
-// كل 6 ساعات
-.schedule('every 6 hours')
-
-// كل يوم في منتصف الليل
-.schedule('0 0 * * *')
-
-// كل ساعة
-.schedule('every 1 hours')
-```
-
-### تغيير مدة الحذف:
-
-```javascript
-// 12 ساعة بدلاً من 24
-const twelveHoursAgo = new Date(now.toDate().getTime() - (12 * 60 * 60 * 1000));
-
-// 48 ساعة
-const fortyEightHoursAgo = new Date(now.toDate().getTime() - (48 * 60 * 60 * 1000));
-```
-
----
-
-## 💰 التكلفة
-
-Cloud Functions مجانية حتى:
-- 2 مليون استدعاء/شهر
-- 400,000 GB-ثانية/شهر
-
-دالة تعمل كل ساعة = **720 استدعاء/شهر** ✅ مجاني تماماً!
-
----
-
-## ✅ الخلاصة
-
-### تم التنفيذ:
-- ✅ حفظ وقت الاكتمال في Firestore
-- ✅ إخفاء الدعوات المكتملة بعد ساعة
-- ✅ إزالة منطق إغلاق الشات
-
-### يحتاج تنفيذ:
-- ✅ Cloud Function للحذف التلقائي بعد 24 ساعة — **تم التنفيذ** في `functions/index.js` باسم `deleteExpiredInvitations` (تشغيل كل ساعة)، مع حذف ملفات Storage المرتبطة بالدعوة والرسائل (بدون list-all، بالمسار فقط).
-
-**الشات الجماعي جاهز ويعمل بشكل مثالي!** 🎉
+## قواعد الأمان (Firestore Rules)
+- `users/{uid}/invitation_archives/{id}`: قراءة للمالك أو الإدمن فقط.
+- `invitation_archives/{id}` (على المستوى الأعلى): قراءة عامة للجميع.
+- رسائل الدردشة المحفوظة بعد الأرشفة: تُقرأ عبر تحقق جديد (`isArchivedInvitationParticipant`) يعتمد على وجود سجل الأرشيف الخاص بالمستخدم، بدل الاعتماد على مستند الدعوة الحي (المحذوف).

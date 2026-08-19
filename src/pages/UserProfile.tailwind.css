@@ -12,7 +12,46 @@
 }
 
 .user-profile-hero {
-    margin-bottom: 3rem;
+    margin-bottom: 2.25rem;
+}
+
+.user-profile-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding-bottom: 6rem;
+}
+
+/* Unified card — one visual language for every section on the page. */
+.user-profile-card {
+    border-radius: 1.1rem;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    padding: 1.1rem;
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-main) 3%, transparent);
+}
+
+.user-profile-card__heading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.9rem;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.user-profile-card__heading-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 0.65rem;
+    background: color-mix(in srgb, var(--primary) 14%, var(--bg-elevated, var(--bg-card)));
+    color: var(--primary);
+    font-size: 0.9rem;
+    flex-shrink: 0;
 }
 
 .user-profile-persona-cover {
@@ -87,32 +126,65 @@
     color: var(--text-main);
 }
 
+.user-profile-summary-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.user-profile-stats {
+    display: flex;
+    justify-content: center;
+    gap: 1.75rem;
+    flex-wrap: wrap;
+}
+
+.user-profile-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
 .user-profile-stat-value {
-    font-size: 1.125rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 1.05rem;
     font-weight: 700;
     color: var(--text-main);
 }
 
-.user-profile-stat-value--reputation {
+.user-profile-stat-value svg {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.user-profile-stat-value--reputation svg {
     color: var(--stat-reviews);
 }
 
 .user-profile-stats__label {
-    margin-top: 0.25rem;
-    font-size: 0.75rem;
+    margin-top: 0.2rem;
+    font-size: 0.72rem;
     color: var(--text-muted);
 }
 
 .user-profile-actions {
+    display: flex;
     gap: 0.5rem;
 }
 
 .user-profile-action {
     flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
     border: none;
     border-radius: 0.75rem;
-    padding: 0.45rem 0.35rem;
-    min-height: 2.25rem;
+    padding: 0.5rem 0.4rem;
+    min-height: 2.4rem;
     font-size: 0.8125rem;
     font-weight: 600;
     line-height: 1.15;
@@ -168,18 +240,19 @@
     background: var(--bg-hover);
 }
 
-.user-profile-section__title {
-    margin-bottom: 0.75rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--text-muted);
+.user-profile-preferences-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1.15rem;
 }
 
-.user-profile-section__heading {
-    margin-bottom: 1rem;
-    font-size: 1rem;
+.user-profile-subsection__title {
+    margin-bottom: 0.65rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    color: var(--text-main);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
 }
 
 .user-profile-reason-card {
@@ -221,12 +294,10 @@
 }
 
 .user-profile-meetup-hint {
+    margin: 0;
     font-size: 0.875rem;
+    line-height: 1.55;
     color: var(--text-secondary);
-    padding: 0.75rem 0.9rem;
-    border-radius: 0.85rem;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
 }
 
 .user-profile-meetup-hint__label {
@@ -241,11 +312,11 @@
     color: var(--text-secondary);
 }
 
-.user-profile-gallery .profile-gallery {
+.user-profile-gallery-card .profile-gallery {
     margin-top: 0;
 }
 
-.user-profile-gallery .profile-gallery__title {
+.user-profile-gallery-card .profile-gallery__title {
     font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: normal;
@@ -254,12 +325,12 @@
     margin: 0 0 0.75rem;
 }
 
-.user-profile-gallery .profile-gallery__grid {
+.user-profile-gallery-card .profile-gallery__grid {
     display: flex;
     gap: 0.75rem;
 }
 
-.user-profile-gallery .profile-gallery__slot {
+.user-profile-gallery-card .profile-gallery__slot {
     flex: 1;
     aspect-ratio: auto;
     height: 9rem;
@@ -268,11 +339,11 @@
     border-color: var(--border-color);
 }
 
-.user-profile-gallery .profile-gallery__slot--filled:hover {
+.user-profile-gallery-card .profile-gallery__slot--filled:hover {
     border-color: color-mix(in srgb, var(--primary) 45%, var(--border-color));
 }
 
-.user-profile-gallery .profile-gallery__empty {
+.user-profile-gallery-card .profile-gallery__empty {
     font-size: 0.75rem;
     color: var(--text-muted);
 }
@@ -314,18 +385,15 @@
     color: var(--color-danger);
 }
 
+.profile-invitation-item__chevron {
+    opacity: 0.3;
+    flex-shrink: 0;
+}
+
 .user-profile-invitation-list {
     display: flex;
     flex-direction: column;
     gap: 0;
-}
-
-.user-profile-extra-section {
-    border-radius: 1rem;
-    border: 1px solid var(--border-color);
-    background: var(--bg-card);
-    padding: 1rem;
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-main) 3%, transparent);
 }
 
 .user-profile-extra-section .profile-invitation-item {

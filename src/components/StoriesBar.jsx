@@ -1,7 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, limit, onSnapshot, getDoc, doc } from 'firebase/firestore';
-import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import StoryCircle from './StoryCircle';
@@ -9,7 +7,7 @@ import LiveStageCircle from './LiveStageCircle';
 import BusinessCommunityCircle from './BusinessCommunityCircle';
 import UserAvatar from './UserAvatar';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
+import { useStories } from '../hooks/useStories';
 import { useLiveStagesDiscover } from '../hooks/useLiveStagesDiscover';
 import { FaPlus, FaCamera } from 'react-icons/fa';
 import { AppText } from "./base";
@@ -38,9 +36,9 @@ const StoriesBar = ({ onStoryClick }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentUser, userProfile, isBusiness } = useAuth();
-  const [stories, setStories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [myStoryData, setMyStoryData] = useState(null);
+  // Robust user photo retrieval
+  const userPhoto = getSafeAvatar(userProfile || currentUser);
+  const { stories, myStoryData, loading } = useStories(currentUser, userPhoto);
   const railRef = useRef(null);
   // Business accounts do not browse live rooms — only consumers see the rail.
   const { stages: liveStages } = useLiveStagesDiscover({
@@ -83,189 +81,6 @@ const StoriesBar = ({ onStoryClick }) => {
     stories.length,
   ]);
 
-  // Robust user photo retrieval
-  const userPhoto = getSafeAvatar(userProfile || currentUser);
-
-  useEffect(() => {
-    if (!currentUser) {
-      setLoading(false);
-      return;
-    }
-
-    const now = new Date();
-
-    // Real-time listener for stories — limit + filter non-expired to reduce reads
-    const q = query(
-      collection(db, 'stories'),
-      where('expiresAt', '>', now),
-      limit(50)
-    );
-
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      try {
-        // Filter and sort client-side
-        const activeStories = snapshot.docs.
-        map((doc) => ({ id: doc.id, ...doc.data() })).
-        filter((story) => {
-          // Check if expired
-          const expiresAt = story.expiresAt;
-          if (expiresAt) {
-            const expiryDate = typeof expiresAt.toDate === 'function' ? expiresAt.toDate() : new Date(expiresAt);
-            // Compare timestamps for accuracy
-            if (expiryDate.getTime() <= Date.now()) return false;
-          }
-          return true;
-        });
-
-        // Separate My Stories vs Others
-        const myStories = [];
-        const userStoriesMap = {};
-
-        activeStories.forEach((story) => {
-          // ROBUST ID CHECK: Check all possible field names
-          const storyOwnerId = story.userId || story.uid || story.authorId || story.author?.id;
-
-          // If no ID found, we can't attribute it. Skip it.
-          if (!storyOwnerId) return;
-
-          // Check if it's my story (String comparison for safety)
-          if (currentUser?.uid && String(storyOwnerId) === String(currentUser.uid)) {
-            myStories.push(story);
-            return; // Don't add to general map
-          }
-
-          if (!userStoriesMap[storyOwnerId]) {
-            userStoriesMap[storyOwnerId] = {
-              userId: storyOwnerId,
-              partnerName: story.userName || story.author?.name, // Can be undefined/null initially
-              partnerLogo: getSafeAvatar(story.author || story),
-              stories: [],
-              hasNewActiveStory: false
-            };
-          }
-
-          userStoriesMap[storyOwnerId].stories.push(story);
-
-          const views = story.views || [];
-          if (currentUser?.uid && !views.includes(currentUser.uid)) {
-            userStoriesMap[storyOwnerId].hasNewActiveStory = true;
-          }
-        });
-
-        // --- DEEP FIX: Fetch missing profiles ---
-        const userIdsToFetch = Object.values(userStoriesMap).
-        filter((u) => !u.partnerName || u.partnerName === 'User').
-        map((u) => u.userId);
-
-        const uniqueIdsToFetch = [...new Set(userIdsToFetch)];
-
-        // Helper to finalize and set state
-        const setFinalStories = (fetchedProfiles = {}) => {
-          const processedStories = Object.values(userStoriesMap).
-          map((userGroup) => {
-            // If we requested a profile fetch for this user (because data was missing/generic)
-            // AND the profile wasn't found in DB -> It's likely a deleted/dummy user.
-            if (uniqueIdsToFetch.includes(userGroup.userId) && !fetchedProfiles[userGroup.userId]) {
-              return null; // Filter out orphan stories
-            }
-
-            const profile = fetchedProfiles[userGroup.userId];
-            if (profile) {
-              // STRICT FILTER: No guests, no generic 'User' with dummy avatars
-              if (profile.isGuest || profile.role === 'guest') return null;
-
-              const pName = profile.displayName || profile.name || profile.businessInfo?.businessName || userGroup.partnerName || 'User';
-              const pLogo = getSafeAvatar(profile);
-
-              // Filter out "User" if they have a cartoon/default avatar (likely unconfigured/dummy account)
-              if (pName === 'User' && (String(pLogo).includes('dicebear') || !pLogo)) {
-                return null;
-              }
-
-              return {
-                ...userGroup,
-                partnerName: pName,
-                partnerLogo: pLogo,
-                partnerGender: profile.gender
-              };
-            }
-
-            // If we didn't need to fetch (data was in story), keep it.
-            // BUT check if it looks like a guest/dummy
-            let currentName = userGroup.partnerName || 'User';
-            // Safe check for logo string
-            let currentLogoStr = String(userGroup.partnerLogo || '');
-
-            if (currentName === 'User' && (currentLogoStr.includes('dicebear') || !userGroup.partnerLogo)) {
-              return null;
-            }
-
-            if (!userGroup.partnerName) userGroup.partnerName = 'User';
-            return userGroup;
-          }).
-          filter(Boolean); // Remove nulls (orphans)
-
-          // Convert to array and sort (unviewed first)
-          const sortedStories = processedStories.sort((a, b) => {
-            if (a.hasNewActiveStory && !b.hasNewActiveStory) return -1;
-            if (!a.hasNewActiveStory && b.hasNewActiveStory) return 1;
-            return 0;
-          });
-
-          setStories(sortedStories);
-          setLoading(false);
-        };
-
-        if (uniqueIdsToFetch.length > 0) {
-          try {
-            // public_profiles is readable by everyone; users/{id} is not (guests).
-            const fetchPromises = uniqueIdsToFetch.map((id) => getDoc(doc(db, 'public_profiles', id)));
-            const snapshots = await Promise.all(fetchPromises);
-            const profilesMap = {};
-            snapshots.forEach((snap) => {
-              if (snap.exists()) {
-                const mapped = mapPublicProfileDocToUserShape(snap.data());
-                if (mapped) profilesMap[snap.id] = mapped;
-              }
-            });
-            setFinalStories(profilesMap);
-          } catch (err) {
-            console.error("Error fetching missing profiles:", err);
-            // In case of error (e.g. network), we might show them as is, or hide.
-            // Let's show them to be safe, or hide to be clean?
-            // Safety: show old behavior if fetch fails completely
-            setStories(Object.values(userStoriesMap));
-            setLoading(false);
-          }
-        } else {
-          setFinalStories();
-        }
-
-        // Set My Story Data
-        if (myStories.length > 0) {
-          setMyStoryData({
-            userId: currentUser?.uid,
-            partnerName: 'You',
-            partnerLogo: userPhoto,
-            stories: myStories,
-            hasNewActiveStory: false
-          });
-        } else {
-          setMyStoryData(null);
-        }
-
-      } catch (error) {
-        console.error("Error processing stories:", error);
-        setLoading(false);
-      }
-    }, (error) => {
-      console.error("Error fetching stories:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [currentUser, userPhoto]);
-
   // Keep the rail visible when rooms exist even if stories are still loading.
   if (loading && activeLiveStages.length === 0 && businessRooms.length === 0 && stories.length === 0) return null;
 
@@ -273,8 +88,8 @@ const StoriesBar = ({ onStoryClick }) => {
     <div style={{
       background: 'transparent',
       borderBottom: 'none',
-      padding: '6px 0',
-      marginBottom: '0.5rem',
+      padding: '6px 0 2px',
+      marginBottom: '0.15rem',
       // Removed sticky to avoid transparency overlap issues
       position: 'relative',
       zIndex: 10

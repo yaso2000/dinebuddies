@@ -226,4 +226,18 @@
         min-height: 0;
         width: 100%;
     }
+
+    /* Business Dashboard doesn't use the .my-community-page shell — it renders a plain
+       .page-container directly, which otherwise has no scroll of its own inside the
+       overflow:hidden dashboard <main>, clipping content on small screens. */
+    .app-main--dashboard > .page-container {
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: contain;
+        touch-action: pan-y;
+    }
 }

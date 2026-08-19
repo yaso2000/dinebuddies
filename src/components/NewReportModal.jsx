@@ -22,6 +22,7 @@ const NewReportModal = ({ isOpen, onClose, reportType, targetId, targetName, onS
       { id: 'other', label: t('other') }],
 
       user: [
+      { id: 'child_safety', label: t('child_safety_concern', 'Child safety concern') },
       { id: 'harassment', label: t('harassment') },
       { id: 'impersonation', label: t('impersonation') },
       { id: 'inappropriate', label: t('inappropriate_content') },

@@ -494,6 +494,10 @@ function buildDemoUserDoc({
             allowFollowing: true,
             showInvitationHistory: false,
             showFriends: false,
+            // Demo accounts have no real person behind them to redeem a gift —
+            // a real user's paid credits would simply vanish. See PrivacySettings.jsx
+            // for the same allowGifts toggle real users can set for themselves.
+            allowGifts: false,
         },
     };
 }

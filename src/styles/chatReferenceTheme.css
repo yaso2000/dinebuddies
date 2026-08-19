@@ -768,3 +768,10 @@
 .community-chat-root .community-main-chat__message-menu-btn {
   color: rgba(255, 255, 255, 0.72) !important;
 }
+
+/*
+ * In-app emoji picker (1:1 + invitation chat, mobile). Rendered in-flow as a
+ * normal composer sibling; its grow/shrink transition is inline in
+ * EmojiPickerPortal.jsx (height animates, matching the in-flow layout it
+ * lives in — no separate CSS animation needed here).
+ */

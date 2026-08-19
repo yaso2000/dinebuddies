@@ -61,7 +61,7 @@ import { sortInvitationsByDateDesc, formatArchiveDateRange, isPublicInvitationEx
 import '../pages/SettingsPages.css';
 import { AppText, AppTextInput } from "../components/base";
 
-const InvitationListItem = ({ inv, navigate, t, showToast }) => {
+const InvitationListItem = ({ inv, navigate, t }) => {
   const isArchived = Boolean(inv.isArchived);
   const isGuestArchive = isArchived && inv.role === 'guest';
   const isHosted =
@@ -78,17 +78,8 @@ const InvitationListItem = ({ inv, navigate, t, showToast }) => {
     : `/invitation/${inv.id}`;
 
   const handleClick = () => {
-    // Archived invites are title+date only — never open full details.
     if (isArchived) {
-      if (!showToast) return;
-      const dates = formatArchiveDateRange(inv, t);
-      const roleLabel = isGuestArchive
-        ? t('invitation_archive_guest_badge', 'Joined as guest')
-        : t('invitation_archive_host_badge', 'Hosted');
-      showToast(
-        `${inv.title || t('invitation', 'Invitation')}\n${dates}\n${roleLabel}`,
-        'info'
-      );
+      navigate(`/invitation/archived/${inv.id}`);
       return;
     }
     navigate(targetPath);
@@ -1354,7 +1345,7 @@ const Profile = () => {
                                                 </button>
                                             </div>
                                             {privatePosted.map((inv) =>
-                    <InvitationListItem key={inv.id} inv={inv} navigate={navigate} t={t} showToast={showToast} />
+                    <InvitationListItem key={inv.id} inv={inv} navigate={navigate} t={t} />
                     )}
                                         </div>
                   }
@@ -1366,7 +1357,7 @@ const Profile = () => {
                                                 {t('received_invitations')}
                                             </AppText>
                                             {receivedPrivate.map((inv) =>
-                    <InvitationListItem key={inv.id} inv={inv} navigate={navigate} t={t} showToast={showToast} />
+                    <InvitationListItem key={inv.id} inv={inv} navigate={navigate} t={t} />
                     )}
                                         </div>
                   }
@@ -1382,7 +1373,7 @@ const Profile = () => {
                             {activeTab !== 'private' &&
                 <>
                                     {activeList.map((inv) =>
-                  <InvitationListItem key={inv.id} inv={inv} navigate={navigate} t={t} showToast={showToast} />
+                  <InvitationListItem key={inv.id} inv={inv} navigate={navigate} t={t} />
                   )}
 
                                     {activeList.length === 0 &&

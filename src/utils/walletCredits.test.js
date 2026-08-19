@@ -27,9 +27,9 @@ describe('walletCredits — frontend spendable totals', () => {
         expect(getPurchaseCredits(profile) >= 90).toBe(false);
     });
 
-    it('gift recipient savings rate is 50%', () => {
-        expect(GIFT_RECIPIENT_VALUE_RATE).toBe(0.5);
-        expect(computeGiftSavedAmount(50)).toBe(25);
+    it('gift recipient savings rate is 30%', () => {
+        expect(GIFT_RECIPIENT_VALUE_RATE).toBe(0.3);
+        expect(computeGiftSavedAmount(100)).toBe(30);
         expect(computeGiftSavedAmount(1)).toBe(0);
     });
 });

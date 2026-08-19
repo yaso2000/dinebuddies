@@ -11,6 +11,11 @@ export default function CommunityChatCastView({ room }) {
   const contentDir = getAppTextDirection(i18n.language);
   const messageListRef = useRef(null);
   const { messages, partnerId, partner, bannerVisible } = room;
+  // Stage rooms: `partnerId` is the stage document id, not the host's user id
+  // — `hostId` (only present on the Stage hook) is the correct id to match
+  // `message.senderId` against. Community Chat has no `hostId`, where
+  // `partnerId` already equals the host's uid.
+  const hostMessageOwnerId = room.hostId || partnerId;
 
   useEffect(() => {
     const node = messageListRef.current;
@@ -48,7 +53,7 @@ export default function CommunityChatCastView({ room }) {
             <CommunityTopMediaPanel room={room} bannerMediaActive />
             <CommunityPinnedHostBar
               messages={messages}
-              partnerId={partnerId}
+              partnerId={hostMessageOwnerId}
               pendingReplyTo={null}
               isHost={false}
             />
@@ -63,7 +68,7 @@ export default function CommunityChatCastView({ room }) {
           <CommunityChatMessages
             messages={messages}
             currentUserId={room.currentUserId}
-            partnerId={partnerId}
+            partnerId={hostMessageOwnerId}
             isHost={false}
             variant="normal"
           />

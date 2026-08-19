@@ -36,6 +36,11 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
     hideMessageFromBanner,
     onSendGiftToHost,
   } = room;
+  // Stage rooms: `partnerId` is the stage document id, not the host's user id
+  // — `hostId` (only present on the Stage hook) is the correct id to match
+  // `message.senderId` against. Community Chat has no `hostId`, where
+  // `partnerId` already equals the host's uid.
+  const hostMessageOwnerId = room.hostId || partnerId;
   const composerBlocked = Boolean(isMutedInChat || isStageClosed);
   const canSendGift = !isHost && typeof onSendGiftToHost === 'function';
   const [modMenu, setModMenu] = useState(null);
@@ -57,7 +62,7 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
 
   const handleMute = useCallback(
     (message) => {
-      if (!message?.senderId || message.senderId === partnerId) return;
+      if (!message?.senderId || message.senderId === hostMessageOwnerId) return;
       if (isStageRoom) {
         setModMenu({
           member: {
@@ -70,7 +75,7 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
       }
       void muteMemberInChat(message.senderId);
     },
-    [isStageRoom, muteMemberInChat, partnerId, t]
+    [isStageRoom, muteMemberInChat, hostMessageOwnerId, t]
   );
 
   const handlePin = useCallback(
@@ -129,7 +134,7 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
           <CommunityChatMessages
             messages={messages}
             currentUserId={currentUserId}
-            partnerId={partnerId}
+            partnerId={hostMessageOwnerId}
             isHost={isHost}
             onReplyToMessage={isHost ? handleReply : undefined}
             onMuteMember={isHost ? handleMute : undefined}

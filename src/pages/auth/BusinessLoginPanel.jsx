@@ -388,7 +388,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                             </div>
             }
                     </div>
-                    <div style={{ marginBottom: '1.25rem' }}>
+                    <div style={{ marginBottom: '1rem' }}>
                         <label
               style={{
                 display: 'block',

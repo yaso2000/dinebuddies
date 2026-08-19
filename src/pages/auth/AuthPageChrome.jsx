@@ -32,45 +32,49 @@ export default function AuthPageChrome({
 
   return (
     <header className="auth-page-chrome" aria-label={t('auth_page_chrome_a11y', 'Sign-in options')}>
-            <div className="auth-page-chrome__brand">
-                <img
+            <div className="auth-page-chrome__brand-group">
+                <div className="auth-page-chrome__brand">
+                    <img
           src="/db-logo.svg"
           alt=""
           className="auth-page-chrome__logo"
           width={40}
           height={40} />
 
-                <AppText as="span" className="auth-page-chrome__title">DineBuddies</AppText>
+                    <AppText as="span" className="auth-page-chrome__title">DineBuddies</AppText>
+                </div>
+                <AppText as="p" className="auth-page-chrome__tagline">
+                    {t('app_tagline', 'Never Dine Alone')}
+                </AppText>
             </div>
 
             <div className="auth-page-chrome__toolbar">
+                {showAccountSwitch && accountTab === 'personal' && onSwitchToBusiness ?
+        <button
+          type="button"
+          className="login-hub-shell-btn auth-page-chrome__account-btn auth-page-chrome__account-btn--business"
+          onClick={onSwitchToBusiness}
+          aria-label={t('login_toggle_open_business_a11y', 'Switch to business account sign-in')}>
+
+                        <HiBuildingStorefront aria-hidden />
+                        <AppText as="span" className="auth-page-chrome__account-label">
+                            {t('login_toggle_business', 'Business')}
+                        </AppText>
+                    </button> :
+        showAccountSwitch && accountTab === 'business' && onSwitchToPersonal ?
+        <button
+          type="button"
+          className="login-hub-shell-btn auth-page-chrome__account-btn auth-page-chrome__account-btn--personal"
+          onClick={onSwitchToPersonal}
+          aria-label={t('login_toggle_open_personal_a11y', 'Switch to personal account sign-in')}>
+
+                        <FaUser aria-hidden />
+                        <AppText as="span" className="auth-page-chrome__account-label">
+                            {t('login_toggle_personal', 'Personal')}
+                        </AppText>
+                    </button> :
+        <span aria-hidden />}
                 <div className="auth-page-chrome__toolbar-actions">
-                    {showAccountSwitch && accountTab === 'personal' && onSwitchToBusiness ?
-          <button
-            type="button"
-            className="login-hub-shell-btn auth-page-chrome__account-btn"
-            onClick={onSwitchToBusiness}
-            aria-label={t('login_toggle_open_business_a11y', 'Switch to business account sign-in')}>
-
-                            <HiBuildingStorefront aria-hidden />
-                            <AppText as="span" className="auth-page-chrome__account-label">
-                                {t('login_toggle_business', 'Business')}
-                            </AppText>
-                        </button> :
-          null}
-                    {showAccountSwitch && accountTab === 'business' && onSwitchToPersonal ?
-          <button
-            type="button"
-            className="login-hub-shell-btn auth-page-chrome__account-btn"
-            onClick={onSwitchToPersonal}
-            aria-label={t('login_toggle_open_personal_a11y', 'Switch to personal account sign-in')}>
-
-                            <FaUser aria-hidden />
-                            <AppText as="span" className="auth-page-chrome__account-label">
-                                {t('login_toggle_personal', 'Personal')}
-                            </AppText>
-                        </button> :
-          null}
                     {showAffiliateLink ?
           <Link
             to="/affiliate/login?next=/affiliate/dashboard"

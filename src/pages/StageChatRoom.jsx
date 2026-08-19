@@ -15,6 +15,7 @@ import { useProfileGiftPicker } from '../hooks/useProfileGiftPicker';
 import { useDesktopShell } from '../hooks/useDesktopShell';
 import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
 import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
+import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import {
   buildCommunityGuestFrameBackgroundStyle,
   getCommunityGuestFrameShellAttributes,
@@ -61,6 +62,9 @@ export default function StageChatRoom() {
     : String(room.partner?.visibility || 'private').toLowerCase() === 'public'
       ? 'public'
       : 'private';
+  const stageHostHasPaidPlan = getBusinessSubscriptionAccess(
+    room.partner?.subscriptionTier
+  ).canCreateBusinessStage;
   const hostId = room.partner?.hostId || room.partner?.ownerId || null;
   const followsHost = useMemo(() => {
     if (!hostId) return false;
@@ -453,6 +457,11 @@ export default function StageChatRoom() {
             )
       );
     }
+  } else if (isBusinessStage && !stageHostHasPaidPlan) {
+    shellContent = renderJoinGate(
+      t('stage_chat', 'Stage'),
+      t('business_stage_paid_only_hint', 'Business Stage requires a Paid Business plan.')
+    );
   } else {
     shellContent = (
       <div

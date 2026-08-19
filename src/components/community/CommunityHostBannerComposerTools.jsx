@@ -4,8 +4,6 @@ import { useTranslation } from 'react-i18next';
 import {
   FaBold,
   FaBullhorn,
-  FaEye,
-  FaEyeSlash,
   FaFont,
   FaHeading,
   FaImage,
@@ -13,6 +11,7 @@ import {
   FaMicrophone,
   FaPalette,
   FaStop,
+  FaTh,
   FaTimes,
   FaTrash,
   FaYoutube,
@@ -394,7 +393,11 @@ function BannerPreviewStrip({
 }
 
 /** Host-only banner tools — image + title + body + background + templates (vertical rail on banner). */
-export default function CommunityHostBannerComposerTools({ room, layout = 'banner-rail' }) {
+export default function CommunityHostBannerComposerTools({
+  room,
+  layout = 'banner-rail',
+  hostToolsVisible = true,
+}) {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const {
@@ -439,13 +442,6 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
   const [voiceRecording, setVoiceRecording] = useState(false);
   const [voiceRecordingSec, setVoiceRecordingSec] = useState(0);
   const [voicePublishing, setVoicePublishing] = useState(false);
-  const [hostToolsVisible, setHostToolsVisible] = useState(() => {
-    try {
-      return localStorage.getItem('db-host-banner-tools-visible') !== '0';
-    } catch {
-      return true;
-    }
-  });
   const voiceStopRef = useRef(null);
   const voiceTimerRef = useRef(null);
   const voiceDurationRef = useRef(0);
@@ -1437,43 +1433,10 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
       </BannerToolModal>
     ) : null;
 
-  const toggleHostToolsVisible = () => {
-    setHostToolsVisible((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem('db-host-banner-tools-visible', next ? '1' : '0');
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  };
-
   const railClass =
     layout === 'banner-rail'
       ? 'community-banner-host-tools community-banner-host-tools--bar community-banner-host-tools--side'
       : 'community-banner-host-tools community-banner-host-tools--inline';
-
-  const toolsVisibilityToggle = (
-    <button
-      type="button"
-      className={`community-banner-tools-toggle${hostToolsVisible ? '' : ' community-banner-tools-toggle--hidden-mode'}`}
-      aria-label={
-        hostToolsVisible
-          ? t('community_banner_tools_hide', 'Hide banner tools')
-          : t('community_banner_tools_show', 'Show banner tools')
-      }
-      title={
-        hostToolsVisible
-          ? t('community_banner_tools_hide', 'Hide banner tools')
-          : t('community_banner_tools_show', 'Show banner tools')
-      }
-      aria-pressed={!hostToolsVisible}
-      onClick={toggleHostToolsVisible}
-    >
-      {hostToolsVisible ? <FaEyeSlash size={14} aria-hidden /> : <FaEye size={14} aria-hidden />}
-    </button>
-  );
 
   const voiceBroadcastControl = (
     <div
@@ -1606,7 +1569,6 @@ export default function CommunityHostBannerComposerTools({ room, layout = 'banne
 
   return (
     <>
-      {toolsVisibilityToggle}
       {hostToolsVisible || voiceRecording || voicePublishing ? (
         <>
           {hostToolsVisible ? toolsLeftRail : null}

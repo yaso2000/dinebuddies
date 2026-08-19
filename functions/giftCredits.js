@@ -14,6 +14,7 @@ const {
     computeGiftSavedAmount,
     isBusinessUserDoc,
     FieldValue,
+    GIFT_RECIPIENT_VALUE_RATE,
 } = require('./creditsCore');
 const { resolveProfileGiftAmount, isKnownProfileGiftId } = require('./profileGiftCatalog');
 
@@ -86,6 +87,13 @@ function mapGiftError(err) {
             'failed-precondition',
             'Business accounts cannot receive gifts.',
             { code: 'BUSINESS_CANNOT_RECEIVE_GIFT' }
+        );
+    }
+    if (code === 'RECIPIENT_GIFTS_DISABLED') {
+        return new functions.https.HttpsError(
+            'failed-precondition',
+            'This user is not accepting gifts right now.',
+            { code: 'RECIPIENT_GIFTS_DISABLED' }
         );
     }
     return err;
@@ -198,6 +206,11 @@ function registerProfileGiftCallables(exportsObj) {
                     err.code = 'BUSINESS_CANNOT_RECEIVE_GIFT';
                     throw err;
                 }
+                if (recipient.privacySettings?.allowGifts === false) {
+                    const err = new Error('RECIPIENT_GIFTS_DISABLED');
+                    err.code = 'RECIPIENT_GIFTS_DISABLED';
+                    throw err;
+                }
 
                 // Delivery first, then payment — both commit atomically or neither does.
                 grantSavedCreditsInTransaction(tx, recipientRef, recipient, {
@@ -227,7 +240,7 @@ function registerProfileGiftCallables(exportsObj) {
                     recipientId,
                     sentAmount: amount,
                     savedAmount,
-                    recipientValueRate: 0.5,
+                    recipientValueRate: GIFT_RECIPIENT_VALUE_RATE,
                     giftId,
                     senderDisplayName: String(
                         sender.display_name || sender.displayName || ''

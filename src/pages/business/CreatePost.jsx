@@ -13,6 +13,7 @@ import { studioFontsForLanguage, STUDIO_TITLE_FONT_SIZE_DEFAULT, STUDIO_BODY_FON
 import { StudioColorsPanel, StudioTypographyPanel, StudioStepperRow } from '../../features/motion-post/studio/StudioToolPanels';
 import { createMotionPostDraft, publishMotionPost, updateMotionPostDraft } from '../../features/motion-post/motionPostDraftService';
 import { syncPublishedMotionPostToCommunityFeed } from '../../features/motion-post/motionPostFeedPublish';
+import { publishStudioPostAsStory } from '../../utils/publishAutoStory';
 import { STUDIO_ANIM_DURATION_MS, STUDIO_TEXT_ANIMATIONS, normalizeStudioTextAnimation } from '../../features/motion-post/studio/studioTextAnimation';
 import AIFloatingLauncher from '../../components/AIFloatingLauncher';
 import { extractAIContentFields, mapAiAnimationToStudio } from '../../utils/aiContentFieldMapper';
@@ -125,20 +126,52 @@ function StudioAnimStrip({ animations, activeAnim, onSelect, t }) {
     );
 }
 
-function StudioPublishActions({ canPublish, isBusy, savingDraft, publishing, onSaveDraft, onClose, onPublish, t }) {
+function StudioPublishActions({
+    canPublish, isBusy, savingDraft, publishing,
+    publishAsPost, publishAsStory, onTogglePublishAsPost, onTogglePublishAsStory,
+    onSaveDraft, onClose, onPublish, t,
+}) {
+    const noTargetSelected = !publishAsPost && !publishAsStory;
     return (
-        <div className="sps-actions">
-            <button type="button" className="sps-actions__ghost" disabled={!canPublish || isBusy} onClick={onSaveDraft}>
-                <FaSave aria-hidden />
-                {savingDraft ? t('studio_saving_draft') : t('studio_save_draft')}
-            </button>
-            <button type="button" className="sps-actions__close" disabled={isBusy} onClick={onClose}>
-                {t('studio_close', 'Close')}
-            </button>
-            <button type="button" className="sps-actions__export" disabled={!canPublish || isBusy} onClick={onPublish} title={t('studio_publish_hint')}>
-                <FaPaperPlane aria-hidden />
-                {publishing ? t('posting') : t('studio_publish')}
-            </button>
+        <div className="sps-actions-wrap">
+            <div className="sps-actions__targets">
+                <label className={`sps-actions__target${publishAsPost ? ' sps-actions__target--active' : ''}`}>
+                    <input
+                        type="checkbox"
+                        checked={publishAsPost}
+                        disabled={isBusy}
+                        onChange={(e) => onTogglePublishAsPost(e.target.checked)}
+                    />
+                    {t('studio_target_post', 'Post')}
+                </label>
+                <label className={`sps-actions__target${publishAsStory ? ' sps-actions__target--active' : ''}`}>
+                    <input
+                        type="checkbox"
+                        checked={publishAsStory}
+                        disabled={isBusy}
+                        onChange={(e) => onTogglePublishAsStory(e.target.checked)}
+                    />
+                    {t('studio_target_story', 'Story')}
+                </label>
+                {noTargetSelected &&
+                    <AppText as="span" className="sps-actions__targets-warning">
+                        {t('studio_select_at_least_one', 'Choose at least one')}
+                    </AppText>
+                }
+            </div>
+            <div className="sps-actions">
+                <button type="button" className="sps-actions__ghost" disabled={!canPublish || isBusy} onClick={onSaveDraft}>
+                    <FaSave aria-hidden />
+                    {savingDraft ? t('studio_saving_draft') : t('studio_save_draft')}
+                </button>
+                <button type="button" className="sps-actions__close" disabled={isBusy} onClick={onClose}>
+                    {t('studio_close', 'Close')}
+                </button>
+                <button type="button" className="sps-actions__export" disabled={!canPublish || isBusy || noTargetSelected} onClick={onPublish} title={t('studio_publish_hint')}>
+                    <FaPaperPlane aria-hidden />
+                    {publishing ? t('posting') : t('studio_publish')}
+                </button>
+            </div>
         </div>
     );
 }
@@ -166,6 +199,8 @@ export default function CreatePost() {
     const [activeTool, setActiveTool] = useState(null);
     const [publishing, setPublishing] = useState(false);
     const [savingDraft, setSavingDraft] = useState(false);
+    const [publishAsPost, setPublishAsPost] = useState(true);
+    const [publishAsStory, setPublishAsStory] = useState(false);
     const [animPlayKey, setAnimPlayKey] = useState(1);
     const [editingMotionId, setEditingMotionId] = useState(editMotionPostId);
     const [loadingEdit, setLoadingEdit] = useState(Boolean(editMotionPostId));
@@ -526,19 +561,41 @@ export default function CreatePost() {
     }, [clearSessionDraft, exitStudio]);
 
     const handlePublish = useCallback(async () => {
-        if (!canPublish || isBusy) return;
+        if (!canPublish || isBusy || (!publishAsPost && !publishAsStory)) return;
         dismissStudioEditors();
         setPublishing(true);
         try {
             const input = await buildDraftInput();
-            if (editingMotionId) {
-                await updateMotionPostDraft(editingMotionId, input);
-                await syncPublishedMotionPostToCommunityFeed(editingMotionId, input.ownerId, input.businessId);
-                showToast(t('studio_post_updated'), 'success');
-            } else {
-                const postId = await createMotionPostDraft(input);
-                await publishMotionPost(postId, input.ownerId, input.businessId);
-                showToast(t('studio_published_feed'), 'success');
+            if (publishAsPost) {
+                if (editingMotionId) {
+                    await updateMotionPostDraft(editingMotionId, input);
+                    await syncPublishedMotionPostToCommunityFeed(editingMotionId, input.ownerId, input.businessId);
+                    showToast(t('studio_post_updated'), 'success');
+                } else {
+                    const postId = await createMotionPostDraft(input);
+                    await publishMotionPost(postId, input.ownerId, input.businessId);
+                    showToast(t('studio_published_feed'), 'success');
+                }
+            }
+            if (publishAsStory) {
+                // Best-effort — when the post also published, a story-image failure
+                // here shouldn't block or error out the flow that already succeeded.
+                const storyPromise = publishStudioPostAsStory({
+                    currentUser,
+                    title: input.payload.content.title,
+                    body: input.payload.content.description,
+                    image: input.payload.content.imageUrl,
+                    style: previewStyle,
+                    sourceType: 'post',
+                });
+                if (publishAsPost) {
+                    storyPromise.catch((err) => console.error('[CreatePost] auto-story', err));
+                } else {
+                    // Story-only publish: no post-success toast already fired, so
+                    // surface real failures here instead of swallowing them.
+                    await storyPromise;
+                    showToast(t('studio_story_published', { defaultValue: 'Story published!' }), 'success');
+                }
             }
             clearSessionDraft();
             navigate('/posts-feed', { replace: true });
@@ -548,7 +605,7 @@ export default function CreatePost() {
         } finally {
             setPublishing(false);
         }
-    }, [buildDraftInput, canPublish, dismissStudioEditors, editingMotionId, isBusy, clearSessionDraft, navigate, showToast, t]);
+    }, [publishAsPost, publishAsStory, buildDraftInput, canPublish, currentUser, dismissStudioEditors, editingMotionId, isBusy, clearSessionDraft, navigate, previewStyle, showToast, t]);
 
     const activeAnim = normalizeStudioTextAnimation(studioStyle.animation);
 
@@ -685,6 +742,10 @@ export default function CreatePost() {
                         isBusy={isBusy}
                         savingDraft={savingDraft}
                         publishing={publishing}
+                        publishAsPost={publishAsPost}
+                        publishAsStory={publishAsStory}
+                        onTogglePublishAsPost={setPublishAsPost}
+                        onTogglePublishAsStory={setPublishAsStory}
                         onSaveDraft={handleSaveDraft}
                         onClose={handleCloseRequest}
                         onPublish={handlePublish}

@@ -166,22 +166,10 @@
     overflow: visible;
 }
 
-.gift-shield-visual__ring-arc {
-    transition: stroke-dasharray 0.45s ease;
-}
-
-.gift-shield-visual__ring-svg {
+.gift-shield-visual__img {
     position: absolute;
     inset: 0;
-    width: 100%;
-    height: 100%;
-    overflow: visible;
-    pointer-events: none;
-    z-index: 2;
-}
-
-.gift-shield-visual__img {
-    position: relative;
+    margin: auto;
     z-index: 1;
     width: 68%;
     height: auto;
@@ -191,28 +179,57 @@
     transition: filter 0.25s ease, opacity 0.25s ease;
 }
 
+/* Dimmed backdrop copy — always full-bleed jar art, desaturated to read as "unfilled". */
+.gift-shield-visual__img--base {
+    z-index: 0;
+    filter: grayscale(0.92) brightness(0.42) contrast(0.95);
+    opacity: 0.92;
+}
+
+/* Full-color copy, revealed from the bottom up via clip-path — the "fill level". */
+.gift-shield-visual__img--fill {
+    z-index: 1;
+    transition: clip-path 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .gift-shield-visual__img--ghost {
     position: absolute;
+    inset: 0;
+    margin: auto;
     width: 58%;
+    height: auto;
     max-height: 68%;
     transform: translate(-12%, -8%) scale(0.9);
-    opacity: 0.38;
-    z-index: 0;
-    filter: none;
+    opacity: 0.28;
+    z-index: -1;
+    filter: grayscale(0.6) brightness(0.55);
 }
 
-.gift-shield-visual--locked .gift-shield-visual__img {
-    opacity: 0.42;
-    filter: grayscale(0.85) brightness(0.65);
-}
-
-.gift-shield-visual--completed .gift-shield-visual__img {
+.gift-shield-visual--completed .gift-shield-visual__img--fill {
     filter: drop-shadow(0 0 14px var(--shield-glow, rgba(251, 191, 36, 0.35)));
 }
 
-.gift-shield-visual--active .gift-shield-visual__img,
-.gift-shield-visual--active-second .gift-shield-visual__img {
+.gift-shield-visual--active .gift-shield-visual__img--fill,
+.gift-shield-visual--active-second .gift-shield-visual__img--fill {
     filter: drop-shadow(0 8px 14px var(--shield-glow, rgba(0, 0, 0, 0.25)));
+}
+
+.gift-shield-visual__check {
+    position: absolute;
+    bottom: 2%;
+    right: 2%;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #22c55e;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    z-index: 2;
 }
 
 .gift-shield-visual--active .gift-shield-visual__svg,

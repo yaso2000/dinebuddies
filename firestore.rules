@@ -573,7 +573,11 @@ service cloud.firestore {
       
       // Users can add themselves to requests (JOIN REQUEST)
       // Treat missing `requests` as [] so the first join does not fail rules evaluation.
+      // A `joinRestriction: 'followers_only'` invitation stays fully readable/visible
+      // (privacy is unaffected) but only the host's followers may actually join it.
       allow update: if isSignedIn() &&
+                       (resource.data.get('joinRestriction', '') != 'followers_only' ||
+                        isFollowingInvitationAuthor(resource.data)) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) &&
                        request.resource.data.requests is list &&
                        request.resource.data.requests.hasAll(
@@ -903,10 +907,26 @@ service cloud.firestore {
         (resource.data.author != null && resource.data.author.id == request.auth.uid) ||
         isAdmin()
       );
-      // Any signed-in user can add their reaction / like / view (append-only fields)
+      // Any signed-in user may add/remove exactly their own entry in `views`/`likes`
+      // (maps: {uid: value}) — cannot touch another user's entry or any other field.
       allow update: if isSignedIn() &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['reactions', 'likes', 'views']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views', 'likes']) &&
+        request.resource.data.get('views', {}).diff(resource.data.get('views', {}))
+          .affectedKeys().hasOnly([request.auth.uid]) &&
+        request.resource.data.get('likes', {}).diff(resource.data.get('likes', {}))
+          .affectedKeys().hasOnly([request.auth.uid]);
+
+      // Reactions live in a subcollection: create-only, one doc per reaction, owner-stamped.
+      // The reaction's own author OR the story owner (deleting/moderating their own story) may
+      // remove it — the story-owner check reads the parent doc's userId via get().
+      match /reactions/{reactionId} {
+        allow read: if true;
+        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if isSignedIn() &&
+          (resource.data.userId == request.auth.uid ||
+           isAdmin() ||
+           get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid);
+      }
     }
 
     match /likes/{likeId} {
@@ -1306,6 +1326,33 @@ service cloud.firestore {
         resource.data.viewerId == request.auth.uid &&
         request.resource.data.viewerId == request.auth.uid &&
         request.resource.data.targetId == resource.data.targetId;
+      allow delete: if false;
+    }
+
+    // Daily free invitation slot tracker — {uid}_{YYYY-MM-DD}, written only by Cloud Functions
+    match /invitation_daily_usage/{docId} {
+      allow get: if isSignedIn() && docId.split('_')[0] == request.auth.uid;
+      allow list, create, update, delete: if false;
+    }
+
+    // Private-invitation decline cooldown — {senderId}_{recipientId}. Recipient controls it;
+    // both parties can check it (sender pre-checks before inviting, recipient reads own list).
+    match /private_invite_declines/{docId} {
+      allow get: if isSignedIn() && (
+        resource == null ||
+        resource.data.senderId == request.auth.uid ||
+        resource.data.recipientId == request.auth.uid
+      );
+      allow list: if isSignedIn() && resource.data.recipientId == request.auth.uid;
+      allow create: if isSignedIn() &&
+        request.resource.data.recipientId == request.auth.uid &&
+        request.resource.data.senderId is string &&
+        request.resource.data.senderId != request.auth.uid &&
+        request.resource.data.keys().hasAll(['senderId', 'recipientId', 'declinedAt']);
+      allow update: if isSignedIn() &&
+        resource.data.recipientId == request.auth.uid &&
+        request.resource.data.recipientId == request.auth.uid &&
+        request.resource.data.senderId == resource.data.senderId;
       allow delete: if false;
     }
 

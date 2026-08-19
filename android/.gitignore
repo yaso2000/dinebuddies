@@ -1,5 +1,8 @@
 # Using Android gitignore template: https://github.com/github/gitignore/blob/HEAD/Android.gitignore
 
+# Local Java truststore copy (machine-specific SSL-interception workaround — see gradle.properties)
+dinebuddies-cacerts
+
 # Built application files
 *.apk
 *.aar

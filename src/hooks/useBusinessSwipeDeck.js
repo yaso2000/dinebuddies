@@ -42,15 +42,9 @@ export function useBusinessSwipeDeck() {
         if (cancelled) return;
         if (ip?.latitude != null && ip?.longitude != null) {
           applyCoords(ip.latitude, ip.longitude);
-          return;
         }
       } catch {
-        /* ignore */
-      }
-      const profileLat = Number(userProfile?.lat ?? userProfile?.location?.lat);
-      const profileLng = Number(userProfile?.lng ?? userProfile?.location?.lng);
-      if (Number.isFinite(profileLat) && Number.isFinite(profileLng)) {
-        applyCoords(profileLat, profileLng);
+        /* ignore — profileLocation (below) already covers this case */
       }
     };
 
@@ -74,7 +68,22 @@ export function useBusinessSwipeDeck() {
     };
   }, [userProfile]);
 
-  const userLocation = deviceLocation;
+  // Profile coordinates are available immediately (no permission prompt, no
+  // network round-trip) — use them as the baseline so the deck can sort by
+  // distance on first render, and let live GPS (once granted) override with a
+  // more precise fix. Previously this hook only fell back to a *mis-keyed*
+  // profile field (userProfile.lat instead of userProfile.coordinates.lat)
+  // and only as a last resort after both GPS and IP lookup failed — so for
+  // most users neither ever populated, the deck silently sorted by "most
+  // recently updated" instead of distance, surfacing whichever business had
+  // been touched most recently regardless of the viewer's actual city.
+  const profileLat = Number(userProfile?.coordinates?.lat);
+  const profileLng = Number(userProfile?.coordinates?.lng);
+  const profileLocation =
+    Number.isFinite(profileLat) && Number.isFinite(profileLng) && !(profileLat === 0 && profileLng === 0)
+      ? { lat: profileLat, lng: profileLng }
+      : null;
+  const userLocation = deviceLocation || profileLocation;
 
   const items = useMemo(() => {
     const mapped = (restaurants || [])

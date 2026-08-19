@@ -30,7 +30,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    padding: 30px 56px 24px 16px;
+    padding: max(30px, calc(env(safe-area-inset-top, 0px) + 18px)) 56px 24px 16px;
     position: absolute;
     top: 0;
     left: 0;
@@ -316,6 +316,24 @@
     gap: 6px;
     padding: 10px 12px max(16px, env(safe-area-inset-bottom, 16px));
     background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+}
+
+.story-footer__owner-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+.story-footer__owner-actions .story-footer__action {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.story-footer__action--delete {
+    color: #f87171;
 }
 
 .story-footer__owner-comments {

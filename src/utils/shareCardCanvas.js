@@ -622,9 +622,247 @@ export async function generatePostShareCard({
     return canvas;
 }
 
+// ─────────────────────────────────────────────
+//  STORY — native 9:16, full-bleed hero, large type (not a padded square)
+// ─────────────────────────────────────────────
+const STORY_CARD_W = 1080;
+const STORY_CARD_H = 1920;
+const STORY_PADDING = 64;
+
+/**
+ * Renders directly at the real story aspect ratio instead of padding a
+ * square/portrait share-card onto a taller canvas — that padded look (and
+ * its comparatively tiny text, sized for a 1080×1080 card) is what read as
+ * "still doesn't look like the real invitation" and "font is too small".
+ * Text sizes here are tuned for the story's own larger canvas, not reused
+ * from the smaller external-share cards above.
+ */
+export async function generateStoryCard({
+    title = 'DineBuddies Event',
+    image,
+    description,
+    date,
+    time,
+    location,
+    maxGuests,
+    paymentLine,
+    hostName,
+    showMeta = false,
+} = {}) {
+    title = title || i18n.t('share_card_default_invitation_title', { defaultValue: 'DineBuddies Event' });
+    const isRtl = isCurrentLanguageRtl();
+    const { align, x: contentX } = getAnchor(isRtl, STORY_CARD_W, STORY_PADDING);
+    const canvas = document.createElement('canvas');
+    canvas.width = STORY_CARD_W;
+    canvas.height = STORY_CARD_H;
+    const ctx = canvas.getContext('2d');
+
+    const heroImg = await loadImg(image);
+    if (heroImg) {
+        const scale = Math.max(STORY_CARD_W / heroImg.naturalWidth, STORY_CARD_H / heroImg.naturalHeight);
+        const sw = STORY_CARD_W / scale;
+        const sh = STORY_CARD_H / scale;
+        const sx = (heroImg.naturalWidth - sw) / 2;
+        const sy = (heroImg.naturalHeight - sh) / 2;
+        ctx.drawImage(heroImg, sx, sy, sw, sh, 0, 0, STORY_CARD_W, STORY_CARD_H);
+    } else {
+        const grad = ctx.createLinearGradient(0, 0, 0, STORY_CARD_H);
+        grad.addColorStop(0, '#2a1810');
+        grad.addColorStop(1, '#5c3d2e');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, STORY_CARD_W, STORY_CARD_H);
+    }
+
+    const textBlockH = showMeta ? 880 : 560;
+    const g = ctx.createLinearGradient(0, STORY_CARD_H - textBlockH, 0, STORY_CARD_H);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,0.92)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, STORY_CARD_H - textBlockH, STORY_CARD_W, textBlockH);
+
+    const maxW = STORY_CARD_W - STORY_PADDING * 2;
+    ctx.textBaseline = 'top';
+    let ty = STORY_CARD_H - textBlockH + 60;
+    const titleSize = title.length > 30 ? 64 : 76;
+    const titleLH = title.length > 30 ? 76 : 88;
+    ty = drawWrappedTitle(ctx, title, contentX, ty, maxW, titleSize, titleLH, 2, align);
+    ty += 14;
+    if (description) {
+        ty = drawWrappedBody(ctx, description, contentX, ty, maxW, 36, 48, showMeta ? 2 : 4, 'rgba(255,255,255,0.88)', align);
+    }
+
+    if (showMeta) {
+        let my = STORY_CARD_H - 360;
+        ctx.font = '42px "Arial", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = align;
+        ctx.fillText(`📅 ${date || '—'}    ·    🕐 ${time || '—'}`, contentX, my);
+        my += 62;
+        const guestsLine = maxGuests != null && maxGuests !== '' ? String(maxGuests) : '—';
+        ctx.fillText(`👥 ${guestsLine}    ·    💳 ${paymentLine || '—'}`, contentX, my);
+        my += 62;
+        ctx.textAlign = 'left';
+        if (location) {
+            my = drawMetaLine(ctx, `📍 ${location}`, contentX, my, maxW, 36, '#ffffff', align);
+        }
+        if (hostName) {
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.font = '32px "Arial", sans-serif';
+            ctx.textAlign = align;
+            ctx.fillText(String(hostName), contentX, my + 10);
+            ctx.textAlign = 'left';
+        }
+    } else if (hostName) {
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.font = '30px "Arial", sans-serif';
+        ctx.textAlign = align;
+        ctx.fillText(String(hostName), contentX, ty + 10);
+        ctx.textAlign = 'left';
+    }
+
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '28px "Arial", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('DineBuddies', STORY_CARD_W / 2, STORY_CARD_H - 44);
+    ctx.textAlign = 'left';
+
+    return canvas;
+}
+
+function wrapLines(ctx, text, font, maxW, maxLines) {
+    ctx.font = font;
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+        const test = line ? `${line} ${w}` : w;
+        if (ctx.measureText(test).width > maxW && line) {
+            lines.push(line);
+            line = w;
+            if (lines.length >= maxLines) { line = ''; break; }
+        } else {
+            line = test;
+        }
+    }
+    if (line && lines.length < maxLines) lines.push(line);
+    return lines;
+}
+
+/**
+ * Business-post story card: honors the actual Studio style choices (text
+ * position top/center/bottom, alignment, colors, overlay tint, background)
+ * instead of the fixed bottom-anchored layout above — this is what makes it
+ * resemble the real post rather than a generic template. Deliberately does
+ * NOT try to reproduce the editor's exact font-size pixels: those are
+ * authored against the editor's own fluid-width preview box, which has no
+ * fixed reference size to scale from, so a literal px copy would come out
+ * wrong on a 1080px canvas anyway. Font sizes here are fixed, story-sized
+ * defaults chosen for legibility; position/alignment/color are what carry
+ * the resemblance to the source post.
+ */
+export async function generateStudioPostStoryCard({ title, body, image, style = {} } = {}) {
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+        try { await document.fonts.ready; } catch { /* ignore */ }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = STORY_CARD_W;
+    canvas.height = STORY_CARD_H;
+    const ctx = canvas.getContext('2d');
+
+    const heroImg = await loadImg(image);
+    if (heroImg) {
+        const scale = Math.max(STORY_CARD_W / heroImg.naturalWidth, STORY_CARD_H / heroImg.naturalHeight);
+        const sw = STORY_CARD_W / scale;
+        const sh = STORY_CARD_H / scale;
+        const sx = (heroImg.naturalWidth - sw) / 2;
+        const sy = (heroImg.naturalHeight - sh) / 2;
+        ctx.drawImage(heroImg, sx, sy, sw, sh, 0, 0, STORY_CARD_W, STORY_CARD_H);
+    } else {
+        ctx.fillStyle = style.backgroundColor && style.backgroundColor !== 'transparent' ? style.backgroundColor : '#1f2937';
+        ctx.fillRect(0, 0, STORY_CARD_W, STORY_CARD_H);
+    }
+
+    const overlayTint = style.overlayTintColor ?? '#000000';
+    const overlayAlpha = Math.min(1, Math.max(0, Number(style.overlayOpacity ?? 35) / 100));
+    if (overlayTint !== 'transparent' && overlayAlpha > 0) {
+        ctx.globalAlpha = overlayAlpha;
+        ctx.fillStyle = overlayTint;
+        ctx.fillRect(0, 0, STORY_CARD_W, STORY_CARD_H);
+        ctx.globalAlpha = 1;
+    }
+
+    const align = style.textAlign === 'left' ? 'left' : style.textAlign === 'right' ? 'right' : 'center';
+    const contentX = align === 'left' ? STORY_PADDING : align === 'right' ? STORY_CARD_W - STORY_PADDING : STORY_CARD_W / 2;
+    const maxW = STORY_CARD_W - STORY_PADDING * 2;
+    const fontFamily = style.fontFamily || '"Cairo", "Tajawal", sans-serif';
+    const titleFont = `bold 68px ${fontFamily}`;
+    const bodyFont = `36px ${fontFamily}`;
+    const titleLH = 82;
+    const bodyLH = 48;
+
+    const titleLines = wrapLines(ctx, title, titleFont, maxW, 3);
+    const bodyLines = body ? wrapLines(ctx, body, bodyFont, maxW, 4) : [];
+    const gap = bodyLines.length ? 20 : 0;
+    const blockH = titleLines.length * titleLH + gap + bodyLines.length * bodyLH;
+
+    const vAlign = style.textVerticalAlign || 'center';
+    let startY = vAlign === 'top' ? 220 : vAlign === 'bottom' ? STORY_CARD_H - 160 - blockH : (STORY_CARD_H - blockH) / 2;
+    startY = Math.max(140, Math.min(startY, STORY_CARD_H - 200 - blockH));
+
+    const scrimTop = Math.max(0, startY - 60);
+    const scrimH = Math.min(STORY_CARD_H - scrimTop, blockH + 140);
+    const scrim = ctx.createLinearGradient(0, scrimTop, 0, scrimTop + scrimH);
+    scrim.addColorStop(0, 'rgba(0,0,0,0)');
+    scrim.addColorStop(0.25, 'rgba(0,0,0,0.5)');
+    scrim.addColorStop(0.75, 'rgba(0,0,0,0.5)');
+    scrim.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = scrim;
+    ctx.fillRect(0, scrimTop, STORY_CARD_W, scrimH);
+
+    ctx.textAlign = align;
+    ctx.textBaseline = 'top';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 14;
+    ctx.font = titleFont;
+    ctx.fillStyle = style.textColor || '#ffffff';
+    let y = startY;
+    titleLines.forEach((line) => { ctx.fillText(line, contentX, y); y += titleLH; });
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+
+    if (bodyLines.length) {
+        y += gap;
+        ctx.font = bodyFont;
+        ctx.fillStyle = style.subtitleColor || '#ffffff';
+        bodyLines.forEach((line) => { ctx.fillText(line, contentX, y); y += bodyLH; });
+    }
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '28px "Arial", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('DineBuddies', STORY_CARD_W / 2, STORY_CARD_H - 44);
+    ctx.textAlign = 'left';
+
+    return canvas;
+}
+
+export const generateStudioPostStoryCardBlob = async (data) => {
+    const canvas = await generateStudioPostStoryCard(data);
+    return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+};
+
+export const generateStoryCardBlob = async (data) => {
+    const canvas = await generateStoryCard(data);
+    return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+};
+
 const CARD_GENERATORS = {
     business: generateBusinessShareCard,
     post: generatePostShareCard,
+    // A story's hero image and a video's poster frame are both plain photos by the time they
+    // reach here — same "hero + title + description" shape as a post card.
+    story: generatePostShareCard,
 };
 
 export const generateShareCardBlob = async (data, type = 'invitation') => {

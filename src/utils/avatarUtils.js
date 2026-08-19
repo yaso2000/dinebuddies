@@ -2,6 +2,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { normalizeProfileGallery } from './profileGallery';
 import { mapPublicProfileDocToUserShape } from './publicProfileMap';
+import { upsizeProviderPhotoUrl } from './providerPhotoSize';
 
 /**
  * Google Places image URLs (JS PhotoService, REST /place/photo, etc.) are not persisted app media.
@@ -114,11 +115,11 @@ export function pickPreferredAvatarUrl(userData, opts = {}) {
 
     const authPhoto = String(opts?.authPhotoUrl || '').trim();
     if (authPhoto && isProviderAccountPhotoUrl(authPhoto) && !isInvalidDirectImageUrl(authPhoto)) {
-        return authPhoto;
+        return upsizeProviderPhotoUrl(authPhoto);
     }
 
     const provider = usable.find((u) => isProviderAccountPhotoUrl(u));
-    if (provider) return provider;
+    if (provider) return upsizeProviderPhotoUrl(provider);
 
     return null;
 }

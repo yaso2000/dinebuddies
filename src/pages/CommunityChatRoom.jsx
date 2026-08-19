@@ -13,7 +13,6 @@ import { useCommunityChatRoom } from '../hooks/useCommunityChatRoom';
 import { useDesktopShell } from '../hooks/useDesktopShell';
 import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
 import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
-import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import {
   buildCommunityGuestFrameBackgroundStyle,
   getCommunityGuestFrameShellAttributes,
@@ -35,9 +34,6 @@ export default function CommunityChatRoom() {
     room.isMember ||
     room.isHost ||
     (partnerId && joinedCommunityIds.includes(partnerId));
-  const chatEnabled = getBusinessSubscriptionAccess(
-    room.partner?.subscriptionTier
-  ).canUseCommunityGroupChat;
   const containerRef = useRef(null);
   const isDesktopShell = useDesktopShell();
   const { goBack: goBackFromCommunity } = useAppBackNavigation({ fallback: '/messages?tab=communities' });
@@ -218,19 +214,6 @@ export default function CommunityChatRoom() {
         </button>
         {t('inbox_loading', 'Loadingâ€¦')}
       </div>
-    );
-  } else if (canEnterChat && !chatEnabled) {
-    shellContent = renderJoinGate(
-      t('community_chat_paid_only_title', 'Community group chat'),
-      room.isHost
-        ? t(
-            'community_chat_paid_only_host_hint',
-            'Community group chat requires a Paid Business plan.'
-          )
-        : t(
-            'community_chat_paid_only_member_hint',
-            'Group chat is available when this business has a Paid plan.'
-          )
     );
   } else if (!canEnterChat) {
     if (room.isBlockedFromCommunity) {

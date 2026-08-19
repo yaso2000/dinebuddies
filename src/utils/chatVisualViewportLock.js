@@ -60,7 +60,18 @@ function isInsideComposerRoot(el) {
 
 function isKeyboardOpenByViewport(vv) {
     if (!vv) return false;
-    return window.innerHeight - vv.height > 100;
+    if (window.innerHeight - vv.height > 100) return true;
+    // iOS Safari 16.4+ honors <meta ... interactive-widget=resizes-content>
+    // (set in index.html) by shrinking window.innerHeight itself when the
+    // keyboard opens — the same behavior Android's windowSoftInputMode=
+    // "adjustResize" already produces there. Either way, window.innerHeight
+    // and visualViewport.height end up nearly equal even with the keyboard
+    // genuinely open, so the diff above never trips. Falling back to focus
+    // state catches that case and keeps the shell explicitly pinned to the
+    // live visualViewport rect instead of trusting CSS fixed-positioning to
+    // track a resize WebKit doesn't always repaint against reliably.
+    const active = document.activeElement;
+    return isComposerField(active) || isInsideComposerRoot(active);
 }
 
 /** Resolved safe-area insets (px) for pinning the shell above the home indicator. */
@@ -113,7 +124,7 @@ function clearShellInlineGeometry(el) {
     el.style.transform = '';
 }
 
-function applyVisualViewportShellGeometry(el, vv, innerH, innerW, override, androidCompose, androidPinnedShellHeight) {
+function applyVisualViewportShellGeometry(el, vv, innerH, innerW, androidCompose, androidPinnedShellHeight) {
     if (isAppleWebKitTouch()) {
         resetDocumentScroll();
         const offsetTop = Math.max(0, Math.round(vv.offsetTop));
@@ -122,8 +133,7 @@ function applyVisualViewportShellGeometry(el, vv, innerH, innerW, override, andr
         // zeroes CSS safe-area padding — pin top to at least the status-bar inset
         // so the chat header never slides under the system status bar.
         const top = Math.max(offsetTop, safeTop);
-        let h = Math.max(1, Math.round(vv.height) - (top - offsetTop));
-        if (override != null) h = Math.max(1, Math.min(override, innerH - top));
+        const h = Math.max(1, Math.round(vv.height) - (top - offsetTop));
         el.style.left = '0px';
         el.style.top = `${top}px`;
         el.style.width = '100%';
@@ -137,7 +147,6 @@ function applyVisualViewportShellGeometry(el, vv, innerH, innerW, override, andr
 
     const w = Math.max(1, Math.min(vv.width, innerW - vv.offsetLeft));
     let h = Math.max(1, Math.min(vv.height, innerH - vv.offsetTop));
-    if (override != null) h = Math.max(1, Math.min(override, innerH - vv.offsetTop));
     if (
         androidCompose &&
         androidPinnedShellHeight != null &&
@@ -176,12 +185,11 @@ function lockPageScroll() {
  * @param {() => HTMLElement | null} getContainer
  * @param {{
  *   onViewportChange?: (vv: typeof window.visualViewport) => void;
- *   getShellHeightOverride?: () => number | null;
- * }} [options] getShellHeightOverride — during emoji↔keyboard, pin shell height (avoids whole-chat reflow).
+ * }} [options]
  * @returns {{ detach: () => void; sync: () => void }}
  */
 export function attachChatShellToVisualViewport(getContainer, options = {}) {
-    const { onViewportChange, getShellHeightOverride } = options;
+    const { onViewportChange } = options;
     if (!isPhoneLikeChatShell()) {
         const noop = () => {};
         return { detach: noop, sync: noop };
@@ -199,14 +207,10 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
         const innerW = window.innerWidth;
         const keyboardOpen = isKeyboardOpenByViewport(vv);
 
-        const overrideRaw = typeof getShellHeightOverride === 'function' ? getShellHeightOverride() : null;
-        const override =
-            overrideRaw != null && Number.isFinite(overrideRaw) ? Math.round(overrideRaw) : null;
-
         // Keyboard closed: drop inline geometry so CSS (100dvh + safe-area) owns the shell again.
         // Android Chrome often keeps a stale visualViewport.offsetTop after dismiss; using it shrinks
         // the shell to the bottom band only and hides the in-flow chat header.
-        if (!keyboardOpen && override == null) {
+        if (!keyboardOpen) {
             clearShellInlineGeometry(el);
             setChatKeyboardOpenAttribute(false);
             resetDocumentScroll();
@@ -218,15 +222,7 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
 
         el.classList.add('chat-vv-shell');
 
-        applyVisualViewportShellGeometry(
-            el,
-            vv,
-            innerH,
-            innerW,
-            override,
-            androidCompose,
-            androidPinnedShellHeight
-        );
+        applyVisualViewportShellGeometry(el, vv, innerH, innerW, androidCompose, androidPinnedShellHeight);
         if (onViewportChange) onViewportChange(vv);
     };
 

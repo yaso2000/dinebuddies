@@ -668,13 +668,7 @@ const BusinessDashboard = () => {
                     <QuickActionButton
             icon={<FaComments />}
             label={t('chat', 'Chat')}
-            onClick={() => {
-              if (!tierAccess.canUseCommunityGroupChat) {
-                navigate('/settings/subscription');
-                return;
-              }
-              navigate(`/community/${currentUser.uid}`);
-            }} />
+            onClick={() => currentUser && navigate(`/community/${currentUser.uid}`)} />
 
                     <QuickActionButton
             icon={<FaChartLine />}

@@ -30,7 +30,7 @@ export const BUSINESS_FREE_PLAN_FEATURE_KEYS = [
     ['biz_plan_free_feat_google_import', 'Google Business data from admin import (display)'],
     ['biz_plan_free_feat_links_view_only', 'Website, map & social visible — open links requires Paid'],
     ['biz_plan_free_feat_gallery_6', 'Photo gallery — up to 6 images'],
-    ['biz_plan_free_feat_community', 'Community page — members can join (chat is Paid)'],
+    ['biz_plan_free_feat_community', 'Community page & group chat — members can join and chat'],
     ['biz_plan_free_feat_directory', 'Public listing when profile is published'],
     ['biz_plan_free_feat_brand_kit', 'Brand Kit (colors & theme)'],
     ['biz_plan_free_feat_ai_credits', 'AI features use Dine Credits (not included)'],
@@ -39,7 +39,7 @@ export const BUSINESS_FREE_PLAN_FEATURE_KEYS = [
 /** i18n keys — Paid column. */
 export const BUSINESS_PAID_PLAN_FEATURE_KEYS = [
     ['biz_plan_paid_feat_dashboard', 'Business dashboard'],
-    ['biz_plan_paid_feat_community_chat', 'Community group chat'],
+    ['biz_plan_paid_feat_business_stage', '24-hour Stage (live event room) for your community'],
     ['biz_plan_paid_feat_motion_featured', 'Motion posts & featured posts'],
     ['biz_plan_paid_feat_clickable_links', 'Clickable website, map & social links'],
     ['biz_plan_paid_feat_menu_services', 'Menu & services on public profile'],
@@ -113,8 +113,10 @@ export function getBusinessPlanAccess(subscriptionTier) {
         canCreateEventPost: isPaid,
         canUseAdvancedAnalytics: isPaid,
         canUseMemberNotifications: isPaid,
-        /** Permanent community group chat — Paid only. Join/membership stays available on Free. */
-        canUseCommunityGroupChat: isPaid,
+        /** Permanent community group chat — free for every tier; join/membership was always free. */
+        canUseCommunityGroupChat: true,
+        /** Business-hosted Stage (24h live room) — Paid only. Personal/consumer Stages are unaffected. */
+        canCreateBusinessStage: isPaid,
         canUnlimitedManualMotionPosts: isPaid,
         canAppearInPaidRankings: isPaid,
         showPaidProfileBadge: isPaid,

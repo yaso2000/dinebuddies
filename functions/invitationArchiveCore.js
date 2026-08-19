@@ -195,6 +195,7 @@ function buildUserArchiveDoc({
         hostId,
         hostName: invData.author?.name || invData.authorName || null,
         location: invData.location || invData.venueName || null,
+        restaurantId: invData.restaurantId || null,
         readOnly: true,
         privacy: kind === 'public' ? 'public' : 'private',
         isArchived: true,
@@ -325,10 +326,10 @@ async function archiveExpiredInvitation(db, bucket, invDoc, opts) {
         }
     }
 
-    const batch = db.batch();
-    messagesSnap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
-    batch.delete(invDoc.ref);
-    await batch.commit();
+    // Message TEXT is cheap to keep and preserved for the archived chat view —
+    // only the invitation doc itself is removed. Heavy media (images/voice
+    // attachments) was already queued for Storage deletion above.
+    await invDoc.ref.delete();
     return true;
 }
 

@@ -57,6 +57,7 @@ const AdminGooglePlacesImportPage = lazy(() => import('./admin/pages/GooglePlace
 const AdminDemoUsersPage = lazy(() => import('./admin/pages/DemoUsersPage'));
 const InvitationDetails = lazy(() => import('./pages/InvitationDetails'));
 const InvitationPreview = lazy(() => import('./pages/InvitationPreview'));
+const InvitationArchiveDetails = lazy(() => import('./pages/InvitationArchiveDetails'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const ChatList = lazy(() => import('./pages/ChatList'));
 const Chat = lazy(() => import('./pages/Chat'));
@@ -76,6 +77,8 @@ const BusinessDashboard = lazy(() => import('./pages/BusinessDashboard'));
 import SocialInvitationDetails from './pages/SocialInvitationDetails';
 import SocialInvitationPreview from './pages/SocialInvitationPreview';
 import PublicSocialInvitationJoin from './pages/PublicSocialInvitationJoin';
+// Eager for the same reason as PublicSocialInvitationJoin above — reached via external share links.
+import PublicStoryView from './pages/PublicStoryView';
 const InvitationChatRoom = lazy(() => import('./pages/InvitationChatRoom'));
 const FollowersList = lazy(() => import('./pages/FollowersList'));
 const CreateInvitation = lazy(() => import('./pages/CreateInvitation'));
@@ -94,6 +97,8 @@ const NotificationsSettings = lazy(() => import('./pages/NotificationsSettings')
 const LanguageSettings = lazy(() => import('./pages/LanguageSettings'));
 const PrivacySettings = lazy(() => import('./pages/PrivacySettings'));
 const BlockedUsersSettings = lazy(() => import('./pages/BlockedUsersSettings'));
+const DeclinedInvitationsSettings = lazy(() => import('./pages/DeclinedInvitationsSettings'));
+const SavedPaymentMethods = lazy(() => import('./pages/SavedPaymentMethods'));
 const SubscriptionSettings = lazy(() => import('./pages/SubscriptionSettings'));
 const CreditsWallet = lazy(() => import('./pages/CreditsWallet'));
 const PaymentSettings = lazy(() => import('./pages/PaymentSettings'));
@@ -102,6 +107,7 @@ const HelpSupport = lazy(() => import('./pages/HelpSupport'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const CommunityGuidelines = lazy(() => import('./pages/CommunityGuidelines'));
+const ChildSafetyStandards = lazy(() => import('./pages/ChildSafetyStandards'));
 const AccountDeletionRequest = lazy(() => import('./pages/AccountDeletionRequest'));
 const BusinessHostedArchive = lazy(() => import('./pages/BusinessHostedArchive'));
 const BusinessDashboardAnalytics = lazy(() => import('./pages/BusinessDashboardAnalytics'));
@@ -240,6 +246,7 @@ function App() {
                                                     <Route path="/post/:postId" element={<PostDetails />} />
 
                                                     <Route path="/invite/p/:token" element={<PublicSocialInvitationJoin />} />
+                                                    <Route path="/story/:id" element={<PublicStoryView />} />
                                                     <Route path="/invitation/social/preview/:id" element={<SocialInvitationPreview />} />
                                                     <Route path="/invitation/private/preview/:id" element={<SocialInvitationPreview />} />
                                                     <Route path="/invitation/social/:id" element={<SocialInvitationDetails />} />
@@ -251,6 +258,7 @@ function App() {
                                                     <Route path="/invitation/private/:id" element={<SocialInvitationDetails />} />
                                                     <Route path="/invitation/:id/chat" element={<GuestBlockedRoute><InvitationChatRoom /></GuestBlockedRoute>} />
                                                     <Route path="/invitation/preview/:id" element={<InvitationPreview />} />
+                                                    <Route path="/invitation/archived/:id" element={<InvitationArchiveDetails />} />
                                                     <Route path="/invitation/:id" element={<InvitationDetails />} />
 
                                                     <Route path="/business/onboarding" element={<GuestBlockedRoute><BusinessOnboarding /></GuestBlockedRoute>} />
@@ -313,6 +321,8 @@ function App() {
                                                     <Route path="/settings/language" element={<GuestBlockedRoute><LanguageSettings /></GuestBlockedRoute>} />
                                                     <Route path="/settings/privacy" element={<GuestBlockedRoute><PrivacySettings /></GuestBlockedRoute>} />
                                                     <Route path="/settings/blocked-users" element={<GuestBlockedRoute><BlockedUsersSettings /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/declined-invitations" element={<GuestBlockedRoute><DeclinedInvitationsSettings /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/payment-methods" element={<GuestBlockedRoute><SavedPaymentMethods /></GuestBlockedRoute>} />
                                                     <Route path="/settings/subscription" element={<GuestBlockedRoute><SubscriptionSettings /></GuestBlockedRoute>} />
                                                     <Route path="/settings/credits" element={<GuestBlockedRoute><CreditsWallet /></GuestBlockedRoute>} />
                                                     <Route path="/settings/payment" element={<GuestBlockedRoute><PaymentSettings /></GuestBlockedRoute>} />
@@ -323,6 +333,7 @@ function App() {
                                                     <Route path="/privacy" element={<PrivacyPolicy />} />
                                                     <Route path="/terms" element={<TermsOfService />} />
                                                     <Route path="/guidelines" element={<CommunityGuidelines />} />
+                                                    <Route path="/child-safety" element={<ChildSafetyStandards />} />
                                                     <Route path="/account-deletion" element={<AccountDeletionRequest />} />
 
                                                     <Route path="/plans" element={<Navigate to="/pricing" replace />} />

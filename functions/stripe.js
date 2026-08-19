@@ -258,6 +258,8 @@ exports.createBusinessSubscriptionCheckout = functions.https.onCall(async (data,
             userData,
         });
 
+        const trialEligible = !userData.businessTrialUsedAt;
+
         const session = await stripe.checkout.sessions.create({
             customer: customerId,
             payment_method_types: ['card'],
@@ -265,6 +267,7 @@ exports.createBusinessSubscriptionCheckout = functions.https.onCall(async (data,
             mode: 'subscription',
             success_url: `${successUrl}${successUrl.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: cancelUrl,
+            ...(trialEligible ? { subscription_data: { trial_period_days: 30 } } : {}),
             metadata: {
                 userId,
                 planId: 'paid',
@@ -273,6 +276,10 @@ exports.createBusinessSubscriptionCheckout = functions.https.onCall(async (data,
                 stripeMode: isStripeTestMode() ? 'test' : 'live',
             },
         });
+
+        if (trialEligible) {
+            await userRef.set({ businessTrialUsedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        }
 
         return { sessionId: session.id, url: session.url };
     } catch (error) {
@@ -285,4 +292,144 @@ exports.createBusinessSubscriptionCheckout = functions.https.onCall(async (data,
 exports.getStripeCommerceStatus = functions.https.onCall(async () => {
     const { stripeCommerceStatus } = require('./stripeEnv');
     return stripeCommerceStatus();
+});
+
+/**
+ * Saved cards (Stripe Vault) — used by Settings → Payment Methods so repeat
+ * Dine Credits / subscription purchases don't require re-entering a card.
+ */
+
+async function requireStripeCustomerId(uid) {
+    const userRef = db.collection('users').doc(uid);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'User not found');
+    }
+    const customerId = String(userDoc.data()?.stripeCustomerId || '').trim();
+    if (!customerId) return null;
+    return customerId;
+}
+
+/** Verify a payment method actually belongs to this caller's Stripe customer before any mutation. */
+async function assertOwnedPaymentMethod(pmId, customerId) {
+    const pm = await stripe.paymentMethods.retrieve(pmId);
+    if (!pm || pm.customer !== customerId) {
+        throw new functions.https.HttpsError('permission-denied', 'Payment method does not belong to this account.');
+    }
+    return pm;
+}
+
+/** Create a SetupIntent to save a card without charging it. */
+exports.createSetupIntent = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+    }
+    const userId = context.auth.uid;
+    try {
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
+        const userData = userDoc.exists ? userDoc.data() : {};
+        const customerId = await resolveStripeCustomerForUser({
+            userId,
+            email: context.auth.token.email,
+            userRef,
+            userData,
+        });
+
+        const setupIntent = await stripe.setupIntents.create({
+            customer: customerId,
+            payment_method_types: ['card'],
+        });
+
+        return { clientSecret: setupIntent.client_secret };
+    } catch (error) {
+        console.error('createSetupIntent:', error);
+        throw new functions.https.HttpsError('internal', error.message || 'Could not start card setup');
+    }
+});
+
+/** List the caller's saved cards, with the current default flagged. */
+exports.listPaymentMethods = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+    }
+    try {
+        const customerId = await requireStripeCustomerId(context.auth.uid);
+        if (!customerId) return { methods: [], defaultPaymentMethodId: null };
+
+        const [methodsList, customer] = await Promise.all([
+            stripe.paymentMethods.list({ customer: customerId, type: 'card' }),
+            stripe.customers.retrieve(customerId),
+        ]);
+
+        const defaultPaymentMethodId = customer?.invoice_settings?.default_payment_method || null;
+
+        const methods = methodsList.data.map((pm) => ({
+            id: pm.id,
+            brand: pm.card?.brand || null,
+            last4: pm.card?.last4 || null,
+            expMonth: pm.card?.exp_month || null,
+            expYear: pm.card?.exp_year || null,
+            isDefault: pm.id === defaultPaymentMethodId,
+        }));
+
+        return { methods, defaultPaymentMethodId };
+    } catch (error) {
+        console.error('listPaymentMethods:', error);
+        throw new functions.https.HttpsError('internal', error.message || 'Could not load payment methods');
+    }
+});
+
+/** Set a saved card as the default payment method. */
+exports.setDefaultPaymentMethod = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+    }
+    const pmId = String(data?.paymentMethodId || '').trim();
+    if (!pmId) {
+        throw new functions.https.HttpsError('invalid-argument', 'paymentMethodId is required');
+    }
+    try {
+        const customerId = await requireStripeCustomerId(context.auth.uid);
+        if (!customerId) {
+            throw new functions.https.HttpsError('failed-precondition', 'No saved payment methods yet.');
+        }
+        await assertOwnedPaymentMethod(pmId, customerId);
+
+        await stripe.customers.update(customerId, {
+            invoice_settings: { default_payment_method: pmId },
+        });
+
+        return { success: true };
+    } catch (error) {
+        if (error instanceof functions.https.HttpsError) throw error;
+        console.error('setDefaultPaymentMethod:', error);
+        throw new functions.https.HttpsError('internal', error.message || 'Could not set default card');
+    }
+});
+
+/** Remove a saved card. */
+exports.deletePaymentMethod = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+    }
+    const pmId = String(data?.paymentMethodId || '').trim();
+    if (!pmId) {
+        throw new functions.https.HttpsError('invalid-argument', 'paymentMethodId is required');
+    }
+    try {
+        const customerId = await requireStripeCustomerId(context.auth.uid);
+        if (!customerId) {
+            throw new functions.https.HttpsError('failed-precondition', 'No saved payment methods yet.');
+        }
+        await assertOwnedPaymentMethod(pmId, customerId);
+
+        await stripe.paymentMethods.detach(pmId);
+
+        return { success: true };
+    } catch (error) {
+        if (error instanceof functions.https.HttpsError) throw error;
+        console.error('deletePaymentMethod:', error);
+        throw new functions.https.HttpsError('internal', error.message || 'Could not remove card');
+    }
 });

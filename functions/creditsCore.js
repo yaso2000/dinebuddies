@@ -18,7 +18,7 @@ const { planCreditSpend } = require('./creditsSpendMath');
 /** @typedef {'user'|'business'} AccountRole */
 
 /** Recipient receives this fraction of the gift amount sent from purchase wallet. */
-const GIFT_RECIPIENT_VALUE_RATE = 0.5;
+const GIFT_RECIPIENT_VALUE_RATE = 0.3;
 
 const CREDIT_COSTS = {
     /** Public invitations use the `invitations` collection and are not charged via this constant. */

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaGift, FaImage, FaSync, FaTimes } from 'react-icons/fa';
+import { FaEye, FaEyeSlash, FaGift, FaImage, FaSync, FaTimes } from 'react-icons/fa';
 import { AppText } from '../base';
 import CommunityHostBannerComposerTools from './CommunityHostBannerComposerTools';
 import CommunityBannerDraggableTitle from './CommunityBannerDraggableTitle';
@@ -43,16 +43,21 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
     onSendGiftToHost,
   } = room;
   const canGiftHost = !isHost && typeof onSendGiftToHost === 'function';
+  // Stage rooms: `partnerId` is the stage document id, not the host's user id
+  // — `hostId` (only present on the Stage hook) is the correct id to match
+  // `message.senderId` against. Community Chat has no `hostId`, where
+  // `partnerId` already equals the host's uid.
+  const hostMessageOwnerId = room.hostId || room.partnerId;
 
   const spotlightViews = useMemo(
     () =>
-      buildBannerSpotlightViews(messages, room.partnerId, {
+      buildBannerSpotlightViews(messages, hostMessageOwnerId, {
         pendingReplyTo,
         isHost,
         spotlightDismissed: banner.hostSpotlightDismissed,
         spotlightAuto: banner.hostSpotlightAuto,
       }),
-    [messages, room.partnerId, pendingReplyTo, isHost, banner.hostSpotlightDismissed, banner.hostSpotlightAuto]
+    [messages, hostMessageOwnerId, pendingReplyTo, isHost, banner.hostSpotlightDismissed, banner.hostSpotlightAuto]
   );
 
   const pinnedBarActive = Boolean(spotlightViews.length > 0);
@@ -73,6 +78,25 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
   const [memberYtReady, setMemberYtReady] = useState(false);
   const bannerRef = useRef(banner);
   bannerRef.current = banner;
+
+  const [hostToolsVisible, setHostToolsVisible] = useState(() => {
+    try {
+      return localStorage.getItem('db-host-banner-tools-visible') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const toggleHostToolsVisible = useCallback(() => {
+    setHostToolsVisible((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('db-host-banner-tools-visible', next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
 
   const hasYoutube = hasYoutubeBannerMedia(banner);
   const hasCustomBannerImage = Boolean(String(banner.url || '').trim()) && !hasYoutube;
@@ -259,29 +283,71 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
       className={`community-top-media-panel${bannerExpanded ? ' community-top-media-panel--expanded' : ''}`}
       aria-label={t('community_banner_panel', 'Community media')}
     >
+      {isHost && bannerMediaActive ? (
+        <div className="community-top-media-panel__host-toolbar">
+          <CommunityHostBannerComposerTools
+            room={room}
+            layout="above-banner"
+            hostToolsVisible={hostToolsVisible}
+          />
+          {isYoutube ? (
+            <CommunityBannerYoutubeHostControls
+              iframeRef={hostYtIframeRef}
+              syncAtMs={banner.youtubeSyncAt}
+              positionSec={banner.youtubePositionSec}
+              paused={banner.youtubePaused}
+              isLive={banner.youtubeLive}
+              onPlaybackSync={room.syncYoutubePlayback}
+              visible
+              layout="toolbar"
+            />
+          ) : null}
+          {showCornerDelete ? (
+            <button
+              type="button"
+              className="community-banner-corner-delete"
+              aria-label={
+                hasYoutube
+                  ? t('community_banner_delete_youtube', 'Remove video')
+                  : t('community_banner_delete_image', 'Remove banner image')
+              }
+              title={
+                hasYoutube
+                  ? t('community_banner_delete_youtube', 'Remove video')
+                  : t('community_banner_delete_image', 'Remove banner image')
+              }
+              onClick={handleDeleteBannerMedia}
+            >
+              <FaTimes size={14} aria-hidden />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div
         className={`community-main-chat__banner-wrap${reserveLowerForHost ? ' community-main-chat__banner-wrap--host-lower' : ''}${isTransparent && hasImage ? ' community-main-chat__banner-wrap--text-overlay' : ''}${isYoutube ? ' community-main-chat__banner-wrap--youtube' : ''}${isHost && isYoutube ? ' community-main-chat__banner-wrap--youtube-host' : ''}`}
       >
-        {showCornerDelete ? (
+        <div className="community-main-chat__banner">{bannerInner}</div>
+
+        {isHost && bannerMediaActive ? (
           <button
             type="button"
-            className="community-banner-corner-delete"
+            className={`community-banner-tools-toggle${hostToolsVisible ? '' : ' community-banner-tools-toggle--hidden-mode'}`}
             aria-label={
-              hasYoutube
-                ? t('community_banner_delete_youtube', 'Remove video')
-                : t('community_banner_delete_image', 'Remove banner image')
+              hostToolsVisible
+                ? t('community_banner_tools_hide', 'Hide banner tools')
+                : t('community_banner_tools_show', 'Show banner tools')
             }
             title={
-              hasYoutube
-                ? t('community_banner_delete_youtube', 'Remove video')
-                : t('community_banner_delete_image', 'Remove banner image')
+              hostToolsVisible
+                ? t('community_banner_tools_hide', 'Hide banner tools')
+                : t('community_banner_tools_show', 'Show banner tools')
             }
-            onClick={handleDeleteBannerMedia}
+            aria-pressed={!hostToolsVisible}
+            onClick={toggleHostToolsVisible}
           >
-            <FaTimes size={14} aria-hidden />
+            {hostToolsVisible ? <FaEyeSlash size={14} aria-hidden /> : <FaEye size={14} aria-hidden />}
           </button>
         ) : null}
-        <div className="community-main-chat__banner">{bannerInner}</div>
 
         {isHost && hasTitle ? (
           <div className="community-main-chat__banner-zones" aria-hidden>
@@ -347,20 +413,6 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
           />
         ) : null}
 
-        {isHost && bannerMediaActive ? (
-          <CommunityHostBannerComposerTools room={room} layout="banner-rail" />
-        ) : null}
-        {isHost && isYoutube && bannerMediaActive ? (
-          <CommunityBannerYoutubeHostControls
-            iframeRef={hostYtIframeRef}
-            syncAtMs={banner.youtubeSyncAt}
-            positionSec={banner.youtubePositionSec}
-            paused={banner.youtubePaused}
-            isLive={banner.youtubeLive}
-            onPlaybackSync={room.syncYoutubePlayback}
-            visible
-          />
-        ) : null}
         {!isHost && isYoutube && bannerMediaActive ? (
           <>
             <CommunityBannerYoutubeMemberSound

@@ -5,6 +5,7 @@ export const GIFT_SHIELD_IMAGES_BASE = '/gift-shields';
 export const GIFT_SHIELD_VISUAL_THEMES = {
     bronze: {
         imageFile: 'Bronze.png',
+        jarImageFile: 'Bronze jar.png',
         fillTop: '#e8a45c',
         fillMid: '#c87832',
         fillBottom: '#7a4518',
@@ -17,6 +18,7 @@ export const GIFT_SHIELD_VISUAL_THEMES = {
     },
     silver: {
         imageFile: 'Silver.png',
+        jarImageFile: 'Silver jar.png',
         fillTop: '#f0f3f8',
         fillMid: '#b8bec8',
         fillBottom: '#6e7682',
@@ -29,6 +31,7 @@ export const GIFT_SHIELD_VISUAL_THEMES = {
     },
     gold: {
         imageFile: 'gold.png',
+        jarImageFile: 'gold jar.png',
         fillTop: '#ffe566',
         fillMid: '#f0b429',
         fillBottom: '#a66f08',
@@ -41,6 +44,7 @@ export const GIFT_SHIELD_VISUAL_THEMES = {
     },
     platinum: {
         imageFile: 'Platinum.png',
+        jarImageFile: 'Platinum jar.png',
         fillTop: '#f5fbff',
         fillMid: '#c5d8e8',
         fillBottom: '#7a96ad',
@@ -53,6 +57,7 @@ export const GIFT_SHIELD_VISUAL_THEMES = {
     },
     diamond: {
         imageFile: 'Diamond.png',
+        jarImageFile: 'Diamond jar.png',
         fillTop: '#e8fbff',
         fillMid: '#7dd3fc',
         fillBottom: '#0284c7',
@@ -74,5 +79,17 @@ export function getGiftShieldVisualTheme(tierId) {
 export function getGiftShieldImageSrc(theme) {
     if (!theme?.imageFile) return null;
     const segments = String(theme.imageFile).split('/').map((s) => encodeURIComponent(s));
+    return `${GIFT_SHIELD_IMAGES_BASE}/${segments.join('/')}`;
+}
+
+/**
+ * Jar art for the cash-out tiers (src/utils/cashoutShieldTiers.js) — visually
+ * distinct from the lifetime "Gift Shields" badge art above, though both
+ * share the same bronze/silver/gold/platinum/diamond tier keys and folder.
+ * @param {{ jarImageFile?: string } | null | undefined} theme
+ */
+export function getGiftJarImageSrc(theme) {
+    if (!theme?.jarImageFile) return null;
+    const segments = String(theme.jarImageFile).split('/').map((s) => encodeURIComponent(s));
     return `${GIFT_SHIELD_IMAGES_BASE}/${segments.join('/')}`;
 }

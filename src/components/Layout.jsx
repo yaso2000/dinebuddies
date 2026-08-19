@@ -30,6 +30,7 @@ import { useJoinedStages } from '../hooks/useJoinedStages';
 import { useTheme } from '../context/ThemeContext';
 import UnpublishedBusinessReminder from './UnpublishedBusinessReminder';
 import EmailVerificationBusinessBanner from './EmailVerificationBusinessBanner';
+import InstallAppBanner from './InstallAppBanner';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 import { doc, getDoc } from 'firebase/firestore';
@@ -743,6 +744,7 @@ const Layout = ({ children }) => {
                   className={`app-main${useChatMainLayout ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute || isStudioRoute || isConnectMagneticRoute ? ' app-main--fullscreen' : ''}${isCommunityFullscreen ? ' app-main--community-fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}${isDashboardRoute ? ' app-main--dashboard' : ''}${isConnectMagneticRoute ? ' app-main--connect' : ''}`}>
                     {!isSearchListRoute && !isConnectMagneticRoute && !isCommunityFullscreen && <EmailVerificationBusinessBanner />}
                     {!isSearchListRoute && !isConnectMagneticRoute && !isCommunityFullscreen && <UnpublishedBusinessReminder />}
+                    {!isSearchListRoute && !isConnectMagneticRoute && !isCommunityFullscreen && <InstallAppBanner />}
                     {children}
                     <Suspense fallback={<AppRouteLoading variant="route" />}>
                         <Outlet />

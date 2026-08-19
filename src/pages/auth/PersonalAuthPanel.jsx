@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaFacebook, FaUser } from 'react-icons/fa';
+import { FaFacebook, FaUser, FaApple } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -58,6 +58,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
   const {
     signInWithGoogle,
     signInWithFacebook,
+    signInWithApple,
     continueAsGuest,
     signOut,
     userProfile,
@@ -358,6 +359,14 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
         }
         authFinished = true;
         setLoading(true);
+      } else if (provider === 'apple') {
+        const appleRes = await signInWithApple();
+        if (appleRes?.__oauthRedirect) {
+          startedRedirect = true;
+          return;
+        }
+        authFinished = true;
+        setLoading(true);
       }
     } catch (err) {
       authFinished = false;
@@ -405,7 +414,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
 
   const btn = {
     width: '100%',
-    padding: '12px',
+    padding: '10px',
     borderRadius: '10px',
     border: '1px solid #d1d5db',
     background: '#ffffff',
@@ -438,14 +447,14 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     style={{
       color: '#4b5563',
       fontSize: '0.88rem',
-      margin: '0 0 1rem',
+      margin: '0 0 0.75rem',
       lineHeight: 1.45,
       textAlign: 'center'
     }}>
       
                 {t(
         'auth_personal_step1_subtitle',
-        'Sign in or create a personal account with Google or Facebook.'
+        'Sign in or create a personal account with Google, Facebook, or Apple.'
       )}
             </AppText>
 
@@ -501,7 +510,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     }
 
             <section style={{ padding: '0.2rem 0' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     {embeddedPreview ? (
                     <a
           href={chromeLoginUrl}
@@ -538,6 +547,22 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
           
                         <FaFacebook size={22} color="#ffffff" />{' '}
                         {t('continue_with_facebook', 'Continue with Facebook')}
+                    </button>
+                    <button
+          type="button"
+          onClick={() => handleOAuth('apple')}
+          disabled={oauthButtonsLocked}
+          className="btn-auth-social btn-apple personal-auth-social ios-tap-target"
+          style={{
+            ...btn,
+            background: '#000000',
+            color: '#ffffff',
+            borderColor: '#000000',
+            opacity: oauthButtonsLocked ? 0.65 : 1,
+          }}>
+
+                        <FaApple size={22} color="#ffffff" />{' '}
+                        {t('continue_with_apple', 'Continue with Apple')}
                     </button>
                 </div>
 

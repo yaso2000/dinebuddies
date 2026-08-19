@@ -66,6 +66,10 @@
             "destination": "/api/invite-preview?token=:token"
         },
         {
+            "source": "/story/:id",
+            "destination": "/api/story-preview?id=:id"
+        },
+        {
             "source": "/company",
             "destination": "/company/index.html"
         },
