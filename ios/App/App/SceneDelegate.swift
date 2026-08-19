@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import FBSDKCoreKit
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
@@ -16,6 +17,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         SceneDelegateProxy.shared.scene(scene, openURLContexts: URLContexts)
+
+        guard let urlContext = URLContexts.first else { return }
+        ApplicationDelegate.shared.application(
+            UIApplication.shared,
+            open: urlContext.url,
+            sourceApplication: urlContext.options.sourceApplication,
+            annotation: urlContext.options.annotation
+        )
     }
 
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {

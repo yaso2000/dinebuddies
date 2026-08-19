@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import FBSDKCoreKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -7,7 +8,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Required by the Facebook iOS SDK — without this call, FBSDKSettings never loads
+        // FacebookAppID/FacebookClientToken from Info.plist and native Facebook login crashes.
+        ApplicationDelegate.shared.application(application, didFinishLaunchingWithOptions: launchOptions)
         return true
     }
 
