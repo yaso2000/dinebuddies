@@ -34,7 +34,7 @@ workflows:
             group = project.main_group.find_subpath("App", true)
             already_added = group.files.any? { |f| f.path == "GoogleService-Info.plist" }
             unless already_added
-              file_ref = group.new_reference("App/GoogleService-Info.plist")
+              file_ref = group.new_reference("GoogleService-Info.plist")
               target.add_resources([file_ref])
             end
             project.save
