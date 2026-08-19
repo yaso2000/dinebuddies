@@ -20,8 +20,9 @@ requires Apple's own IAP for anything unlocked inside the app.
 | Signed build → TestFlight | You (via Codemagic) |
 | Sandbox purchase test | You |
 | Native iOS sign-in (Google/Facebook/Apple) code | Done |
-| Enable "Sign In with Apple" capability on `com.dinebuddies.app` | You (Apple Developer Portal) |
-| Add iOS platform to Facebook app in Meta Developer Console | You |
+| Enable "Sign In with Apple" capability on `com.dinebuddies.app` | Done |
+| Add iOS platform to Facebook app in Meta Developer Console | Done |
+| Native iOS sign-in verified on TestFlight (build 10) | Done — Google, Apple, Facebook all confirmed working |
 
 ## What is already in the repo
 
@@ -149,6 +150,22 @@ Until step 1 is done, native Apple sign-in will fail even though the app code an
 file (`ios/App/App/App.entitlements`) are correctly in place — Apple rejects the sign-in request
 server-side if the capability isn't enabled for the bundle ID. Google sign-in has no extra
 manual step (the reversed client ID URL scheme is already wired into `Info.plist`).
+
+**Status: done and verified.** Both manual steps above were completed, plus two follow-up fixes
+found only via real TestFlight testing (no Mac/Xcode available, diagnosed from on-device crash
+logs at Settings → Privacy & Security → Analytics & Improvements → Analytics Data):
+
+- Facebook Login crashed with SIGABRT on every attempt (`FBSDKInternalUtility validateAppID`)
+  because nothing ever called `ApplicationDelegate.shared.application(didFinishLaunchingWithOptions:)`.
+  Fixed in `ios/App/App/AppDelegate.swift` (init call) and `SceneDelegate.swift`
+  (`openURLContexts` forwarding) — see build 9.
+- Facebook then failed with `auth/invalid-credential` because Meta now forces iOS through
+  Limited Login (`limited.facebook.com`) and rejects the classic access token. Fixed in
+  `src/platform/nativeFacebookAuth.js` — iOS now passes `useLimitedLogin: true` and exchanges
+  the returned ID token via `OAuthProvider('facebook.com')`; Android keeps the classic
+  access-token flow unchanged — see build 10.
+
+Google, Apple, and Facebook native sign-in are all confirmed working on TestFlight build 10.
 
 ## 8. Known gaps / follow-ups (not built in this pass)
 
