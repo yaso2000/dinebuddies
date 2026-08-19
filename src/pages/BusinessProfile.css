@@ -1,0 +1,267 @@
+/* BusinessProfile.jsx — visual redesign layer.
+   Consumes tokens from index.css + profile-shared.css + ui-primitives.css;
+   Brand-Kit-aware bits read the `--bp-*` custom properties set on the page root. */
+
+/* ---- Stats box ---- */
+.business-profile-stats {
+    background: color-mix(in srgb, var(--brand-primary) 15%, transparent);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    padding: 18px 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    margin-top: var(--profile-stack-gap);
+}
+
+.business-profile-stat-value {
+    font-size: 1.35rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* ---- Standardized section card ---- */
+.business-profile-card {
+    position: relative;
+    border-radius: var(--profile-card-radius-lg, 24px);
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    padding: var(--profile-card-padding-lg, 24px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+
+.business-profile-card--accent::before {
+    content: '';
+    position: absolute;
+    inset-inline-start: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--brand-primary);
+}
+
+.business-profile-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+/* Header-only cards (no children) — skip the body gap. */
+.business-profile-card__header--tight {
+    margin-bottom: 0;
+}
+
+.business-profile-card__heading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.3rem;
+    font-weight: 800;
+    margin: 0;
+    color: var(--text-main, var(--text-primary));
+}
+
+.business-profile-card__heading-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: var(--radius-md, 8px);
+    background: color-mix(in srgb, var(--brand-primary) 14%, transparent);
+    color: var(--brand-primary);
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.business-profile-card__actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.business-profile-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 6px 14px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-main, var(--text-primary));
+    background: var(--hover-overlay);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+.business-profile-chip--static {
+    min-height: 32px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    background: color-mix(in srgb, var(--brand-primary) 12%, var(--bg-card));
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 28%, var(--border-color));
+    border-radius: 12px;
+    cursor: default;
+}
+
+/* ---- Contact tab ---- */
+.business-profile-contact-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--profile-stack-gap);
+}
+
+.business-profile-contact-tile {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, opacity 0.2s;
+}
+
+.business-profile-contact-tile--clickable {
+    cursor: pointer;
+}
+
+.business-profile-contact-tile--clickable:hover {
+    transform: translateY(-4px);
+}
+
+.business-profile-contact-tile--locked {
+    cursor: default;
+    opacity: 0.92;
+}
+
+.business-profile-contact-tile__icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--brand-primary) 15%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--brand-primary);
+    font-size: 1.5rem;
+    box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.business-profile-contact-tile__body {
+    flex: 1;
+    min-width: 0;
+}
+
+.business-profile-contact-tile__label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.business-profile-contact-tile__value {
+    font-weight: 800;
+    color: var(--text-main, var(--text-primary));
+    font-size: 1.1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.business-profile-social-btn {
+    padding: 16px;
+    border: none;
+    border-radius: 16px;
+    color: white;
+    font-weight: 800;
+    font-size: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.2s;
+}
+
+.business-profile-social-btn--clickable {
+    cursor: pointer;
+}
+
+.business-profile-social-btn:disabled {
+    cursor: default;
+    opacity: 0.75;
+}
+
+/* ---- Tab bar ---- */
+.business-profile-tabs {
+    position: sticky;
+    top: 10px;
+    z-index: 50;
+    background: color-mix(in srgb, var(--bg-card) 90%, transparent);
+    border: 1px solid var(--border-color);
+    border-radius: var(--profile-card-radius, 20px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+
+.business-profile-tab--locked {
+    color: var(--text-muted);
+    opacity: 0.75;
+}
+
+/* ---- Actions row (Join Community / Create Invitation) ---- */
+.business-profile-actions-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--profile-actions-gap);
+    width: 100%;
+    margin-bottom: var(--profile-stack-gap);
+}
+
+.business-profile-cta {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: none;
+    font-weight: 900;
+    font-size: 1.05rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.3s;
+}
+
+.business-profile-cta--primary {
+    background: var(--brand-primary);
+    color: var(--text-on-brand);
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--brand-primary) 30%, transparent);
+}
+
+.business-profile-cta--joined {
+    background: linear-gradient(135deg, #1a2744 0%, #0f1729 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(15, 23, 41, 0.45);
+}
+
+.business-profile-cta--secondary {
+    padding: 16px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-weight: 800;
+    font-size: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
