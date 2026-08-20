@@ -1152,7 +1152,7 @@ const BusinessesDirectory = () => {
         res.businessInfo?.photo_url ||
         res.image ||
         res.businessInfo?.image ||
-        resolveBusinessCoverImageUrl(res, { preferProxy: true }) ||
+        resolveBusinessCoverImageUrl(res) ||
         pickSafeDisplayImageUrl(res.image, res.businessInfo?.coverImage) ||
         DEFAULT_BUSINESS_COVER;
 
@@ -1183,7 +1183,7 @@ const BusinessesDirectory = () => {
         const popupContent = `
                     <div class="compact-popup" dir="auto" style="unicode-bidi:isolate;text-align:start">
                         <div style="position: relative;">
-                            <img src="${res.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400'}" class="compact-popup-image" />
+                            <img src="${resolveBusinessCoverImageUrl(res) || pickSafeDisplayImageUrl(res.image, res.businessInfo?.coverImage) || DEFAULT_BUSINESS_COVER}" class="compact-popup-image" />
                             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; padding: 4px; background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);">
                                 <span style="background: ${markerColor}; color: black; padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; font-weight: 700; position: absolute; bottom: 4px; left: 4px; unicode-bidi:isolate;" dir="auto">${escapeHtmlText(formatBiDiText(res.type || t('venue', 'Venue')))}</span>
                             </div>
