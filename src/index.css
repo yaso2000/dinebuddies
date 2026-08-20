@@ -6296,14 +6296,15 @@ button.notification-bell {
 
   /*
    * Community chat on desktop: same phone width + portrait proportion as mobile
-   * (not stretched across the wide center column).
+   * (not stretched across the wide center column). Stage rooms opt out — they get
+   * their own wide 3-pane desktop layout (StageDesktopLayout) instead.
    */
-  .app-main--chat:has(> .community-chat-root:not(.community-chat-fullscreen)) {
+  .app-main--chat:has(> .community-chat-root:not(.community-chat-fullscreen):not(.stage-chat-root)) {
     justify-content: center !important;
     align-items: center !important;
   }
 
-  .app-main--chat > .community-chat-root.chat-room-container.community-chat-swipe-shell:not(.community-chat-fullscreen) {
+  .app-main--chat > .community-chat-root.chat-room-container.community-chat-swipe-shell:not(.community-chat-fullscreen):not(.stage-chat-root) {
     --community-chat-phone-w: min(100%, var(--max-width, 500px));
     width: var(--community-chat-phone-w) !important;
     max-width: var(--community-chat-phone-w) !important;
