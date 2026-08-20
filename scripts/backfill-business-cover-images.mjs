@@ -49,9 +49,11 @@ async function repairRestaurant(doc) {
                 coverImageStoragePath: uploaded.path,
                 coverImageFromFirebase: true,
                 photo_url: uploaded.url,
-                'businessInfo.coverImage': uploaded.url,
-                'businessInfo.coverImageStoragePath': uploaded.path,
-                'businessInfo.coverImageFromFirebase': true,
+                businessInfo: {
+                    coverImage: uploaded.url,
+                    coverImageStoragePath: uploaded.path,
+                    coverImageFromFirebase: true,
+                },
             },
             { merge: true },
         );
@@ -70,8 +72,10 @@ async function repairRestaurant(doc) {
             {
                 coverImageStoragePath: urlPath,
                 coverImageFromFirebase: true,
-                'businessInfo.coverImageStoragePath': urlPath,
-                'businessInfo.coverImageFromFirebase': true,
+                businessInfo: {
+                    coverImageStoragePath: urlPath,
+                    coverImageFromFirebase: true,
+                },
             },
             { merge: true },
         );
@@ -97,9 +101,11 @@ async function repairRestaurant(doc) {
             coverImageFromFirebase: true,
             photo_url: details.coverImageUrl,
             googlePhotoReference: details.googlePhotoReference,
-            'businessInfo.coverImage': details.coverImageUrl,
-            'businessInfo.coverImageStoragePath': details.coverImageStoragePath,
-            'businessInfo.coverImageFromFirebase': true,
+            businessInfo: {
+                coverImage: details.coverImageUrl,
+                coverImageStoragePath: details.coverImageStoragePath,
+                coverImageFromFirebase: true,
+            },
         },
         { merge: true },
     );

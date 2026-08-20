@@ -173,17 +173,23 @@ async function listStoragePrefix(placeId) {
 async function persistCoverPath(placeId, objectPath, coverUrl) {
     ensureFirebaseAdmin();
     const db = getFirestore();
+    // Dotted string keys like 'businessInfo.coverImage' inside a plain object passed to
+    // .set(data, {merge:true}) are NOT parsed as nested field paths by the Admin SDK — they
+    // create a literal top-level field named "businessInfo.coverImage" (dot and all), leaving
+    // the real nested businessInfo.coverImage the frontend reads untouched. Nest properly instead.
     /** @type {Record<string, unknown>} */
     const patch = {
         coverImageStoragePath: objectPath,
         coverImageFromFirebase: true,
         updated_at: FieldValue.serverTimestamp(),
-        'businessInfo.coverImageStoragePath': objectPath,
-        'businessInfo.coverImageFromFirebase': true,
+        businessInfo: {
+            coverImageStoragePath: objectPath,
+            coverImageFromFirebase: true,
+        },
     };
     if (coverUrl) {
         patch.photo_url = coverUrl;
-        patch['businessInfo.coverImage'] = coverUrl;
+        patch.businessInfo.coverImage = coverUrl;
     }
     await db.collection('restaurants').doc(placeId).set(patch, { merge: true });
     try {

@@ -50,15 +50,21 @@ async function repairRestaurant(doc) {
         return { placeId, status: 'no-photo' };
     }
 
+    // NOTE: dotted string keys like 'businessInfo.coverImage' inside a plain object passed to
+    // .set(data, {merge:true}) are NOT parsed as nested field paths by the Admin SDK — they create
+    // a literal top-level field named "businessInfo.coverImage" (dot and all), leaving the real
+    // nested businessInfo.coverImage the frontend reads untouched. Must nest properly instead.
     await doc.ref.set(
         {
             coverImageStoragePath: details.coverImageStoragePath,
             coverImageFromFirebase: true,
             photo_url: details.coverImageUrl,
             googlePhotoReference: details.googlePhotoReference,
-            'businessInfo.coverImage': details.coverImageUrl,
-            'businessInfo.coverImageStoragePath': details.coverImageStoragePath,
-            'businessInfo.coverImageFromFirebase': true,
+            businessInfo: {
+                coverImage: details.coverImageUrl,
+                coverImageStoragePath: details.coverImageStoragePath,
+                coverImageFromFirebase: true,
+            },
         },
         { merge: true },
     );
