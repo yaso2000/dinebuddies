@@ -6004,6 +6004,14 @@ button.notification-bell {
     max-width: 100% !important;
   }
 
+  /* Stage rooms on desktop: keep the primary nav column, drop the generic
+     suggested-friends/invitations widgets column — Stage builds its own
+     members+gifts sidebar inside the chat area instead. */
+  .ds-body-grid--stage-desktop-wide {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 9.5fr) !important;
+    max-width: 100% !important;
+  }
+
   .app-main--community-fullscreen {
     padding-bottom: 0 !important;
     overflow: hidden !important;

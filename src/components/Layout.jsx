@@ -297,6 +297,7 @@ const Layout = ({ children }) => {
     isMessagesHub,
     isMessagesIndex,
     isCommunityRoute,
+    isStageRoute,
     isCommunityFullscreen,
     showConversationSidebar,
     isNotificationsRoute,
@@ -304,6 +305,9 @@ const Layout = ({ children }) => {
     hideBottomNav,
     useChatMainLayout,
   } = routeShell;
+  // Stage rooms build their own desktop sidebar (members + gifts) — the generic
+  // suggested-friends/invitations widgets column would just crowd the chat.
+  const isStageDesktopWide = isStageRoute && isDesktopShell;
   const isDashboardRoute =
   location.pathname.startsWith('/my-community') || location.pathname.startsWith('/business-dashboard');
   const isStoryRoute = location.pathname === '/create-story';
@@ -566,7 +570,7 @@ const Layout = ({ children }) => {
 
             {/* ── DESKTOP 3-COLUMN BODY (all routes, incl. chat) ── */}
             <div
-              className={`ds-body-grid${isAdminRoute ? ' ds-body-grid--admin' : ''}${isCommunityFullscreen ? ' ds-body-grid--community-fullscreen' : ''}`}>
+              className={`ds-body-grid${isAdminRoute ? ' ds-body-grid--admin' : ''}${isCommunityFullscreen ? ' ds-body-grid--community-fullscreen' : ''}${isStageDesktopWide ? ' ds-body-grid--stage-desktop-wide' : ''}`}>
 
                 {/* Column 1 — contextual left sidebar */}
                 {!isAdminRoute && (showConversationSidebar ?
@@ -752,7 +756,7 @@ const Layout = ({ children }) => {
                 </main>
 
                 {/* Column 3 — Right widgets */}
-                {!isAdminRoute && !isCommunityFullscreen && <DesktopRightSidebar />}
+                {!isAdminRoute && !isCommunityFullscreen && !isStageDesktopWide && <DesktopRightSidebar />}
             </div>
 
             {/* ── MOBILE BOTTOM NAV (admin uses embedded nav in AdminLayout) ── */}
