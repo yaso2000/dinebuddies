@@ -1144,16 +1144,19 @@ const BusinessesDirectory = () => {
         // Get profile logo/avatar for marker (prefer real profile over header image);
         // fall back to the same cover photo the directory card shows (handles Google-imported
         // businesses with no logo field) before the generated-initials placeholder.
-        const logo = res.photo_url ||
-        res.avatar ||
-        res.logoImage ||
-        res.businessInfo?.logo ||
-        res.businessInfo?.logoImage ||
-        res.businessInfo?.photo_url ||
-        res.image ||
-        res.businessInfo?.image ||
+        // Routed through pickSafeDisplayImageUrl so a raw, expired Google Places photo URL in
+        // any of these fields can never win over the safe/default fallback below.
+        const logo = pickSafeDisplayImageUrl(
+          res.photo_url,
+          res.avatar,
+          res.logoImage,
+          res.businessInfo?.logo,
+          res.businessInfo?.logoImage,
+          res.businessInfo?.photo_url,
+          res.image,
+          res.businessInfo?.image
+        ) ||
         resolveBusinessCoverImageUrl(res) ||
-        pickSafeDisplayImageUrl(res.image, res.businessInfo?.coverImage) ||
         DEFAULT_BUSINESS_COVER;
 
         // Create custom marker with logo - gold border for all restaurants
