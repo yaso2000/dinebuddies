@@ -254,6 +254,14 @@ const Home = () => {
           null
         };
       });
+
+      // Closest to the user first; invitations with no resolvable location sort last.
+      filtered = [...filtered].sort((a, b) => {
+        if (a.distance == null && b.distance == null) return 0;
+        if (a.distance == null) return 1;
+        if (b.distance == null) return -1;
+        return a.distance - b.distance;
+      });
     }
 
     return filtered;

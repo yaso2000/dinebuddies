@@ -1141,7 +1141,9 @@ const BusinessesDirectory = () => {
           travelTime = Math.round(distance / 40 * 60);
         }
 
-        // Get profile logo/avatar for marker (prefer real profile over header image)
+        // Get profile logo/avatar for marker (prefer real profile over header image);
+        // fall back to the same cover photo the directory card shows (handles Google-imported
+        // businesses with no logo field) before the generated-initials placeholder.
         const logo = res.photo_url ||
         res.avatar ||
         res.logoImage ||
@@ -1150,7 +1152,9 @@ const BusinessesDirectory = () => {
         res.businessInfo?.photo_url ||
         res.image ||
         res.businessInfo?.image ||
-        `https://ui-avatars.com/api/?name=${encodeURIComponent(res.name || 'Restaurant')}&background=fbbf24&color=fff&size=200&bold=true&rounded=true&font-size=0.4`;
+        resolveBusinessCoverImageUrl(res, { preferProxy: true }) ||
+        pickSafeDisplayImageUrl(res.image, res.businessInfo?.coverImage) ||
+        DEFAULT_BUSINESS_COVER;
 
         // Create custom marker with logo - gold border for all restaurants
         const markerColor = '#fbbf24'; // Gold for all restaurants
