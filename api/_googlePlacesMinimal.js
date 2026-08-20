@@ -36,7 +36,7 @@ function googlePlacesApiKey() {
  * @param {string} placeId
  * @param {string} fieldMask
  */
-async function fetchGooglePlaceResource(placeId, fieldMask, languageCode = 'en') {
+async function fetchGooglePlaceResource(placeId, fieldMask, languageCode = 'en', referer = '') {
     const key = googlePlacesApiKey();
     const id = String(placeId || '').trim();
     if (!id) {
@@ -55,6 +55,7 @@ async function fetchGooglePlaceResource(placeId, fieldMask, languageCode = 'en')
         headers: {
             'X-Goog-Api-Key': key,
             'X-Goog-FieldMask': fieldMask,
+            ...(referer ? { Referer: referer } : {}),
         },
     });
 
@@ -98,7 +99,8 @@ function extractPhotoName(data) {
  */
 export async function fetchGooglePlaceMinimal(placeId, options = {}) {
     const languageCode = String(options.languageCode || 'en').trim() || 'en';
-    const { id, data } = await fetchGooglePlaceResource(placeId, GOOGLE_PLACE_IMPORT_FIELD_MASK, languageCode);
+    const referer = String(options.referer || '').trim();
+    const { id, data } = await fetchGooglePlaceResource(placeId, GOOGLE_PLACE_IMPORT_FIELD_MASK, languageCode, referer);
 
     const types = normalizeGooglePlaceCategories(data.types);
     const hours = regularOpeningHoursToBusinessHours(data.regularOpeningHours);
@@ -136,7 +138,7 @@ export async function fetchGooglePlaceMinimal(placeId, options = {}) {
 
     if (!skipPhotoUpload && googlePhotoReference) {
         try {
-            const uploaded = await uploadGooglePlacePhotoToStorage(id, googlePhotoReference);
+            const uploaded = await uploadGooglePlacePhotoToStorage(id, googlePhotoReference, referer);
             coverImageUrl = uploaded.url;
             coverImageStoragePath = uploaded.path;
             if (!isFirebaseStorageMediaUrl(coverImageUrl)) {

@@ -24,12 +24,12 @@ function googlePlacesApiKey() {
  * @param {string} photoName
  * @param {string} key
  */
-async function downloadGooglePlacePhotoBytes(photoName, key) {
+async function downloadGooglePlacePhotoBytes(photoName, key, referer = '') {
     const resource = String(photoName || '').replace(/^\/+/, '');
     if (!resource || !key) return null;
 
     const mediaBase = `https://places.googleapis.com/v1/${resource}/media`;
-    const headers = { 'X-Goog-Api-Key': key };
+    const headers = { 'X-Goog-Api-Key': key, ...(referer ? { Referer: referer } : {}) };
 
     // 1) Direct image response (follow redirect)
     try {
@@ -69,7 +69,7 @@ async function downloadGooglePlacePhotoBytes(photoName, key) {
             if (photoUri) {
                 const imageRes = await fetch(photoUri, {
                     redirect: 'follow',
-                    headers: { 'X-Goog-Api-Key': key },
+                    headers: headers,
                 });
                 if (imageRes.ok) {
                     const contentType = imageRes.headers.get('content-type') || 'image/jpeg';
@@ -182,7 +182,7 @@ export async function uploadRestaurantCoverFromDataUrl(placeId, dataUrl) {
  * @param {string} photoName
  * @returns {Promise<{ url: string; path: string }>}
  */
-export async function uploadGooglePlacePhotoToStorage(placeId, photoName) {
+export async function uploadGooglePlacePhotoToStorage(placeId, photoName, referer = '') {
     const key = googlePlacesApiKey();
     const id = String(placeId || '').trim();
     const name = String(photoName || '').trim();
@@ -197,7 +197,7 @@ export async function uploadGooglePlacePhotoToStorage(placeId, photoName) {
         });
     }
 
-    const downloaded = await downloadGooglePlacePhotoBytes(name, key);
+    const downloaded = await downloadGooglePlacePhotoBytes(name, key, referer);
     if (!downloaded) {
         throw Object.assign(new Error('Could not download Google Place photo bytes'), {
             code: 'photo-download-failed',

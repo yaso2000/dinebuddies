@@ -84,6 +84,13 @@ async function ensureDownloadToken(fileRef, seedToken) {
  */
 async function saveToBucket(bucket, objectPath, buffer, mimeType, token, sourceTag = 'public_upload') {
     const fileRef = bucket.file(objectPath);
+    const tag = String(sourceTag || 'public_upload');
+    // functions/imageModeration.js's enforceApprovedImageUpload storage trigger deletes any
+    // upload under business_photos/ (and other public prefixes) within seconds unless its
+    // metadata marks it moderation-approved. Google Places photos come from Google's own
+    // already-moderated content, not raw user uploads, so they're exempt from our Vision
+    // Safe Search check and must be tagged approved here or the trigger silently deletes them.
+    const isTrustedGoogleImport = tag === 'google_places_import';
     await fileRef.save(buffer, {
         contentType: mimeType,
         resumable: false,
@@ -91,7 +98,8 @@ async function saveToBucket(bucket, objectPath, buffer, mimeType, token, sourceT
             cacheControl: 'public, max-age=31536000',
             metadata: {
                 firebaseStorageDownloadTokens: token,
-                source: String(sourceTag || 'public_upload'),
+                source: tag,
+                ...(isTrustedGoogleImport ? { moderationStatus: 'approved' } : {}),
             },
         },
     });
