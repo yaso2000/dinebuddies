@@ -571,12 +571,12 @@
 @media (max-width: 480px) {
   .profile-gift-modal__backdrop {
     padding: 8px;
-    align-items: flex-end;
+    align-items: center;
   }
 
   .profile-gift-modal {
-    max-height: 88vh;
-    border-radius: 18px 18px 12px 12px;
+    max-height: 82vh;
+    border-radius: 20px;
   }
 
   .profile-gift-modal__header {
