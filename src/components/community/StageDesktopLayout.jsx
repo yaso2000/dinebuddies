@@ -7,8 +7,8 @@ import ProfileGiftPickerModal from '../gifts/ProfileGiftPickerModal';
 import './StageDesktopLayout.css';
 
 /**
- * Stage rooms only, desktop width — main column (banner + chat bubbles) next to a
- * fixed sidebar (members, gift box always visible instead of a popup). Community
+ * Stage rooms only, desktop width — three panes: a stage pane (tools + banner),
+ * a wide chat pane (bubbles), and a sidebar (gift strip + members). Community
  * business chat keeps the single-column CommunityFullChatView unchanged.
  */
 export default function StageDesktopLayout({ room, giftRecipient }) {
@@ -18,28 +18,29 @@ export default function StageDesktopLayout({ room, giftRecipient }) {
 
   return (
     <div className="stage-desktop-layout">
+      {showTop ? (
+        <aside className="stage-desktop-layout__stage-pane" aria-label="Stage">
+          <CommunityTopMediaPanel room={room} bannerMediaActive />
+          <CommunityPinnedHostBar
+            messages={messages}
+            partnerId={hostMessageOwnerId}
+            pendingReplyTo={pendingReplyTo}
+            isHost={isHost}
+            onUnpinHostMessage={isHost ? unpinHostMessage : undefined}
+          />
+        </aside>
+      ) : null}
+
       <div className="stage-desktop-layout__main">
-        {showTop ? (
-          <section className="stage-desktop-layout__top" aria-label="Top panel">
-            <CommunityTopMediaPanel room={room} bannerMediaActive />
-            <CommunityPinnedHostBar
-              messages={messages}
-              partnerId={hostMessageOwnerId}
-              pendingReplyTo={pendingReplyTo}
-              isHost={isHost}
-              onUnpinHostMessage={isHost ? unpinHostMessage : undefined}
-            />
-          </section>
-        ) : null}
+        <CommunityGuestChatBody room={room} className="community-guest-chat--expanded" />
+      </div>
+
+      <aside className="stage-desktop-layout__sidebar">
         {giftRecipient ? (
           <div className="stage-desktop-layout__gift-strip">
             <ProfileGiftPickerModal recipient={giftRecipient} embedded layout="strip" />
           </div>
         ) : null}
-        <CommunityGuestChatBody room={room} className="community-guest-chat--expanded" />
-      </div>
-
-      <aside className="stage-desktop-layout__sidebar">
         <div className="stage-desktop-layout__members">
           <CommunityParticipantsView
             participants={room.participants}
