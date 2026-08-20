@@ -217,6 +217,47 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* ── Embedded strip (single horizontal row, e.g. under the Stage room toolbar) ── */
+
+.profile-gift-modal--strip {
+  border-radius: 14px;
+}
+
+.profile-gift-modal--strip .profile-gift-modal__header {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+.profile-gift-modal--strip .profile-gift-modal__subtitle {
+  display: none;
+}
+
+.profile-gift-modal--strip .profile-gift-modal__header-actions {
+  width: auto;
+}
+
+.profile-gift-modal--strip .profile-gift-modal__body {
+  padding: 0 10px 10px;
+}
+
+.profile-gift-modal--strip .profile-gift-modal__grid {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: 2px;
+}
+
+.profile-gift-modal--strip .profile-gift-modal__card {
+  flex: 0 0 84px;
+  width: 84px;
+  aspect-ratio: 1;
+  padding: 5px 4px 18px;
+}
+
 .profile-gift-modal__card {
   position: relative;
   display: flex;

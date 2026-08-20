@@ -19,7 +19,7 @@ import { AppText } from '../base';
 import ProfileGiftVisual from './ProfileGiftVisual';
 import './ProfileGiftPickerModal.css';
 
-export default function ProfileGiftPickerModal({ recipient, onClose, embedded = false }) {
+export default function ProfileGiftPickerModal({ recipient, onClose, embedded = false, layout = 'panel' }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -200,7 +200,7 @@ export default function ProfileGiftPickerModal({ recipient, onClose, embedded = 
 
   const pickerPanel = (
     <motion.div
-      className={`profile-gift-modal${embedded ? ' profile-gift-modal--embedded' : ''}`}
+      className={`profile-gift-modal${embedded ? ' profile-gift-modal--embedded' : ''}${embedded && layout === 'strip' ? ' profile-gift-modal--strip' : ''}`}
       role={embedded ? undefined : 'dialog'}
       aria-modal={embedded ? undefined : true}
       aria-labelledby="profile-gift-modal-title"

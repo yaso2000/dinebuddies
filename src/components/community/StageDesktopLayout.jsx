@@ -31,6 +31,11 @@ export default function StageDesktopLayout({ room, giftRecipient }) {
             />
           </section>
         ) : null}
+        {giftRecipient ? (
+          <div className="stage-desktop-layout__gift-strip">
+            <ProfileGiftPickerModal recipient={giftRecipient} embedded layout="strip" />
+          </div>
+        ) : null}
         <CommunityGuestChatBody room={room} className="community-guest-chat--expanded" />
       </div>
 
@@ -47,11 +52,6 @@ export default function StageDesktopLayout({ room, giftRecipient }) {
             onBlockMember={room.blockMemberFromStages}
           />
         </div>
-        {giftRecipient ? (
-          <div className="stage-desktop-layout__gifts">
-            <ProfileGiftPickerModal recipient={giftRecipient} embedded />
-          </div>
-        ) : null}
       </aside>
     </div>
   );
