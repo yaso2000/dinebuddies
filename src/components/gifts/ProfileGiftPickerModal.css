@@ -185,6 +185,38 @@
   gap: 8px;
 }
 
+/* ── Embedded (always-visible sidebar panel, e.g. desktop Stage rooms) ── */
+
+.profile-gift-modal--embedded {
+  position: relative;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  box-shadow: none;
+  border-radius: 16px;
+}
+
+.profile-gift-modal--embedded .profile-gift-modal__header {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px 12px 8px;
+}
+
+.profile-gift-modal--embedded .profile-gift-modal__header-actions {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.profile-gift-modal--embedded .profile-gift-modal__body {
+  padding: 10px 10px 12px;
+}
+
+.profile-gift-modal--embedded .profile-gift-modal__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .profile-gift-modal__card {
   position: relative;
   display: flex;

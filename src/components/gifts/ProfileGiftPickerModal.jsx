@@ -19,7 +19,7 @@ import { AppText } from '../base';
 import ProfileGiftVisual from './ProfileGiftVisual';
 import './ProfileGiftPickerModal.css';
 
-export default function ProfileGiftPickerModal({ recipient, onClose }) {
+export default function ProfileGiftPickerModal({ recipient, onClose, embedded = false }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -198,30 +198,27 @@ export default function ProfileGiftPickerModal({ recipient, onClose }) {
     [dragControls, dragEnabled]
   );
 
-  return createPortal(
-    <div
-      className="profile-gift-modal__backdrop"
-      role="presentation"
-      onClick={handleBackdropClick}>
-      <motion.div
-        className="profile-gift-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="profile-gift-modal-title"
-        style={{ y: dragY }}
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        drag={dragEnabled ? 'y' : false}
-        dragControls={dragControls}
-        dragListener={false}
-        dragMomentum={false}
-        dragElastic={{ top: 0.22, bottom: 0.38 }}
-        dragConstraints={dragConstraints}
-        onDragStart={handleDragStart}
-        onDrag={handleDrag}
-        onDragEnd={handleDragEnd}
-        onClick={(e) => e.stopPropagation()}>
+  const pickerPanel = (
+    <motion.div
+      className={`profile-gift-modal${embedded ? ' profile-gift-modal--embedded' : ''}`}
+      role={embedded ? undefined : 'dialog'}
+      aria-modal={embedded ? undefined : true}
+      aria-labelledby="profile-gift-modal-title"
+      style={embedded ? undefined : { y: dragY }}
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+      drag={!embedded && dragEnabled ? 'y' : false}
+      dragControls={dragControls}
+      dragListener={false}
+      dragMomentum={false}
+      dragElastic={{ top: 0.22, bottom: 0.38 }}
+      dragConstraints={dragConstraints}
+      onDragStart={handleDragStart}
+      onDrag={handleDrag}
+      onDragEnd={handleDragEnd}
+      onClick={(e) => e.stopPropagation()}>
+      {!embedded ? (
         <div
           className={`profile-gift-modal__drag-zone${dragEnabled ? '' : ' profile-gift-modal__drag-zone--disabled'}`}
           onPointerDown={startDrag}
@@ -231,46 +228,48 @@ export default function ProfileGiftPickerModal({ recipient, onClose }) {
             {t('gift_picker_drag_hint', 'Drag up or down · swipe down to close')}
           </AppText>
         </div>
-        <header className="profile-gift-modal__header">
-          <div className="profile-gift-modal__header-main">
-            <div className="profile-gift-modal__title-row">
-              <span className="profile-gift-modal__title-icon" aria-hidden>
-                <FaGift />
-              </span>
-              <AppText as="h2" id="profile-gift-modal-title" className="profile-gift-modal__title">
-                {t('gift_picker_title', 'Gifts')}
-              </AppText>
-            </div>
-            <AppText as="p" className="profile-gift-modal__subtitle">
-              {t('gift_picker_subtitle', {
-                name: recipientLabel,
-                defaultValue: `Send a gift to ${recipientLabel} and make their day special 💖`,
-              })}
+      ) : null}
+      <header className="profile-gift-modal__header">
+        <div className="profile-gift-modal__header-main">
+          <div className="profile-gift-modal__title-row">
+            <span className="profile-gift-modal__title-icon" aria-hidden>
+              <FaGift />
+            </span>
+            <AppText as="h2" id="profile-gift-modal-title" className="profile-gift-modal__title">
+              {t('gift_picker_title', 'Gifts')}
             </AppText>
           </div>
+          <AppText as="p" className="profile-gift-modal__subtitle">
+            {t('gift_picker_subtitle', {
+              name: recipientLabel,
+              defaultValue: `Send a gift to ${recipientLabel} and make their day special 💖`,
+            })}
+          </AppText>
+        </div>
 
-          <div className="profile-gift-modal__header-actions">
-            <div className="profile-gift-modal__balance">
-              <FaCoins className="profile-gift-modal__balance-coin" aria-hidden />
-              <div>
-                <AppText as="span" className="profile-gift-modal__balance-label">
-                  {t('gift_your_balance', 'Your balance')}
-                </AppText>
-                <AppText as="span" className="profile-gift-modal__balance-value">
-                  {balance.toLocaleString()} {t('credits_unit', 'credits')}
-                </AppText>
-              </div>
+        <div className="profile-gift-modal__header-actions">
+          <div className="profile-gift-modal__balance">
+            <FaCoins className="profile-gift-modal__balance-coin" aria-hidden />
+            <div>
+              <AppText as="span" className="profile-gift-modal__balance-label">
+                {t('gift_your_balance', 'Your balance')}
+              </AppText>
+              <AppText as="span" className="profile-gift-modal__balance-value">
+                {balance.toLocaleString()} {t('credits_unit', 'credits')}
+              </AppText>
             </div>
-            <button
-              type="button"
-              className="profile-gift-modal__topup"
-              aria-label={t('buy_credits', 'Buy credits')}
-              onClick={() => {
-                onClose?.();
-                navigate('/settings/credits');
-              }}>
-              <FaPlus aria-hidden />
-            </button>
+          </div>
+          <button
+            type="button"
+            className="profile-gift-modal__topup"
+            aria-label={t('buy_credits', 'Buy credits')}
+            onClick={() => {
+              onClose?.();
+              navigate('/settings/credits');
+            }}>
+            <FaPlus aria-hidden />
+          </button>
+          {!embedded ? (
             <button
               type="button"
               className="profile-gift-modal__close"
@@ -278,44 +277,171 @@ export default function ProfileGiftPickerModal({ recipient, onClose }) {
               aria-label={t('close', 'Close')}>
               <FaTimes aria-hidden />
             </button>
-          </div>
-        </header>
-
-        <div className="profile-gift-modal__body">
-          <div className="profile-gift-modal__grid">
-            {PROFILE_GIFTS.map((gift, index) => {
-              const affordable = balance >= gift.credits;
-              return (
-                <button
-                  key={gift.id}
-                  type="button"
-                  className={`profile-gift-modal__card${!affordable ? ' profile-gift-modal__card--low-balance' : ''}`}
-                  onClick={() => setConfirmGiftId(gift.id)}
-                  aria-label={t(gift.nameKey, gift.defaultName)}>
-                  <span className="profile-gift-modal__card-index">{index + 1}</span>
-                  <span
-                    className="profile-gift-modal__card-icon-wrap"
-                    style={{ '--gift-accent': gift.accent }}>
-                    <ProfileGiftVisual
-                      gift={gift}
-                      size="card"
-                      imgClassName="profile-gift-modal__card-icon"
-                      iconClassName="profile-gift-modal__card-icon"
-                    />
-                  </span>
-                  <AppText as="span" className="profile-gift-modal__card-name">
-                    {t(gift.nameKey, gift.defaultName)}
-                  </AppText>
-                  <span className="profile-gift-modal__card-price">
-                    <FaCoins aria-hidden />
-                    {gift.credits}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          ) : null}
         </div>
-      </motion.div>
+      </header>
+
+      <div className="profile-gift-modal__body">
+        <div className="profile-gift-modal__grid">
+          {PROFILE_GIFTS.map((gift, index) => {
+            const affordable = balance >= gift.credits;
+            return (
+              <button
+                key={gift.id}
+                type="button"
+                className={`profile-gift-modal__card${!affordable ? ' profile-gift-modal__card--low-balance' : ''}`}
+                onClick={() => setConfirmGiftId(gift.id)}
+                aria-label={t(gift.nameKey, gift.defaultName)}>
+                <span className="profile-gift-modal__card-index">{index + 1}</span>
+                <span
+                  className="profile-gift-modal__card-icon-wrap"
+                  style={{ '--gift-accent': gift.accent }}>
+                  <ProfileGiftVisual
+                    gift={gift}
+                    size="card"
+                    imgClassName="profile-gift-modal__card-icon"
+                    iconClassName="profile-gift-modal__card-icon"
+                  />
+                </span>
+                <AppText as="span" className="profile-gift-modal__card-name">
+                  {t(gift.nameKey, gift.defaultName)}
+                </AppText>
+                <span className="profile-gift-modal__card-price">
+                  <FaCoins aria-hidden />
+                  {gift.credits}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </motion.div>
+  );
+
+  if (embedded) {
+    return (
+      <>
+        {pickerPanel}
+        {createPortal(
+          <AnimatePresence mode="wait">
+            {confirmGiftId && confirmGift ? (
+              <motion.div
+                key={confirmGiftId}
+                className="profile-gift-confirm__backdrop"
+                role="presentation"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.22 }}
+                onClick={closeConfirm}>
+                <motion.div
+                  className="profile-gift-confirm"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="profile-gift-confirm-desc"
+                  initial={{ opacity: 0, scale: 0.9, y: 28 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.94, y: 20 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+                  onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="profile-gift-confirm__close"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      closeConfirm();
+                    }}
+                    disabled={sending}
+                    aria-label={t('close', 'Close')}>
+                    <FaTimes aria-hidden />
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`profile-gift-confirm__image-btn${sending ? ' profile-gift-confirm__image-btn--sending' : ''}${!confirmCanAfford ? ' profile-gift-confirm__image-btn--disabled' : ''}`}
+                    disabled={sending || !confirmCanAfford}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSend();
+                    }}
+                    aria-label={t('gift_send_btn', 'Send Gift')}>
+                    <div
+                      className="profile-gift-confirm__glow"
+                      style={{ '--gift-accent': confirmGift.accent }}
+                      aria-hidden
+                    />
+                    <div className="profile-gift-confirm__ring-wrap" aria-hidden>
+                      <motion.div
+                        className="profile-gift-confirm__ring"
+                        style={{ '--gift-accent': confirmGift.accent }}
+                        initial={{ scale: 0.6, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 1.08, opacity: 0 }}
+                        transition={{ duration: 0.35, ease: 'easeOut' }}
+                      />
+                    </div>
+                    <motion.div
+                      className="profile-gift-confirm__icon-wrap"
+                      style={{ '--gift-accent': confirmGift.accent }}
+                      initial={{ scale: 0.15, opacity: 0, rotate: -18, y: 48 }}
+                      animate={{ scale: 1, opacity: 1, rotate: 0, y: 0 }}
+                      exit={{ scale: 0.35, opacity: 0, rotate: 12, y: -56 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 340,
+                        damping: 20,
+                        mass: 0.85,
+                      }}>
+                      <ProfileGiftVisual
+                        gift={confirmGift}
+                        size="confirm-full"
+                        imgClassName="profile-gift-confirm__icon"
+                        iconClassName="profile-gift-confirm__icon"
+                      />
+                    </motion.div>
+                  </button>
+
+                  <motion.div
+                    className="profile-gift-confirm__caption"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 6 }}
+                    transition={{ delay: 0.08, duration: 0.22 }}>
+                    <AppText as="p" id="profile-gift-confirm-desc" className="profile-gift-confirm__desc">
+                      {t(confirmGift.previewDescKey, confirmGift.defaultPreview)}
+                    </AppText>
+                    <span className="profile-gift-confirm__price">
+                      <FaCoins aria-hidden />
+                      {confirmGift.credits} {t('credits_unit', 'credits')}
+                    </span>
+
+                    {sending ? (
+                      <AppText as="span" className="profile-gift-confirm__status">
+                        {t('loading', 'Loading…')}
+                      </AppText>
+                    ) : !confirmCanAfford ? (
+                      <AppText as="span" className="profile-gift-confirm__warn">
+                        {t('gift_insufficient_balance', 'Not enough credits to send this gift.')}
+                      </AppText>
+                    ) : null}
+                  </motion.div>
+                </motion.div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>,
+          document.body
+        )}
+      </>
+    );
+  }
+
+  return createPortal(
+    <div
+      className="profile-gift-modal__backdrop"
+      role="presentation"
+      onClick={handleBackdropClick}>
+      {pickerPanel}
 
       <AnimatePresence mode="wait">
         {confirmGiftId && confirmGift ? (

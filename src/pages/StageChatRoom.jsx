@@ -5,7 +5,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { FaDoorClosed, FaDoorOpen, FaSignOutAlt, FaTimes } from 'react-icons/fa';
 import CommunityChatSwipePager from '../components/community/CommunityChatSwipePager';
-import CommunityFullChatView from '../components/community/CommunityFullChatView';
+import StageDesktopLayout from '../components/community/StageDesktopLayout';
 import CommunityChatHeaderMenu from '../components/community/CommunityChatHeaderMenu';
 import UserAvatar from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
@@ -122,6 +122,20 @@ export default function StageChatRoom() {
       !isBusinessStage &&
       streamHostId
   );
+
+  // Desktop Stage layout keeps the gift box always visible in the sidebar (no popup) —
+  // same recipient shape openGiftToHost already resolves for the mobile picker.
+  const desktopGiftRecipient = useMemo(() => {
+    if (!canGiftStreamHost) return null;
+    return {
+      id: streamHostId,
+      displayName:
+        room.partner?.hostName ||
+        room.partner?.display_name ||
+        room.partner?.hostDisplayName ||
+        t('stage_chat', 'Stage'),
+    };
+  }, [canGiftStreamHost, streamHostId, room.partner, t]);
 
   const roomWithGifts = useMemo(() => {
     const base =
@@ -589,7 +603,7 @@ export default function StageChatRoom() {
         ) : null}
 
         {isDesktopShell ? (
-          <CommunityFullChatView room={roomWithGifts} />
+          <StageDesktopLayout room={roomWithGifts} giftRecipient={desktopGiftRecipient} />
         ) : (
           <CommunityChatSwipePager room={roomWithGifts} />
         )}
