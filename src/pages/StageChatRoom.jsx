@@ -486,6 +486,24 @@ export default function StageChatRoom() {
         {...guestFrameShellAttrs}
         style={shellInlineStyle}
       >
+        {/* TEMPORARY diagnostic — remove once desktop-width detection is confirmed fixed */}
+        <span
+          style={{
+            position: 'fixed',
+            top: 4,
+            insetInlineStart: 4,
+            zIndex: 999999,
+            background: '#000',
+            color: '#0f0',
+            font: '11px monospace',
+            padding: '2px 6px',
+            borderRadius: 4,
+            pointerEvents: 'none',
+          }}
+        >
+          w={typeof window !== 'undefined' ? window.innerWidth : '?'} desktop=
+          {String(isDesktopShell)}
+        </span>
         <header className="chat-header">
           <button
             type="button"
