@@ -217,6 +217,14 @@ export default function InvitationSwipeCard({ item, isTop = true, onSkip, listPa
         <div className="discovery-card__gradient discovery-card__gradient--entity" aria-hidden />
 
         <div className="discovery-card__top-row">
+          {hostName ? (
+            <UserAvatar
+              user={inv.author}
+              alt={hostName}
+              className="discovery-card__host-avatar discovery-card__host-avatar--corner"
+              style={{ width: 64, height: 64 }}
+            />
+          ) : null}
           <span className="discovery-card__location-spacer" aria-hidden />
           <button
             type="button"
@@ -236,18 +244,10 @@ export default function InvitationSwipeCard({ item, isTop = true, onSkip, listPa
               {item.title || inv.title}
             </AppText>
             {hostName ? (
-              <div className="discovery-card__host-row">
-                <UserAvatar
-                  user={inv.author}
-                  alt={hostName}
-                  className="discovery-card__host-avatar"
-                  style={{ width: 44, height: 44 }}
-                />
-                <AppText as="p" className="discovery-card__host">
-                  {hostName}
-                  {inv.type ? ` · ${inv.type}` : ''}
-                </AppText>
-              </div>
+              <AppText as="p" className="discovery-card__host">
+                {hostName}
+                {inv.type ? ` · ${inv.type}` : ''}
+              </AppText>
             ) : null}
             {address ? (
               <AppText as="p" className="discovery-card__address">

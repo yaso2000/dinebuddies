@@ -123,7 +123,17 @@ export function getAuthErrorMessage(error) {
         );
     }
     if (!error?.code) {
-        const detail = String(error?.message || error?.name || '').trim();
+        let detail = String(error?.message || error?.name || '').trim();
+        if (!detail) {
+            try {
+                const stringified = String(error);
+                if (stringified && stringified !== '[object Object]' && stringified !== 'undefined' && stringified !== 'null') {
+                    detail = stringified.trim();
+                }
+            } catch {
+                // ignore
+            }
+        }
         if (detail && detail.length < 160) {
             return detail;
         }
