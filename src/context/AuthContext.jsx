@@ -850,6 +850,17 @@ export const AuthProvider = ({ children }) => {
             err.code = 'auth/no-user';
             throw err;
         }
+        // Prefer a fresh Graph API URL over whatever CDN URL Firebase stored — Limited Login
+        // (iOS) hands back a small, signed platform-lookaside.fbsbx.com thumbnail that cannot
+        // be upsized (see providerPhotoSize.js), while graph.facebook.com/{id}/picture is a
+        // stable public endpoint that always honors the requested width/height.
+        const facebookProviderUid = result.user.providerData?.find(
+            (p) => p.providerId === 'facebook.com'
+        )?.uid;
+        const facebookPhotoUrl = facebookProviderUid
+            ? `https://graph.facebook.com/${facebookProviderUid}/picture?width=512&height=512`
+            : result.user.photoURL;
+
         const userDoc = await getDoc(doc(db, 'users', result.user.uid));
         let isNewUser = false;
 
@@ -858,14 +869,14 @@ export const AuthProvider = ({ children }) => {
             await createUserProfile(result.user.uid, {
                 display_name: result.user.displayName,
                 email: result.user.email,
-                photo_url: result.user.photoURL,
+                photo_url: facebookPhotoUrl,
                 authProvider: 'facebook',
             });
         } else {
             assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
         }
-        if (userDoc.exists() && result.user.photoURL) {
-            const photoPatch = resolveOAuthPhotoUpdate(userDoc.data(), result.user.photoURL);
+        if (userDoc.exists() && facebookPhotoUrl) {
+            const photoPatch = resolveOAuthPhotoUpdate(userDoc.data(), facebookPhotoUrl);
             if (photoPatch) {
                 await updateDoc(doc(db, 'users', result.user.uid), {
                     ...photoPatch,
