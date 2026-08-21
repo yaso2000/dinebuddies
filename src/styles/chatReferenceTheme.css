@@ -42,9 +42,10 @@
   opacity: 0.02 !important;
 }
 
+/* Stage/Community rooms keep their own theme+zone-aware header (community-chat-theme.css) —
+   this reference dark header is only for 1:1 chat / invitation chat, which always look dark. */
 .chat-root .chat-header,
-.invitation-chat-root .chat-header,
-.community-chat-root .chat-header {
+.invitation-chat-root .chat-header {
   background: var(--chat-ref-overlay) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22) !important;
@@ -78,25 +79,26 @@
 .chat-root .options-btn,
 .chat-root .chat-theme-picker__toggle,
 .invitation-chat-root .chat-header > div > button:not(.community-chat-banner-toggle),
-.invitation-chat-root .chat-header > div > .chat-theme-picker .chat-theme-picker__toggle,
-.community-chat-root .header-close-btn,
-.community-chat-root .community-chat-header__actions > .chat-theme-picker .chat-theme-picker__toggle {
+.invitation-chat-root .chat-header > div > .chat-theme-picker .chat-theme-picker__toggle {
   background: rgba(255, 255, 255, 0.08) !important;
   border: 1px solid rgba(255, 255, 255, 0.13) !important;
   color: #fff !important;
 }
 
 .chat-root .header-info h3,
-.invitation-chat-root .chat-header h2,
-.community-chat-root .header-title {
+.invitation-chat-root .chat-header h2 {
   color: #fff !important;
   font-weight: 800 !important;
   letter-spacing: -0.02em;
 }
 
+.community-chat-root .header-title {
+  font-weight: 800 !important;
+  letter-spacing: -0.02em;
+}
+
 .chat-root .header-info .status,
-.invitation-chat-root .chat-header span,
-.community-chat-root .header-subtitle {
+.invitation-chat-root .chat-header span {
   color: rgba(255, 255, 255, 0.68) !important;
 }
 
