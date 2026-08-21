@@ -4,12 +4,14 @@ import { AppText } from '../base';
 import UserAvatar from '../UserAvatar';
 import { useLongPress } from './useLongPress';
 import StageHostGuestModerationMenu from './StageHostGuestModerationMenu';
+import StageParticipantPreviewCard from './StageParticipantPreviewCard';
 
 function ParticipantRow({
   member,
   partnerId,
   canModerate,
   onModerate,
+  onPreview,
   mutedLabel,
   layout = 'list',
 }) {
@@ -30,6 +32,10 @@ function ParticipantRow({
         className={`community-participants__row community-participants__row--grid${canModerate ? ' community-participants__row--moderatable' : ''}`}
         title={member.displayName}
         {...(canModerate ? longPress : {})}
+        onClick={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          onPreview?.(member, rect);
+        }}
         onContextMenu={
           canModerate
             ? (event) => {
@@ -121,12 +127,19 @@ export default function CommunityParticipantsView({
   const { t } = useTranslation();
   const [menu, setMenu] = useState(null); // { member, rect }
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState(null); // { member, rect }
 
   const closeMenu = useCallback(() => setMenu(null), []);
+  const closePreview = useCallback(() => setPreview(null), []);
 
   const openMenu = useCallback((member, rect) => {
     if (!member?.id) return;
     setMenu({ member, rect });
+  }, []);
+
+  const openPreview = useCallback((member, rect) => {
+    if (!member?.id) return;
+    setPreview({ member, rect });
   }, []);
 
   const runAction = useCallback(
@@ -196,6 +209,7 @@ export default function CommunityParticipantsView({
               partnerId={partnerId}
               canModerate={canModerate}
               onModerate={openMenu}
+              onPreview={isGrid ? openPreview : undefined}
               mutedLabel={t('member_muted_badge', 'Muted')}
               layout={layout}
             />
@@ -239,6 +253,16 @@ export default function CommunityParticipantsView({
               await onBlockMember?.(menu?.member?.id);
             })
           }
+        />
+      ) : null}
+
+      {isGrid ? (
+        <StageParticipantPreviewCard
+          open={Boolean(preview)}
+          anchorRect={preview?.rect}
+          member={preview?.member}
+          isHost={Boolean(preview?.member?.id === partnerId || preview?.member?.isHost)}
+          onClose={closePreview}
         />
       ) : null}
     </div>

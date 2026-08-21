@@ -25,7 +25,7 @@ export const BANNER_AXIS_EDGE_MARGIN = 6;
 export const DEFAULT_BANNER_TITLE_POS = { x: 50, y: 12.5 };
 export const DEFAULT_BANNER_TEXT_POS = { x: 50, y: 62.5 };
 export const DEFAULT_BANNER_GRADIENT_ANGLE = 135;
-export const DEFAULT_BANNER_BG_DENSITY = 100;
+export const DEFAULT_BANNER_BG_DENSITY = 10;
 export const BANNER_BODY_SLOT_COUNT = 2;
 /** Slot 0 = plain text, slot 1 = link button (fixed roles). */
 export const BANNER_BODY_TEXT_INDEX = 0;
