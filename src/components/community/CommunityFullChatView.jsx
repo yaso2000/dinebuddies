@@ -7,7 +7,7 @@ import CommunityGuestChatBody from './CommunityGuestChatBody';
  * Business community chat — final 3-zone layout:
  * top panel (media) · bubbles · text editor
  */
-export default function CommunityFullChatView({ room, bannerMediaActive = true }) {
+export default function CommunityFullChatView({ room, bannerMediaActive = true, onOpenMembers }) {
   const { messages, pendingReplyTo, isHost, unpinHostMessage } = room;
   const showTop = room.bannerVisible !== false;
   // Stage rooms: `partnerId` is the stage document id, not the host's user id
@@ -20,7 +20,11 @@ export default function CommunityFullChatView({ room, bannerMediaActive = true }
     <div className="community-chat-layout community-full-chat">
       {showTop ? (
         <section className="community-chat-layout__top" aria-label="Top panel">
-          <CommunityTopMediaPanel room={room} bannerMediaActive={bannerMediaActive} />
+          <CommunityTopMediaPanel
+            room={room}
+            bannerMediaActive={bannerMediaActive}
+            onOpenMembers={onOpenMembers}
+          />
           <CommunityPinnedHostBar
             messages={messages}
             partnerId={hostMessageOwnerId}

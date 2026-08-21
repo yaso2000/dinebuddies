@@ -127,6 +127,7 @@ export default function CommunityParticipantsView({
   onBlockMember,
   onGift,
   layout = 'list',
+  hideTitle = false,
 }) {
   const { t } = useTranslation();
   const [menu, setMenu] = useState(null); // { member, rect }
@@ -186,7 +187,7 @@ export default function CommunityParticipantsView({
 
   return (
     <div className={`community-participants${isGrid ? ' community-participants--grid' : ''}`}>
-      {!isGrid ? (
+      {!isGrid && !hideTitle ? (
         <AppText as="h2" className="community-participants__title">
           {t('community_participants_title', 'Online Participants')}
         </AppText>

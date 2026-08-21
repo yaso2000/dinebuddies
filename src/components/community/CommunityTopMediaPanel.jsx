@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaEye, FaEyeSlash, FaGift, FaImage, FaSync, FaTimes } from 'react-icons/fa';
+import { FaEye, FaEyeSlash, FaGift, FaImage, FaSync, FaTimes, FaUsers } from 'react-icons/fa';
 import { AppText } from '../base';
 import CommunityHostBannerComposerTools from './CommunityHostBannerComposerTools';
 import CommunityBannerDraggableTitle from './CommunityBannerDraggableTitle';
@@ -22,7 +22,7 @@ import {
 import { BANNER_VOICE_AUDIO_PRIORITY_EVENT } from '../../utils/bannerVoiceAudioPriority';
 
 /** Top media strip — 16:9 banner + host tools. */
-export default function CommunityTopMediaPanel({ room, bannerExpanded = false, bannerMediaActive = true }) {
+export default function CommunityTopMediaPanel({ room, bannerExpanded = false, bannerMediaActive = true, onOpenMembers }) {
   const { t } = useTranslation();
   const {
     messages,
@@ -319,6 +319,17 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
               onClick={handleDeleteBannerMedia}
             >
               <FaTimes size={14} aria-hidden />
+            </button>
+          ) : null}
+          {typeof onOpenMembers === 'function' ? (
+            <button
+              type="button"
+              className="community-top-media-panel__members-btn"
+              onClick={onOpenMembers}
+              title={t('community_participants_title', 'Online Participants')}
+              aria-label={t('community_participants_title', 'Online Participants')}
+            >
+              <FaUsers size={14} aria-hidden />
             </button>
           ) : null}
         </div>

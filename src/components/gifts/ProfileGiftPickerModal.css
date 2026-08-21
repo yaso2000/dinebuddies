@@ -721,3 +721,32 @@
     max-width: 84px;
   }
 }
+
+/* ── Desktop popup: compact floating box instead of the large mobile sheet size ── */
+@media (min-width: 1024px) {
+  .profile-gift-modal:not(.profile-gift-modal--embedded) {
+    width: min(400px, 100%);
+    max-height: min(78vh, 560px);
+    border-radius: 18px;
+  }
+
+  .profile-gift-modal:not(.profile-gift-modal--embedded) .profile-gift-modal__header {
+    padding: 14px 14px 8px;
+  }
+
+  .profile-gift-modal:not(.profile-gift-modal--embedded) .profile-gift-modal__body {
+    padding: 8px 12px 12px;
+  }
+
+  .profile-gift-modal:not(.profile-gift-modal--embedded) .profile-gift-modal__grid {
+    gap: 6px;
+  }
+
+  .profile-gift-modal:not(.profile-gift-modal--embedded) .profile-gift-modal__card {
+    padding: 5px 4px 18px;
+  }
+
+  .profile-gift-modal:not(.profile-gift-modal--embedded) .profile-gift-modal__card-icon-wrap {
+    max-width: 60px;
+  }
+}

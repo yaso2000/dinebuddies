@@ -1,22 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaUsers } from 'react-icons/fa';
-import CommunityParticipantsView from './CommunityParticipantsView';
 import CommunityCenterStageView from './CommunityCenterStageView';
 import CommunityFullChatView from './CommunityFullChatView';
+import CommunityMembersModal from './CommunityMembersModal';
 import './CommunityChatSwipePager.css';
 
 /** Default landing page — center (media stage). */
-export const COMMUNITY_CHAT_DEFAULT_PAGE = 1;
+export const COMMUNITY_CHAT_DEFAULT_PAGE = 0;
 
-/** Track layout (LTR): members | center (default) | guest chat */
+/** Track layout (LTR): center (default) | guest chat — members open as a floating modal instead */
 const PAGES = [
-  { id: 'participants', label: 'Members', background: '#0f2744' },
-  { id: 'center-stage', label: 'Media stage', background: '#1a1a2e' },
-  { id: 'full-chat', label: 'Guest chat', background: '#1a1a2e' },
+  { id: 'center-stage', label: 'Media stage' },
+  { id: 'full-chat', label: 'Guest chat' },
 ];
-
-const PARTICIPANTS_PAGE_INDEX = 0;
 
 function scrollToPage(container, index, behavior = 'auto') {
   if (!container) return;
@@ -24,42 +21,37 @@ function scrollToPage(container, index, behavior = 'auto') {
   container.scrollTo({ left: width * index, top: 0, behavior });
 }
 
-function renderPagePanel(page, room, pageIndex, activePageIndex, onGiftParticipant) {
+function renderPagePanel(page, room, pageIndex, activePageIndex, onOpenMembers) {
   if (!room) return null;
 
-  const isMediaPage = page.id === 'center-stage' || page.id === 'full-chat';
-  const bannerMediaActive = !isMediaPage || pageIndex === activePageIndex;
+  const bannerMediaActive = pageIndex === activePageIndex;
 
-  if (page.id === 'participants') {
+  if (page.id === 'center-stage') {
     return (
-      <CommunityParticipantsView
-        participants={room.participants}
-        loading={room.participantsLoading}
-        partnerId={room.partnerId}
-        isHost={Boolean(room.isHost)}
-        isStageRoom={Boolean(room.isStageRoom)}
-        onMuteMember={room.muteMemberInChat}
-        onKickMember={room.kickMemberFromStage}
-        onBlockMember={room.blockMemberFromStages}
-        onGift={onGiftParticipant}
+      <CommunityCenterStageView
+        room={room}
+        bannerMediaActive={bannerMediaActive}
+        onOpenMembers={onOpenMembers}
       />
     );
   }
 
-  if (page.id === 'center-stage') {
-    return <CommunityCenterStageView room={room} bannerMediaActive={bannerMediaActive} />;
-  }
-
   if (page.id === 'full-chat') {
-    return <CommunityFullChatView room={room} bannerMediaActive={bannerMediaActive} />;
+    return (
+      <CommunityFullChatView
+        room={room}
+        bannerMediaActive={bannerMediaActive}
+        onOpenMembers={onOpenMembers}
+      />
+    );
   }
 
   return null;
 }
 
 /**
- * Horizontal three-panel pager (LTR track):
- * swipe left → guest chat full screen · center (default) → media + chat · swipe right → members
+ * Horizontal two-panel pager (LTR track): center (default) media stage · guest chat full screen.
+ * Members open as a floating modal (see CommunityMembersModal) rather than a swipe page.
  */
 export default function CommunityChatSwipePager({
   room,
@@ -70,10 +62,12 @@ export default function CommunityChatSwipePager({
   const pagerRef = useRef(null);
   const activeIndexRef = useRef(defaultPage);
   const [activePageIndex, setActivePageIndex] = useState(defaultPage);
-
-  const goToParticipants = useCallback(() => {
-    scrollToPage(pagerRef.current, PARTICIPANTS_PAGE_INDEX, 'smooth');
-  }, []);
+  const [membersOpen, setMembersOpen] = useState(false);
+  const isHost = Boolean(room?.isHost);
+  // Hosts get a "Members" icon inline in their banner toolbar (see CommunityTopMediaPanel) so it
+  // never overlaps the tools; fall back to the floating button when there's no toolbar to sit in
+  // (banner hidden) — guests never have that toolbar, so they always keep the floating button.
+  const showFloatingMembersBtn = !isHost || room?.bannerVisible === false;
 
   const syncActiveIndex = useCallback(() => {
     const el = pagerRef.current;
@@ -114,25 +108,31 @@ export default function CommunityChatSwipePager({
               className={`community-chat-swipe__page community-chat-swipe__page--panel community-chat-swipe__page--${page.id}`}
               role="tabpanel"
               aria-label={page.label}
-              style={page.id === 'center-stage' || page.id === 'full-chat' ? undefined : { background: page.background }}
             >
-              {renderPagePanel(page, room, pageIndex, activePageIndex, onGiftParticipant)}
+              {renderPagePanel(page, room, pageIndex, activePageIndex, () => setMembersOpen(true))}
             </section>
           ))}
         </div>
       </div>
 
-      {activePageIndex !== PARTICIPANTS_PAGE_INDEX ? (
+      {showFloatingMembersBtn ? (
         <button
           type="button"
           className="community-chat-swipe__members-btn"
-          onClick={goToParticipants}
+          onClick={() => setMembersOpen(true)}
           title={t('community_participants_title', 'Online Participants')}
           aria-label={t('community_participants_title', 'Online Participants')}
         >
           <FaUsers aria-hidden />
         </button>
       ) : null}
+
+      <CommunityMembersModal
+        open={membersOpen}
+        room={room}
+        onGift={onGiftParticipant}
+        onClose={() => setMembersOpen(false)}
+      />
     </div>
   );
 }
