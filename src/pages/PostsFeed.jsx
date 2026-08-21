@@ -67,6 +67,14 @@ const PostsFeed = () => {
   const [posts, setPosts] = useState([]);
   const [motionPosts, setMotionPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Community posts, motion posts, and featured posts each load via their own
+  // onSnapshot listener and resolve at different times — without this, the feed
+  // used to reveal in three visible steps (posts, then motion posts, then
+  // featured posts popping in/reordering the feed a moment later). Wait for all
+  // three to report in at least once, then reveal the feed as a single update.
+  const [communityPostsReady, setCommunityPostsReady] = useState(false);
+  const [motionPostsReady, setMotionPostsReady] = useState(false);
+  const [featuredPostsReady, setFeaturedPostsReady] = useState(false);
   const [feedLimit, setFeedLimit] = useState(FEED_PAGE_SIZE);
   const [hasMorePosts, setHasMorePosts] = useState(false);
   const [viewingStory, setViewingStory] = useState(null);
@@ -235,8 +243,8 @@ const PostsFeed = () => {
     const unsub = onSnapshot(q, (snap) => {
       setPosts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       setHasMorePosts(snap.docs.length >= feedLimit);
-      setLoading(false);
-    }, () => setLoading(false));
+      setCommunityPostsReady(true);
+    }, () => setCommunityPostsReady(true));
     return () => unsub();
   }, [feedLimit]);
 
@@ -256,8 +264,12 @@ const PostsFeed = () => {
       q,
       (snap) => {
         setMotionPosts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setMotionPostsReady(true);
       },
-      (err) => console.error('[PostsFeed] business_motion_posts error:', err)
+      (err) => {
+        console.error('[PostsFeed] business_motion_posts error:', err);
+        setMotionPostsReady(true);
+      }
     );
     return () => unsub();
   }, []);
@@ -277,14 +289,25 @@ const PostsFeed = () => {
           map((d) => normalizeFeaturedPostDoc(d.id, d.data())).
           filter((p) => p.status === 'published' || !p.status);
           setFeaturedPosts(fp);
-        }, (err) => console.error('[PostsFeed] featured_posts error:', err));
+          setFeaturedPostsReady(true);
+        }, (err) => {
+          console.error('[PostsFeed] featured_posts error:', err);
+          setFeaturedPostsReady(true);
+        });
       } catch (e) {
         console.error('[PostsFeed] featured_posts load error:', e);
+        setFeaturedPostsReady(true);
       }
     };
     load();
     return () => unsub?.();
   }, []);
+
+  useEffect(() => {
+    if (communityPostsReady && motionPostsReady && featuredPostsReady) {
+      setLoading(false);
+    }
+  }, [communityPostsReady, motionPostsReady, featuredPostsReady]);
 
   const publishedFeaturedIds = useMemo(
     () => new Set(featuredPosts.map((p) => String(p.id))),
