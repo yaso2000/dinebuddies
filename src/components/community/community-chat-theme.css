@@ -161,6 +161,10 @@
     color: var(--cchat-zone-header-text);
 }
 
+.community-chat-root .header-menu-btn {
+    color: var(--cchat-zone-header-text);
+}
+
 .community-chat-root .community-chat-leave-btn {
     color: #f87171;
     border-color: color-mix(in srgb, #ef4444 45%, var(--cchat-zone-header-border));

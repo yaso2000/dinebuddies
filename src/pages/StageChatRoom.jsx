@@ -3,10 +3,11 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useParams } from 'react-router-dom';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { FaDoorClosed, FaDoorOpen, FaSignOutAlt, FaTimes } from 'react-icons/fa';
+import { FaDoorClosed, FaDoorOpen, FaPalette, FaSignOutAlt, FaTimes } from 'react-icons/fa';
 import CommunityChatSwipePager from '../components/community/CommunityChatSwipePager';
 import StageDesktopLayout from '../components/community/StageDesktopLayout';
 import CommunityChatHeaderMenu from '../components/community/CommunityChatHeaderMenu';
+import useZoneThemeModal from '../components/community/useZoneThemeModal';
 import UserAvatar from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -36,6 +37,7 @@ export default function StageChatRoom() {
   const { showToast } = useToast();
   const room = useStageChatRoom(stageId);
   const { openGiftPicker, giftModal } = useProfileGiftPicker();
+  const zoneTheme = useZoneThemeModal(room);
   const bootstrapHostId = location.state?.stageHostId || null;
   const justCreated = Boolean(location.state?.stageJustCreated);
   const uid = currentUser?.uid || userProfile?.id || null;
@@ -263,9 +265,17 @@ export default function StageChatRoom() {
       onClick: handleLeave,
     };
 
+    const chatLookAction = {
+      id: 'chat-look',
+      label: t('community_guest_frame_bg_tool', 'Chat look'),
+      icon: <FaPalette size={15} aria-hidden />,
+      onClick: zoneTheme.open,
+    };
+
     if (room.isHost || isBootstrapHost) {
       if (room.isStageClosed) {
         return [
+          chatLookAction,
           {
             id: 'reopen',
             label: t('stage_reopen', 'Reopen Stage'),
@@ -277,6 +287,7 @@ export default function StageChatRoom() {
         ];
       }
       return [
+        chatLookAction,
         {
           id: 'soft-close',
           label: t('stage_close', 'Close Stage'),
@@ -617,6 +628,7 @@ export default function StageChatRoom() {
           <CommunityChatSwipePager room={roomWithGifts} onGiftParticipant={openGiftPicker} />
         )}
         {giftModal}
+        {zoneTheme.modal}
       </div>
     );
   }

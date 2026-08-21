@@ -64,43 +64,7 @@ import {
 } from '../../utils/videoEmbedUtils';
 import CommunityBannerYoutubeBackground from './CommunityBannerYoutubeBackground';
 import BannerGradientPresetCarousel from './BannerGradientPresetCarousel';
-import CommunityChatZoneThemePicker from './CommunityChatZoneThemePicker';
-import InvitationEditorLeaveDialog from '../Invitations/socialCard/InvitationEditorLeaveDialog';
-import {
-  buildGuestFrameBackgroundFromDraft,
-  createGuestFrameDraftFromResolved,
-} from '../../constants/communityChatGuestFrameLook';
-
-const DEFAULT_ZONE_THEME_DRAFT = {
-  themeId: 'stage',
-  guestFrame: {
-    imageMode: 'none',
-    colorOverlayEnabled: true,
-    colorStart: DEFAULT_BANNER_BG,
-    colorEnd: DEFAULT_BANNER_BG2,
-    intensity: 100,
-    presetId: null,
-    customUrl: null,
-  },
-};
-
-function createDefaultZoneThemeDraftSnapshot() {
-  return {
-    themeId: DEFAULT_ZONE_THEME_DRAFT.themeId,
-    guestFrame: { ...DEFAULT_ZONE_THEME_DRAFT.guestFrame },
-  };
-}
-
-function createZoneThemeDraftSnapshot(themeId, guestFrameBackground) {
-  return {
-    themeId: themeId || 'stage',
-    guestFrame: createGuestFrameDraftFromResolved(guestFrameBackground),
-  };
-}
-
-function zoneThemeDraftsEqual(a, b) {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
+import useZoneThemeModal from './useZoneThemeModal';
 
 const TITLE_FONT_FAMILY_OPTIONS = [
   { key: 'system', labelKey: 'community_banner_font_system', fallback: 'System' },
@@ -144,7 +108,7 @@ function BannerIconBtn({ active, onClick, ariaLabel, title, children, className 
 
 const KEYBOARD_OPEN_THRESHOLD_PX = 100;
 
-function BannerToolModal({ title, titleId, onClose, children, footer, headerActions }) {
+export function BannerToolModal({ title, titleId, onClose, children, footer, headerActions }) {
   const overlayRef = useRef(null);
   const bodyRef = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -411,12 +375,10 @@ export default function CommunityHostBannerComposerTools({
     updateBanner,
     setHostSpotlightAuto,
     zoneThemeId,
-    saveCommunityChatZoneThemeSettings,
     zoneThemeSaving,
-    guestFrameBackground,
-    generateCommunityChatGuestFrameBackgroundImage,
-    guestFrameBackgroundGenerating,
   } = room;
+
+  const zoneTheme = useZoneThemeModal(room);
 
   const bannerForPreview = {
     ...banner,
@@ -436,9 +398,6 @@ export default function CommunityHostBannerComposerTools({
   const [fontSizeDraft, setFontSizeDraft] = useState(DEFAULT_BANNER_FONT_SIZE);
   const [showCamera, setShowCamera] = useState(false);
   const [youtubeDraft, setYoutubeDraft] = useState('');
-  const [zoneThemeDraft, setZoneThemeDraft] = useState(null);
-  const [zoneThemeSavedSnapshot, setZoneThemeSavedSnapshot] = useState(null);
-  const [zoneThemeLeaveOpen, setZoneThemeLeaveOpen] = useState(false);
   const [voiceRecording, setVoiceRecording] = useState(false);
   const [voiceRecordingSec, setVoiceRecordingSec] = useState(0);
   const [voicePublishing, setVoicePublishing] = useState(false);
@@ -510,26 +469,6 @@ export default function CommunityHostBannerComposerTools({
     setFontSizeDraft(banner.fontSize || DEFAULT_BANNER_FONT_SIZE);
     setActiveModal('background');
   };
-
-  const openZoneThemeModal = () => {
-    const snapshot = createZoneThemeDraftSnapshot(zoneThemeId, guestFrameBackground);
-    setZoneThemeDraft(snapshot);
-    setZoneThemeSavedSnapshot(snapshot);
-    setZoneThemeLeaveOpen(false);
-    setActiveModal('zoneTheme');
-  };
-
-  // Live-preview bubble colors on the room shell while the Chat look draft is open.
-  useEffect(() => {
-    if (activeModal !== 'zoneTheme' || !zoneThemeDraft?.themeId) return undefined;
-    const root = document.querySelector('.community-chat-root');
-    if (!root) return undefined;
-    const previewId = String(zoneThemeDraft.themeId);
-    root.setAttribute('data-cchat-zone-theme', previewId);
-    return () => {
-      root.setAttribute('data-cchat-zone-theme', zoneThemeId || 'stage');
-    };
-  }, [activeModal, zoneThemeDraft?.themeId, zoneThemeId]);
 
   const clearVoiceTimer = () => {
     if (voiceTimerRef.current) {
@@ -657,69 +596,6 @@ export default function CommunityHostBannerComposerTools({
   };
 
   const closeModal = () => setActiveModal(null);
-
-  const isZoneThemeDraftDirty =
-    zoneThemeDraft &&
-    zoneThemeSavedSnapshot &&
-    !zoneThemeDraftsEqual(zoneThemeDraft, zoneThemeSavedSnapshot);
-
-  const zoneThemeDraftBusy = zoneThemeSaving || guestFrameBackgroundGenerating;
-
-  const updateZoneThemeDraft = (patch) => {
-    setZoneThemeDraft((prev) => (prev ? { ...prev, ...patch } : prev));
-  };
-
-  const updateZoneThemeGuestFrameDraft = (patch) => {
-    setZoneThemeDraft((prev) =>
-      prev
-        ? {
-            ...prev,
-            guestFrame: { ...prev.guestFrame, ...patch },
-          }
-        : prev
-    );
-  };
-
-  const publishZoneTheme = async () => {
-    if (!zoneThemeDraft || zoneThemeDraftBusy) return false;
-    const ok = await saveCommunityChatZoneThemeSettings(zoneThemeDraft);
-    if (ok) {
-      setZoneThemeSavedSnapshot(zoneThemeDraft);
-    }
-    return ok;
-  };
-
-  const closeZoneThemeModal = () => {
-    setZoneThemeLeaveOpen(false);
-    closeModal();
-  };
-
-  const requestCloseZoneThemeModal = () => {
-    // Always allow close — never trap the host behind a busy AI/generate state.
-    if (isZoneThemeDraftDirty) {
-      setZoneThemeLeaveOpen(true);
-      return;
-    }
-    closeZoneThemeModal();
-  };
-
-  const saveZoneThemeAndClose = async () => {
-    const ok = await publishZoneTheme();
-    if (ok) closeZoneThemeModal();
-  };
-
-  const discardZoneThemeDraft = () => {
-    closeZoneThemeModal();
-  };
-
-  const resetZoneThemeDraftToDefaults = () => {
-    if (zoneThemeDraftBusy) return;
-    setZoneThemeDraft(createDefaultZoneThemeDraftSnapshot());
-  };
-
-  const isZoneThemeDraftAtDefaults = zoneThemeDraft
-    ? zoneThemeDraftsEqual(zoneThemeDraft, DEFAULT_ZONE_THEME_DRAFT)
-    : true;
 
   const handleMediaCaptured = async (file) => {
     setShowCamera(false);
@@ -1284,92 +1160,6 @@ export default function CommunityHostBannerComposerTools({
       </BannerToolModal>
     ) : null;
 
-  const zoneThemeModal =
-    activeModal === 'zoneTheme' && zoneThemeDraft ? (
-      <>
-        <BannerToolModal
-          title={t('community_guest_frame_bg_tool', 'Chat look')}
-          titleId="community-chat-zone-theme-modal"
-          onClose={requestCloseZoneThemeModal}
-          headerActions={
-            <>
-              {resetBtn(
-                t('community_chat_zone_theme_reset', 'Reset to default'),
-                zoneThemeDraftBusy || isZoneThemeDraftAtDefaults,
-                resetZoneThemeDraftToDefaults,
-                true
-              )}
-              {publishBtn(
-                zoneThemeSaving
-                  ? t('saving', 'Saving…')
-                  : t('save', 'Save'),
-                zoneThemeDraftBusy || !isZoneThemeDraftDirty,
-                saveZoneThemeAndClose,
-                true
-              )}
-            </>
-          }
-        >
-          <CommunityChatZoneThemePicker
-            themeId={zoneThemeDraft.themeId}
-            onSelectTheme={(nextThemeId) => updateZoneThemeDraft({ themeId: nextThemeId })}
-            guestFrameBackground={buildGuestFrameBackgroundFromDraft(zoneThemeDraft.guestFrame)}
-            saving={zoneThemeSaving}
-            guestFrameBackgroundGenerating={guestFrameBackgroundGenerating}
-            onSelectTransparent={() => {
-              updateZoneThemeGuestFrameDraft({ colorOverlayEnabled: false });
-            }}
-            onSelectGradientPreset={(colorStart, colorEnd) =>
-              updateZoneThemeGuestFrameDraft({
-                colorOverlayEnabled: true,
-                colorStart,
-                colorEnd,
-              })
-            }
-            onChangeGuestFrameColors={(colorStart, colorEnd) =>
-              updateZoneThemeGuestFrameDraft({
-                colorOverlayEnabled: true,
-                colorStart,
-                colorEnd,
-              })
-            }
-            onChangeGuestFrameDensity={(intensity) =>
-              updateZoneThemeGuestFrameDraft({
-                colorOverlayEnabled: true,
-                intensity,
-              })
-            }
-            onSelectImageNone={() => {
-              updateZoneThemeGuestFrameDraft({
-                imageMode: 'none',
-                presetId: null,
-                customUrl: null,
-              });
-            }}
-            onGenerateGuestFrameBackgroundAi={async (prompt) => {
-              const url = await generateCommunityChatGuestFrameBackgroundImage(prompt);
-              if (url) {
-                updateZoneThemeGuestFrameDraft({
-                  imageMode: 'custom',
-                  customUrl: url,
-                  presetId: null,
-                });
-              }
-            }}
-          />
-        </BannerToolModal>
-        <InvitationEditorLeaveDialog
-          open={zoneThemeLeaveOpen}
-          saving={zoneThemeSaving}
-          onSave={saveZoneThemeAndClose}
-          onDiscard={discardZoneThemeDraft}
-          onCancel={() => setZoneThemeLeaveOpen(false)}
-          questionKey="community_chat_zone_theme_unsaved_question"
-          questionDefault="Save your chat color changes before closing?"
-        />
-      </>
-    ) : null;
-
   const templatesModal =
     activeModal === 'templates' ? (
       <BannerToolModal
@@ -1548,7 +1338,7 @@ export default function CommunityHostBannerComposerTools({
         className={`community-banner-host-tools__btn community-banner-host-tools__btn--look${zoneThemeId && zoneThemeId !== 'default' ? ' community-banner-host-tools__btn--active' : ''}`}
         aria-label={t('community_guest_frame_bg_tool', 'Chat look')}
         title={t('community_guest_frame_bg_tool', 'Chat look')}
-        onClick={openZoneThemeModal}
+        onClick={zoneTheme.open}
         disabled={uploadingBanner || zoneThemeSaving}
       >
         <FaPalette size={16} aria-hidden />
@@ -1581,7 +1371,7 @@ export default function CommunityHostBannerComposerTools({
       {bodyTextModal}
       {backgroundModal}
       {youtubeModal}
-      {zoneThemeModal}
+      {zoneTheme.modal}
       {templatesModal}
 
       {showCamera ? (
