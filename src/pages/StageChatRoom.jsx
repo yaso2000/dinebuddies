@@ -123,20 +123,6 @@ export default function StageChatRoom() {
       streamHostId
   );
 
-  // Desktop Stage layout keeps the gift box always visible in the sidebar (no popup) —
-  // same recipient shape openGiftToHost already resolves for the mobile picker.
-  const desktopGiftRecipient = useMemo(() => {
-    if (!canGiftStreamHost) return null;
-    return {
-      id: streamHostId,
-      displayName:
-        room.partner?.hostName ||
-        room.partner?.display_name ||
-        room.partner?.hostDisplayName ||
-        t('stage_chat', 'Stage'),
-    };
-  }, [canGiftStreamHost, streamHostId, room.partner, t]);
-
   const roomWithGifts = useMemo(() => {
     const base =
       room.partner || !isBootstrapHost
@@ -577,6 +563,7 @@ export default function StageChatRoom() {
               bannerPersonal={!room.isHost}
               onBannerChange={(visible) => room.setCommunityChatBannerVisible(visible)}
               actions={headerMenuActions}
+              inline={isDesktopShell}
             />
           </div>
         </header>
@@ -606,7 +593,7 @@ export default function StageChatRoom() {
         ) : null}
 
         {isDesktopShell ? (
-          <StageDesktopLayout room={roomWithGifts} giftRecipient={desktopGiftRecipient} />
+          <StageDesktopLayout room={roomWithGifts} />
         ) : (
           <CommunityChatSwipePager room={roomWithGifts} />
         )}

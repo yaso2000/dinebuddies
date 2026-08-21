@@ -123,3 +123,39 @@
   width: 18px;
   flex-shrink: 0;
 }
+
+/* ── Inline mode (Stage rooms desktop) — controls shown directly in the header,
+   no dropdown, since there are only a couple of items. ── */
+
+.community-chat-header-menu--inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.community-chat-header-menu--inline .community-chat-banner-toggle {
+  margin: 0;
+  padding: 0.4rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.community-chat-header-menu--inline .community-chat-banner-toggle__label {
+  display: inline;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.community-chat-header-menu__action--inline {
+  width: auto;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.community-chat-header-menu__action--inline + .community-chat-header-menu__action--inline {
+  margin-top: 0;
+}

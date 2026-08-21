@@ -13,8 +13,8 @@
 .stage-desktop-layout__stage-pane {
     display: flex;
     flex-direction: column;
-    flex: 0 0 360px;
-    width: 360px;
+    flex: 0 0 460px;
+    width: 460px;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior-y: contain;
@@ -43,7 +43,11 @@
     min-height: 0;
 }
 
-/* ── Right/main pane: gift strip on top (guests only), chat bubbles filling the rest ── */
+.stage-desktop-layout__members-grid .community-participants--grid {
+    padding-top: 0.4rem;
+}
+
+/* ── Main pane: chat bubbles + composer ── */
 
 .stage-desktop-layout__main {
     display: flex;
@@ -54,21 +58,10 @@
     overflow: hidden;
 }
 
-.stage-desktop-layout__gift-strip {
-    flex: 0 0 auto;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(0, 0, 0, 0.14);
-}
-
-.stage-desktop-layout__gift-strip .profile-gift-modal--strip .profile-gift-modal__grid {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-}
-
 @media (max-width: 1280px) {
     .stage-desktop-layout__stage-pane {
-        flex-basis: 300px;
-        width: 300px;
+        flex-basis: 380px;
+        width: 380px;
     }
 }
 

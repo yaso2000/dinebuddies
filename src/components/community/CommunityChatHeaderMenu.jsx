@@ -16,6 +16,7 @@ export default function CommunityChatHeaderMenu({
   bannerPersonal = false,
   onBannerChange,
   actions = [],
+  inline = false,
 }) {
   const { t, i18n } = useTranslation();
   const isRtl = i18n.dir() === 'rtl';
@@ -23,6 +24,32 @@ export default function CommunityChatHeaderMenu({
   const rootRef = useRef(null);
 
   const menuLabel = t('community_chat_header_menu', 'Chat options');
+  const visibleActionsInline = (actions || []).filter(Boolean);
+
+  if (inline) {
+    return (
+      <div className="community-chat-header-menu community-chat-header-menu--inline">
+        <CommunityChatBannerToggle
+          checked={bannerChecked}
+          disabled={bannerDisabled}
+          personal={bannerPersonal}
+          onChange={onBannerChange}
+        />
+        {visibleActionsInline.map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            className={`community-chat-header-menu__action community-chat-header-menu__action--inline${action.danger ? ' community-chat-header-menu__action--danger' : ''}`}
+            disabled={action.disabled}
+            onClick={() => void action.onClick?.()}
+          >
+            {action.icon ? <span className="community-chat-header-menu__action-icon">{action.icon}</span> : null}
+            <AppText as="span">{action.label}</AppText>
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (!open) return undefined;

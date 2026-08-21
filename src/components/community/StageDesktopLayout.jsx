@@ -3,17 +3,16 @@ import CommunityTopMediaPanel from './CommunityTopMediaPanel';
 import CommunityPinnedHostBar from './CommunityPinnedHostBar';
 import CommunityGuestChatBody from './CommunityGuestChatBody';
 import CommunityParticipantsView from './CommunityParticipantsView';
-import ProfileGiftPickerModal from '../gifts/ProfileGiftPickerModal';
 import './StageDesktopLayout.css';
 
 /**
  * Stage rooms only, desktop width — two panes: a stage pane (tools + banner +
- * avatar-only participants grid) and a wide chat pane (gift strip on top,
- * bubbles + composer filling the rest — no dedicated gift sidebar, since gifts
- * only apply to guests and shouldn't shrink the chat for everyone). Community
+ * avatar-only participants grid) and a wide chat pane (bubbles + composer).
+ * Gifts stay reachable via the in-chat gift button (no dedicated strip/sidebar —
+ * removed per feedback so the banner/chat get the space instead). Community
  * business chat keeps the single-column CommunityFullChatView unchanged.
  */
-export default function StageDesktopLayout({ room, giftRecipient }) {
+export default function StageDesktopLayout({ room }) {
   const { messages, pendingReplyTo, isHost, unpinHostMessage } = room;
   const showTop = room.bannerVisible !== false;
   const hostMessageOwnerId = room.hostId || room.partnerId;
@@ -47,11 +46,6 @@ export default function StageDesktopLayout({ room, giftRecipient }) {
       ) : null}
 
       <div className="stage-desktop-layout__main">
-        {giftRecipient ? (
-          <div className="stage-desktop-layout__gift-strip">
-            <ProfileGiftPickerModal recipient={giftRecipient} embedded layout="strip" />
-          </div>
-        ) : null}
         <CommunityGuestChatBody room={room} className="community-guest-chat--expanded" />
       </div>
     </div>
