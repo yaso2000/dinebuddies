@@ -11,6 +11,7 @@ function ParticipantRow({
   canModerate,
   onModerate,
   mutedLabel,
+  layout = 'list',
 }) {
   const { t } = useTranslation();
   const longPress = useLongPress(
@@ -21,6 +22,43 @@ function ParticipantRow({
     },
     { disabled: !canModerate }
   );
+  const isHostMember = member.id === partnerId || member.isHost;
+
+  if (layout === 'grid') {
+    return (
+      <li
+        className={`community-participants__row community-participants__row--grid${canModerate ? ' community-participants__row--moderatable' : ''}`}
+        title={member.displayName}
+        {...(canModerate ? longPress : {})}
+        onContextMenu={
+          canModerate
+            ? (event) => {
+                event.preventDefault();
+                const rect = event.currentTarget.getBoundingClientRect();
+                onModerate?.(member, rect);
+              }
+            : undefined
+        }
+      >
+        <div className="community-participants__avatar-wrap community-participants__avatar-wrap--grid">
+          <UserAvatar
+            user={member}
+            src={member.avatar}
+            alt={member.displayName || ''}
+            className="community-participants__avatar"
+          />
+          {member.isOnline ? (
+            <span className="community-participants__online-dot" aria-label={t('online', 'Online')} />
+          ) : null}
+          {isHostMember ? (
+            <AppText as="span" className="community-participants__badge community-participants__badge--grid">
+              {t('host', 'Host')}
+            </AppText>
+          ) : null}
+        </div>
+      </li>
+    );
+  }
 
   return (
     <li
@@ -51,7 +89,7 @@ function ParticipantRow({
         <AppText as="span" className="community-participants__name">
           {member.displayName}
         </AppText>
-        {member.id === partnerId || member.isHost ? (
+        {isHostMember ? (
           <AppText as="span" className="community-participants__badge">
             {t('host', 'Host')}
           </AppText>
@@ -78,6 +116,7 @@ export default function CommunityParticipantsView({
   onMuteMember,
   onKickMember,
   onBlockMember,
+  layout = 'list',
 }) {
   const { t } = useTranslation();
   const [menu, setMenu] = useState(null); // { member, rect }
@@ -126,12 +165,16 @@ export default function CommunityParticipantsView({
 
   const hostCanModerate = Boolean(isHost && isStageRoom);
 
+  const isGrid = layout === 'grid';
+
   return (
-    <div className="community-participants">
-      <AppText as="h2" className="community-participants__title">
-        {t('community_participants_title', 'Online Participants')}
-      </AppText>
-      {hostCanModerate ? (
+    <div className={`community-participants${isGrid ? ' community-participants--grid' : ''}`}>
+      {!isGrid ? (
+        <AppText as="h2" className="community-participants__title">
+          {t('community_participants_title', 'Online Participants')}
+        </AppText>
+      ) : null}
+      {hostCanModerate && !isGrid ? (
         <AppText as="p" className="community-participants__hint">
           {t(
             'stage_host_long_press_hint',
@@ -139,7 +182,7 @@ export default function CommunityParticipantsView({
           )}
         </AppText>
       ) : null}
-      <ul className="community-participants__list">
+      <ul className={`community-participants__list${isGrid ? ' community-participants__list--grid' : ''}`}>
         {participants.map((member) => {
           const canModerate =
             hostCanModerate &&
@@ -154,6 +197,7 @@ export default function CommunityParticipantsView({
               canModerate={canModerate}
               onModerate={openMenu}
               mutedLabel={t('member_muted_badge', 'Muted')}
+              layout={layout}
             />
           );
         })}

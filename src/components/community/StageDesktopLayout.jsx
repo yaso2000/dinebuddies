@@ -7,9 +7,10 @@ import ProfileGiftPickerModal from '../gifts/ProfileGiftPickerModal';
 import './StageDesktopLayout.css';
 
 /**
- * Stage rooms only, desktop width — three panes: a stage pane (tools + banner),
- * a wide chat pane (bubbles), and a sidebar (gift strip + members). Community
- * business chat keeps the single-column CommunityFullChatView unchanged.
+ * Stage rooms only, desktop width — three panes: a stage pane (tools + banner +
+ * avatar-only participants grid), a wide chat pane (bubbles + composer), and a
+ * sidebar dedicated to gifts (horizontal, always visible). Community business
+ * chat keeps the single-column CommunityFullChatView unchanged.
  */
 export default function StageDesktopLayout({ room, giftRecipient }) {
   const { messages, pendingReplyTo, isHost, unpinHostMessage } = room;
@@ -28,6 +29,19 @@ export default function StageDesktopLayout({ room, giftRecipient }) {
             isHost={isHost}
             onUnpinHostMessage={isHost ? unpinHostMessage : undefined}
           />
+          <div className="stage-desktop-layout__members-grid">
+            <CommunityParticipantsView
+              participants={room.participants}
+              loading={room.participantsLoading}
+              partnerId={room.partnerId}
+              isHost={Boolean(room.isHost)}
+              isStageRoom={Boolean(room.isStageRoom)}
+              onMuteMember={room.muteMemberInChat}
+              onKickMember={room.kickMemberFromStage}
+              onBlockMember={room.blockMemberFromStages}
+              layout="grid"
+            />
+          </div>
         </aside>
       ) : null}
 
@@ -35,25 +49,11 @@ export default function StageDesktopLayout({ room, giftRecipient }) {
         <CommunityGuestChatBody room={room} className="community-guest-chat--expanded" />
       </div>
 
-      <aside className="stage-desktop-layout__sidebar">
-        {giftRecipient ? (
-          <div className="stage-desktop-layout__gift-strip">
-            <ProfileGiftPickerModal recipient={giftRecipient} embedded layout="strip" />
-          </div>
-        ) : null}
-        <div className="stage-desktop-layout__members">
-          <CommunityParticipantsView
-            participants={room.participants}
-            loading={room.participantsLoading}
-            partnerId={room.partnerId}
-            isHost={Boolean(room.isHost)}
-            isStageRoom={Boolean(room.isStageRoom)}
-            onMuteMember={room.muteMemberInChat}
-            onKickMember={room.kickMemberFromStage}
-            onBlockMember={room.blockMemberFromStages}
-          />
-        </div>
-      </aside>
+      {giftRecipient ? (
+        <aside className="stage-desktop-layout__sidebar">
+          <ProfileGiftPickerModal recipient={giftRecipient} embedded layout="strip" />
+        </aside>
+      ) : null}
     </div>
   );
 }
