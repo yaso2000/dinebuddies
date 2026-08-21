@@ -52,7 +52,7 @@
 
 .create-stage-page__visibility {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
   margin-top: 8px;
 }
@@ -141,6 +141,11 @@
   font-size: 0.9rem;
   color: var(--text-muted);
   line-height: 1.45;
+}
+
+.create-stage-page__hint--warn {
+  color: #f59e0b;
+  font-weight: 600;
 }
 
 .create-stage-page__list {

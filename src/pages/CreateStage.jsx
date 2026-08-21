@@ -99,12 +99,14 @@ export default function CreateStage() {
   }, []);
 
   const blockedByExisting = Boolean(hasLiveStage && liveStageId);
+  const inviteOnlyNeedsInvitee = !isBusiness && visibility === 'invite_only' && selectedCount === 0;
   const canSubmit =
     !submitting &&
     !blockedAccount &&
     !blockedByExisting &&
     !businessStageBlocked &&
-    !liveStageLoading;
+    !liveStageLoading &&
+    !inviteOnlyNeedsInvitee;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -179,7 +181,7 @@ export default function CreateStage() {
           )
         : t(
             'create_stage_subtitle',
-            'Open alone or invite mutual follows. Choose public for everyone, or private for your followers only.'
+            'Open alone or invite mutual follows. Choose public for everyone, followers only, or invite-only for a fully private Stage.'
           ),
     [isBusiness, t]
   );
@@ -337,15 +339,28 @@ export default function CreateStage() {
               </button>
               <button
                 type="button"
-                className={`create-stage-page__visibility-btn${visibility === 'private' ? ' is-selected' : ''}`}
-                aria-pressed={visibility === 'private'}
-                onClick={() => setVisibility('private')}
+                className={`create-stage-page__visibility-btn${visibility === 'followers' ? ' is-selected' : ''}`}
+                aria-pressed={visibility === 'followers'}
+                onClick={() => setVisibility('followers')}
               >
                 <AppText as="span" className="create-stage-page__visibility-title">
-                  {t('create_stage_visibility_private', 'Private')}
+                  {t('create_stage_visibility_followers', 'Followers')}
                 </AppText>
                 <AppText as="span" className="create-stage-page__visibility-hint">
-                  {t('create_stage_visibility_private_hint', 'Followers only')}
+                  {t('create_stage_visibility_followers_hint', 'Followers only')}
+                </AppText>
+              </button>
+              <button
+                type="button"
+                className={`create-stage-page__visibility-btn${visibility === 'invite_only' ? ' is-selected' : ''}`}
+                aria-pressed={visibility === 'invite_only'}
+                onClick={() => setVisibility('invite_only')}
+              >
+                <AppText as="span" className="create-stage-page__visibility-title">
+                  {t('create_stage_visibility_invite_only', 'Private')}
+                </AppText>
+                <AppText as="span" className="create-stage-page__visibility-hint">
+                  {t('create_stage_visibility_invite_only_hint', 'Invite only')}
                 </AppText>
               </button>
             </div>
@@ -363,7 +378,9 @@ export default function CreateStage() {
           <div className="create-stage-page__field">
             <div className="create-stage-page__label-row">
               <AppText as="span" className="create-stage-page__label">
-                {t('create_stage_guests_optional', 'Invite guests (optional)')}
+                {visibility === 'invite_only'
+                  ? t('create_stage_guests_required', 'Invite guests')
+                  : t('create_stage_guests_optional', 'Invite guests (optional)')}
               </AppText>
               <AppText as="span" className="create-stage-page__count">
                 {selectedCount}/{MAX_INVITEES}
@@ -371,10 +388,15 @@ export default function CreateStage() {
             </div>
 
             <AppText as="p" className="create-stage-page__hint">
-              {t(
-                'create_stage_guests_later_hint',
-                'Guests are optional. Open the Stage now — you can invite people after it is created.'
-              )}
+              {visibility === 'invite_only'
+                ? t(
+                    'create_stage_guests_invite_only_hint',
+                    'This Stage is invite-only — nobody else can find or join it. Choose who to invite; you cannot add more people later.'
+                  )
+                : t(
+                    'create_stage_guests_later_hint',
+                    'Guests are optional. Open the Stage now — you can invite people after it is created.'
+                  )}
             </AppText>
 
             {loadingMutuals ? (
@@ -383,10 +405,15 @@ export default function CreateStage() {
               </AppText>
             ) : mutuals.length === 0 ? (
               <AppText as="p" className="create-stage-page__hint">
-                {t(
-                  'create_stage_no_mutuals_optional',
-                  'No mutual follows yet. You can still open the Stage alone and share a join link.'
-                )}
+                {visibility === 'invite_only'
+                  ? t(
+                      'create_stage_no_mutuals_invite_only',
+                      'No mutual follows yet — you need at least one to invite for a private Stage.'
+                    )
+                  : t(
+                      'create_stage_no_mutuals_optional',
+                      'No mutual follows yet. You can still open the Stage alone and share a join link.'
+                    )}
               </AppText>
             ) : (
               <ul className="create-stage-page__list">
@@ -419,6 +446,14 @@ export default function CreateStage() {
                 })}
               </ul>
             )}
+            {inviteOnlyNeedsInvitee ? (
+              <AppText as="p" className="create-stage-page__hint create-stage-page__hint--warn">
+                {t(
+                  'create_stage_invite_only_required_hint',
+                  'Select at least one guest to invite before opening a private Stage.'
+                )}
+              </AppText>
+            ) : null}
           </div>
         ) : null}
 

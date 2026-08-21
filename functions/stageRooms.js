@@ -163,12 +163,18 @@ function resolveHostKind(stage, host) {
     return isBusinessUserDoc(host) ? 'business' : 'people';
 }
 
-/** Business Stages are always community-members only (no public/private choice). */
+/**
+ * Business Stages are always community-members only (no public/followers/invite choice).
+ * People Stages: 'public' (anyone), 'followers' (mutual/one-way followers of the host),
+ * or 'invite_only' (only the host's explicit invitees — hidden from everyone else).
+ * Legacy stage docs stored 'private' for the followers tier — normalize that too.
+ */
 function resolveVisibility(stage, hostKind) {
     if (hostKind === 'business') return 'community';
-    return String(stage?.visibility || 'private').toLowerCase() === 'public'
-        ? 'public'
-        : 'private';
+    const raw = String(stage?.visibility || 'followers').toLowerCase();
+    if (raw === 'public') return 'public';
+    if (raw === 'invite_only' || raw === 'invite-only') return 'invite_only';
+    return 'followers';
 }
 
 async function deleteQueryInBatches(db, queryRef, batchSize = 200) {
@@ -348,12 +354,14 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                 'Stage';
 
             const visibilityRaw = asTrimmedString(data?.visibility).toLowerCase();
-            // Business Stages are always for community members (no public/private toggle).
+            // Business Stages are always for community members (no public/followers/invite toggle).
             const visibility = hostIsBusiness
                 ? 'community'
                 : visibilityRaw === 'public'
                   ? 'public'
-                  : 'private';
+                  : visibilityRaw === 'invite_only'
+                    ? 'invite_only'
+                    : 'followers';
 
             const rawInvitees = Array.isArray(data?.inviteeIds) ? data.inviteeIds : [];
             const inviteeCandidates = [
@@ -403,7 +411,7 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                 hostId,
                 title,
                 status: 'active',
-                /** people: public|private; business: always community (members of the business community). */
+                /** people: public|followers|invite_only; business: always community (members of the business community). */
                 visibility,
                 memberIds,
                 invitedIds: validInvitees,
@@ -660,7 +668,11 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                     isMember ||
                     (stageHostKind === 'business'
                         ? inBizCommunity
-                        : visibility === 'public' || followsHost);
+                        : visibility === 'public'
+                          ? true
+                          : visibility === 'followers'
+                            ? followsHost
+                            : false); // invite_only: only host/invited members ever see it
                 if (!discoverable) continue;
 
                 candidates.push({
@@ -934,7 +946,11 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                         isMember ||
                         (stageHostKind === 'business'
                             ? inBizCommunity
-                            : visibility === 'public' || followsHost)
+                            : visibility === 'public'
+                              ? true
+                              : visibility === 'followers'
+                                ? followsHost
+                                : false) // invite_only: only host/invited members ever see it
                     )
                 ) {
                     continue;
@@ -1142,16 +1158,22 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
             const canJoin =
                 stageHostKind === 'business'
                     ? inBizCommunity || wasInvited
-                    : visibility === 'public' || followsHost || wasInvited;
+                    : visibility === 'public'
+                      ? true
+                      : visibility === 'followers'
+                        ? followsHost || wasInvited
+                        : wasInvited; // invite_only: invite is the only way in
 
             if (!canJoin) {
                 throw new functions.https.HttpsError(
                     'permission-denied',
                     stageHostKind === 'business'
                         ? 'This business Stage is for community members only. Join the community first.'
-                        : visibility === 'private'
+                        : visibility === 'followers'
                           ? 'This Stage is for followers of the host only.'
-                          : 'You cannot join this Stage.'
+                          : visibility === 'invite_only'
+                            ? 'This Stage is invite-only. Ask the host for an invite.'
+                            : 'You cannot join this Stage.'
                 );
             }
 

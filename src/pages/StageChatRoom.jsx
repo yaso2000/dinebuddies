@@ -59,9 +59,12 @@ export default function StageChatRoom() {
     String(room.partner?.visibility || '').toLowerCase() === 'community';
   const stageVisibility = isBusinessStage
     ? 'community'
-    : String(room.partner?.visibility || 'private').toLowerCase() === 'public'
-      ? 'public'
-      : 'private';
+    : (() => {
+        const raw = String(room.partner?.visibility || 'followers').toLowerCase();
+        if (raw === 'public') return 'public';
+        if (raw === 'invite_only') return 'invite_only';
+        return 'followers'; // legacy stage docs stored 'private' for this tier
+      })();
   const stageHostHasPaidPlan = getBusinessSubscriptionAccess(
     room.partner?.subscriptionTier
   ).canCreateBusinessStage;
@@ -90,7 +93,11 @@ export default function StageChatRoom() {
     !room.isStageClosed &&
     (isBusinessStage
       ? inBizCommunity || wasInvited
-      : stageVisibility === 'public' || followsHost || wasInvited);
+      : stageVisibility === 'public'
+        ? true
+        : stageVisibility === 'followers'
+          ? followsHost || wasInvited
+          : wasInvited); // invite_only: invite is the only way in
 
   const streamHostId = hostId || room.partner?.ownerId || null;
 
@@ -438,26 +445,38 @@ export default function StageChatRoom() {
             )
           : stageVisibility === 'public'
             ? t('stage_join_public_hint', 'This Stage is public. Join to enter the chat.')
-            : t(
-                'stage_join_followers_hint',
-                'This Stage is for followers of the host. Join to enter.'
-              ),
+            : stageVisibility === 'invite_only'
+              ? t(
+                  'stage_join_invited_hint',
+                  'You were invited to this Stage. Join to enter.'
+                )
+              : t(
+                  'stage_join_followers_hint',
+                  'This Stage is for followers of the host. Join to enter.'
+                ),
         { showJoin: true }
       );
     } else {
       shellContent = renderJoinGate(
         isBusinessStage
           ? t('stage_chat_community_only', 'Community members only')
-          : t('stage_chat_followers_only', 'Followers only'),
+          : stageVisibility === 'invite_only'
+            ? t('stage_chat_invite_only', 'Invite only')
+            : t('stage_chat_followers_only', 'Followers only'),
         isBusinessStage
           ? t(
               'stage_chat_community_only_hint',
               'Join this business community first, then you can enter the Stage.'
             )
-          : t(
-              'stage_chat_followers_only_hint',
-              'Follow the host to join this private Stage, or ask them for an invite.'
-            )
+          : stageVisibility === 'invite_only'
+            ? t(
+                'stage_chat_invite_only_hint',
+                'This Stage is invite-only. Ask the host for an invite.'
+              )
+            : t(
+                'stage_chat_followers_only_hint',
+                'Follow the host to join this private Stage, or ask them for an invite.'
+              )
       );
     }
   } else if (isBusinessStage && !stageHostHasPaidPlan) {

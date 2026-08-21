@@ -127,9 +127,11 @@ function StageCard({ stage, index, t, onOpen }) {
                 : t('stage_ready_to_chat', 'Ready to chat')}
             {business
               ? ` · ${t('stage_visibility_community', 'Community')}`
-              : stage.visibility === 'private'
-                ? ` · ${t('create_stage_visibility_private', 'Private')}`
-                : ''}
+              : stage.visibility === 'invite_only'
+                ? ` · ${t('create_stage_visibility_invite_only', 'Private')}`
+                : stage.visibility === 'followers'
+                  ? ` · ${t('create_stage_visibility_followers', 'Followers')}`
+                  : ''}
           </AppText>
 
           <div className="stages-hub__meta">
