@@ -321,7 +321,7 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
               <FaTimes size={14} aria-hidden />
             </button>
           ) : null}
-          {typeof onOpenMembers === 'function' ? (
+          {typeof onOpenMembers === 'function' && hostToolsVisible ? (
             <button
               type="button"
               className="community-top-media-panel__members-btn"
@@ -357,6 +357,18 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
             onClick={toggleHostToolsVisible}
           >
             {hostToolsVisible ? <FaEyeSlash size={14} aria-hidden /> : <FaEye size={14} aria-hidden />}
+          </button>
+        ) : null}
+
+        {isHost && bannerMediaActive && !hostToolsVisible && typeof onOpenMembers === 'function' ? (
+          <button
+            type="button"
+            className="community-main-chat__banner-members-btn"
+            onClick={onOpenMembers}
+            title={t('community_participants_title', 'Online Participants')}
+            aria-label={t('community_participants_title', 'Online Participants')}
+          >
+            <FaUsers size={14} aria-hidden />
           </button>
         ) : null}
 

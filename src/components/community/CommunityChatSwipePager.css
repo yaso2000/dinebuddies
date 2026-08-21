@@ -193,6 +193,18 @@
     display: none;
 }
 
+/* Host hid the banner tools (eye toggle) and nothing else rendered into this row
+   (no YouTube controls, no corner-delete, no members icon) — collapse it instead
+   of leaving an empty bar taking up space above the banner. */
+.community-top-media-panel__host-toolbar:empty {
+    display: none;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    box-shadow: none;
+}
+
 .community-top-media-panel__host-toolbar .community-banner-corner-delete {
     position: static;
     top: auto;
@@ -368,6 +380,35 @@
 .community-banner-corner-delete:hover {
     background: rgba(220, 38, 38, 0.88);
     border-color: rgba(254, 202, 202, 0.55);
+}
+
+/* Host hid the banner tools row — members icon floats on the banner instead of
+   leaving it stranded in an otherwise-empty toolbar bar above the banner. */
+.community-main-chat__banner-members-btn {
+    position: absolute;
+    top: 2.65rem;
+    inset-inline-end: 0.45rem;
+    inset-inline-start: auto;
+    z-index: 16;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.85rem;
+    height: 1.85rem;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: rgba(255, 255, 255, 0.95);
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.community-main-chat__banner-members-btn:hover {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: rgba(255, 255, 255, 0.5);
 }
 
 .community-main-chat__banner-gift-btn {
