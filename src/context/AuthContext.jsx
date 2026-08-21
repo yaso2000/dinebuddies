@@ -8,7 +8,6 @@ import {
     canConsumerEnterApp,
     shouldSkipConsumerProfileCompletion,
     markConsumerEntryOk,
-    clearConsumerEntryOk,
 } from '../utils/consumerProfileComplete';
 import { normalizeUserProfile as normalizeProfile } from '../utils/userProfileNormalize';
 import { getAvatarUrlOrNull, resolveOAuthPhotoUpdate } from '../utils/avatarUtils';
@@ -260,10 +259,6 @@ export const AuthProvider = ({ children }) => {
         setIsGuest(false);
         setLoading(false);
         syncBusinessNavHint(null, null);
-    };
-
-    const clearLegacyConsumerEntryCache = (uid) => {
-        clearConsumerEntryOk(uid);
     };
 
     // Guest profile template
@@ -1625,7 +1620,6 @@ export const AuthProvider = ({ children }) => {
                 new Promise((resolve) => setTimeout(resolve, 800)),
             ]).catch(() => {});
             try {
-                clearLegacyConsumerEntryCache(uid);
                 clearInboxClosedInvitationIds(uid);
                 clearInviteLandingSession(uid);
             } catch {
