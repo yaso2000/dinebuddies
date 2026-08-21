@@ -222,6 +222,20 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
 
         el.classList.add('chat-vv-shell');
 
+        // Track the smallest real (post-resize) height seen while the composer stays focused —
+        // used as a floor so a stray dip mid-keyboard-animation doesn't bounce the shell taller.
+        // Must be the MINIMUM, not the height captured at the focus event itself: at focusin the
+        // keyboard hasn't animated in yet, so vv.height there is still the pre-keyboard (full)
+        // height — pinning to that stale, too-large value via Math.max previously left the shell
+        // sized as if the keyboard weren't open at all, hiding the composer behind it.
+        if (androidCompose && isComposerField(document.activeElement)) {
+            const observedH = Math.round(Math.min(vv.height, innerH - vv.offsetTop));
+            androidPinnedShellHeight =
+                androidPinnedShellHeight == null
+                    ? observedH
+                    : Math.min(androidPinnedShellHeight, observedH);
+        }
+
         applyVisualViewportShellGeometry(el, vv, innerH, innerW, androidCompose, androidPinnedShellHeight);
         if (onViewportChange) onViewportChange(vv);
     };
@@ -247,12 +261,9 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
         }
 
         if (!androidCompose || !isComposerField(event.target)) return;
-        if (isKeyboardOpenByViewport(vv)) {
-            androidPinnedShellHeight = Math.max(
-                androidPinnedShellHeight || 0,
-                Math.round(vv.height)
-            );
-        }
+        // sync() itself now tracks androidPinnedShellHeight (as a running minimum of real,
+        // post-resize measurements) — nothing to seed here, since vv.height at this exact
+        // instant is still the pre-keyboard height and would only poison it.
         sync();
     };
 
