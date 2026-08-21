@@ -3455,3 +3455,7 @@ registerSendPasswordResetEmailResend({ exports, functions, db, admin });
 // ─── Image moderation (Vision Safe Search) ───────────────────────────────────
 const { registerImageModeration } = require('./imageModeration');
 registerImageModeration({ exports, functions, db, admin, enforceCallableRateLimit });
+
+// ─── Stories: remux uploaded MP4/MOV to fast-start so video reliably plays on iOS ────
+const { registerStoryVideoFaststart } = require('./storyVideoFaststart');
+registerStoryVideoFaststart({ exports, functions, admin });
