@@ -567,18 +567,16 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
   // but the MAIN content is the original post.
   const isRepost = post.type === 'repost' && post.originalPost;
   const displayPost = isRepost ? post.originalPost : post;
-  // Some older posts stored a hardcoded near-white text color with no background
-  // (assuming the app's dark theme card behind it) — that combo is invisible on the
-  // light theme's white card, so ignore it and fall back to the theme-aware default.
-  const isNearWhiteColor = (value) =>
-    typeof value === 'string' && /^(#fff(fff)?|white|rgba?\(\s*255\s*,\s*255\s*,\s*255)/i.test(value.trim());
+  // A custom text color only ever makes sense paired with a matching opaque background —
+  // some older posts stored a custom color (often white) with no background at all
+  // (assuming the app's dark theme card behind it), which is unreadable on the light
+  // theme's own card color. Without a real background to contrast against, always use
+  // the theme-aware default instead of trusting the stored color.
   const postTextHasOpaqueBg = Boolean(
     displayPost.textStyle?.backgroundColor && displayPost.textStyle.backgroundColor !== 'transparent'
   );
   const safePostTextColor =
-    displayPost.textStyle?.color && !(isNearWhiteColor(displayPost.textStyle.color) && !postTextHasOpaqueBg)
-      ? displayPost.textStyle.color
-      : 'inherit';
+    displayPost.textStyle?.color && postTextHasOpaqueBg ? displayPost.textStyle.color : 'inherit';
   const isMotionPost = isCommunityMotionPost(displayPost);
   const motionDoc = useMemo(() => motionDocFromPost(displayPost), [displayPost]);
   const isVideoPost = displayPost.mediaType === 'video';

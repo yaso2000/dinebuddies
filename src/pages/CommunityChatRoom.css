@@ -4,7 +4,9 @@
 :root {
     --bg-dark: var(--bg-body);
     --bg-darker: var(--bg-card);
-    --text-primary: var(--text-main);
+    /* --text-primary is already a theme-aware global token (index.css) — re-aliasing it to
+       --text-main here creates a circular reference with index.css's --text-main: var(--text-primary),
+       which makes both guaranteed-invalid and breaks every header icon that depends on them. */
     --text-muted: var(--text-secondary);
     --accent-color: var(--primary);
     --incoming-bg: var(--bg-light);
