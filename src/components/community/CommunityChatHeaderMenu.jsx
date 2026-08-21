@@ -18,8 +18,7 @@ export default function CommunityChatHeaderMenu({
   actions = [],
   inline = false,
 }) {
-  const { t, i18n } = useTranslation();
-  const isRtl = i18n.dir() === 'rtl';
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
 
@@ -94,7 +93,10 @@ export default function CommunityChatHeaderMenu({
 
       {open ? (
         <div
-          className={`community-chat-header-menu__panel${isRtl ? ' community-chat-header-menu__panel--rtl' : ' community-chat-header-menu__panel--ltr'}`}
+          // The chat shell forces dir="ltr" regardless of app language (so the swipe
+          // pager's paging stays consistent) — the panel must always anchor the same
+          // way (right:0) or it overflows off-screen when the app language is RTL.
+          className="community-chat-header-menu__panel community-chat-header-menu__panel--ltr"
           role="menu"
           aria-label={menuLabel}
         >

@@ -9,7 +9,7 @@
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.06);
-  color: var(--text-primary, #fff);
+  color: var(--cchat-zone-header-text, var(--text-primary, #fff));
 }
 
 .community-chat-header-menu__toggle:hover:not(:disabled) {
@@ -40,11 +40,6 @@
 .community-chat-header-menu__panel--ltr {
   right: 0;
   left: auto;
-}
-
-.community-chat-header-menu__panel--rtl {
-  left: 0;
-  right: auto;
 }
 
 .community-chat-header-menu__section {
