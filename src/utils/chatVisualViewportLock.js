@@ -276,6 +276,18 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
     vv.addEventListener('resize', sync);
     sync();
 
+    // Modern Chrome/Android honors <meta interactive-widget=resizes-content> (index.html) by
+    // shrinking window.innerHeight itself when the keyboard opens, rather than only shrinking
+    // visualViewport while innerHeight stays tall (the older "overlay" model this file was
+    // originally written against). visualViewport's own 'resize' event isn't reliably fired in
+    // that mode on every Android build, which left a stale/oversized inline height applied from
+    // the focus-triggered sync() (computed before the keyboard finished animating in) with
+    // nothing to correct it — the shell never actually shrank. Listening to window resize too
+    // means any innerHeight change re-syncs with fresh, correct dimensions either way.
+    if (androidCompose) {
+        window.addEventListener('resize', sync);
+    }
+
     document.addEventListener('focusin', onComposerFocusIn);
     document.addEventListener('focusout', onComposerFocusOut);
 
@@ -298,6 +310,9 @@ export function attachChatShellToVisualViewport(getContainer, options = {}) {
 
     function detach() {
         vv.removeEventListener('resize', sync);
+        if (androidCompose) {
+            window.removeEventListener('resize', sync);
+        }
         if (onVVScroll) {
             vv.removeEventListener('scroll', onVVScroll);
         }
