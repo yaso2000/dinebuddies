@@ -7,10 +7,11 @@ import ProfileGiftPickerModal from '../gifts/ProfileGiftPickerModal';
 import './StageDesktopLayout.css';
 
 /**
- * Stage rooms only, desktop width — three panes: a stage pane (tools + banner +
- * avatar-only participants grid), a wide chat pane (bubbles + composer), and a
- * sidebar dedicated to gifts (horizontal, always visible). Community business
- * chat keeps the single-column CommunityFullChatView unchanged.
+ * Stage rooms only, desktop width — two panes: a stage pane (tools + banner +
+ * avatar-only participants grid) and a wide chat pane (gift strip on top,
+ * bubbles + composer filling the rest — no dedicated gift sidebar, since gifts
+ * only apply to guests and shouldn't shrink the chat for everyone). Community
+ * business chat keeps the single-column CommunityFullChatView unchanged.
  */
 export default function StageDesktopLayout({ room, giftRecipient }) {
   const { messages, pendingReplyTo, isHost, unpinHostMessage } = room;
@@ -46,14 +47,13 @@ export default function StageDesktopLayout({ room, giftRecipient }) {
       ) : null}
 
       <div className="stage-desktop-layout__main">
+        {giftRecipient ? (
+          <div className="stage-desktop-layout__gift-strip">
+            <ProfileGiftPickerModal recipient={giftRecipient} embedded layout="strip" />
+          </div>
+        ) : null}
         <CommunityGuestChatBody room={room} className="community-guest-chat--expanded" />
       </div>
-
-      {giftRecipient ? (
-        <aside className="stage-desktop-layout__sidebar">
-          <ProfileGiftPickerModal recipient={giftRecipient} embedded layout="strip" />
-        </aside>
-      ) : null}
     </div>
   );
 }

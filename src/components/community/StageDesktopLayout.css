@@ -43,7 +43,7 @@
     min-height: 0;
 }
 
-/* ── Middle pane: chat bubbles (the wide, primary area) ── */
+/* ── Right/main pane: gift strip on top (guests only), chat bubbles filling the rest ── */
 
 .stage-desktop-layout__main {
     display: flex;
@@ -54,50 +54,21 @@
     overflow: hidden;
 }
 
-/* ── Right pane: gifts only, filling the whole column ── */
-
-.stage-desktop-layout__sidebar {
-    display: flex;
-    flex-direction: column;
-    flex: 0 0 300px;
-    width: 300px;
-    min-height: 0;
-    overflow: hidden;
-    border-inline-start: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(0, 0, 0, 0.18);
+.stage-desktop-layout__gift-strip {
+    flex: 0 0 auto;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.14);
 }
 
-.stage-desktop-layout__sidebar .profile-gift-modal--strip {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-}
-
-.stage-desktop-layout__sidebar .profile-gift-modal--strip .profile-gift-modal__body {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-}
-
-.stage-desktop-layout__sidebar .profile-gift-modal--strip .profile-gift-modal__grid {
-    flex-wrap: wrap;
-    overflow-x: visible;
-}
-
-.stage-desktop-layout__sidebar .profile-gift-modal--strip .profile-gift-modal__card {
-    flex: 0 0 calc(50% - 4px);
-    width: auto;
+.stage-desktop-layout__gift-strip .profile-gift-modal--strip .profile-gift-modal__grid {
+    flex-wrap: nowrap;
+    overflow-x: auto;
 }
 
 @media (max-width: 1280px) {
     .stage-desktop-layout__stage-pane {
         flex-basis: 300px;
         width: 300px;
-    }
-
-    .stage-desktop-layout__sidebar {
-        flex-basis: 260px;
-        width: 260px;
     }
 }
 
