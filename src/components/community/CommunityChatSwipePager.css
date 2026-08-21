@@ -1208,7 +1208,10 @@
     bottom: 0;
     width: auto;
     max-width: none;
-    height: auto;
+    /* Native fallback so the shell shrinks above the on-screen keyboard even before/without the
+       JS visualViewport lock (chatVisualViewportLock.js) taking effect on a given browser —
+       the JS lock's inline height (set once it engages) still overrides this via specificity. */
+    height: 100dvh;
     max-height: none;
     min-height: 0;
     margin: 0;
