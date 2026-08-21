@@ -12,7 +12,7 @@ import './StageDesktopLayout.css';
  * removed per feedback so the banner/chat get the space instead). Community
  * business chat keeps the single-column CommunityFullChatView unchanged.
  */
-export default function StageDesktopLayout({ room }) {
+export default function StageDesktopLayout({ room, onGiftParticipant }) {
   const { messages, pendingReplyTo, isHost, unpinHostMessage } = room;
   const showTop = room.bannerVisible !== false;
   const hostMessageOwnerId = room.hostId || room.partnerId;
@@ -39,6 +39,7 @@ export default function StageDesktopLayout({ room }) {
               onMuteMember={room.muteMemberInChat}
               onKickMember={room.kickMemberFromStage}
               onBlockMember={room.blockMemberFromStages}
+              onGift={onGiftParticipant}
               layout="grid"
             />
           </div>

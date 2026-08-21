@@ -593,9 +593,9 @@ export default function StageChatRoom() {
         ) : null}
 
         {isDesktopShell ? (
-          <StageDesktopLayout room={roomWithGifts} />
+          <StageDesktopLayout room={roomWithGifts} onGiftParticipant={openGiftPicker} />
         ) : (
-          <CommunityChatSwipePager room={roomWithGifts} />
+          <CommunityChatSwipePager room={roomWithGifts} onGiftParticipant={openGiftPicker} />
         )}
         {giftModal}
       </div>

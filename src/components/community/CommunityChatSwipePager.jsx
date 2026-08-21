@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { FaUsers } from 'react-icons/fa';
 import CommunityParticipantsView from './CommunityParticipantsView';
 import CommunityCenterStageView from './CommunityCenterStageView';
 import CommunityFullChatView from './CommunityFullChatView';
@@ -14,13 +16,15 @@ const PAGES = [
   { id: 'full-chat', label: 'Guest chat', background: '#1a1a2e' },
 ];
 
+const PARTICIPANTS_PAGE_INDEX = 0;
+
 function scrollToPage(container, index, behavior = 'auto') {
   if (!container) return;
   const width = container.clientWidth;
   container.scrollTo({ left: width * index, top: 0, behavior });
 }
 
-function renderPagePanel(page, room, pageIndex, activePageIndex) {
+function renderPagePanel(page, room, pageIndex, activePageIndex, onGiftParticipant) {
   if (!room) return null;
 
   const isMediaPage = page.id === 'center-stage' || page.id === 'full-chat';
@@ -37,6 +41,7 @@ function renderPagePanel(page, room, pageIndex, activePageIndex) {
         onMuteMember={room.muteMemberInChat}
         onKickMember={room.kickMemberFromStage}
         onBlockMember={room.blockMemberFromStages}
+        onGift={onGiftParticipant}
       />
     );
   }
@@ -59,10 +64,16 @@ function renderPagePanel(page, room, pageIndex, activePageIndex) {
 export default function CommunityChatSwipePager({
   room,
   defaultPage = COMMUNITY_CHAT_DEFAULT_PAGE,
+  onGiftParticipant,
 }) {
+  const { t } = useTranslation();
   const pagerRef = useRef(null);
   const activeIndexRef = useRef(defaultPage);
   const [activePageIndex, setActivePageIndex] = useState(defaultPage);
+
+  const goToParticipants = useCallback(() => {
+    scrollToPage(pagerRef.current, PARTICIPANTS_PAGE_INDEX, 'smooth');
+  }, []);
 
   const syncActiveIndex = useCallback(() => {
     const el = pagerRef.current;
@@ -105,11 +116,23 @@ export default function CommunityChatSwipePager({
               aria-label={page.label}
               style={page.id === 'center-stage' || page.id === 'full-chat' ? undefined : { background: page.background }}
             >
-              {renderPagePanel(page, room, pageIndex, activePageIndex)}
+              {renderPagePanel(page, room, pageIndex, activePageIndex, onGiftParticipant)}
             </section>
           ))}
         </div>
       </div>
+
+      {activePageIndex !== PARTICIPANTS_PAGE_INDEX ? (
+        <button
+          type="button"
+          className="community-chat-swipe__members-btn"
+          onClick={goToParticipants}
+          title={t('community_participants_title', 'Online Participants')}
+          aria-label={t('community_participants_title', 'Online Participants')}
+        >
+          <FaUsers aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 }

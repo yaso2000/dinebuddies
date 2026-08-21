@@ -1,11 +1,37 @@
 @import './community-chat-theme.css';
 
 .community-chat-swipe {
+    position: relative;
     display: flex;
     flex: 1;
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
+}
+
+.community-chat-swipe__members-btn {
+    position: absolute;
+    top: 0.75rem;
+    inset-inline-end: 0.75rem;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(10, 16, 30, 0.72);
+    color: #fff;
+    font-size: 1.05rem;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+}
+
+.community-chat-swipe__members-btn:hover {
+    background: rgba(10, 16, 30, 0.9);
 }
 
 .community-chat-swipe__viewport {
@@ -4374,6 +4400,65 @@ body:has(.community-chat-fullscreen) {
 .stage-participant-preview-card__status {
     font-size: 0.7rem;
     color: rgba(255, 255, 255, 0.55);
+}
+
+/* ── Shared follow / wave / gift action row (preview card + mobile members list) ── */
+
+.stage-participant-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.stage-participant-preview-card__actions {
+    margin-top: 0.35rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    width: 100%;
+}
+
+.stage-participant-actions__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.stage-participant-actions__btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.14);
+    transform: translateY(-1px);
+}
+
+.stage-participant-actions__btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.stage-participant-actions__btn--active {
+    background: color-mix(in srgb, var(--primary, #e86e2e) 30%, transparent);
+    border-color: color-mix(in srgb, var(--primary, #e86e2e) 55%, transparent);
+    color: #fff;
+}
+
+/* Inline in the mobile members list row */
+.community-participants__row .stage-participant-actions {
+    margin-inline-start: auto;
+    flex-shrink: 0;
+}
+
+.community-participants__row .stage-participant-actions__btn {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.85rem;
 }
 
 .stage-host-guest-mod-menu__title {

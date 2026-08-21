@@ -5,6 +5,7 @@ import UserAvatar from '../UserAvatar';
 import { useLongPress } from './useLongPress';
 import StageHostGuestModerationMenu from './StageHostGuestModerationMenu';
 import StageParticipantPreviewCard from './StageParticipantPreviewCard';
+import StageParticipantActions from './StageParticipantActions';
 
 function ParticipantRow({
   member,
@@ -12,6 +13,7 @@ function ParticipantRow({
   canModerate,
   onModerate,
   onPreview,
+  onGift,
   mutedLabel,
   layout = 'list',
 }) {
@@ -109,6 +111,7 @@ function ParticipantRow({
           </AppText>
         ) : null}
       </div>
+      {!isHostMember ? <StageParticipantActions member={member} onGift={onGift} /> : null}
     </li>
   );
 }
@@ -122,6 +125,7 @@ export default function CommunityParticipantsView({
   onMuteMember,
   onKickMember,
   onBlockMember,
+  onGift,
   layout = 'list',
 }) {
   const { t } = useTranslation();
@@ -210,6 +214,7 @@ export default function CommunityParticipantsView({
               canModerate={canModerate}
               onModerate={openMenu}
               onPreview={isGrid ? openPreview : undefined}
+              onGift={onGift}
               mutedLabel={t('member_muted_badge', 'Muted')}
               layout={layout}
             />
@@ -262,6 +267,7 @@ export default function CommunityParticipantsView({
           anchorRect={preview?.rect}
           member={preview?.member}
           isHost={Boolean(preview?.member?.id === partnerId || preview?.member?.isHost)}
+          onGift={onGift}
           onClose={closePreview}
         />
       ) : null}

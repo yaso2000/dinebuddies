@@ -1,15 +1,17 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AppText } from '../base';
 import UserAvatar from '../UserAvatar';
 import { getAppTextDirection } from '../../utils/bidiText';
+import StageParticipantActions from './StageParticipantActions';
 
 /**
  * Small floating identity card for a Stage participant — shown on click when
- * the avatar grid hides names (desktop). Not a menu: just who this person is.
+ * the avatar grid hides names (desktop). Follow / wave / gift actions are
+ * shared with the mobile members list via StageParticipantActions.
  */
-export default function StageParticipantPreviewCard({ open, anchorRect, member, isHost, onClose }) {
+export default function StageParticipantPreviewCard({ open, anchorRect, member, isHost, onGift, onClose }) {
     const { t, i18n } = useTranslation();
     const contentDir = getAppTextDirection(i18n.language);
     const cardRef = useRef(null);
@@ -32,16 +34,20 @@ export default function StageParticipantPreviewCard({ open, anchorRect, member, 
         };
     }, [open, onClose]);
 
-    if (!open || !member || typeof document === 'undefined') return null;
+    const position = useMemo(() => {
+        if (typeof window === 'undefined') return { top: 0, left: 0 };
+        const top = Math.max(
+            8,
+            Math.min((anchorRect?.bottom ?? window.innerHeight / 2) + 8, window.innerHeight - 190)
+        );
+        const left = Math.min(
+            window.innerWidth - 220,
+            Math.max(8, (anchorRect?.left ?? 16) + (anchorRect?.width || 0) / 2 - 100)
+        );
+        return { top, left };
+    }, [anchorRect]);
 
-    const top = Math.max(
-        8,
-        Math.min((anchorRect?.bottom ?? window.innerHeight / 2) + 8, window.innerHeight - 140)
-    );
-    const left = Math.min(
-        window.innerWidth - 220,
-        Math.max(8, (anchorRect?.left ?? 16) + (anchorRect?.width || 0) / 2 - 100)
-    );
+    if (!open || !member || typeof document === 'undefined') return null;
 
     const name = member.displayName || t('member', 'Member');
 
@@ -49,7 +55,7 @@ export default function StageParticipantPreviewCard({ open, anchorRect, member, 
         <div
             ref={cardRef}
             className="stage-participant-preview-card"
-            style={{ top, left }}
+            style={position}
             dir={contentDir}
             role="dialog"
             aria-label={name}
@@ -73,6 +79,15 @@ export default function StageParticipantPreviewCard({ open, anchorRect, member, 
                     {t('online', 'Online')}
                 </AppText>
             ) : null}
+
+            <StageParticipantActions
+                member={member}
+                onGift={(m) => {
+                    onGift?.(m);
+                    onClose?.();
+                }}
+                className="stage-participant-preview-card__actions"
+            />
         </div>,
         document.body
     );
