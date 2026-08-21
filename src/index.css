@@ -868,7 +868,7 @@ body {
     overflow: hidden !important;
   }
 
-  .community-chat-root.chat-room-container:not(.community-chat-fullscreen) {
+  .community-chat-root.chat-room-container:not(.community-chat-fullscreen):not(.stage-chat-root) {
     position: relative !important;
     left: auto !important;
     right: auto !important;
@@ -882,6 +882,28 @@ body {
     max-height: 100% !important;
     min-height: 0 !important;
     margin-inline: auto !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Stage rooms opt out of the phone-width simulation above — full-width 3-pane
+     desktop layout (StageDesktopLayout) instead. */
+  .community-chat-root.chat-room-container.stage-chat-root:not(.community-chat-fullscreen) {
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    z-index: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    margin-inline: 0 !important;
     padding: 0 !important;
     display: flex !important;
     flex-direction: column !important;
