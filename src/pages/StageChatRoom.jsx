@@ -29,6 +29,67 @@ import { AppText } from '../components/base';
 import { APP_HOME_PATH } from '../utils/appRouteShell';
 import app from '../firebase/config';
 
+/** TEMPORARY diagnostic badge — remove once the Android keyboard/composer bug is confirmed fixed. */
+function KeyboardDebugBadge({ containerRef }) {
+  const [info, setInfo] = useState('');
+
+  useEffect(() => {
+    const update = () => {
+      const vv = window.visualViewport;
+      const el = containerRef.current;
+      const phoneLikeW = window.matchMedia('(max-width: 1023px)').matches;
+      const phoneLikeExcl = window.matchMedia('(min-width: 600px) and (min-height: 600px)').matches;
+      const active = document.activeElement;
+      const lines = [
+        `innerW=${window.innerWidth} innerH=${window.innerHeight}`,
+        vv ? `vvW=${Math.round(vv.width)} vvH=${Math.round(vv.height)} vvTop=${Math.round(vv.offsetTop)}` : 'no visualViewport',
+        `phoneW<1023=${phoneLikeW} exclW600H600=${phoneLikeExcl}`,
+        `hasVVShellClass=${el ? el.classList.contains('chat-vv-shell') : 'no-el'}`,
+        `elInlineHeight=${el ? el.style.height || '(none)' : 'no-el'}`,
+        `activeEl=${active ? `${active.tagName}.${active.className}`.slice(0, 60) : 'none'}`,
+        `dataKbOpen=${document.documentElement.getAttribute('data-chat-keyboard-open')}`,
+        `ua=${navigator.userAgent.slice(0, 40)}`,
+      ];
+      setInfo(lines.join('\n'));
+    };
+    update();
+    const iv = setInterval(update, 500);
+    window.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('resize', update);
+    document.addEventListener('focusin', update);
+    document.addEventListener('focusout', update);
+    return () => {
+      clearInterval(iv);
+      window.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('resize', update);
+      document.removeEventListener('focusin', update);
+      document.removeEventListener('focusout', update);
+    };
+  }, [containerRef]);
+
+  return (
+    <pre
+      style={{
+        position: 'fixed',
+        top: 0,
+        insetInlineStart: 0,
+        zIndex: 999999,
+        margin: 0,
+        padding: '6px 8px',
+        fontSize: '9px',
+        lineHeight: 1.3,
+        background: 'rgba(0,0,0,0.85)',
+        color: '#0f0',
+        whiteSpace: 'pre-wrap',
+        maxWidth: '100vw',
+        pointerEvents: 'none',
+      }}
+    >
+      {info}
+    </pre>
+  );
+}
+
 export default function StageChatRoom() {
   const { t } = useTranslation();
   const { stageId } = useParams();
@@ -505,6 +566,7 @@ export default function StageChatRoom() {
         {...guestFrameShellAttrs}
         style={shellInlineStyle}
       >
+        {useMobileFullscreen ? <KeyboardDebugBadge containerRef={containerRef} /> : null}
         <header className="chat-header">
           <button
             type="button"
