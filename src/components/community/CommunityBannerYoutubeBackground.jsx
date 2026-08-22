@@ -86,6 +86,13 @@ export default function CommunityBannerYoutubeBackground({
     const [posterIndex, setPosterIndex] = useState(0);
     const posterUrl = posterCandidates[posterIndex] || '';
 
+    // Stagger the actual embed request per viewer — several devices opening
+    // the same banner within the same instant otherwise all hit YouTube for
+    // the identical video at once, which can trip its own anti-abuse
+    // throttling on that video (surfaced as a confusing "too many devices
+    // streaming" message, unrelated to any real account/device limit).
+    const [activeSrc, setActiveSrc] = useState('');
+
     // Sync anchor read once per mount (mediaKey change) so it seeds the
     // initial `start` param — later anchor updates re-seek via postMessage
     // instead of rebuilding `embedSrc` (never rewrite `src` after mount; see
@@ -137,6 +144,13 @@ export default function CommunityBannerYoutubeBackground({
         setRevealed(false);
         setErrored(false);
     }, [mediaKey]);
+
+    useEffect(() => {
+        setActiveSrc('');
+        const jitterMs = preview ? 0 : Math.floor(Math.random() * 1200);
+        const jitterTimer = window.setTimeout(() => setActiveSrc(embedSrc), jitterMs);
+        return () => window.clearTimeout(jitterTimer);
+    }, [embedSrc, preview]);
 
     useEffect(() => {
         const revealTimer = window.setTimeout(() => setRevealed(true), 2200);
@@ -209,19 +223,21 @@ export default function CommunityBannerYoutubeBackground({
             ) : (
                 <div className="community-main-chat__banner-youtube-poster community-main-chat__banner-youtube-poster--fallback" />
             )}
-            <iframe
-                ref={assignIframeRef}
-                key={mediaKey}
-                src={embedSrc}
-                title="YouTube banner"
-                className="community-main-chat__banner-youtube-frame"
-                allow={`${YOUTUBE_EMBED_ALLOW}; fullscreen`}
-                allowFullScreen
-                playsInline
-                loading="eager"
-                onLoad={handleIframeLoad}
-                style={playbackEnabled || preview ? undefined : { visibility: 'hidden' }}
-            />
+            {activeSrc ? (
+                <iframe
+                    ref={assignIframeRef}
+                    key={mediaKey}
+                    src={activeSrc}
+                    title="YouTube banner"
+                    className="community-main-chat__banner-youtube-frame"
+                    allow={`${YOUTUBE_EMBED_ALLOW}; fullscreen`}
+                    allowFullScreen
+                    playsInline
+                    loading="eager"
+                    onLoad={handleIframeLoad}
+                    style={playbackEnabled || preview ? undefined : { visibility: 'hidden' }}
+                />
+            ) : null}
             <div className="community-main-chat__banner-youtube-scrim" aria-hidden />
         </div>
     );
