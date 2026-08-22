@@ -421,8 +421,12 @@ export default function CommunityHostBannerComposerTools({
   const youtubePreviewReady = Boolean(youtubePreviewId || youtubePreviewPlaylistId);
 
   const [twitchDraft, setTwitchDraft] = useState('');
-  const twitchPreviewChannel =
-    parseTwitchChannelInput(twitchDraft) || sanitizeTwitchChannel(banner.twitchChannel);
+  // Strict parse of what's currently typed — no fallback, so an edited-but-invalid
+  // draft can never masquerade as "ready" just because a channel was already saved.
+  const twitchDraftChannel = parseTwitchChannelInput(twitchDraft);
+  // Preview-only: falls back to the saved channel so opening the modal shows
+  // something immediately, before the host has typed anything.
+  const twitchPreviewChannel = twitchDraftChannel || sanitizeTwitchChannel(banner.twitchChannel);
   const hasTwitchBanner = Boolean(banner.twitchChannel);
 
   const isTransparentBg = isBannerBgTransparent(bgColorDraft);
@@ -744,9 +748,19 @@ export default function CommunityHostBannerComposerTools({
   };
 
   const publishTwitch = async () => {
-    const channel = parseTwitchChannelInput(twitchDraft);
-    if (!channel) return;
-    const ok = await updateBanner({ twitchChannel: channel });
+    if (!twitchDraftChannel) {
+      if (twitchDraft.trim()) {
+        showToast(
+          t(
+            'community_banner_twitch_invalid',
+            "That doesn't look like a valid Twitch channel name or link."
+          ),
+          'error'
+        );
+      }
+      return;
+    }
+    const ok = await updateBanner({ twitchChannel: twitchDraftChannel });
     if (ok) closeModal();
   };
 
@@ -1203,7 +1217,7 @@ export default function CommunityHostBannerComposerTools({
         onClose={closeModal}
         footer={modalFooter(
           t('community_banner_publish_twitch', 'Apply channel'),
-          !twitchPreviewChannel,
+          !twitchDraftChannel,
           publishTwitch,
           hasTwitchBanner,
           t('community_banner_delete_twitch', 'Remove channel'),
