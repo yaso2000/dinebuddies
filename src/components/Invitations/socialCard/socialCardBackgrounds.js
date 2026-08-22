@@ -339,10 +339,8 @@ export function getSocialInvitationHeroCoverFromInvitation(invitation) {
     if (type === 'Private' && String(invitation.inviteCategory || '').toLowerCase() === 'private') {
         return null;
     }
-    const vid = invitation.customVideo;
-    if (vid) {
-        return { src: vid, mediaType: 'video', poster: invitation.videoThumbnail || null };
-    }
+    // Uploaded video covers are no longer supported — an existing video cover is hidden,
+    // falling through to its poster frame / image / template instead of playing it.
     const img =
         invitation.customImage ||
         invitation.image ||

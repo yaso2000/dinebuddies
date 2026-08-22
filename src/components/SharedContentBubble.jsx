@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaUtensils, FaUserTie, FaImage, FaPlay, FaYoutube, FaTiktok, FaInstagram } from 'react-icons/fa';
+import { FaUtensils, FaUserTie, FaImage, FaYoutube, FaTiktok, FaInstagram } from 'react-icons/fa';
 import { AppText } from "./base";
 import { useExternalLinkGuard } from '../context/ExternalLinkGuardContext';
 
@@ -60,10 +60,8 @@ const SharedContentBubble = ({ data }) => {
             {data.image ?
       <div style={{ width: '100%', height: '160px', background: '#000', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {data.mediaType === 'video' ?
-        <>
-                            <video src={data.image} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} />
-                            <FaPlay size={30} color="white" style={{ position: 'absolute' }} />
-                        </> :
+        // Uploaded video is no longer supported — show a neutral placeholder instead of playing it.
+        <div style={{ width: '100%', height: '100%', background: '#000' }} /> :
         data.mediaType === 'youtube' ?
         <>
                             <img src={`https://img.youtube.com/vi/${data.image}/hqdefault.jpg`} alt="YouTube" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} />

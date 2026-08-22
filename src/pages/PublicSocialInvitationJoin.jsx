@@ -311,17 +311,17 @@ export default function PublicSocialInvitationJoin() {
 
     if (!preview) return null;
 
+    // Uploaded video covers are no longer supported — always resolve as an image,
+    // using the poster/thumbnail as a fallback for legacy video invitations.
     return getPrivateHeroCoverFromMediaData({
 
-      type: preview.mediaType === 'video' ? 'video' : 'image',
+      type: 'image',
 
       preview: preview.customImage || preview.videoThumbnail,
 
-      url: preview.customImage,
+      url: preview.customImage || preview.videoThumbnail,
 
-      publishedUrl: preview.customImage,
-
-      videoThumbnail: preview.videoThumbnail
+      publishedUrl: preview.customImage
 
     });
 

@@ -31,7 +31,6 @@ import {
   INVITATION_CARD_TITLE_MAX } from
 '../constants/invitationCardLimits';
 import PrivateCardPreviewStage from '../components/Invitations/privateCard/PrivateCardPreviewStage';
-import PrivateCoverCameraPanel from '../components/Invitations/privateCard/PrivateCoverCameraPanel';
 import {
   DEFAULT_PRIVATE_TEXT_BACKDROP_TONE,
   getDatingCardTextBackdropFromInvitation } from
@@ -195,9 +194,6 @@ const CreatePrivateInvitation = () => {
     null
   );
   const [datingCoverTab, setDatingCoverTab] = useState('upload');
-  /** Bumps when user selects the Camera cover tab (or taps it again) to open the recorder. */
-  const [cameraOpenNonce, setCameraOpenNonce] = useState(0);
-  const pendingCameraStreamRef = useRef(null);
   const [aiCoverSheetOpen, setAiCoverSheetOpen] = useState(false);
   const [aiCoverCommittingId, setAiCoverCommittingId] = useState(null);
   /** Dating card: show personal message + profile on the preview (default on). */
@@ -234,7 +230,7 @@ const CreatePrivateInvitation = () => {
   /** Isolated cover editor state per personal invite category (dating / friendship / social). */
   const coverByCategoryRef = useRef(null);
   const mediaDataRef = useRef(null);
-  const datingCoverTabRef = useRef(editInvitation ? 'camera' : 'template');
+  const datingCoverTabRef = useRef('template');
   const coverUploadInputRef = useRef(null);
   const datingAiFieldsRef = useRef(null);
   const [datingAiFieldsPulse, setDatingAiFieldsPulse] = useState(false);
@@ -368,10 +364,6 @@ const CreatePrivateInvitation = () => {
         Object.values(bucket).forEach((slice) => revokeAllPrivateCoverStash(slice.stash || []));
       }
       revokeAllPrivateCoverStash(coverMediaStashRef.current);
-      if (pendingCameraStreamRef.current) {
-        pendingCameraStreamRef.current.getTracks().forEach((track) => track.stop());
-        pendingCameraStreamRef.current = null;
-      }
     };
   }, []);
 
@@ -528,26 +520,10 @@ const CreatePrivateInvitation = () => {
       const backdrop = getDatingCardTextBackdropFromInvitation(editInvitation);
       setDatingCardTextBackdropTone(backdrop.tone);
 
-      const videoUrl = editInvitation.customVideo;
+      // Video covers are no longer supported — an existing video cover is hidden
+      // and treated as if absent, falling through to image/template hydration.
       const imgUrl = editInvitation.customImage || editInvitation.image;
-      if (videoUrl) {
-        const m = {
-          source: 'custom_video',
-          type: 'video',
-          preview: videoUrl,
-          file: null,
-          videoThumbnail: editInvitation.videoThumbnail
-        };
-        const videoEntry = { id: createPrivateCoverStashId(), kind: 'camera', media: m };
-        initialCoverStash = [videoEntry];
-        initialCoverTab = 'camera';
-        initialCoverMedia = m;
-        initialCoverDrafts = { template: null, upload: null, camera: m, ai: null };
-        setCoverMediaStash(initialCoverStash);
-        setDatingCoverTab(initialCoverTab);
-        setMediaData(initialCoverMedia);
-        datingCoverDraftsRef.current = initialCoverDrafts;
-      } else if (imgUrl) {
+      if (imgUrl) {
         const templateId =
         parseDatingCoverTemplateIdFromUrl(imgUrl) || editInvitation.cardBackgroundId;
         if (templateId && isPrivateBackgroundIdForCategory(templateId, editCategory)) {
@@ -934,52 +910,6 @@ const CreatePrivateInvitation = () => {
     }
   };
 
-  const handleDatingCoverCameraTabClick = async () => {
-    if (datingCoverTab !== 'camera') {
-      handleDatingCoverTab('camera');
-    }
-    if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'camera')) {
-      toastCoverStashLimit('camera');
-      return;
-    }
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      showToast(
-        t('camera_error_generic', 'Could not open the camera. Check permissions and try again.'),
-        'error'
-      );
-      return;
-    }
-
-    try {
-      if (pendingCameraStreamRef.current) {
-        pendingCameraStreamRef.current.getTracks().forEach((track) => track.stop());
-        pendingCameraStreamRef.current = null;
-      }
-      pendingCameraStreamRef.current = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
-        audio: true
-      });
-      setCameraOpenNonce((n) => n + 1);
-    } catch (err) {
-      pendingCameraStreamRef.current = null;
-      console.error('[CreatePrivateInvitation] camera permission', err);
-      const denied =
-        err?.name === 'NotAllowedError' ||
-        err?.name === 'PermissionDeniedError' ||
-        String(err?.message || '').toLowerCase().includes('permission');
-      showToast(
-        denied ?
-          t(
-            'camera_error_permission',
-            'Camera access was blocked. Allow camera in browser settings, then try again.'
-          ) :
-          t('camera_error_generic', 'Could not open the camera. Check permissions and try again.'),
-        'error'
-      );
-    }
-  };
-
   const stashCoverMedia = (kind, media) => {
     if (isCoverStashKindAtLimit(coverMediaStashRef.current, kind)) {
       toastCoverStashLimit(kind);
@@ -988,17 +918,6 @@ const CreatePrivateInvitation = () => {
     const entry = { id: createPrivateCoverStashId(), kind, media };
     setCoverMediaStash((prev) => [...prev, entry]);
     return entry;
-  };
-
-  const handleCameraCoverMedia = (media) => {
-    datingCoverDraftsRef.current[datingCoverTab] = mediaDataRef.current;
-    if (!stashCoverMedia('camera', media)) {
-      revokePrivateCoverMedia(media);
-      return;
-    }
-    setDatingCoverTab('camera');
-    setMediaData(media);
-    datingCoverDraftsRef.current.camera = media;
   };
 
   const handleDatingCoverUploadPick = (e) => {
@@ -1594,7 +1513,6 @@ const CreatePrivateInvitation = () => {
 
   const datingCoverTabLabel = useMemo(() => {
     const labels = {
-      camera: t('social_cover_tab_camera_record', { defaultValue: 'Record video' }),
       upload: t('social_cover_tab_upload_device', { defaultValue: 'Upload from device' }),
       template: t('private_cover_tab_template', { defaultValue: 'Template' }),
       ai: t('social_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' })
@@ -1876,13 +1794,6 @@ const CreatePrivateInvitation = () => {
                                 <FaMagic aria-hidden />
                             </button>
                             </div>
-                        </div>
-
-                        <div style={{ display: datingCoverTab === 'camera' ? 'block' : 'none' }}>
-                            <PrivateCoverCameraPanel
-              onMediaSelect={handleCameraCoverMedia}
-              openNonce={cameraOpenNonce}
-              preOpenedStreamRef={pendingCameraStreamRef} />
                         </div>
 
                         <SocialInvitationAiCoverPanel

@@ -245,12 +245,13 @@ const InvitationPreview = () => {
                 {/* Media (Image or Video) */}
                 {(() => {
           // Determine media to display
+          // Uploaded video invitations are no longer supported — fall back to the
+          // poster/thumbnail image instead of playing an existing video.
           let mediaUrl = null;
-          let isVideo = false;
+          const isVideo = false;
 
-          if (invitation.mediaType === 'video' && invitation.customVideo) {
-            mediaUrl = invitation.customVideo;
-            isVideo = true;
+          if (invitation.mediaType === 'video' && invitation.videoThumbnail) {
+            mediaUrl = invitation.videoThumbnail;
           } else if (invitation.customImage) {
             mediaUrl = invitation.customImage;
           } else if (invitation.restaurantImage) {

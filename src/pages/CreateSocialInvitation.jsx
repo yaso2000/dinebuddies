@@ -69,7 +69,6 @@ import {
   isPrivateCardGradientBackgroundId } from
 '../components/Invitations/socialCard/socialCardGradientBackgrounds';
 import { getPrivateHeroCoverFromMediaData } from '../components/Invitations/privateCard/privateCardBackgrounds';
-import PrivateCoverCameraPanel from '../components/Invitations/privateCard/PrivateCoverCameraPanel';
 import { getTotalDineCredits, SOCIAL_INVITATION_PUBLISH_CREDITS, getInvitationDailyFreeStatus } from '../utils/privateInvitationCredits';
 import {
   createPrivateCoverStashId,
@@ -160,7 +159,6 @@ const CreateSocialInvitation = () => {
     null
   );
   const [privateCoverTab, setPrivateCoverTab] = useState('upload');
-  const [cameraOpenNonce, setCameraOpenNonce] = useState(0);
   const [aiCoverSheetOpen, setAiCoverSheetOpen] = useState(false);
   const [aiCoverCommittingId, setAiCoverCommittingId] = useState(null);
   const [socialCardShowHostAndMessage, setPrivateCardShowHostAndMessage] = useState(true);
@@ -251,7 +249,6 @@ const CreateSocialInvitation = () => {
 
   const privateCoverTabLabel = useMemo(() => {
     const labels = {
-      camera: t('social_cover_tab_camera_record', { defaultValue: 'Record video' }),
       upload: t('social_cover_tab_upload_device', { defaultValue: 'Upload from device' }),
       template: t('private_cover_tab_template', { defaultValue: 'Template' }),
       ai: t('social_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' })
@@ -294,22 +291,10 @@ const CreateSocialInvitation = () => {
       const backdrop = getPrivateCardTextBackdropFromInvitation(editInvitation);
       setPrivateCardTextBackdropTone(backdrop.tone);
 
-      const videoUrl = editInvitation.customVideo;
+      // Video covers are no longer supported — an existing video cover is hidden
+      // and treated as if absent, falling through to image/template hydration.
       const imgUrl = editInvitation.customImage || editInvitation.image;
-      if (videoUrl) {
-        const m = {
-          source: 'custom_video',
-          type: 'video',
-          preview: videoUrl,
-          file: null,
-          videoThumbnail: editInvitation.videoThumbnail
-        };
-        const videoEntry = { id: createPrivateCoverStashId(), kind: 'camera', media: m };
-        setCoverMediaStash([videoEntry]);
-        setPrivateCoverTab('camera');
-        setMediaData(m);
-        privateCoverDraftsRef.current = { template: null, upload: null, camera: m };
-      } else if (imgUrl) {
+      if (imgUrl) {
         const cat = resolveOccasionCategoryId(editInvitation.occasionType);
         const parsedBg = parsePrivateInvitationCardBackgroundFromUrl(imgUrl);
         if (parsedBg && parsedBg.categoryId === cat) {
@@ -640,20 +625,6 @@ const CreateSocialInvitation = () => {
     }
   };
 
-  /** Switch to Camera tab and open recorder (single tap). */
-  const handlePrivateCoverCameraTabClick = () => {
-    if (privateCoverTab === 'camera') {
-      if (isCoverStashKindAtLimit(coverMediaStashRef.current, 'camera')) {
-        toastCoverStashLimit('camera');
-        return;
-      }
-      setCameraOpenNonce((n) => n + 1);
-    } else {
-      handlePrivateCoverTab('camera');
-      setCameraOpenNonce((n) => n + 1);
-    }
-  };
-
   const stashCoverMedia = (kind, media) => {
     if (isCoverStashKindAtLimit(coverMediaStashRef.current, kind)) {
       toastCoverStashLimit(kind);
@@ -662,17 +633,6 @@ const CreateSocialInvitation = () => {
     const entry = { id: createPrivateCoverStashId(), kind, media };
     setCoverMediaStash((prev) => [...prev, entry]);
     return entry;
-  };
-
-  const handleCameraCoverMedia = (media) => {
-    privateCoverDraftsRef.current[privateCoverTab] = mediaDataRef.current;
-    if (!stashCoverMedia('camera', media)) {
-      revokePrivateCoverMedia(media);
-      return;
-    }
-    setPrivateCoverTab('camera');
-    setMediaData(media);
-    privateCoverDraftsRef.current.camera = media;
   };
 
   const handlePrivateCoverUploadPick = (e) => {
@@ -1482,10 +1442,6 @@ const CreateSocialInvitation = () => {
                                 </button>
                             </div>
                         </div>
-
-                        {privateCoverTab === 'camera' &&
-            <PrivateCoverCameraPanel onMediaSelect={handleCameraCoverMedia} openNonce={cameraOpenNonce} />
-            }
 
                         <SocialInvitationAiCoverPanel
               open={aiCoverSheetOpen}

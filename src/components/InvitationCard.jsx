@@ -208,13 +208,13 @@ const InvitationCard = ({ invitation }) => {
     distanceLine: distanceMeta || ''
   };
 
-  const isVideo = mediaType === 'video' && customVideo;
+  // Uploaded video invitations are no longer supported — always render the poster/fallback
+  // image instead of a <video>, even for invitations that still have a video in the database.
+  const isVideo = false;
 
   const storyData = {
     title,
-    image:
-    pickSafeDisplayImageUrl(videoThumbnail, customImage, restaurantImage, image) || (
-    !isVideo ? INVITATION_CARD_IMAGE_FALLBACK : undefined),
+    image: pickSafeDisplayImageUrl(videoThumbnail, customImage, restaurantImage, image) || INVITATION_CARD_IMAGE_FALLBACK,
     description,
     date,
     time,
@@ -225,7 +225,7 @@ const InvitationCard = ({ invitation }) => {
     shareUrl,
     shareLayout: cardVariant,
     shareMeta,
-    videoDurationLabel: isVideo ? videoDurationLabel : ''
+    videoDurationLabel: ''
   };
 
   const handleShare = (e) => {
@@ -249,12 +249,9 @@ const InvitationCard = ({ invitation }) => {
     navigate('/posts-feed', { state: { attachedInvitation: attachment, scrollToComposer: true } });
   };
 
-  // Determine media to display (non–selfie-video cards only — video invites use split layout + `<video>`)
   const cardMedia = {
-    type: isVideo ? 'video' : 'image',
-    url: isVideo ?
-    customVideo :
-    pickSafeDisplayImageUrl(customImage, restaurantImage, image) || INVITATION_CARD_IMAGE_FALLBACK
+    type: 'image',
+    url: pickSafeDisplayImageUrl(videoThumbnail, customImage, restaurantImage, image) || INVITATION_CARD_IMAGE_FALLBACK
   };
 
   const videoPosterUrl = pickSafeDisplayImageUrl(videoThumbnail, customImage, restaurantImage, image) || undefined;

@@ -3,12 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
-import { FaFont, FaPalette, FaTimes, FaPhotoVideo, FaSmile, FaCamera, FaPlus, FaTrash, FaVideo } from 'react-icons/fa';
+import { FaFont, FaPalette, FaTimes, FaPhotoVideo, FaSmile, FaCamera, FaPlus, FaTrash } from 'react-icons/fa';
 import UnifiedCamera from '../components/UnifiedCamera';
 
 import { uploadImage } from '../utils/imageUpload';
-import { uploadVideoWithThumbnail } from '../services/mediaService';
-import { validateVideo, getVideoDuration } from '../utils/videoCompression';
 import { ImageUploadZone } from '../services/imageUploadZones';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { db } from '../firebase/config';
@@ -44,12 +42,6 @@ const MOOD_EMOJIS = [
 '😄', '🥰', '🤤', '😋', '🥳', '🎂', '☕', '🍕', '🍔', '🥂', '🔥', '✨'];
 
 const MAX_REEL_ITEMS = 10;
-const MAX_VIDEO_DURATION_SEC = 15;
-const VIDEO_ALLOWED_FORMATS = [
-'video/mp4', 'video/quicktime', 'video/x-msvideo',
-// MediaRecorder output (in-app camera) commonly lands here, not in the gallery-file formats above.
-'video/webm', 'video/webm;codecs=h264', 'video/webm;codecs=vp8', 'video/webm;codecs=vp9'];
-
 const IMAGE_STORY_DURATION_MS = 5000;
 
 let localIdCounter = 0;
@@ -158,33 +150,14 @@ const CreateStory = () => {
     setActiveIndex((prev) => Math.max(0, prev >= index ? prev - (prev === index ? 0 : 1) : prev));
   };
 
-  const acceptVideoFile = async (file) => {
-    const validation = await validateVideo(file, {
-      maxDuration: MAX_VIDEO_DURATION_SEC,
-      allowedFormats: VIDEO_ALLOWED_FORMATS
-    });
-    if (!validation.valid) {
-      showToast(validation.error || t('invalid_video', 'This video cannot be used.'), 'error');
-      return;
-    }
-    let durationSec = MAX_VIDEO_DURATION_SEC;
-    try {
-      durationSec = Math.min(await getVideoDuration(file), MAX_VIDEO_DURATION_SEC);
-    } catch { /* keep cap as fallback */ }
-    updateActiveItem({
-      backgroundType: 'VIDEO',
-      mediaFile: file,
-      mediaPreview: URL.createObjectURL(file),
-      videoDurationSec: durationSec
-    });
-  };
-
   const handleFileSelect = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     if (file.type.startsWith('video/')) {
-      await acceptVideoFile(file);
+      // Video removed from Stories — reject even if a video somehow reaches this handler
+      // (the file input's accept attribute already narrows to image/*).
+      showToast(t('video_not_supported_stories', 'Video is not supported for stories — please choose a photo.'), 'error');
     } else if (file.type.startsWith('image/')) {
       updateActiveItem({
         backgroundType: 'IMAGE',
@@ -193,7 +166,7 @@ const CreateStory = () => {
         videoDurationSec: null
       });
     } else {
-      showToast(t('only_media_stories', 'Only photo or video files are supported for stories.'), 'error');
+      showToast(t('only_media_stories', 'Only photo files are supported for stories.'), 'error');
     }
     e.target.value = "";
   };
@@ -245,18 +218,7 @@ const CreateStory = () => {
         let finalType = 'text';
         let mediaDurationMs = IMAGE_STORY_DURATION_MS;
 
-        if (it.backgroundType === 'VIDEO' && it.mediaFile) {
-          const { videoUrl, thumbnailUrl } = await uploadVideoWithThumbnail(
-            it.mediaFile,
-            currentUser.uid,
-            'stories',
-            { enforceThumbnailModeration: true }
-          );
-          mediaUrl = videoUrl;
-          posterUrl = thumbnailUrl;
-          finalType = 'video';
-          mediaDurationMs = Math.round((it.videoDurationSec || MAX_VIDEO_DURATION_SEC) * 1000);
-        } else if (it.backgroundType === 'IMAGE' && it.mediaFile) {
+        if (it.backgroundType === 'IMAGE' && it.mediaFile) {
           const sanitizedName = it.mediaFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
           const path = `stories/${currentUser.uid}/${Date.now()}_${i}_${sanitizedName}`;
           mediaUrl = await uploadImage(it.mediaFile, path, null, {}, {
@@ -345,7 +307,6 @@ const CreateStory = () => {
             backgroundPosition: 'center'
           }}>
 
-                            {it.backgroundType === 'VIDEO' && <FaVideo className="story-item-thumb__video-icon" size={10} />}
                             {items.length > 1 &&
           <button
             type="button"
@@ -373,19 +334,6 @@ const CreateStory = () => {
           backgroundPosition: 'center',
           fontFamily: FONTS[activeItem.fontIndex].family
         }}>
-
-                {activeItem.backgroundType === 'VIDEO' && activeItem.mediaPreview &&
-        <video
-          key={activeItem.localId}
-          src={activeItem.mediaPreview}
-          className="story-video-preview"
-          style={{ position: 'absolute', inset: 0 }}
-          autoPlay
-          loop
-          muted
-          playsInline />
-
-        }
 
                 {showCaptionInput &&
         <AppTextInput as="textarea"
@@ -475,7 +423,7 @@ const CreateStory = () => {
                     </button>
         }
 
-                <button className={`tool-btn ${activeItem.backgroundType === 'IMAGE' || activeItem.backgroundType === 'VIDEO' ? 'active' : ''}`} onClick={() => fileInputRef.current?.click()} title={t('upload_media', 'Upload Photo/Video')}>
+                <button className={`tool-btn ${activeItem.backgroundType === 'IMAGE' ? 'active' : ''}`} onClick={() => fileInputRef.current?.click()} title={t('upload_media', 'Upload Photo')}>
                     <FaPhotoVideo />
                 </button>
 
@@ -503,33 +451,20 @@ const CreateStory = () => {
                 </button>
             </div>
 
-            {/* CAMERA OVERLAY — photo + video (max 15s) */}
+            {/* CAMERA OVERLAY — photo only (video removed from Stories) */}
             {showCamera &&
       <UnifiedCamera
         stopCamera={() => setShowCamera(false)}
         onMediaCaptured={async (file, previewUrl, type) => {
           setShowCamera(false);
-          if (type === 'video') {
-            let durationSec = MAX_VIDEO_DURATION_SEC;
-            try {
-              durationSec = Math.min(await getVideoDuration(file), MAX_VIDEO_DURATION_SEC);
-            } catch { /* keep cap as fallback */ }
-            updateActiveItem({
-              backgroundType: 'VIDEO',
-              mediaFile: file,
-              mediaPreview: previewUrl,
-              videoDurationSec: durationSec
-            });
-            return;
-          }
+          if (type === 'video') return; // defense in depth — mode="photo" should already prevent this
           updateActiveItem({ backgroundType: 'IMAGE', mediaFile: file, mediaPreview: previewUrl, videoDurationSec: null });
         }}
-        maxDuration={MAX_VIDEO_DURATION_SEC}
-        mode="both" />
+        mode="photo" />
 
       }
 
-            <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileSelect} />
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
         </div>);
 
 };

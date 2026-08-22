@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaVideo, FaStore, FaCamera, FaUpload, FaTrash } from 'react-icons/fa';
+import { FaStore, FaCamera, FaUpload, FaTrash } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import MediaUpload from '../Shared/MediaUpload';
 import UnifiedCamera from '../UnifiedCamera';
@@ -44,17 +44,12 @@ const MediaSelector = ({
   const [cameraSubMode, setCameraSubMode] = useState(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(initialData || null);
-  const [videoPersisting, setVideoPersisting] = useState(false);
   const [imagePersisting, setImagePersisting] = useState(false);
   const [imageRejectedPreview, setImageRejectedPreview] = useState(null);
 
   useEffect(() => {
     setSelectedMedia(parentMediaData ?? null);
   }, [parentMediaData]);
-
-  useEffect(() => {
-    if (parentMediaData?.type === 'video') setSource('camera');
-  }, [parentMediaData?.type]);
 
   /** When editing with an existing uploaded/custom image, show Upload tab + preview. */
   useEffect(() => {
@@ -103,22 +98,9 @@ const MediaSelector = ({
   isVenueSelection && selectedMedia?.type === 'image' && selectedMedia?.url === url;
 
   const handleCustomMedia = async (file, preview, type) => {
-    if (type === 'video') {
-      if (libraryVideo) return;
-      if (onPersistSelfieVideo) {
-        setVideoPersisting(true);
-        try {
-          await onPersistSelfieVideo(file);
-        } catch (e) {
-          console.error(e);
-        } finally {
-          setVideoPersisting(false);
-        }
-        return;
-      }
-    }
+    if (type === 'video') return;
     const mediaData = {
-      source: type === 'video' ? 'custom_video' : 'custom_image',
+      source: 'custom_image',
       file,
       preview,
       type
@@ -126,46 +108,6 @@ const MediaSelector = ({
     setSelectedMedia(mediaData);
     onMediaSelect(mediaData);
   };
-
-  const handleRecording = async (file, previewUrl) => {
-    if (libraryVideo) return;
-    if (onPersistSelfieVideo) {
-      setVideoPersisting(true);
-      try {
-        await onPersistSelfieVideo(file);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setVideoPersisting(false);
-      }
-      return;
-    }
-    const mediaData = {
-      source: 'custom_video',
-      file,
-      preview: previewUrl,
-      type: 'video'
-    };
-    setSelectedMedia(mediaData);
-    onMediaSelect(mediaData);
-  };
-
-  const selectLibraryVideo = () => {
-    if (!libraryVideo) return;
-    const data = {
-      source: 'custom_video',
-      type: 'video',
-      file: null,
-      preview: libraryVideo.videoUrl,
-      videoThumbnail: libraryVideo.thumbnailUrl,
-      fromLibrary: true
-    };
-    setSelectedMedia(data);
-    onMediaSelect(data);
-  };
-
-  const isLibraryTileSelected =
-  libraryVideo && selectedMedia?.type === 'video' && selectedMedia?.preview === libraryVideo.videoUrl;
 
   const handlePhotoCapture = async (file, previewUrl) => {
     if (onPersistImage) {
@@ -203,11 +145,8 @@ const MediaSelector = ({
   };
 
   const handleCameraMediaCaptured = (file, previewUrl, type) => {
-    if (type === 'video') {
-      handleRecording(file, previewUrl);
-    } else {
-      handlePhotoCapture(file, previewUrl);
-    }
+    if (type === 'video') return;
+    handlePhotoCapture(file, previewUrl);
     setCameraOpen(false);
   };
 
@@ -382,236 +321,20 @@ const MediaSelector = ({
         <div className="custom-video-container">
                         {simplified && cameraOpen &&
           <UnifiedCamera
-            mode="both"
-            maxDuration={15}
+            mode="photo"
             allowFilePicker={false}
             onMediaCaptured={handleCameraMediaCaptured}
             stopCamera={() => setCameraOpen(false)} />
 
           }
 
-                        {!simplified && libraryVideo &&
-          <div style={{ marginBottom: 14 }}>
-                                <AppText as="p"
-            style={{
-              fontSize: '0.85rem',
-              color: 'var(--text-muted)',
-              marginBottom: 10,
-              lineHeight: 1.45
-            }}>
+                        {!simplified &&
+          <UnifiedCamera
+            mode="photo"
+            allowFilePicker={false}
+            onMediaCaptured={(file, url) => handlePhotoCapture(file, url)}
+            stopCamera={() => setCameraSubMode(null)} />
 
-                                    {t('video_library_hint', {
-                defaultValue:
-                'Your selfie video is saved. Tap to use it on the card, or delete it permanently to record or upload a different one.'
-              })}
-                                </AppText>
-                                <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-                gap: 10
-              }}>
-
-                                    <div
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  selectLibraryVideo();
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') selectLibraryVideo();
-                }}
-                style={{
-                  position: 'relative',
-                  borderRadius: 12,
-                  overflow: 'hidden',
-                  height: 120,
-                  cursor: 'pointer',
-                  border: isLibraryTileSelected ? '3px solid var(--primary)' : '2px solid var(--border-color)',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                  background: '#111'
-                }}>
-
-                                        <img
-                  src={libraryVideo.thumbnailUrl}
-                  alt=""
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-
-                                        <div
-                  style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    padding: '6px 8px',
-                    background: 'linear-gradient(transparent, rgba(0,0,0,0.85))',
-                    color: '#fff',
-                    fontSize: '0.72rem',
-                    fontWeight: 800
-                  }}>
-
-                                            {t('selfie_video', { defaultValue: 'Selfie video' })}
-                                        </div>
-                                        {onDeleteLibraryVideo &&
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteLibraryVideo();
-                  }}
-                  style={{
-                    position: 'absolute',
-                    top: 8,
-                    right: 8,
-                    background: 'rgba(220,38,38,0.92)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 10,
-                    padding: '6px 10px',
-                    fontSize: '0.72rem',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}
-                  title={t('delete_video_permanent', { defaultValue: 'Delete video permanently' })}>
-
-                                                <FaTrash size={12} /> {t('delete', { defaultValue: 'Delete' })}
-                                            </button>
-                }
-                                    </div>
-                                </div>
-                            </div>
-          }
-
-                        {!simplified && !libraryVideo &&
-          <>
-                                {!cameraSubMode &&
-            <div className="video-mode-selection">
-                                        <AppText as="p"
-              style={{
-                fontSize: '0.9rem',
-                color: 'var(--text-muted)',
-                marginBottom: '1rem',
-                textAlign: 'center'
-              }}>
-
-                                            {t(
-                  'camera_tab_hint',
-                  { defaultValue: 'Take a photo or record a video with your camera (no file upload here).' }
-                )}
-                                        </AppText>
-                                        <div className="mode-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                                            <button
-                  type="button"
-                  className="mode-btn"
-                  disabled={videoPersisting}
-                  onClick={() => setCameraSubMode('video')}
-                  style={{
-                    padding: '1rem',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '12px',
-                    color: 'var(--text-main)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '8px',
-                    cursor: videoPersisting ? 'not-allowed' : 'pointer',
-                    opacity: videoPersisting ? 0.6 : 1
-                  }}>
-
-                                                <FaVideo size={24} style={{ color: 'var(--primary)' }} />
-                                                <AppText as="span" style={{ fontSize: '0.9rem' }}>{t('record_video', 'Record video')}</AppText>
-                                            </button>
-                                            <button
-                  type="button"
-                  className="mode-btn"
-                  disabled={videoPersisting}
-                  onClick={() => setCameraSubMode('photo')}
-                  style={{
-                    padding: '1rem',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '12px',
-                    color: 'var(--text-main)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '8px',
-                    cursor: videoPersisting ? 'not-allowed' : 'pointer',
-                    opacity: videoPersisting ? 0.6 : 1
-                  }}>
-
-                                                <FaCamera size={24} style={{ color: 'var(--secondary)' }} />
-                                                <AppText as="span" style={{ fontSize: '0.9rem' }}>{t('take_photo', 'Take photo')}</AppText>
-                                            </button>
-                                        </div>
-                                    </div>
-            }
-
-                                {cameraSubMode === 'photo' &&
-            <UnifiedCamera
-              mode="photo"
-              allowFilePicker={false}
-              onMediaCaptured={(file, url) => handlePhotoCapture(file, url)}
-              stopCamera={() => setCameraSubMode(null)} />
-
-            }
-
-                                {cameraSubMode === 'video' &&
-            <UnifiedCamera
-              mode="video"
-              maxDuration={15}
-              allowFilePicker={false}
-              onMediaCaptured={(file, url) => handleRecording(file, url)}
-              stopCamera={() => setCameraSubMode(null)} />
-
-            }
-                            </>
-          }
-
-                        {videoPersisting &&
-          <AppText as="p" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: 8 }}>
-                                {t('saving_video', { defaultValue: 'Saving video…' })}
-                            </AppText>
-          }
-
-                        {selectedMedia?.type === 'video' && selectedMedia?.preview &&
-          <div className="media-preview" style={{ position: 'relative', marginTop: 12 }}>
-                                <video
-              src={selectedMedia.preview}
-              controls
-              playsInline
-              className="preview-video"
-              style={{
-                width: '100%',
-                borderRadius: '12px',
-                maxHeight: '400px'
-              }} />
-
-                                <button
-              type="button"
-              onClick={() => {
-                setSelectedMedia(null);
-                onMediaSelect(null);
-              }}
-              style={{
-                marginTop: 8,
-                background: 'rgba(0,0,0,0.55)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '20px',
-                padding: '6px 14px',
-                fontSize: '0.8rem',
-                cursor: 'pointer'
-              }}>
-
-                                    {t('remove_preview', 'Remove')}
-                                </button>
-                            </div>
           }
 
                         {imagePersisting &&
@@ -790,9 +513,8 @@ const MediaSelector = ({
 
                         {!isUploadSelection && !imageRejectedPreview &&
           <MediaUpload
-            type={simplified ? 'both' : 'image'}
+            type="image"
             maxSize={10}
-            maxDuration={15}
             awaitMediaSelect={!!onPersistImage}
             onMediaSelect={async (file, preview, type) => {
               if (onPersistImage && type === 'image') {
@@ -827,17 +549,8 @@ const MediaSelector = ({
                         {isUploadSelection && (selectedMedia.preview || selectedMedia.url) && !imageRejectedPreview &&
           <div className="media-preview" style={{ position: 'relative' }}>
                                 {selectedMedia.type === 'video' ?
-            <video
-              src={selectedMedia.preview || selectedMedia.url}
-              controls
-              playsInline
-              className="preview-video"
-              style={{
-                width: '100%',
-                maxHeight: '300px',
-                borderRadius: '12px'
-              }} /> :
-
+            // Uploaded video is no longer supported — hide the old video instead of playing it.
+            null :
 
             <ImageModerationOverlay status={imagePersisting ? 'checking' : null}>
                                         <img

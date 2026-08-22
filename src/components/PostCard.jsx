@@ -999,14 +999,9 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                                         </div> :
 
             displayPost.mediaType === 'video' ?
-            <video
-              ref={videoRef}
-              src={displayPost.mediaUrl}
-              className="post-video"
-              controls={isPlaying}
-              autoPlay={isPlaying}
-              playsInline
-              onClick={(e) => {e.stopPropagation();if (!isPlaying) handlePlayMedia(e);}} /> :
+            // Uploaded video posts are no longer supported — hide rather than show a
+            // broken <img> (mediaUrl here is a video file, not something <img> can render).
+            null :
 
 
             <img

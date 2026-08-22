@@ -130,28 +130,6 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
 
   const currentStory = realTimeStory || initialStory;
 
-  // Video stories play with sound like Instagram; if the browser's autoplay policy blocks
-  // sound (no prior interaction in this session), fall back to muted so playback still starts.
-  const activeVideoRef = useRef(null);
-  const [videoMuted, setVideoMuted] = useState(false);
-  useEffect(() => {
-    if (currentStory?.type !== 'video') return;
-    setVideoMuted(false);
-    const el = activeVideoRef.current;
-    if (!el) return;
-    el.muted = false;
-    const playPromise = el.play?.();
-    if (playPromise?.catch) {
-      playPromise.catch(() => {
-        setVideoMuted(true);
-        if (activeVideoRef.current) {
-          activeVideoRef.current.muted = true;
-          activeVideoRef.current.play?.().catch(() => {});
-        }
-      });
-    }
-  }, [currentStory?.id, currentStory?.type]);
-
   // Effect 1b: Reactions now live in a subcollection (map/subcollection security model)
   // instead of an array field on the story doc — separate live listener, ordered by creation.
   useEffect(() => {
@@ -1044,28 +1022,20 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                 const storyToRender = isActiveGroup ? currentStory : userGroup.stories[0];
                 if (!storyToRender) return null;
 
-                if (storyToRender.type === 'video' && storyToRender.url) {
-                  if (isActiveGroup) {
-                    return (
-                      <video
-                        key={storyToRender.id}
-                        ref={activeVideoRef}
-                        src={storyToRender.url}
-                        poster={storyToRender.posterUrl || undefined}
-                        muted={videoMuted}
-                        autoPlay
-                        playsInline
-                        onEnded={handleNext}
-                        style={{ width: '100%', height: '100%', objectFit: 'contain' }} />);
+                // Video stories are no longer supported — show the poster frame (or the raw
+                // url as a last resort for older docs with no poster) as a still image instead
+                // of ever creating a <video> element, for both legacy and any stray future docs.
+                if (storyToRender.type === 'video') {
+                  return storyToRender.posterUrl || storyToRender.url ?
+                  <img
+                    src={storyToRender.posterUrl || storyToRender.url}
+                    alt="Story"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> :
 
-
-                  }
-                  // Neighboring user's tray preview — poster only, no autoplay/audio.
-                  return (
-                    <img
-                      src={storyToRender.posterUrl || storyToRender.url}
-                      alt="Story"
-                      style={{ width: '100%', height: '100%', objectFit: 'contain' }} />);
+                  <div style={{
+                    width: '100%', height: '100%',
+                    background: storyToRender.backgroundColor || 'linear-gradient(135deg, #8b5cf6, #ec4899)'
+                  }} />;
 
                 }
 
@@ -1089,10 +1059,8 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                 const nextItem = currentUserStories?.stories?.[currentStoryIndex + 1];
                 if (!nextItem?.url) return null;
                 const hiddenStyle = { position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' };
-                return nextItem.type === 'video' ?
-                <video key={`preload-${nextItem.id}`} src={nextItem.url} preload="auto" muted style={hiddenStyle} /> :
-
-                <img key={`preload-${nextItem.id}`} src={nextItem.url} alt="" style={hiddenStyle} />;
+                const preloadSrc = nextItem.type === 'video' ? nextItem.posterUrl || nextItem.url : nextItem.url;
+                return <img key={`preload-${nextItem.id}`} src={preloadSrc} alt="" style={hiddenStyle} />;
 
               })()}
 

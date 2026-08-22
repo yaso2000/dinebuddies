@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import MediaSelector from '../components/Invitations/MediaSelector';
 import VenueLocationPicker from '../components/VenueLocationPicker';
-import { processInvitationMedia, uploadVideoWithThumbnail, uploadMedia, uploadGoogleImage } from '../services/mediaService';
+import { processInvitationMedia, uploadMedia, uploadGoogleImage } from '../services/mediaService';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { deleteFilesAtFirebaseDownloadUrls } from '../utils/firebaseStorageDelete';
 import { validateInvitationCreation } from '../utils/invitationValidation';
@@ -78,8 +78,6 @@ const CreateInvitation = () => {
 
   // UI State
   const [mediaData, setMediaData] = useState(null); // NEW: For MediaSelector
-  /** Single saved selfie / upload video (library). New recording blocked until this is deleted from Storage. */
-  const [libraryVideo, setLibraryVideo] = useState(null);
   const [libraryImages, setLibraryImages] = useState([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -144,7 +142,6 @@ const CreateInvitation = () => {
   const editingDraft = location.state?.editingDraft; // Editing draft from preview
   const draftId = location.state?.draftId; // Draft ID to load
   const editingInvitation = location.state?.editingInvitation; // Editing PUBLISHED invitation
-  const editVideoHydratedRef = useRef(null);
   const mediaLibraryHydratedRef = useRef(false);
 
   const mediaLibraryStorageKey = React.useMemo(() => {
@@ -155,17 +152,12 @@ const CreateInvitation = () => {
   useEffect(() => scheduleScrollPageToTop(), []);
 
   useEffect(() => {
-    if (!editingInvitation?.id) editVideoHydratedRef.current = null;
-  }, [editingInvitation?.id]);
-
-  useEffect(() => {
     if (!mediaLibraryStorageKey || mediaLibraryHydratedRef.current) return;
     try {
       const raw = localStorage.getItem(mediaLibraryStorageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed.images)) setLibraryImages(parsed.images.slice(0, 24));
-        if (parsed.video?.videoUrl) setLibraryVideo(parsed.video);
       }
     } catch (e) {
       console.warn('Failed to read invitation media library:', e);
@@ -178,45 +170,13 @@ const CreateInvitation = () => {
     if (!mediaLibraryStorageKey || !mediaLibraryHydratedRef.current) return;
     const payload = {
       images: libraryImages.slice(0, 24),
-      video: libraryVideo || null
+      video: null
     };
     localStorage.setItem(mediaLibraryStorageKey, JSON.stringify(payload));
-  }, [mediaLibraryStorageKey, libraryImages, libraryVideo]);
+  }, [mediaLibraryStorageKey, libraryImages]);
 
-  // Load existing invitation video into the media library + selection (edit flow) — once per invitation id
-  useEffect(() => {
-    if (!editingInvitation?.id) return;
-    if (editVideoHydratedRef.current === editingInvitation.id) return;
-    if (editingInvitation.mediaType !== 'video' || !editingInvitation.customVideo) return;
-    editVideoHydratedRef.current = editingInvitation.id;
-    setLibraryVideo({
-      videoUrl: editingInvitation.customVideo,
-      thumbnailUrl: editingInvitation.videoThumbnail || editingInvitation.customVideo
-    });
-    setMediaData({
-      source: 'custom_video',
-      type: 'video',
-      file: null,
-      preview: editingInvitation.customVideo,
-      videoThumbnail: editingInvitation.videoThumbnail || null,
-      fromLibrary: true
-    });
-  }, [editingInvitation]);
-
-  const persistSelfieVideo = useCallback(async (file) => {
-    const userId = currentUser?.id || authUser?.uid;
-    if (!userId) throw new Error('Not signed in');
-    const { videoUrl, thumbnailUrl } = await uploadVideoWithThumbnail(file, userId, 'invitations');
-    setLibraryVideo({ videoUrl, thumbnailUrl });
-    setMediaData({
-      source: 'custom_video',
-      type: 'video',
-      file: null,
-      preview: videoUrl,
-      videoThumbnail: thumbnailUrl,
-      fromLibrary: true
-    });
-  }, [currentUser?.id, authUser?.uid]);
+  // Video covers are no longer supported — an existing invitation's video is left
+  // untouched in the database but never hydrated back into the editor.
 
   const persistImageToLibrary = useCallback(async (file) => {
     const userId = currentUser?.id || authUser?.uid;
@@ -225,25 +185,6 @@ const CreateInvitation = () => {
     setLibraryImages((prev) => [url, ...prev.filter((u) => u !== url)].slice(0, 24));
     return url;
   }, [currentUser?.id, authUser?.uid]);
-
-  const deleteLibraryVideo = useCallback(async () => {
-    if (!libraryVideo) return;
-    const vUrl = libraryVideo.videoUrl;
-    const tUrl = libraryVideo.thumbnailUrl;
-    try {
-      await deleteFilesAtFirebaseDownloadUrls([vUrl, tUrl]);
-    } catch (e) {
-      console.error(e);
-      showToast(t('delete_failed', { defaultValue: 'Could not delete video' }), 'error');
-      return;
-    }
-    setLibraryVideo(null);
-    setMediaData((prev) => {
-      if (prev?.type === 'video' && prev?.preview === vUrl) return null;
-      return prev;
-    });
-    showToast(t('video_removed_from_library', { defaultValue: 'Video removed. You can record a new one.' }), 'success');
-  }, [libraryVideo, showToast, t]);
 
   const deleteLibraryImage = useCallback(async (url) => {
     if (!url) return;
@@ -782,15 +723,6 @@ const CreateInvitation = () => {
           return;
         }
         setUploadProgress(80);
-      } else if (editingInvitation?.customVideo && !mediaData) {
-        // User removed the library video and did not choose another medium
-        mediaFields = {
-          customVideo: deleteField(),
-          videoThumbnail: deleteField(),
-          videoDuration: deleteField(),
-          mediaType: deleteField(),
-          mediaSource: deleteField()
-        };
       } else if (editingInvitation?.customImage && !mediaData) {
         // User removed the library image and did not choose another medium
         mediaFields = {
@@ -1601,19 +1533,16 @@ const CreateInvitation = () => {
             }}>
 
                     <AppText as="h3" style={{ fontSize: '1rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        🎬 {t('create_section_media', { defaultValue: 'Photo or video' })}
+                        🎬 {t('create_section_media_photo', { defaultValue: 'Photo' })}
                     </AppText>
                     <AppText as="p" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                        {t('media_helper_text') || 'Choose a photo or video for your invitation'}
+                        {t('media_helper_text_photo') || 'Choose a photo for your invitation'}
                     </AppText>
                     <MediaSelector
               restaurant={restaurantData || prefilledData}
               mediaData={mediaData}
-              libraryVideo={libraryVideo}
               libraryImages={libraryImages}
-              onPersistSelfieVideo={persistSelfieVideo}
               onPersistImage={persistImageToLibrary}
-              onDeleteLibraryVideo={deleteLibraryVideo}
               onDeleteLibraryImage={deleteLibraryImage}
               onImageUploadError={(err) => notifyImageUploadError(showToast, err, t, 'media_upload_failed')}
               onMediaSelect={handleMediaSelect}

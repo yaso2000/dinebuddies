@@ -358,14 +358,8 @@ export default function SocialInvitationCoverRightRail({
               onClear={() => onRemoveStashItem?.(entry.id)}>
 
                                 {isPending ? null : entry.media.type === 'video' ?
-              <video
-                src={entry.media.preview}
-                poster={entry.media.videoThumbnail || undefined}
-                className="private-preview-rail__thumb-video"
-                muted
-                playsInline
-                preload="metadata" /> :
-
+              // Uploaded video covers are no longer supported — hide old video stash entries.
+              null :
 
               <StashImageThumb media={entry.media} />
               }

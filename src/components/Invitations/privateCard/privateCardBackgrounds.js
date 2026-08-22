@@ -310,9 +310,10 @@ export function getPrivateInvitationHeroCoverFromInvitation(invitation) {
         String(invitation.occasionType || '').toLowerCase() === 'dating' ||
         String(invitation.personalInviteCategory || '').length > 0;
     if (!isPersonal) return null;
-    const vid = invitation.customVideo;
-    if (vid) {
-        return { src: vid, mediaType: 'video', poster: invitation.videoThumbnail || null };
+    // Uploaded video covers are no longer supported — an existing video cover is hidden,
+    // showing its poster frame (or falling through to image/template) instead of playing it.
+    if (invitation.videoThumbnail) {
+        return { src: invitation.videoThumbnail, mediaType: 'image', poster: null };
     }
     const img = invitation.customImage || invitation.image;
     if (img && typeof img === 'string' && !parseDatingCoverTemplateIdFromUrl(img)) {
