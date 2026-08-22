@@ -123,6 +123,10 @@ export const InvitationProvider = ({ children }) => {
         'getPrivateInvitationSharePreview'
     );
     const claimPrivateInvitationShareCallable = httpsCallable(functions, 'claimPrivateInvitationShare');
+    const acceptPrivateInvitationFollowBackCallable = httpsCallable(
+        functions,
+        'acceptPrivateInvitationFollowBack'
+    );
     const ensurePrivateInvitationShareTokenCallable = httpsCallable(
         functions,
         'ensurePrivateInvitationShareToken'
@@ -1385,6 +1389,23 @@ export const InvitationProvider = ({ children }) => {
                     await postResponseChatMessage();
                 } catch (chatErr) {
                     console.error('Failed to send accept chat message:', chatErr);
+                }
+
+                // Private invitations exist to unlock chat between the two people —
+                // the invitee's own follow-back (below) only covers one direction;
+                // this trusted callable makes the HOST follow the invitee back too
+                // (a client can't write another user's own following list directly),
+                // so accepting completes mutual-follow immediately instead of
+                // depending on the host separately following back on their own.
+                if (hostId && hostId !== me) {
+                    try {
+                        await acceptPrivateInvitationFollowBackCallable({ invitationId: invId });
+                    } catch (followBackErr) {
+                        console.warn(
+                            '[respondToPrivateInvitation] host follow-back failed',
+                            followBackErr
+                        );
+                    }
                 }
 
                 if (hostId && hostId !== me) {

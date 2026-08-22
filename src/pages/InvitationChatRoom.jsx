@@ -188,6 +188,19 @@ const InvitationChatRoom = () => {
             getHostedInvitationDetailsPath({ id: invitationId, ...data }) :
             `/invitation/${invitationId}`;
             navigate(detailsPath);
+          } else if (data.type === 'Private') {
+            // A private invitation only exists to unlock the real 1:1 chat between
+            // host and invitee — once accepted, send both sides to the actual
+            // private conversation instead of this group-chat UI. Before
+            // acceptance, fall through to the existing pending/accept-decline view.
+            const otherUserId = isHost ? data.invitedFriends?.[0] || null : hostId;
+            const otherAccepted = isHost
+              ? data.rsvps?.[otherUserId] === 'accepted'
+              : isPrivateAccepted;
+            if (otherUserId && otherAccepted) {
+              navigate(`/chat/${otherUserId}`, { replace: true });
+              return;
+            }
           }
         } else {
           navigate('/', { replace: true, state: { message: t('invitation_ended') } });

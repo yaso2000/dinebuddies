@@ -2136,6 +2136,9 @@ exports.getFollowerCount = functions.https.onCall(async (data, context) => {
 const { registerSetUserFollow } = require('./setUserFollow');
 registerSetUserFollow(exports, { db, isBusinessUserDoc, enforceCallableRateLimit });
 
+const { registerPrivateInvitationConnection } = require('./privateInvitationConnection');
+registerPrivateInvitationConnection(exports, { db, isBusinessUserDoc, enforceCallableRateLimit });
+
 // ─── Trusted callable: resolve business uid by placeId ───────────────────────
 exports.lookupBusinessByPlaceId = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
