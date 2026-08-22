@@ -1440,6 +1440,8 @@
   "chat_relationship_dating": "Dating",
   "chat_relationship_friendship": "Friendship",
   "chat_relationship_acquaintance": "Acquaintance",
+  "chat_panel_change_photo": "Change your chat photo",
+  "chat_panel_reset_photo": "Use profile photo",
   "chats": "Chats",
   "check_in": "Check in",
   "check_updates_details": "Check updates and details",

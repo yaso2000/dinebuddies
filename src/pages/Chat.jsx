@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import React, { Suspense, lazy, useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot, doc, getDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
@@ -14,7 +14,7 @@ import { useTheme } from '../context/ThemeContext';
 import {
   FaArrowLeft, FaCamera, FaMicrophone,
   FaPaperPlane, FaPlay, FaPause, FaFile,
-  FaDownload, FaStop, FaPlus, FaArrowDown } from
+  FaDownload, FaStop, FaPlus, FaArrowDown, FaTimes } from
 'react-icons/fa';
 import { FaLock, FaBan } from 'react-icons/fa6';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -50,6 +50,7 @@ import { openExternalUrl } from '../platform/externalLinks';
 import { formatAppTime } from '../utils/localeFormat';
 import { useChatTheme } from '../hooks/useChatTheme';
 import ChatThemePicker from '../components/chat/ChatThemePicker';
+import PrivateChatTopPanels from '../components/chat/PrivateChatTopPanels';
 import { resolveConnectionKind } from '../utils/connectConnection';
 import { FaHeart, FaHandshake, FaUserFriends } from 'react-icons/fa';
 
@@ -79,6 +80,8 @@ const Chat = () => {
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [otherUserTyping, setOtherUserTyping] = useState(false);
+  const [myPanelImage, setMyPanelImage] = useState('');
+  const [theirPanelImage, setTheirPanelImage] = useState('');
   const [activeReactionMenu, setActiveReactionMenu] = useState(null);
   const [extendedReactionPicker, setExtendedReactionPicker] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
@@ -167,6 +170,7 @@ const Chat = () => {
   const inputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const imageInputRef = useRef(null);
+  const panelImageInputRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
   const latestMessageDocsRef = useRef([]);
@@ -417,10 +421,13 @@ const Chat = () => {
         const data = doc.data();
         const typingData = data.typing || {};
         setOtherUserTyping(typingData[userId] || false);
+        const panelImages = data.panelImages || {};
+        setMyPanelImage(panelImages[currentUser?.uid] || '');
+        setTheirPanelImage(panelImages[userId] || '');
       }
     });
     return () => unsubscribe();
-  }, [conversationId, userId]);
+  }, [conversationId, userId, currentUser?.uid]);
 
   const [initialScrollDone, setInitialScrollDone] = useState(false);
 
@@ -575,6 +582,33 @@ const Chat = () => {
     }
   };
 
+  // Chat top panel (per-user banner, defaults to profile photo)
+  const handlePanelImageSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !conversationId || !currentUser?.uid) return;
+    try {
+      const url = await uploadImage(file, currentUser.uid, { zone: ImageUploadZone.PRIVATE_DM });
+      await updateDoc(doc(db, 'conversations', conversationId), {
+        [`panelImages.${currentUser.uid}`]: url,
+      });
+    } catch (error) {
+      console.error('Error uploading chat panel image:', error);
+      notifyImageUploadError(showToast, error, t);
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleResetMyPanelImage = async () => {
+    if (!conversationId || !currentUser?.uid) return;
+    try {
+      await updateDoc(doc(db, 'conversations', conversationId), {
+        [`panelImages.${currentUser.uid}`]: '',
+      });
+    } catch (error) {
+      console.error('Error resetting chat panel image:', error);
+    }
+  };
 
 
   // Voice Recording
@@ -711,6 +745,20 @@ const Chat = () => {
       style={chatThemeStyle}
     >
             <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelect} />
+            <input ref={panelImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePanelImageSelect} />
+
+            {/* Top panels — one per participant, defaults to profile photo */}
+            {otherUser ? (
+              <PrivateChatTopPanels
+                myImageUrl={myPanelImage || getSafeAvatar(userProfile) || currentUser?.photoURL}
+                theirImageUrl={theirPanelImage || otherUser.photoURL}
+                myAlt={userProfile?.displayName || currentUser?.displayName || ''}
+                theirAlt={otherUser.displayName}
+                hasCustomMyImage={Boolean(myPanelImage)}
+                onEditMyPanel={() => panelImageInputRef.current?.click()}
+                onResetMyPanel={handleResetMyPanelImage}
+              />
+            ) : null}
 
             {/* Header */}
             <div className={`chat-header${connectionKind ? ` chat-header--${connectionKind}` : ''}`} style={{
