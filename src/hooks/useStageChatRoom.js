@@ -39,7 +39,6 @@ import {
     buildBannerUpdate,
     mergeBannerPatch,
     normalizeCommunityBanner,
-    resolveBannerYoutubeSyncFields,
     sanitizeBannerAxis,
     BANNER_VOICE_MAX_DURATION_SEC,
 } from '../utils/communityChatBanner';
@@ -661,42 +660,12 @@ export function useStageChatRoom(stageId) {
             if (!isHost || !partnerId) return;
             const payload = {
                 ...fields,
-                ...resolveBannerYoutubeSyncFields(fields, serverTimestamp()),
                 banner_updated_at: serverTimestamp(),
                 ownerId: hostId || partnerId,
             };
             await setDoc(doc(db, 'stages', partnerId), payload, { merge: true });
         },
         [hostId, isHost, partnerId]
-    );
-
-    const syncYoutubePlayback = useCallback(
-        async ({ paused, positionSec } = {}) => {
-            if (!isHost || !partnerId) return;
-            if (!banner.youtubeId && !banner.youtubePlaylistId) return;
-            try {
-                const payload = {
-                    banner_youtube_sync_at: serverTimestamp(),
-                    // Instant guest math — avoid waiting for serverTimestamp resolution.
-                    banner_youtube_sync_client_ms: Date.now(),
-                    ownerId: hostId || partnerId,
-                };
-                if (typeof paused === 'boolean') {
-                    payload.banner_youtube_paused = paused;
-                }
-                // Only update position when explicitly provided (0 = hard stop / restart from start).
-                if (positionSec !== undefined && Number.isFinite(Number(positionSec))) {
-                    payload.banner_youtube_position_sec = Math.max(
-                        0,
-                        Math.floor(Number(positionSec))
-                    );
-                }
-                await setDoc(doc(db, 'stages', partnerId), payload, { merge: true });
-            } catch (err) {
-                console.error('[useStageChatRoom] youtube sync', err);
-            }
-        },
-        [banner.youtubeId, banner.youtubePlaylistId, hostId, isHost, partnerId]
     );
 
     const setBannerImage = useCallback(
@@ -855,7 +824,6 @@ export function useStageChatRoom(stageId) {
                         stageRef,
                         {
                             ...fields,
-                            ...resolveBannerYoutubeSyncFields(fields, serverTimestamp()),
                             banner_updated_at: serverTimestamp(),
                             ownerId: hostId || partnerId,
                         },
@@ -1536,7 +1504,6 @@ export function useStageChatRoom(stageId) {
         setBannerVoice,
         clearBannerVoice,
         setBannerVoiceLoop,
-        syncYoutubePlayback,
         updateBanner,
         currentUserId: uid,
         participants,

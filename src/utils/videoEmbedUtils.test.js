@@ -1,14 +1,11 @@
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
     parseYoutubeLink,
     sanitizeYoutubePlaylistId,
     sanitizeYoutubeVideoId,
-    computeYoutubeMemberStartSec,
     buildYoutubeBannerBackgroundSrc,
     hasYoutubeBannerMedia,
     normalizeYoutubePositionSec,
-    pickTrustedYoutubePauseSec,
-    resolveYoutubeSyncAtMs,
 } from './videoEmbedUtils.js';
 
 describe('parseYoutubeLink extended media', () => {
@@ -53,36 +50,17 @@ describe('parseYoutubeLink extended media', () => {
     });
 });
 
-describe('youtube sync helpers', () => {
-    afterEach(() => {
-        vi.useRealTimers();
-    });
-
+describe('youtube embed helpers', () => {
     it('sanitizes ids', () => {
         expect(sanitizeYoutubeVideoId('dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
         expect(sanitizeYoutubePlaylistId('PLrAXtmRdnEQy6nuLMOV8u4M4xXq')).toMatch(/^PL/);
         expect(sanitizeYoutubePlaylistId('dQw4w9WgXcQ')).toBe('');
     });
 
-    it('computes start with pause / live', () => {
-        vi.useFakeTimers();
-        vi.setSystemTime(new Date('2026-01-01T00:01:00Z'));
-        const syncAt = Date.parse('2026-01-01T00:00:00Z');
-        expect(computeYoutubeMemberStartSec(syncAt, { positionSec: 10 })).toBe(70);
-        expect(
-            computeYoutubeMemberStartSec(syncAt, { positionSec: 10, paused: true })
-        ).toBe(10);
-        expect(computeYoutubeMemberStartSec(syncAt, { isLive: true })).toBe(0);
+    it('normalizes a position to whole non-negative seconds', () => {
         expect(normalizeYoutubePositionSec(12.9)).toBe(12);
-        expect(pickTrustedYoutubePauseSec(45, 0)).toBe(45);
-        expect(pickTrustedYoutubePauseSec(45, 44)).toBe(44);
-    });
-
-    it('prefers client sync ms when close to server', () => {
-        const server = 1_000_000;
-        const client = 1_000_400;
-        expect(resolveYoutubeSyncAtMs(server, client)).toBe(client);
-        expect(resolveYoutubeSyncAtMs(server, server + 120_000)).toBe(server);
+        expect(normalizeYoutubePositionSec(-5)).toBe(0);
+        expect(normalizeYoutubePositionSec('not a number')).toBe(0);
     });
 
     it('builds embed src for live and playlist', () => {

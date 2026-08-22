@@ -442,106 +442,6 @@
     color: var(--brand-primary, #7c3aed);
 }
 
-.community-main-chat__banner-wrap--youtube-host .community-main-chat__banner-youtube--host {
-    z-index: 2;
-}
-
-/* Full-banner tap target to reveal controls while playing */
-.community-main-chat__banner-youtube-host-hit {
-    position: absolute;
-    inset: 0;
-    z-index: 17;
-    margin: 0;
-    padding: 0;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    pointer-events: auto;
-}
-
-/* Bottom bar — visible when paused/stopped or after tap; hidden while playing */
-.community-main-chat__banner-youtube-host-controls {
-    position: absolute;
-    top: auto;
-    left: 50%;
-    bottom: 0.55rem;
-    transform: translateX(-50%);
-    z-index: 18;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.35rem 0.45rem;
-    border-radius: 999px;
-    background: rgba(8, 12, 22, 0.84);
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    backdrop-filter: blur(14px) saturate(150%);
-    -webkit-backdrop-filter: blur(14px) saturate(150%);
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.42);
-    pointer-events: auto;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.community-main-chat__banner-youtube-host-controls.is-hidden {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateX(-50%) translateY(0.4rem);
-}
-
-.community-main-chat__banner-youtube-host-controls.is-open {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.community-main-chat__banner-wrap:has(.community-banner-voice-fab--rail)
-    .community-main-chat__banner-youtube-host-controls {
-    bottom: 4.4rem;
-}
-
-.community-main-chat__banner-wrap:has(.community-banner-voice-fab--recording)
-    .community-main-chat__banner-youtube-host-controls,
-.community-main-chat__banner-wrap:has(.community-banner-voice-fab--publishing)
-    .community-main-chat__banner-youtube-host-controls {
-    bottom: 3.6rem;
-}
-
-.community-main-chat__banner-youtube-host-controls__btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.85rem;
-    height: 2.85rem;
-    padding: 0;
-    border: none;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.98);
-    cursor: pointer;
-}
-
-.community-main-chat__banner-youtube-host-controls__btn--toggle {
-    width: 3.25rem;
-    height: 3.25rem;
-    background: linear-gradient(165deg, #fb923c 0%, #ea580c 55%, #c2410c 100%);
-    box-shadow: 0 6px 16px rgba(194, 65, 12, 0.45);
-}
-
-.community-main-chat__banner-youtube-host-controls__btn--toggle.is-paused {
-    padding-inline-start: 0.18rem;
-}
-
-.community-main-chat__banner-youtube-host-controls__btn:hover:not(:disabled) {
-    filter: brightness(1.08);
-}
-
-.community-main-chat__banner-youtube-host-controls__btn:active:not(:disabled) {
-    transform: scale(0.94);
-}
-
-.community-main-chat__banner-youtube-host-controls__btn--stop {
-    color: #fecaca;
-    background: rgba(127, 29, 29, 0.6);
-}
-
 .community-banner-host-tools__group {
     display: flex;
     flex-direction: row;
@@ -2714,7 +2614,7 @@ body:has(.community-chat-fullscreen) {
     background: var(--bg-body, #000);
 }
 
-.community-main-chat__banner-wrap--youtube .community-main-chat__banner-youtube--member {
+.community-main-chat__banner-wrap--youtube .community-main-chat__banner-youtube {
     pointer-events: none;
     user-select: none;
 }
@@ -2729,11 +2629,6 @@ body:has(.community-chat-fullscreen) {
     background: #0d1520;
 }
 
-.community-main-chat__banner-youtube--member {
-    pointer-events: none;
-}
-
-.community-main-chat__banner-youtube--host,
 .community-main-chat__banner-youtube--preview {
     pointer-events: auto;
     z-index: 1;
@@ -2770,53 +2665,20 @@ body:has(.community-chat-fullscreen) {
     }
 }
 
-.community-main-chat__banner-youtube-player {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    z-index: 1;
-}
-
-.community-main-chat__banner-youtube--member-poster .community-main-chat__banner-youtube-player,
 .community-main-chat__banner-youtube--member-poster .community-main-chat__banner-youtube-frame {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
 }
 
-.community-main-chat__banner-youtube--member-playing .community-main-chat__banner-youtube-player,
 .community-main-chat__banner-youtube--member-playing .community-main-chat__banner-youtube-frame {
     opacity: 1;
     visibility: visible;
 }
 
-.community-main-chat__banner-youtube-player iframe {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 300%;
-    height: 300%;
-    max-width: none;
-    border: 0;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-}
-
+/* Fill the banner exactly — no crop trick needed for a plain background loop. */
 .community-main-chat__banner-youtube-frame {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 320%;
-    height: 320%;
-    max-width: none;
-    border: 0;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-    z-index: 1;
-}
-
-/* Members — fill banner exactly; clip inside panel (no 320% bleed on guest chat) */
-.community-main-chat__banner-youtube--member .community-main-chat__banner-youtube-frame {
     inset: 0;
     top: 0;
     left: 0;
@@ -2824,7 +2686,10 @@ body:has(.community-chat-fullscreen) {
     height: 100%;
     max-width: 100%;
     max-height: 100%;
+    border: 0;
     transform: none;
+    pointer-events: none;
+    z-index: 1;
 }
 
 /* YouTube Shorts — cover crop within 16:9 banner */
@@ -2840,14 +2705,8 @@ body:has(.community-chat-fullscreen) {
     transform: translate(-50%, -50%);
 }
 
-.community-main-chat__banner-youtube--host .community-main-chat__banner-youtube-frame,
 .community-main-chat__banner-youtube--preview .community-main-chat__banner-youtube-frame {
     pointer-events: auto;
-    width: 100%;
-    height: 100%;
-    transform: none;
-    top: 0;
-    left: 0;
 }
 
 .community-main-chat__banner-youtube-scrim {
@@ -2862,95 +2721,6 @@ body:has(.community-chat-fullscreen) {
         transparent 60%,
         rgba(0, 0, 0, 0.45) 100%
     );
-}
-
-/* Guest tap — re-sync to host playhead (below sound/gift controls). */
-.community-main-chat__banner-youtube-member-sync-hit {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    margin: 0;
-    padding: 0;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    pointer-events: auto;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-}
-
-.community-main-chat__banner-youtube-member-sync-toast {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    z-index: 4;
-    transform: translate(-50%, -50%);
-    padding: 0.35rem 0.75rem;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    background: rgba(8, 12, 22, 0.82);
-    color: rgba(255, 255, 255, 0.95);
-    font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    pointer-events: none;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-    animation: community-yt-member-sync-toast 1.15s ease both;
-}
-
-.community-main-chat__banner-youtube--member-synced .community-main-chat__banner-youtube-frame {
-    outline: 2px solid rgba(232, 110, 46, 0.55);
-    outline-offset: -2px;
-}
-
-@keyframes community-yt-member-sync-toast {
-    0% {
-        opacity: 0;
-        transform: translate(-50%, -40%) scale(0.96);
-    }
-    18% {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(1);
-    }
-    75% {
-        opacity: 1;
-    }
-    100% {
-        opacity: 0;
-        transform: translate(-50%, -58%) scale(0.98);
-    }
-}
-
-.community-main-chat__banner-youtube-guest-sync-btn {
-    position: absolute;
-    inset-inline-start: 3.35rem;
-    bottom: 0.55rem;
-    z-index: 12;
-    pointer-events: auto;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-    user-select: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    height: 2.5rem;
-    padding: 0 0.7rem;
-    border-radius: 0.75rem;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    background: rgba(15, 23, 42, 0.55);
-    backdrop-filter: blur(12px) saturate(140%);
-    -webkit-backdrop-filter: blur(12px) saturate(140%);
-    color: rgba(255, 255, 255, 0.95);
-    font-size: 0.78rem;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow:
-        0 4px 14px rgba(0, 0, 0, 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-
-.community-main-chat__banner-youtube-guest-sync-btn:active {
-    transform: scale(0.96);
 }
 
 .community-main-chat__banner-youtube-sound-btn {
@@ -2990,26 +2760,8 @@ body:has(.community-chat-fullscreen) {
     border-color: rgba(255, 255, 255, 0.45);
 }
 
-.community-main-chat__banner-youtube--poster-only .community-main-chat__banner-youtube-scrim {
-    background: linear-gradient(
-        to bottom,
-        rgba(0, 0, 0, 0.12) 0%,
-        transparent 40%,
-        rgba(0, 0, 0, 0.35) 100%
-    );
-}
-
 .community-banner-host-tools__btn--sound {
     color: rgba(255, 255, 255, 0.92);
-}
-
-.community-main-chat__banner-youtube--paused .community-main-chat__banner-youtube-poster {
-    opacity: 1;
-    transform: scale(1.02);
-}
-
-.community-main-chat__banner-youtube--host.community-main-chat__banner-youtube--paused {
-    background: #0b1220;
 }
 
 .community-main-chat__banner-youtube--preview {

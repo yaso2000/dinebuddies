@@ -205,54 +205,15 @@ export function firestoreTimestampToMs(ts) {
     return 0;
 }
 
-/** Soft drift correction while playing — not a pause/restart. */
-export const YOUTUBE_DRIFT_RESYNC_MS = 8000;
-/** Only seek when member is off by more than this (seconds). */
-export const YOUTUBE_DRIFT_TOLERANCE_SEC = 1.25;
-/** Prefer host client wall-clock if within this of server timestamp. */
-export const YOUTUBE_SYNC_CLIENT_SKEW_MS = 45_000;
-
 /**
- * Normalize a playback position to whole seconds (Firestore + seekTo).
+ * Normalize a playback position to whole seconds (used for the local,
+ * per-viewer "don't restart from 0 on unmute" elapsed-time estimate).
  * @param {unknown} value
  */
 export function normalizeYoutubePositionSec(value) {
     const n = Number(value);
     if (!Number.isFinite(n) || n < 0) return 0;
     return Math.floor(n);
-}
-
-/**
- * Resolve sync anchor: prefer host client ms (no serverTimestamp lag), else server.
- * @param {number} serverSyncAtMs
- * @param {number} [clientSyncAtMs]
- */
-export function resolveYoutubeSyncAtMs(serverSyncAtMs, clientSyncAtMs = 0) {
-    const server = Number(serverSyncAtMs) || 0;
-    const client = Number(clientSyncAtMs) || 0;
-    if (!client) return server;
-    if (!server) return client;
-    if (Math.abs(client - server) <= YOUTUBE_SYNC_CLIENT_SKEW_MS) return client;
-    return server;
-}
-
-/**
- * Member / join-midstream start second.
- * @param {number} syncAtMs
- * @param {{ positionSec?: number; paused?: boolean; isLive?: boolean; nowMs?: number }} [opts]
- */
-export function computeYoutubeMemberStartSec(
-    syncAtMs,
-    { positionSec = 0, paused = false, isLive = false, nowMs } = {}
-) {
-    if (isLive) return 0;
-    const base = normalizeYoutubePositionSec(positionSec);
-    if (paused) return base;
-    const anchor = Number(syncAtMs) || 0;
-    if (!anchor) return base;
-    const now = Number.isFinite(nowMs) ? Number(nowMs) : Date.now();
-    const elapsed = Math.max(0, Math.floor((now - anchor) / 1000));
-    return base + elapsed;
 }
 
 const YOUTUBE_MESSAGE_ORIGINS = new Set([
@@ -326,28 +287,6 @@ export function setYoutubeEmbedMuted(iframe, muted) {
     }
 }
 
-/** Seek and resume — best-effort sync when a member enables sound. */
-export function syncYoutubeEmbedPlayback(iframe, startSec = 0, { paused = false } = {}) {
-    const sec = normalizeYoutubePositionSec(startSec);
-    // Always seek — including 0 — so hard-stop really restarts from the beginning.
-    postYoutubeEmbedCommand(iframe, 'seekTo', [sec, true]);
-    if (paused) {
-        postYoutubeEmbedCommand(iframe, 'pauseVideo');
-        return;
-    }
-    postYoutubeEmbedCommand(iframe, 'playVideo');
-}
-
-/**
- * Correct drift without pause/play churn (playing members only).
- * @param {HTMLIFrameElement | null | undefined} iframe
- * @param {number} startSec
- */
-export function softSeekYoutubeEmbed(iframe, startSec = 0) {
-    const sec = normalizeYoutubePositionSec(startSec);
-    postYoutubeEmbedCommand(iframe, 'seekTo', [sec, true]);
-}
-
 /** Send listening handshake so postMessage commands reach the embed. */
 export function postYoutubeEmbedListening(iframe) {
     const win = iframe?.contentWindow;
@@ -364,174 +303,56 @@ export function postYoutubeEmbedListening(iframe) {
 }
 
 /**
- * Ask the embed for its real playhead (more accurate than wall-clock on pause).
- * @param {HTMLIFrameElement | null | undefined} iframe
- * @param {number} [timeoutMs]
- * @returns {Promise<number | null>}
- */
-export function requestYoutubeEmbedCurrentTime(iframe, timeoutMs = 450) {
-    return new Promise((resolve) => {
-        if (!iframe?.contentWindow || typeof window === 'undefined') {
-            resolve(null);
-            return;
-        }
-
-        let settled = false;
-        const finish = (value) => {
-            if (settled) return;
-            settled = true;
-            window.clearTimeout(timer);
-            window.removeEventListener('message', onMessage);
-            resolve(value);
-        };
-
-        const onMessage = (event) => {
-            const parsed = parseYoutubeEmbedMessage(event);
-            if (!parsed) return;
-            // Ignore bare 0 from stale infoDelivery — embeds often emit currentTime:0 on buffer.
-            if (parsed.type === 'time' && parsed.currentTime != null && parsed.currentTime > 0.25) {
-                finish(Math.max(0, parsed.currentTime));
-                return;
-            }
-            if (
-                parsed.type === 'state' &&
-                parsed.currentTime != null &&
-                parsed.currentTime > 0.25
-            ) {
-                finish(Math.max(0, parsed.currentTime));
-            }
-        };
-
-        const timer = window.setTimeout(() => finish(null), timeoutMs);
-        window.addEventListener('message', onMessage);
-        postYoutubeEmbedListening(iframe);
-        // Some embeds only answer after a listening + getCurrentTime pair.
-        postYoutubeEmbedCommand(iframe, 'getCurrentTime');
-        window.setTimeout(() => {
-            if (!settled) postYoutubeEmbedCommand(iframe, 'getCurrentTime');
-        }, 80);
-    });
-}
-
-/**
- * Choose a pause freeze second. Prefer wall-clock when the player reports ~0 / nonsense.
- * @param {number} wallSec
- * @param {number | null | undefined} playerSec
- */
-export function pickTrustedYoutubePauseSec(wallSec, playerSec) {
-    const wall = normalizeYoutubePositionSec(wallSec);
-    if (playerSec == null || !Number.isFinite(Number(playerSec))) return wall;
-    const player = normalizeYoutubePositionSec(playerSec);
-    // Player at ~0 while wall says we are deep into the video → trust wall.
-    if (player <= 1 && wall >= 3) return wall;
-    // Wild mismatch (player jumped far ahead/behind) → trust wall.
-    if (wall >= 2 && Math.abs(player - wall) > 12) return wall;
-    return player;
-}
-
-/**
- * @param {HTMLIFrameElement | null | undefined} iframe
- * @param {number} syncAtMs
- * @param {{ positionSec?: number; paused?: boolean; isLive?: boolean }} [media]
- */
-export function syncMemberYoutubeToHost(iframe, syncAtMs, media = {}) {
-    if (!iframe) return;
-    const startSec = computeYoutubeMemberStartSec(syncAtMs, media);
-    postYoutubeEmbedListening(iframe);
-    syncYoutubeEmbedPlayback(iframe, startSec, { paused: Boolean(media.paused) && !media.isLive });
-}
-
-/**
- * Toggle member sound. On iOS, prefer JS API (no src reload — remounts stall Safari).
+ * Toggle member sound. On iOS, prefer JS API (no src reload — remounts stall
+ * Safari). Elsewhere, reload with `muted=0` baked into the URL — some
+ * browsers ignore a later `unMute()` call from an autoplay-muted embed — using
+ * a locally-tracked elapsed time so the video doesn't visibly restart from 0.
  * @param {HTMLIFrameElement | null | undefined} iframe
  * @param {string} videoId
- * @param {number} syncAtMs
  * @param {boolean} soundOn
- * @param {{ playlistId?: string; isLive?: boolean; paused?: boolean; positionSec?: number }} [media]
+ * @param {{ playlistId?: string; isLive?: boolean; elapsedSec?: number }} [media]
  */
-export function applyMemberYoutubeSound(iframe, videoId, syncAtMs, soundOn, media = {}) {
+export function applyMemberYoutubeSound(iframe, videoId, soundOn, media = {}) {
     if (!iframe) return;
 
     // iOS: never rewrite iframe.src for mute toggles — that remounts and often dies.
     if (isIosLikeDevice()) {
         postYoutubeEmbedListening(iframe);
         setYoutubeEmbedMuted(iframe, !soundOn);
-        if (soundOn && !(media.paused && !media.isLive)) {
-            postYoutubeEmbedCommand(iframe, 'playVideo');
-        } else if (!soundOn) {
-            /* stay muted; keep playing video */
-        } else if (media.paused && !media.isLive) {
-            postYoutubeEmbedCommand(iframe, 'pauseVideo');
-        }
         return;
     }
-
-    const startSec = computeYoutubeMemberStartSec(syncAtMs, {
-        positionSec: media.positionSec,
-        paused: media.paused,
-        isLive: media.isLive,
-    });
-    const common = {
-        controls: false,
-        loop: false,
-        startSec,
-        playlistId: media.playlistId,
-        isLive: media.isLive,
-    };
 
     iframe.src = buildYoutubeBannerBackgroundSrc(videoId, {
-        ...common,
         muted: !soundOn,
+        controls: false,
+        loop: true,
+        startSec: normalizeYoutubePositionSec(media.elapsedSec),
+        playlistId: media.playlistId,
+        isLive: media.isLive,
     });
     postYoutubeEmbedListening(iframe);
-    if (media.paused && !media.isLive) {
-        window.setTimeout(() => {
-            syncYoutubeEmbedPlayback(iframe, startSec, { paused: true });
-        }, 200);
-    }
 }
 
 /**
- * Best-effort unmute after a user gesture.
- * iOS: unmute + play only (no seek storms — they stutter/cut playback).
+ * Best-effort unmute after a user gesture — repeated once shortly after in
+ * case the first call landed before the embed was ready to receive it.
  * @param {HTMLIFrameElement | null | undefined} iframe
- * @param {number} syncAtMs
- * @param {{ positionSec?: number; paused?: boolean; isLive?: boolean }} [media]
  */
-export function reinforceMemberYoutubeSound(iframe, syncAtMs, media = {}) {
+export function reinforceMemberYoutubeSound(iframe) {
     if (!iframe) return;
-
-    if (isIosLikeDevice()) {
-        const bump = () => {
-            postYoutubeEmbedListening(iframe);
-            setYoutubeEmbedMuted(iframe, false);
-            if (!(media.paused && !media.isLive)) {
-                postYoutubeEmbedCommand(iframe, 'playVideo');
-            }
-        };
-        bump();
-        window.setTimeout(bump, 180);
-        return;
-    }
-
-    const run = () => {
-        const startSec = computeYoutubeMemberStartSec(syncAtMs, media);
+    const bump = () => {
         postYoutubeEmbedListening(iframe);
-        syncYoutubeEmbedPlayback(iframe, startSec, {
-            paused: Boolean(media.paused) && !media.isLive,
-        });
-        if (!(media.paused && !media.isLive)) {
-            setYoutubeEmbedMuted(iframe, false);
-        }
+        setYoutubeEmbedMuted(iframe, false);
+        postYoutubeEmbedCommand(iframe, 'playVideo');
     };
-
-    run();
-    window.setTimeout(run, 120);
+    bump();
+    window.setTimeout(bump, isIosLikeDevice() ? 180 : 120);
 }
 
 /**
- * Background banner embed — autoplay for members; host gets controls.
- * Supports single video, live, playlist (+ music.youtube links via same video id).
+ * Background banner embed — autoplay + loop, independent per viewer (no
+ * cross-viewer playback control). Supports single video, live, playlist
+ * (+ music.youtube links via same video id).
  * @param {string} videoId
  * @param {{
  *   muted?: boolean;

@@ -1153,7 +1153,6 @@ export default function CommunityHostBannerComposerTools({
               isShort={Boolean(parsedYoutubeDraft?.isShort || banner.youtubeShort)}
               isLive={Boolean(parsedYoutubeDraft?.isLive || banner.youtubeLive)}
               preview
-              isHost
             />
           </div>
         ) : null}

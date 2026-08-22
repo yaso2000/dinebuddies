@@ -501,74 +501,9 @@ export function useCommunityChatRoom(partnerId) {
                 banner_updated_at: serverTimestamp(),
                 ownerId: partnerId,
             };
-            if (
-                Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_id') ||
-                Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_playlist_id')
-            ) {
-                const ytId = String(fields.banner_youtube_id || '').trim();
-                const listId = String(fields.banner_youtube_playlist_id || '').trim();
-                const hasYt =
-                    /^[a-zA-Z0-9_-]{11}$/.test(ytId) ||
-                    (/^[a-zA-Z0-9_-]{10,64}$/.test(listId) &&
-                        !(listId.length === 11 && !/^(PL|UU|RD|OL|LL|FL|WL)/i.test(listId)));
-                if (hasYt) {
-                    // Only stamp a new sync epoch when the caller asks for it
-                    // (new YouTube media / explicit syncYoutubePlayback).
-                    const refreshSync = Object.prototype.hasOwnProperty.call(
-                        fields,
-                        'banner_youtube_sync_client_ms'
-                    );
-                    if (refreshSync) {
-                        payload.banner_youtube_sync_at = serverTimestamp();
-                        if (!Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_paused')) {
-                            payload.banner_youtube_paused = false;
-                        }
-                        if (
-                            !Object.prototype.hasOwnProperty.call(
-                                fields,
-                                'banner_youtube_position_sec'
-                            )
-                        ) {
-                            payload.banner_youtube_position_sec = 0;
-                        }
-                    }
-                } else if (!ytId && !listId) {
-                    payload.banner_youtube_sync_at = null;
-                    payload.banner_youtube_sync_client_ms = 0;
-                }
-            }
             await setDoc(doc(db, 'communities', partnerId), payload, { merge: true });
         },
         [isHost, partnerId]
-    );
-
-    const syncYoutubePlayback = useCallback(
-        async ({ paused, positionSec } = {}) => {
-            if (!isHost || !partnerId) return;
-            if (!banner.youtubeId && !banner.youtubePlaylistId) return;
-            try {
-                const payload = {
-                    banner_youtube_sync_at: serverTimestamp(),
-                    // Instant guest math — avoid waiting for serverTimestamp resolution.
-                    banner_youtube_sync_client_ms: Date.now(),
-                    ownerId: partnerId,
-                };
-                if (typeof paused === 'boolean') {
-                    payload.banner_youtube_paused = paused;
-                }
-                // Only update position when explicitly provided (0 = hard stop / restart from start).
-                if (positionSec !== undefined && Number.isFinite(Number(positionSec))) {
-                    payload.banner_youtube_position_sec = Math.max(
-                        0,
-                        Math.floor(Number(positionSec))
-                    );
-                }
-                await setDoc(doc(db, 'communities', partnerId), payload, { merge: true });
-            } catch (err) {
-                console.error('[useCommunityChatRoom] youtube sync', err);
-            }
-        },
-        [isHost, partnerId, banner.youtubeId, banner.youtubePlaylistId]
     );
 
     const setBannerImage = useCallback(
@@ -1301,7 +1236,6 @@ export function useCommunityChatRoom(partnerId) {
         setBannerVoice,
         clearBannerVoice,
         setBannerVoiceLoop,
-        syncYoutubePlayback,
         updateBanner,
         currentUserId: uid,
         participants,

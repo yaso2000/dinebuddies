@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaVolumeMute, FaVolumeUp } from 'react-icons/fa';
 import {
@@ -7,23 +7,22 @@ import {
     reinforceMemberYoutubeSound,
 } from '../../utils/videoEmbedUtils';
 
-/** Member sound toggle — rendered above banner overlays for reliable taps. */
+/** Sound toggle for the YouTube banner — rendered above overlays for reliable taps. */
 export default function CommunityBannerYoutubeMemberSound({
     iframeRef,
     videoId,
     playlistId = '',
-    syncAtMs = 0,
-    positionSec = 0,
-    paused = false,
     isLive = false,
     visible = false,
 }) {
     const { t } = useTranslation();
     const [soundOn, setSoundOn] = useState(false);
+    const mountedAtRef = useRef(Date.now());
 
-    // Reset sound only when the media identity changes — not on every host sync tick.
+    // Reset sound + elapsed-time anchor only when the media identity changes.
     useEffect(() => {
         setSoundOn(false);
+        mountedAtRef.current = Date.now();
     }, [videoId, playlistId]);
 
     const toggleSound = useCallback(
@@ -33,38 +32,25 @@ export default function CommunityBannerYoutubeMemberSound({
             const iframe = iframeRef?.current;
             if (!iframe || (!videoId && !playlistId)) return;
 
-            const media = {
-                playlistId,
-                isLive,
-                paused,
-                positionSec,
-            };
-
+            const elapsedSec = isLive
+                ? 0
+                : Math.max(0, Math.floor((Date.now() - mountedAtRef.current) / 1000));
             const next = !soundOn;
-            applyMemberYoutubeSound(iframe, videoId, syncAtMs, next, media);
+            applyMemberYoutubeSound(iframe, videoId, next, { playlistId, isLive, elapsedSec });
             setSoundOn(next);
 
             if (!next) return;
 
-            reinforceMemberYoutubeSound(iframe, syncAtMs, media);
+            reinforceMemberYoutubeSound(iframe);
 
-            if (isIosLikeDevice()) {
-                // One light follow-up only — avoid seek/reload storms on Safari.
-                window.setTimeout(() => {
-                    if (iframeRef?.current) {
-                        reinforceMemberYoutubeSound(iframeRef.current, syncAtMs, media);
-                    }
-                }, 220);
-                return;
-            }
-
-            window.setTimeout(() => {
-                if (iframeRef?.current) {
-                    reinforceMemberYoutubeSound(iframeRef.current, syncAtMs, media);
-                }
-            }, 400);
+            window.setTimeout(
+                () => {
+                    if (iframeRef?.current) reinforceMemberYoutubeSound(iframeRef.current);
+                },
+                isIosLikeDevice() ? 220 : 400
+            );
         },
-        [iframeRef, isLive, paused, playlistId, positionSec, soundOn, syncAtMs, videoId]
+        [iframeRef, isLive, playlistId, soundOn, videoId]
     );
 
     if (!visible || (!videoId && !playlistId)) return null;

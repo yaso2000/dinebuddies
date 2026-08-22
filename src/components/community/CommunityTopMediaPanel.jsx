@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaEye, FaEyeSlash, FaGift, FaImage, FaSync, FaTimes, FaUsers } from 'react-icons/fa';
+import { FaEye, FaEyeSlash, FaGift, FaImage, FaTimes, FaUsers } from 'react-icons/fa';
 import { AppText } from '../base';
 import CommunityHostBannerComposerTools from './CommunityHostBannerComposerTools';
 import CommunityBannerDraggableTitle from './CommunityBannerDraggableTitle';
@@ -8,18 +8,10 @@ import CommunityBannerDraggableBody from './CommunityBannerDraggableBody';
 import { isBannerBgTransparent, resolveBannerBackgroundStyle, hasAnyBannerBodyText, bannerBodySlotIsVisible } from '../../utils/communityChatBanner';
 import CommunityBannerYoutubeBackground from './CommunityBannerYoutubeBackground';
 import CommunityBannerYoutubeMemberSound from './CommunityBannerYoutubeMemberSound';
-import CommunityBannerYoutubeHostControls from './CommunityBannerYoutubeHostControls';
 import CommunityHostBannerMessages from './CommunityHostBannerMessages';
 import CommunityBannerVoiceBroadcast from './CommunityBannerVoiceBroadcast';
 import { buildBannerSpotlightViews } from '../../utils/communityHostSpotlightPins';
-import {
-  computeYoutubeMemberStartSec,
-  hasYoutubeBannerMedia,
-  postYoutubeEmbedListening,
-  syncMemberYoutubeToHost,
-  syncYoutubeEmbedPlayback,
-} from '../../utils/videoEmbedUtils';
-import { BANNER_VOICE_AUDIO_PRIORITY_EVENT } from '../../utils/bannerVoiceAudioPriority';
+import { hasYoutubeBannerMedia } from '../../utils/videoEmbedUtils';
 
 /** Top media strip — 16:9 banner + host tools. */
 export default function CommunityTopMediaPanel({ room, bannerExpanded = false, bannerMediaActive = true, onOpenMembers }) {
@@ -73,11 +65,7 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
   const reserveLowerForHost =
     hasTitle && (!hasBody || pinnedBarActive);
 
-  const memberYtIframeRef = useRef(null);
-  const hostYtIframeRef = useRef(null);
-  const [memberYtReady, setMemberYtReady] = useState(false);
-  const bannerRef = useRef(banner);
-  bannerRef.current = banner;
+  const ytIframeRef = useRef(null);
 
   const [hostToolsVisible, setHostToolsVisible] = useState(() => {
     try {
@@ -102,61 +90,6 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
   const hasCustomBannerImage = Boolean(String(banner.url || '').trim()) && !hasYoutube;
   const showCornerDelete =
     isHost && bannerMediaActive && (hasYoutube || hasCustomBannerImage);
-
-  // Voice recording/playback auto-pauses YouTube for host + guests; host resumes manually (Sync).
-  useEffect(() => {
-    if (!isHost || typeof room.syncYoutubePlayback !== 'function') return undefined;
-
-    const onVoicePriority = (event) => {
-      const active = Boolean(event?.detail?.active);
-      if (!active) return;
-      const current = bannerRef.current;
-      if (!hasYoutubeBannerMedia(current)) return;
-
-      const at = current.youtubeLive
-        ? 0
-        : computeYoutubeMemberStartSec(current.youtubeSyncAt, {
-            positionSec: current.youtubePositionSec,
-            paused: Boolean(current.youtubePaused),
-            isLive: Boolean(current.youtubeLive),
-          });
-
-      // Pause host iframe immediately (don't wait for Firestore round-trip).
-      const iframe = hostYtIframeRef.current;
-      if (iframe) {
-        postYoutubeEmbedListening(iframe);
-        syncYoutubeEmbedPlayback(iframe, at, { paused: true });
-      }
-
-      if (!current.youtubePaused || Number(current.youtubePositionSec) !== at) {
-        void room.syncYoutubePlayback({ paused: true, positionSec: at });
-      }
-    };
-
-    window.addEventListener(BANNER_VOICE_AUDIO_PRIORITY_EVENT, onVoicePriority);
-    return () => {
-      window.removeEventListener(BANNER_VOICE_AUDIO_PRIORITY_EVENT, onVoicePriority);
-    };
-  }, [isHost, room]);
-
-  const handleMemberVideoReady = useCallback((ready) => {
-    setMemberYtReady(Boolean(ready));
-  }, []);
-
-  const handleGuestYoutubeSync = useCallback(
-    (event) => {
-      event?.preventDefault?.();
-      event?.stopPropagation?.();
-      const iframe = memberYtIframeRef.current;
-      if (!iframe || !hasYoutubeBannerMedia(banner)) return;
-      syncMemberYoutubeToHost(iframe, banner.youtubeSyncAt, {
-        positionSec: banner.youtubePositionSec,
-        paused: Boolean(banner.youtubePaused),
-        isLive: Boolean(banner.youtubeLive),
-      });
-    },
-    [banner]
-  );
 
   const handleDeleteBannerMedia = useCallback(() => {
     if (hasYoutube) {
@@ -232,15 +165,8 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
               playlistId={bannerDisplay.youtubePlaylistId}
               isShort={bannerDisplay.youtubeShort}
               isLive={bannerDisplay.youtubeLive}
-              paused={banner.youtubePaused}
-              positionSec={banner.youtubePositionSec}
-              isHost={isHost}
-              syncAtMs={banner.youtubeSyncAt}
               playbackEnabled={bannerMediaActive}
-              onPlaybackSync={isHost ? room.syncYoutubePlayback : undefined}
-              memberIframeRef={!isHost ? memberYtIframeRef : undefined}
-              hostIframeRef={isHost ? hostYtIframeRef : undefined}
-              onMemberVideoReady={!isHost ? handleMemberVideoReady : undefined}
+              iframeRef={ytIframeRef}
             />
           ) : bannerDisplay.isVideo ? (
             <video
@@ -290,18 +216,6 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
             layout="above-banner"
             hostToolsVisible={hostToolsVisible}
           />
-          {isYoutube ? (
-            <CommunityBannerYoutubeHostControls
-              iframeRef={hostYtIframeRef}
-              syncAtMs={banner.youtubeSyncAt}
-              positionSec={banner.youtubePositionSec}
-              paused={banner.youtubePaused}
-              isLive={banner.youtubeLive}
-              onPlaybackSync={room.syncYoutubePlayback}
-              visible
-              layout="toolbar"
-            />
-          ) : null}
           {showCornerDelete ? (
             <button
               type="button"
@@ -335,7 +249,7 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
         </div>
       ) : null}
       <div
-        className={`community-main-chat__banner-wrap${reserveLowerForHost ? ' community-main-chat__banner-wrap--host-lower' : ''}${isTransparent && hasImage ? ' community-main-chat__banner-wrap--text-overlay' : ''}${isYoutube ? ' community-main-chat__banner-wrap--youtube' : ''}${isHost && isYoutube ? ' community-main-chat__banner-wrap--youtube-host' : ''}`}
+        className={`community-main-chat__banner-wrap${reserveLowerForHost ? ' community-main-chat__banner-wrap--host-lower' : ''}${isTransparent && hasImage ? ' community-main-chat__banner-wrap--text-overlay' : ''}${isYoutube ? ' community-main-chat__banner-wrap--youtube' : ''}`}
       >
         <div className="community-main-chat__banner">{bannerInner}</div>
 
@@ -436,30 +350,14 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
           />
         ) : null}
 
-        {!isHost && isYoutube && bannerMediaActive ? (
-          <>
-            <CommunityBannerYoutubeMemberSound
-              iframeRef={memberYtIframeRef}
-              videoId={bannerDisplay.youtubeId}
-              playlistId={bannerDisplay.youtubePlaylistId}
-              syncAtMs={banner.youtubeSyncAt}
-              positionSec={banner.youtubePositionSec}
-              paused={banner.youtubePaused}
-              isLive={banner.youtubeLive}
-              visible={memberYtReady || hasYoutube}
-            />
-            <button
-              type="button"
-              className="community-main-chat__banner-youtube-guest-sync-btn"
-              onClick={handleGuestYoutubeSync}
-              onPointerDown={(event) => event.stopPropagation()}
-              aria-label={t('community_banner_youtube_guest_sync', 'Tap to sync with the host')}
-              title={t('community_banner_youtube_guest_sync', 'Tap to sync with the host')}
-            >
-              <FaSync size={14} aria-hidden />
-              <AppText as="span">{t('community_banner_youtube_guest_sync_short', 'Sync')}</AppText>
-            </button>
-          </>
+        {isYoutube && bannerMediaActive ? (
+          <CommunityBannerYoutubeMemberSound
+            iframeRef={ytIframeRef}
+            videoId={bannerDisplay.youtubeId}
+            playlistId={bannerDisplay.youtubePlaylistId}
+            isLive={bannerDisplay.youtubeLive}
+            visible={hasYoutube}
+          />
         ) : null}
         {canGiftHost ? (
           <button
