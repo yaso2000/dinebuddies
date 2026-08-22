@@ -23,6 +23,7 @@ import { deleteFeedPostCascade, filterOrphanedCommunityPosts } from '../utils/po
 import {
   buildFollowingAuthorSet,
   filterPostsByFeedScope,
+  rankPostsByFriendsThenGeo,
   normalizePlaceLabel } from
 '../utils/postsFeedScope';
 // Removed redundant FeaturedPostCard. PostCard now natively handles featured_posts when post._isFeatured is true.
@@ -83,7 +84,7 @@ const PostsFeed = () => {
   /** @type {'global' | 'country' | 'city'} */
   const [feedGeoScope, setFeedGeoScope] = useState('global');
   /** @type {'all' | 'following'} */
-  const [feedAudienceScope, setFeedAudienceScope] = useState('following');
+  const [feedAudienceScope, setFeedAudienceScope] = useState('all');
   const [userLocation, setUserLocation] = useState(null);
 
   // Featured posts (elite slides from business partners)
@@ -158,7 +159,7 @@ const PostsFeed = () => {
   );
 
   const hasFeedScopeFilters =
-  feedGeoScope !== 'global' || feedAudienceScope !== 'following';
+  feedGeoScope !== 'global' || feedAudienceScope !== 'all';
 
   const renderGeoScopeChips = () =>
   <div
@@ -445,13 +446,13 @@ const PostsFeed = () => {
     });
   }, [filteredPosts, motionPostById, userProfile?.blockedUserIds]);
 
-  /** All post types merged and sorted by publish date (newest first). */
+  /** All post types merged; default order is friends first, then geographic closeness. */
   const feedPosts = useMemo(() => {
     const blocked = new Set(asUidArray(userProfile?.blockedUserIds));
     const featured = featuredPosts.map((p) => ({ ...p, _isFeatured: true, _isMotionPost: false }));
     const pool = [...featured, ...communityFeedPosts, ...motionFeedPosts];
     const merged = buildConsumerHomeFeed(pool, null, currentUser?.uid, { blockedSet: blocked }).mainFeed;
-    return filterPostsByFeedScope(merged, {
+    const scoped = filterPostsByFeedScope(merged, {
       geoScope: feedGeoScope,
       audienceScope: feedAudienceScope,
       userLocation,
@@ -460,6 +461,16 @@ const PostsFeed = () => {
       userCountryCode,
       followingSet: followingAuthorIds,
       viewerUid: currentUser?.uid
+    });
+    // Default order: friends (followed accounts) first, then everyone else by
+    // geographic closeness (same city, then same country, then the rest).
+    return rankPostsByFriendsThenGeo(scoped, {
+      followingSet: followingAuthorIds,
+      viewerUid: currentUser?.uid,
+      userLocation,
+      userCityNorm,
+      userCountryNorm,
+      userCountryCode
     });
   }, [
   featuredPosts,
@@ -639,7 +650,7 @@ const PostsFeed = () => {
               onClick={() => {
                 setSearchQuery('');
                 setFeedGeoScope('global');
-                setFeedAudienceScope('following');
+                setFeedAudienceScope('all');
               }}
               style={{
                 padding: '8px 16px',

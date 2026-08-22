@@ -1,5 +1,5 @@
 import { asUidArray } from './userSocialLists';
-import { authorIdFromPost } from './feedSocialGraph';
+import { authorIdFromPost, getPostTimestamp } from './feedSocialGraph';
 
 const LOCAL_RADIUS_KM = 50;
 const COUNTRY_RADIUS_KM = 500;
@@ -143,4 +143,52 @@ export function filterPostsByFeedScope(posts, opts) {
                 viewerUid
             })
     );
+}
+
+/** Lower is closer: 0 = same city / within local radius, 1 = same country / within country radius, 2 = everywhere else. */
+function geoTierAndDistance(post, { userLocation, userCityNorm, userCountryNorm, userCountryCode }) {
+    const postCity = normalizePlaceLabel(post?.city || post?.author?.city);
+    const postCountry = normalizePlaceLabel(post?.country || post?.author?.country);
+    const postCountryCode = String(post?.countryCode || post?.author?.countryCode || '')
+        .trim()
+        .toLowerCase();
+    const coords = coordsFromPost(post);
+    const km = userLocation && coords ?
+        haversineKm(userLocation.lat, userLocation.lng, coords.lat, coords.lng) :
+        null;
+
+    if (userCityNorm && cityMatches(postCity, userCityNorm)) return { tier: 0, km: km ?? 0 };
+    if (km != null && km < LOCAL_RADIUS_KM) return { tier: 0, km };
+    if (countryMatches(postCountry, userCountryNorm, postCountryCode, userCountryCode)) {
+        return { tier: 1, km: km ?? LOCAL_RADIUS_KM };
+    }
+    if (km != null && km < COUNTRY_RADIUS_KM) return { tier: 1, km };
+    return { tier: 2, km: km ?? Infinity };
+}
+
+/**
+ * Default feed order: people the viewer follows first, then everyone else ranked
+ * by geographic closeness (same city, then same country, then the rest), newest
+ * first as the final tiebreaker within each group.
+ * @param {object[]} posts
+ * @param {{ followingSet: Set<string>, viewerUid?: string, userLocation?: {lat:number,lng:number}|null, userCityNorm?: string, userCountryNorm?: string, userCountryCode?: string }} opts
+ */
+export function rankPostsByFriendsThenGeo(posts, opts) {
+    const { followingSet, viewerUid } = opts;
+
+    return (posts || [])
+        .map((post) => {
+            const authorId = authorIdFromPost(post);
+            const isSelf = Boolean(viewerUid && authorId && authorId === viewerUid);
+            const isFriend = isSelf || Boolean(authorId && followingSet?.has(authorId));
+            const { tier, km } = geoTierAndDistance(post, opts);
+            return { post, isFriend, tier, km, ts: getPostTimestamp(post) };
+        })
+        .sort((a, b) => {
+            if (a.isFriend !== b.isFriend) return a.isFriend ? -1 : 1;
+            if (a.tier !== b.tier) return a.tier - b.tier;
+            if (a.km !== b.km) return a.km - b.km;
+            return b.ts - a.ts;
+        })
+        .map((row) => row.post);
 }
