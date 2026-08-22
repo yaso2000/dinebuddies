@@ -27,10 +27,6 @@ export default function CommunityBannerTwitchBackground({ channel, preview = fal
         allow="autoplay; fullscreen"
         allowFullScreen
         loading="eager"
-        // No allow-popups / allow-top-navigation: any link inside the Twitch
-        // player (channel name, offline-screen recommendations, etc.) is
-        // blocked from opening a new tab or navigating the app away.
-        sandbox="allow-scripts allow-same-origin allow-forms allow-fullscreen"
       />
     </div>
   );
