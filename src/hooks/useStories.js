@@ -121,8 +121,14 @@ export function useStories(currentUser, userPhoto) {
 
         const uniqueIdsToFetch = [...new Set(userIdsToFetch)];
 
+        // Gender/business ring: fetch every other owner's public profile too (name/logo
+        // already present from the story doc are kept as-is — this is enrichment only,
+        // so a missing/failed fetch here never hides a story, unlike uniqueIdsToFetch above).
+        const uniqueIdsToEnrich = Object.keys(userStoriesMap).
+        filter((id) => !uniqueIdsToFetch.includes(id));
+
         // Helper to finalize and set state
-        const setFinalStories = (fetchedProfiles = {}) => {
+        const setFinalStories = (fetchedProfiles = {}, enrichedProfiles = {}) => {
           const processedStories = Object.values(userStoriesMap).
           map((userGroup) => {
             // If we requested a profile fetch for this user (because data was missing/generic)
@@ -148,7 +154,8 @@ export function useStories(currentUser, userPhoto) {
                 ...userGroup,
                 partnerName: pName,
                 partnerLogo: pLogo,
-                partnerGender: profile.gender
+                partnerGender: profile.gender,
+                partnerIsBusiness: profile.isBusiness === true
               };
             }
 
@@ -163,6 +170,11 @@ export function useStories(currentUser, userPhoto) {
             }
 
             if (!userGroup.partnerName) userGroup.partnerName = 'User';
+            const enrichment = enrichedProfiles[userGroup.userId];
+            if (enrichment) {
+              userGroup.partnerGender = enrichment.gender;
+              userGroup.partnerIsBusiness = enrichment.isBusiness === true;
+            }
             return userGroup;
           }).
           filter(Boolean); // Remove nulls (orphans)
@@ -178,19 +190,32 @@ export function useStories(currentUser, userPhoto) {
           setLoading(false);
         };
 
+        const fetchProfilesById = async (ids) => {
+          const snapshots = await Promise.all(ids.map((id) => getDoc(doc(db, 'public_profiles', id))));
+          const profilesMap = {};
+          snapshots.forEach((snap) => {
+            if (snap.exists()) {
+              const mapped = mapPublicProfileDocToUserShape(snap.data());
+              if (mapped) profilesMap[snap.id] = mapped;
+            }
+          });
+          return profilesMap;
+        };
+
+        let enrichedProfiles = {};
+        if (uniqueIdsToEnrich.length > 0) {
+          try {
+            enrichedProfiles = await fetchProfilesById(uniqueIdsToEnrich);
+          } catch (err) {
+            console.error("Error fetching profile enrichment (gender/business ring):", err);
+          }
+        }
+
         if (uniqueIdsToFetch.length > 0) {
           try {
             // public_profiles is readable by everyone; users/{id} is not (guests).
-            const fetchPromises = uniqueIdsToFetch.map((id) => getDoc(doc(db, 'public_profiles', id)));
-            const snapshots = await Promise.all(fetchPromises);
-            const profilesMap = {};
-            snapshots.forEach((snap) => {
-              if (snap.exists()) {
-                const mapped = mapPublicProfileDocToUserShape(snap.data());
-                if (mapped) profilesMap[snap.id] = mapped;
-              }
-            });
-            setFinalStories(profilesMap);
+            const profilesMap = await fetchProfilesById(uniqueIdsToFetch);
+            setFinalStories(profilesMap, enrichedProfiles);
           } catch (err) {
             console.error("Error fetching missing profiles:", err);
             // In case of error (e.g. network), we might show them as is, or hide.
@@ -199,7 +224,7 @@ export function useStories(currentUser, userPhoto) {
             setLoading(false);
           }
         } else {
-          setFinalStories();
+          setFinalStories({}, enrichedProfiles);
         }
 
         // Set My Story Data

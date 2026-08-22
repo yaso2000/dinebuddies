@@ -241,7 +241,8 @@ const StoriesBar = ({ onStoryClick }) => {
             id: user.userId,
             name: user.partnerName,
             logo: user.partnerLogo,
-            gender: user.partnerGender
+            gender: user.partnerGender,
+            isBusiness: user.partnerIsBusiness === true
           }}
           hasNewStory={user.hasNewActiveStory}
           onClick={() => onStoryClick({

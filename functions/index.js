@@ -521,6 +521,14 @@ function pickPublicAvatarUrl(userData) {
     return '';
 }
 
+/** Normalized for the public avatar gender ring: 'male' | 'female' | null (unspecified). */
+function normalizePublicGender(userData) {
+    const raw = String(userData?.gender || '').toLowerCase().trim();
+    if (raw === 'male' || raw === 'm' || raw === 'man') return 'male';
+    if (raw === 'female' || raw === 'f' || raw === 'woman') return 'female';
+    return null;
+}
+
 // Shared mapper for sync trigger + backfill (phase-1 schema only).
 function toPublicProfile(userDocData, uid) {
     const userData = userDocData && typeof userDocData === 'object' ? userDocData : {};
@@ -625,6 +633,8 @@ function toPublicProfile(userDocData, uid) {
         profileType,
         displayName,
         avatarUrl: avatarUrl || null,
+        // Consumer-only field: drives the male/female/unspecified avatar ring for other viewers.
+        gender: profileType === 'user' ? normalizePublicGender(userData) : null,
         subscriptionTier,
         accountRole,
         searchable,

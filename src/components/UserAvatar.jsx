@@ -6,7 +6,7 @@ const DEFAULT_AVATAR_PX = 40;
 
 /**
  * Profile avatar with gender ring: blue (male), pink (female), purple (unspecified).
- * Business accounts use the neutral theme border color.
+ * Business accounts use a dark green ring.
  */
 const UserAvatar = ({
   user,

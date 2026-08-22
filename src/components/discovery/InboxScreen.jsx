@@ -12,6 +12,7 @@ import {
   LuX,
 } from 'react-icons/lu';
 import { db } from '../../firebase/config';
+import UserAvatar from '../UserAvatar';
 import { useChat } from '../../context/ChatContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { usePendingInvitesForMe } from '../../hooks/usePendingInvitesForMe';
@@ -81,7 +82,7 @@ function ChatsTab() {
                 className="inbox-row inbox-row--button"
                 onClick={() => navigate(`/chat/${other.uid}`)}
               >
-                <img src={avatar} alt="" className="inbox-avatar" />
+                <UserAvatar user={other} src={avatar} alt="" style={{ width: '3rem', height: '3rem' }} />
                 <div className="inbox-row__main">
                   <div className="inbox-row__top">
                     <AppText as="span" className="inbox-row__title">{name}</AppText>
@@ -189,7 +190,7 @@ function InvitesTab() {
                     className={`inbox-row inbox-row--start inbox-row--button${isPrivate ? ' inbox-row--premium' : ''}`}
                     onClick={() => navigate(path)}
                   >
-                    <img src={avatar} alt="" className="inbox-avatar" />
+                    <UserAvatar user={hostDoc || inv.author} src={avatar} alt="" style={{ width: '3rem', height: '3rem' }} />
                     <div className="inbox-row__main">
                       <div className="inbox-row__title-row">
                         <LuUtensilsCrossed className="inbox-icon-dining" size={16} />
@@ -232,7 +233,7 @@ function InvitesTab() {
                   className="inbox-row inbox-row--start inbox-row--button"
                   onClick={() => gift.actionUrl && navigate(gift.actionUrl)}
                 >
-                  <img src={getSafeAvatar(gift.sender)} alt="" className="inbox-avatar" />
+                  <UserAvatar user={gift.sender} src={getSafeAvatar(gift.sender)} alt="" style={{ width: '3rem', height: '3rem' }} />
                   <div className="inbox-row__main">
                     <div className="inbox-row__title-row">
                       <LuGift className="inbox-icon-gift" size={16} />

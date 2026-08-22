@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaBookmark, FaTimes } from 'react-icons/fa';
+import UserAvatar from './UserAvatar';
 import { AppText } from "./base";
 
 const SWIPE_SAVE_PX = 56;
@@ -112,7 +113,8 @@ export default function NotificationToastBanner({ toast, onNavigate, onPin, onDi
         onClick={handleTap}>
         
                 {message.icon ?
-        <img
+        <UserAvatar
+          user={message.iconUser}
           src={message.icon}
           alt=""
           className="notification-toast__avatar"

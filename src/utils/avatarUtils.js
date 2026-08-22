@@ -232,11 +232,12 @@ export const getShareableCoverImage = (url) => {
     return null;
 };
 
-/** Gender ring colors — blue (male), pink (female), purple (unspecified). */
+/** Gender ring colors — blue (male), pink (female), purple (unspecified), dark green (business). */
 export const GENDER_AVATAR_RING = {
     male: 'var(--avatar-ring-male, #3b82f6)',
     female: 'var(--avatar-ring-female, #ec4899)',
     unspecified: 'var(--avatar-ring-unspecified, #a855f7)',
+    business: 'var(--avatar-ring-business, #166534)',
 };
 
 export function isBusinessAvatarUser(user) {
@@ -466,11 +467,11 @@ export const getDefaultAvatar = (name = '') => {
 
 /**
  * Returns the CSS color for a user's gender-based avatar ring.
- * Business accounts use the theme border color.
+ * Business accounts always get the dark-green business ring.
  */
 export const getGenderBorderColor = (user) => {
     if (!user) return GENDER_AVATAR_RING.unspecified;
-    if (isBusinessAvatarUser(user)) return 'var(--border-color)';
+    if (isBusinessAvatarUser(user)) return GENDER_AVATAR_RING.business;
 
     const gender = normalizeUserGender(user);
     if (gender === 'female') return GENDER_AVATAR_RING.female;

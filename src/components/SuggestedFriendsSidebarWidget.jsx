@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { FaUserFriends } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { useSuggestedFriends } from '../hooks/useSuggestedFriends';
-import { getSafeAvatar } from '../utils/avatarUtils';
+import { getSafeAvatar, mergeAvatarStyleWithGenderRing } from '../utils/avatarUtils';
 import { resolveProfileAvatarUrl } from '../utils/profileGallery';
 import { AppText } from './base';
 
@@ -62,6 +62,7 @@ export default function SuggestedFriendsSidebarWidget() {
             alt={user.displayName || user.display_name || t('user', 'User')}
             className="ds-widget-img-round"
             loading="lazy"
+            style={mergeAvatarStyleWithGenderRing(user, {}, { ringWidth: 2 })}
             onError={(e) => {
               e.currentTarget.onerror = null;
               e.currentTarget.src = getSafeAvatar(null);

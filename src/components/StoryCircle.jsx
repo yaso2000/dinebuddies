@@ -31,7 +31,8 @@ const StoryCircle = ({ partner, hasNewStory, onClick }) => {
             id: partner.id,
             display_name: partner.name,
             photo_url: partner.logo,
-            gender: partner.gender
+            gender: partner.gender,
+            isBusiness: partner.isBusiness === true
           }}
           src={partner.logo}
           alt={partner.name}

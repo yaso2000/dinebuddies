@@ -198,6 +198,11 @@ export const NotificationProvider = ({ children }) => {
                             title: newNotif.title,
                             body: newNotif.message,
                             icon: newNotif.fromUserAvatar || newNotif.senderAvatar || null,
+                            iconUser: {
+                                name: newNotif.fromUserName || newNotif.senderName,
+                                gender: newNotif.fromUserGender,
+                                role: newNotif.fromUserRole
+                            },
                             onClick: () => {
                                 const invId =
                                     newNotif.invitationId || newNotif.metadata?.invitationId;

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
 import { FaComments, FaGift, FaHeart, FaMapMarkerAlt, FaUserCheck, FaUserPlus } from 'react-icons/fa';
 import { db } from '../../firebase/config';
-import { getSafeAvatar } from '../../utils/avatarUtils';
+import { getSafeAvatar, mergeAvatarStyleWithGenderRing } from '../../utils/avatarUtils';
 import { getPrivateInviteeDisplayName } from '../../utils/privateInviteAvailability';
 import { goToLogin } from '../../utils/goToLogin';
 import {
@@ -345,6 +345,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
             className="user-directory-card__avatar"
             loading="lazy"
             draggable={false}
+            style={mergeAvatarStyleWithGenderRing(user, { borderRadius: 0 }, { ringWidth: 3 })}
           />
         </Link>
       ) : (
@@ -354,6 +355,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
           className="user-directory-card__avatar"
           loading="lazy"
           draggable={false}
+          style={mergeAvatarStyleWithGenderRing(user, { borderRadius: 0 }, { ringWidth: 3 })}
         />
       )}
       <OnlineStatusBadge

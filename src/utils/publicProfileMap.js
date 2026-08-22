@@ -16,6 +16,8 @@ export function mapPublicProfileDocToUserShape(p) {
         avatarUrl: av,
         avatar: av,
         role: isBiz ? 'business' : 'user',
+        isBusiness: isBiz,
+        gender: !isBiz ? p.gender || null : null,
         isGuest: p.isGuest === true,
         subscriptionTier: (p.subscriptionTier || 'free').toString().toLowerCase(),
         businessInfo: isBiz && p.businessPublic
