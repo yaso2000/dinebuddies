@@ -14,6 +14,7 @@ import {
   FaTh,
   FaTimes,
   FaTrash,
+  FaTwitch,
   FaYoutube,
 } from 'react-icons/fa';
 import { formatDuration, startRecording } from '../../utils/mediaUtils';
@@ -60,9 +61,12 @@ import {
 } from '../../utils/communityBannerTemplates';
 import {
   parseYoutubeLink,
+  parseTwitchChannelInput,
+  sanitizeTwitchChannel,
   sanitizeYoutubeVideoId,
 } from '../../utils/videoEmbedUtils';
 import CommunityBannerYoutubeBackground from './CommunityBannerYoutubeBackground';
+import CommunityBannerTwitchBackground from './CommunityBannerTwitchBackground';
 import BannerGradientPresetCarousel from './BannerGradientPresetCarousel';
 import useZoneThemeModal from './useZoneThemeModal';
 
@@ -416,9 +420,15 @@ export default function CommunityHostBannerComposerTools({
     parsedYoutubeDraft?.playlistId || banner.youtubePlaylistId || '';
   const youtubePreviewReady = Boolean(youtubePreviewId || youtubePreviewPlaylistId);
 
+  const [twitchDraft, setTwitchDraft] = useState('');
+  const twitchPreviewChannel =
+    parseTwitchChannelInput(twitchDraft) || sanitizeTwitchChannel(banner.twitchChannel);
+  const hasTwitchBanner = Boolean(banner.twitchChannel);
+
   const isTransparentBg = isBannerBgTransparent(bgColorDraft);
   const hasYoutubeBanner = Boolean(banner.youtubeId || banner.youtubePlaylistId);
-  const hasCustomBannerImage = Boolean(String(banner.url || '').trim()) && !hasYoutubeBanner;
+  const hasCustomBannerImage =
+    Boolean(String(banner.url || '').trim()) && !hasYoutubeBanner && !hasTwitchBanner;
   const hasBannerBackgroundTool =
     hasCustomBannerImage || Boolean(banner.hasBackground && !banner.transparent);
 
@@ -595,6 +605,11 @@ export default function CommunityHostBannerComposerTools({
     setActiveModal('youtube');
   };
 
+  const openTwitchModal = () => {
+    setTwitchDraft(banner.twitchChannel ? `https://twitch.tv/${banner.twitchChannel}` : '');
+    setActiveModal('twitch');
+  };
+
   const closeModal = () => setActiveModal(null);
 
   const handleMediaCaptured = async (file) => {
@@ -725,6 +740,18 @@ export default function CommunityHostBannerComposerTools({
 
   const deleteYoutube = async () => {
     const ok = await setBannerYoutube('');
+    if (ok) closeModal();
+  };
+
+  const publishTwitch = async () => {
+    const channel = parseTwitchChannelInput(twitchDraft);
+    if (!channel) return;
+    const ok = await updateBanner({ twitchChannel: channel });
+    if (ok) closeModal();
+  };
+
+  const deleteTwitch = async () => {
+    const ok = await updateBanner({ twitchChannel: '' });
     if (ok) closeModal();
   };
 
@@ -1034,6 +1061,14 @@ export default function CommunityHostBannerComposerTools({
               )}
             </AppText>
           ) : null}
+          {hasTwitchBanner && !hasCustomBannerImage ? (
+            <AppText as="span" className="community-banner-modal__hint">
+              {t(
+                'community_banner_bg_image_replaces_twitch',
+                'Adding a photo replaces the current Twitch channel.'
+              )}
+            </AppText>
+          ) : null}
         </div>
 
         <div className="community-banner-modal__section">
@@ -1155,6 +1190,52 @@ export default function CommunityHostBannerComposerTools({
               preview
               isHost
             />
+          </div>
+        ) : null}
+      </BannerToolModal>
+    ) : null;
+
+  const twitchModal =
+    activeModal === 'twitch' ? (
+      <BannerToolModal
+        title={t('community_banner_twitch_tool', 'Twitch')}
+        titleId="community-banner-twitch-modal"
+        onClose={closeModal}
+        footer={modalFooter(
+          t('community_banner_publish_twitch', 'Apply channel'),
+          !twitchPreviewChannel,
+          publishTwitch,
+          hasTwitchBanner,
+          t('community_banner_delete_twitch', 'Remove channel'),
+          deleteTwitch
+        )}
+      >
+        <div className="community-banner-modal__section">
+          <label className="community-banner-modal__label" htmlFor="community-banner-twitch-url">
+            {t('community_banner_twitch_url_label', 'Twitch channel name or link')}
+          </label>
+          <AppTextInput
+            id="community-banner-twitch-url"
+            type="text"
+            className="community-banner-modal__textarea"
+            placeholder={t(
+              'community_banner_twitch_url_placeholder',
+              'Channel name or twitch.tv/channel link'
+            )}
+            value={twitchDraft}
+            onChange={(e) => setTwitchDraft(e.target.value)}
+            autoComplete="off"
+          />
+          <AppText as="p" className="community-banner-modal__hint">
+            {t(
+              'community_banner_twitch_host_hint',
+              'Shows the channel live — guests see whatever that channel is broadcasting on Twitch right now, or an offline screen when it is not live.'
+            )}
+          </AppText>
+        </div>
+        {twitchPreviewChannel ? (
+          <div className="community-banner-modal__banner-strip community-banner-modal__banner-strip--twitch">
+            <CommunityBannerTwitchBackground channel={twitchPreviewChannel} preview />
           </div>
         ) : null}
       </BannerToolModal>
@@ -1305,6 +1386,16 @@ export default function CommunityHostBannerComposerTools({
       </button>
       <button
         type="button"
+        className={`community-banner-host-tools__btn community-banner-host-tools__btn--twitch${hasTwitchBanner ? ' community-banner-host-tools__btn--active' : ''}`}
+        aria-label={t('community_banner_twitch_tool', 'Twitch')}
+        title={t('community_banner_twitch_tool', 'Twitch')}
+        onClick={openTwitchModal}
+        disabled={uploadingBanner || voiceRecording || voicePublishing}
+      >
+        <FaTwitch size={18} aria-hidden />
+      </button>
+      <button
+        type="button"
         className="community-banner-host-tools__btn community-banner-host-tools__btn--title"
         aria-label={t('community_banner_title_tool', 'Banner title')}
         title={t('community_banner_title_tool', 'Banner title')}
@@ -1371,6 +1462,7 @@ export default function CommunityHostBannerComposerTools({
       {bodyTextModal}
       {backgroundModal}
       {youtubeModal}
+      {twitchModal}
       {zoneTheme.modal}
       {templatesModal}
 

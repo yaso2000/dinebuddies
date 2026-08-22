@@ -3,7 +3,7 @@
  * Image, gradient background, title, and body text are independent layers.
  */
 
-import { resolveYoutubeSyncAtMs } from './videoEmbedUtils';
+import { resolveYoutubeSyncAtMs, sanitizeTwitchChannel } from './videoEmbedUtils';
 
 export const BANNER_BG_TRANSPARENT = 'transparent';
 
@@ -612,6 +612,7 @@ export function normalizeCommunityBanner(data) {
         0,
         Math.floor(Number(data?.banner_youtube_position_sec) || 0)
     );
+    const twitchChannel = sanitizeTwitchChannel(data?.banner_twitch_channel);
     const hasYoutube = Boolean(youtubeId || youtubePlaylistId);
     const youtubeSyncServerAt = hasYoutube
         ? firestoreTimestampToMs(data?.banner_youtube_sync_at) ||
@@ -664,6 +665,7 @@ export function normalizeCommunityBanner(data) {
         youtubePaused,
         youtubePositionSec,
         youtubeSyncAt,
+        twitchChannel,
         title,
         text,
         texts,
@@ -746,16 +748,38 @@ export function buildBannerYoutubeClearFields() {
     };
 }
 
+/** Clears the Twitch layer (mutually exclusive with image/YouTube). */
+export function buildBannerTwitchClearFields() {
+    return { banner_twitch_channel: '' };
+}
+
 export function buildBannerImageUpdate(url) {
     return {
         banner_url: url,
         ...buildBannerYoutubeClearFields(),
+        ...buildBannerTwitchClearFields(),
     };
 }
 
 /** Remove custom banner image (falls back to business cover). */
 export function buildBannerClearImageUpdate() {
     return { banner_url: '' };
+}
+
+/**
+ * Twitch background — live channel only, no playback position to sync
+ * (Twitch's own CDN keeps every viewer near the live edge). Replaces
+ * image/upload and YouTube layers.
+ * @param {string} channel
+ */
+export function buildBannerTwitchUpdate(channel) {
+    const safeChannel = sanitizeTwitchChannel(channel);
+    if (!safeChannel) return buildBannerTwitchClearFields();
+    return {
+        banner_twitch_channel: safeChannel,
+        banner_url: '',
+        ...buildBannerYoutubeClearFields(),
+    };
 }
 
 /**
@@ -796,6 +820,7 @@ export function buildBannerYoutubeUpdate(
         // Signals replaceBanner to stamp a fresh sync epoch (new media only).
         banner_youtube_sync_client_ms: Date.now(),
         banner_url: '',
+        ...buildBannerTwitchClearFields(),
     };
 }
 
@@ -818,6 +843,7 @@ export function buildBannerUpdate({
     youtubeMusic,
     youtubePaused,
     youtubePositionSec,
+    twitchChannel,
     titleX,
     titleY,
     textX,
@@ -851,7 +877,10 @@ export function buildBannerUpdate({
             : listRaw
         : '';
     const hasYoutube = Boolean(bannerYoutubeId || bannerPlaylistId);
+    // Image/YouTube/Twitch are mutually exclusive banner media layers.
     const bannerUrl = hasYoutube ? '' : String(imageUrl ?? url ?? '').trim();
+    const bannerTwitchChannel =
+        hasYoutube || bannerUrl ? '' : sanitizeTwitchChannel(twitchChannel);
     const showBackground = hasBackground ?? (!transparent && Boolean(bgColor));
     const colors = showBackground && !transparent
         ? resolveBannerGradientColors(bgColor || DEFAULT_BANNER_BG, bgColor2)
@@ -865,12 +894,15 @@ export function buildBannerUpdate({
                     ? `youtube:${bannerYoutubeId}`
                     : bannerPlaylistId
                       ? `youtube:list:${bannerPlaylistId}`
-                      : ''),
+                      : bannerTwitchChannel
+                        ? `twitch:${bannerTwitchChannel}`
+                        : ''),
             title: trimmedTitle,
             texts: normalizedTexts,
             hasBackground: showBackground,
         }),
         banner_url: bannerUrl,
+        banner_twitch_channel: bannerTwitchChannel,
         banner_youtube_id: bannerYoutubeId,
         banner_youtube_playlist_id: bannerPlaylistId,
         banner_youtube_short: bannerYoutubeId ? Boolean(youtubeShort) : false,
@@ -1087,15 +1119,27 @@ export function mergeBannerPatch(current, patch = {}) {
                 : listRaw
             : '';
     }
+    let twitchChannel = sanitizeTwitchChannel(base.twitchChannel);
+    if (patch.twitchChannel !== undefined) {
+        twitchChannel = sanitizeTwitchChannel(patch.twitchChannel);
+    }
+
     if (patch.imageUrl !== undefined && imageUrl) {
         youtubeId = '';
         youtubePlaylistId = '';
+        twitchChannel = '';
     }
     if (
         (patch.youtubeId !== undefined && youtubeId) ||
         (patch.youtubePlaylistId !== undefined && youtubePlaylistId)
     ) {
         imageUrl = '';
+        twitchChannel = '';
+    }
+    if (patch.twitchChannel !== undefined && twitchChannel) {
+        imageUrl = '';
+        youtubeId = '';
+        youtubePlaylistId = '';
     }
 
     let youtubeShort = Boolean(base.youtubeShort);
@@ -1169,6 +1213,7 @@ export function mergeBannerPatch(current, patch = {}) {
         youtubeMusic,
         youtubePaused,
         youtubePositionSec,
+        twitchChannel,
         transparent,
     };
 }

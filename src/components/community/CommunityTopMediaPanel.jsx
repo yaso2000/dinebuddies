@@ -7,6 +7,7 @@ import CommunityBannerDraggableTitle from './CommunityBannerDraggableTitle';
 import CommunityBannerDraggableBody from './CommunityBannerDraggableBody';
 import { isBannerBgTransparent, resolveBannerBackgroundStyle, hasAnyBannerBodyText, bannerBodySlotIsVisible } from '../../utils/communityChatBanner';
 import CommunityBannerYoutubeBackground from './CommunityBannerYoutubeBackground';
+import CommunityBannerTwitchBackground from './CommunityBannerTwitchBackground';
 import CommunityBannerYoutubeMemberSound from './CommunityBannerYoutubeMemberSound';
 import CommunityBannerYoutubeHostControls from './CommunityBannerYoutubeHostControls';
 import CommunityHostBannerMessages from './CommunityHostBannerMessages';
@@ -64,6 +65,7 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
 
   const hasImage = bannerDisplay.hasMedia;
   const isYoutube = Boolean(bannerDisplay.isYoutube);
+  const isTwitch = Boolean(bannerDisplay.isTwitch);
   const isTransparent = banner.transparent || isBannerBgTransparent(banner.bgColor);
   const hasTitle = Boolean(banner.title);
   const hasBody = hasAnyBannerBodyText(banner.texts);
@@ -99,9 +101,10 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
   }, []);
 
   const hasYoutube = hasYoutubeBannerMedia(banner);
-  const hasCustomBannerImage = Boolean(String(banner.url || '').trim()) && !hasYoutube;
+  const hasTwitchBanner = Boolean(bannerDisplay.twitchChannel);
+  const hasCustomBannerImage = Boolean(String(banner.url || '').trim()) && !hasYoutube && !hasTwitchBanner;
   const showCornerDelete =
-    isHost && bannerMediaActive && (hasYoutube || hasCustomBannerImage);
+    isHost && bannerMediaActive && (hasYoutube || hasTwitchBanner || hasCustomBannerImage);
 
   // Voice recording/playback auto-pauses YouTube for host + guests; host resumes manually (Sync).
   useEffect(() => {
@@ -163,10 +166,14 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
       void setBannerYoutube('');
       return;
     }
+    if (hasTwitchBanner) {
+      void updateBanner({ twitchChannel: '' });
+      return;
+    }
     if (hasCustomBannerImage) {
       void clearBannerImage();
     }
-  }, [clearBannerImage, hasCustomBannerImage, hasYoutube, setBannerYoutube]);
+  }, [clearBannerImage, hasCustomBannerImage, hasYoutube, hasTwitchBanner, setBannerYoutube, updateBanner]);
 
   const handleTitleMove = useCallback(
     (x, y) => updateBanner({ titleX: x, titleY: y }),
@@ -242,6 +249,8 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
               hostIframeRef={isHost ? hostYtIframeRef : undefined}
               onMemberVideoReady={!isHost ? handleMemberVideoReady : undefined}
             />
+          ) : isTwitch ? (
+            <CommunityBannerTwitchBackground channel={bannerDisplay.twitchChannel} />
           ) : bannerDisplay.isVideo ? (
             <video
               key={bannerMediaActive ? 'active' : 'paused'}
@@ -309,12 +318,16 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
               aria-label={
                 hasYoutube
                   ? t('community_banner_delete_youtube', 'Remove video')
-                  : t('community_banner_delete_image', 'Remove banner image')
+                  : hasTwitchBanner
+                    ? t('community_banner_delete_twitch', 'Remove Twitch channel')
+                    : t('community_banner_delete_image', 'Remove banner image')
               }
               title={
                 hasYoutube
                   ? t('community_banner_delete_youtube', 'Remove video')
-                  : t('community_banner_delete_image', 'Remove banner image')
+                  : hasTwitchBanner
+                    ? t('community_banner_delete_twitch', 'Remove Twitch channel')
+                    : t('community_banner_delete_image', 'Remove banner image')
               }
               onClick={handleDeleteBannerMedia}
             >

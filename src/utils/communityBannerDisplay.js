@@ -3,6 +3,7 @@ import { isCommunityBannerVideoUrl } from './communityBannerTemplates';
 import {
     buildYoutubeBannerBackgroundSrc,
     hasYoutubeBannerMedia,
+    sanitizeTwitchChannel,
     sanitizeYoutubePlaylistId,
     sanitizeYoutubeVideoId,
 } from './videoEmbedUtils';
@@ -27,14 +28,37 @@ export function resolveCommunityBannerDisplay(banner, businessUser) {
             youtubeMusic: isMusic,
             youtubePaused: Boolean(banner?.youtubePaused),
             youtubePositionSec: Math.max(0, Math.floor(Number(banner?.youtubePositionSec) || 0)),
+            twitchChannel: '',
             usesBusinessCover: false,
             isVideo: false,
             isYoutube: true,
+            isTwitch: false,
             embedSrc: buildYoutubeBannerBackgroundSrc(youtubeId, {
                 playlistId: youtubePlaylistId,
                 isLive,
                 loop: false,
             }),
+            hasMedia: true,
+        };
+    }
+
+    const twitchChannel = sanitizeTwitchChannel(banner?.twitchChannel);
+    if (twitchChannel) {
+        return {
+            url: '',
+            youtubeId: '',
+            youtubePlaylistId: '',
+            youtubeShort: false,
+            youtubeLive: false,
+            youtubeMusic: false,
+            youtubePaused: false,
+            youtubePositionSec: 0,
+            twitchChannel,
+            usesBusinessCover: false,
+            isVideo: false,
+            isYoutube: false,
+            isTwitch: true,
+            embedSrc: '',
             hasMedia: true,
         };
     }
@@ -55,9 +79,11 @@ export function resolveCommunityBannerDisplay(banner, businessUser) {
         youtubeMusic: false,
         youtubePaused: false,
         youtubePositionSec: 0,
+        twitchChannel: '',
         usesBusinessCover,
         isVideo: isCommunityBannerVideoUrl(url),
         isYoutube: false,
+        isTwitch: false,
         embedSrc: '',
         hasMedia: Boolean(url),
     };
