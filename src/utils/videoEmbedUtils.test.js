@@ -68,17 +68,21 @@ describe('youtube embed helpers', () => {
         const live = buildYoutubeBannerBackgroundSrc('dQw4w9WgXcQ', {
             isLive: true,
             startSec: 99,
-            loop: false,
         });
         expect(live).toContain('/embed/dQw4w9WgXcQ');
         expect(live).not.toContain('start=');
 
         const list = buildYoutubeBannerBackgroundSrc('', {
             playlistId: 'PLrAXtmRdnEQy6nuLMOV8u4M4xXq',
-            loop: false,
         });
         expect(list).toContain('/embed/videoseries');
         expect(list).toContain('list=PLrAXtmRdnEQy6nuLMOV8u4M4xXq');
+    });
+
+    it('never uses the playlist=<id>&loop=1 self-loop trick (triggers YouTube throttling on some content)', () => {
+        const single = buildYoutubeBannerBackgroundSrc('dQw4w9WgXcQ', {});
+        expect(single).not.toContain('loop=');
+        expect(single).not.toContain('playlist=');
     });
 
     it('detects banner youtube media', () => {

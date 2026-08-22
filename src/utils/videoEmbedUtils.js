@@ -341,7 +341,6 @@ export function applyMemberYoutubeSound(iframe, videoId, soundOn, media = {}) {
     iframe.src = buildYoutubeBannerBackgroundSrc(videoId, {
         muted: !soundOn,
         controls: false,
-        loop: true,
         startSec: normalizeYoutubePositionSec(media.elapsedSec),
         playlistId: media.playlistId,
         isLive: media.isLive,
@@ -366,14 +365,18 @@ export function reinforceMemberYoutubeSound(iframe) {
 }
 
 /**
- * Background banner embed — autoplay + loop, independent per viewer (no
+ * Background banner embed — autoplay, independent per viewer (no
  * cross-viewer playback control). Supports single video, live, playlist
- * (+ music.youtube links via same video id).
+ * (+ music.youtube links via same video id). Single-video looping is handled
+ * by the caller via the JS API on the `ENDED` state (seekTo(0) + playVideo) —
+ * NOT via the `playlist=<same id>&loop=1` embed-param trick: that trick is
+ * what caused some licensed content (official music, live news) to hit
+ * YouTube's own "too many devices streaming" throttle after a few viewers
+ * opened it — the confirmed-working banner before that never used it.
  * @param {string} videoId
  * @param {{
  *   muted?: boolean;
  *   controls?: boolean;
- *   loop?: boolean;
  *   startSec?: number;
  *   playlistId?: string;
  *   isLive?: boolean;
@@ -384,7 +387,6 @@ export function buildYoutubeBannerBackgroundSrc(
     {
         muted = true,
         controls = false,
-        loop = true,
         startSec = 0,
         playlistId = '',
         isLive = false,
@@ -411,12 +413,6 @@ export function buildYoutubeBannerBackgroundSrc(
 
     if (listId) {
         params.set('list', listId);
-    }
-
-    // Single-video loop hack — do not override a real playlist `list=`.
-    if (loop && id && !listId && !isLive) {
-        params.set('loop', '1');
-        params.set('playlist', id);
     }
 
     if (!isLive) {

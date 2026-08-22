@@ -16,7 +16,7 @@ function youtubeMediaKey(videoId, playlistId, isLive) {
     return `${videoId || 'list'}|${playlistId || ''}|${isLive ? 'live' : 'vod'}`;
 }
 
-function useYoutubeEmbedPlayback({ onPlaying, onError, enabled = true }) {
+function useYoutubeEmbedPlayback({ onPlaying, onEnded, onError, enabled = true }) {
     const playingRef = useRef(false);
 
     useEffect(() => {
@@ -34,6 +34,12 @@ function useYoutubeEmbedPlayback({ onPlaying, onError, enabled = true }) {
 
             if (parsed.type !== 'state') return;
 
+            if (parsed.state === YOUTUBE_PLAYER_STATE.ENDED) {
+                playingRef.current = false;
+                onEnded?.();
+                return;
+            }
+
             const isPlaying = parsed.state === YOUTUBE_PLAYER_STATE.PLAYING;
             const wasPlaying = playingRef.current;
             playingRef.current = isPlaying;
@@ -45,7 +51,7 @@ function useYoutubeEmbedPlayback({ onPlaying, onError, enabled = true }) {
 
         window.addEventListener('message', onMessage);
         return () => window.removeEventListener('message', onMessage);
-    }, [enabled, onError, onPlaying]);
+    }, [enabled, onEnded, onError, onPlaying]);
 }
 
 /**
@@ -107,7 +113,6 @@ export default function CommunityBannerYoutubeBackground({
         return buildYoutubeBannerBackgroundSrc(videoId, {
             muted: !preview,
             controls: false,
-            loop: true,
             startSec: computeYoutubeSyncPositionSec({ isLive, paused, positionSec, syncAtMs: at }),
             playlistId,
             isLive,
@@ -161,6 +166,18 @@ export default function CommunityBannerYoutubeBackground({
         onPlaying: () => {
             setErrored(false);
             setRevealed(true);
+        },
+        // Loop a single video via the JS API (seek back to 0) instead of the
+        // `playlist=<same id>&loop=1` embed-param trick — that trick is what
+        // triggered YouTube's own throttling on some licensed content. Real
+        // playlists (playlistId set) are left to advance/end on their own.
+        onEnded: () => {
+            if (isLive || playlistId) return;
+            const iframe = localIframeRef.current;
+            if (!iframe) return;
+            postYoutubeEmbedListening(iframe);
+            postYoutubeEmbedCommand(iframe, 'seekTo', [0, true]);
+            postYoutubeEmbedCommand(iframe, 'playVideo');
         },
         onError: () => setErrored(true),
     });
