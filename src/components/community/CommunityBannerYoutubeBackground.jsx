@@ -268,6 +268,11 @@ function MemberYoutubeEmbed({
     }, [mediaKey]);
 
     useEffect(() => {
+        // Count from when the (possibly staggered) iframe actually starts
+        // loading, not from mount — otherwise this fallback can flip
+        // `revealed` true (switching the CSS to "playing" mode) before
+        // `activeSrc` exists yet, showing a blank banner during the stagger.
+        if (!activeSrc) return undefined;
         const revealTimer = window.setTimeout(() => {
             setRevealed(true);
         }, isIosLikeDevice() ? 1200 : 2200);
@@ -275,7 +280,7 @@ function MemberYoutubeEmbed({
         return () => {
             window.clearTimeout(revealTimer);
         };
-    }, [mediaKey]);
+    }, [activeSrc]);
 
     const startErrorRetryRef = useRef(false);
 
