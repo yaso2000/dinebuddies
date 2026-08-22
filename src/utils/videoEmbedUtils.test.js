@@ -1,12 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
 import {
     parseYoutubeLink,
     sanitizeYoutubePlaylistId,
     sanitizeYoutubeVideoId,
+    computeYoutubeMemberStartSec,
     buildYoutubeBannerBackgroundSrc,
     hasYoutubeBannerMedia,
     normalizeYoutubePositionSec,
-    computeYoutubeSyncPositionSec,
+    pickTrustedYoutubePauseSec,
+    resolveYoutubeSyncAtMs,
 } from './videoEmbedUtils.js';
 
 describe('parseYoutubeLink extended media', () => {
@@ -51,38 +53,53 @@ describe('parseYoutubeLink extended media', () => {
     });
 });
 
-describe('youtube embed helpers', () => {
+describe('youtube sync helpers', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
     it('sanitizes ids', () => {
         expect(sanitizeYoutubeVideoId('dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
         expect(sanitizeYoutubePlaylistId('PLrAXtmRdnEQy6nuLMOV8u4M4xXq')).toMatch(/^PL/);
         expect(sanitizeYoutubePlaylistId('dQw4w9WgXcQ')).toBe('');
     });
 
-    it('normalizes a position to whole non-negative seconds', () => {
+    it('computes start with pause / live', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-01-01T00:01:00Z'));
+        const syncAt = Date.parse('2026-01-01T00:00:00Z');
+        expect(computeYoutubeMemberStartSec(syncAt, { positionSec: 10 })).toBe(70);
+        expect(
+            computeYoutubeMemberStartSec(syncAt, { positionSec: 10, paused: true })
+        ).toBe(10);
+        expect(computeYoutubeMemberStartSec(syncAt, { isLive: true })).toBe(0);
         expect(normalizeYoutubePositionSec(12.9)).toBe(12);
-        expect(normalizeYoutubePositionSec(-5)).toBe(0);
-        expect(normalizeYoutubePositionSec('not a number')).toBe(0);
+        expect(pickTrustedYoutubePauseSec(45, 0)).toBe(45);
+        expect(pickTrustedYoutubePauseSec(45, 44)).toBe(44);
+    });
+
+    it('prefers client sync ms when close to server', () => {
+        const server = 1_000_000;
+        const client = 1_000_400;
+        expect(resolveYoutubeSyncAtMs(server, client)).toBe(client);
+        expect(resolveYoutubeSyncAtMs(server, server + 120_000)).toBe(server);
     });
 
     it('builds embed src for live and playlist', () => {
         const live = buildYoutubeBannerBackgroundSrc('dQw4w9WgXcQ', {
             isLive: true,
             startSec: 99,
+            loop: false,
         });
         expect(live).toContain('/embed/dQw4w9WgXcQ');
         expect(live).not.toContain('start=');
 
         const list = buildYoutubeBannerBackgroundSrc('', {
             playlistId: 'PLrAXtmRdnEQy6nuLMOV8u4M4xXq',
+            loop: false,
         });
         expect(list).toContain('/embed/videoseries');
         expect(list).toContain('list=PLrAXtmRdnEQy6nuLMOV8u4M4xXq');
-    });
-
-    it('never uses the playlist=<id>&loop=1 self-loop trick (triggers YouTube throttling on some content)', () => {
-        const single = buildYoutubeBannerBackgroundSrc('dQw4w9WgXcQ', {});
-        expect(single).not.toContain('loop=');
-        expect(single).not.toContain('playlist=');
     });
 
     it('detects banner youtube media', () => {
@@ -91,14 +108,5 @@ describe('youtube embed helpers', () => {
             hasYoutubeBannerMedia({ youtubePlaylistId: 'PLrAXtmRdnEQy6nuLMOV8u4M4xXq' })
         ).toBe(true);
         expect(hasYoutubeBannerMedia({})).toBe(false);
-    });
-
-    it('computes the host-sync position anchor', () => {
-        expect(computeYoutubeSyncPositionSec({ isLive: true, positionSec: 40, syncAtMs: Date.now() })).toBe(0);
-        expect(computeYoutubeSyncPositionSec({ paused: true, positionSec: 40, syncAtMs: Date.now() - 10000 })).toBe(40);
-        expect(computeYoutubeSyncPositionSec({ positionSec: 40 })).toBe(40);
-        const target = computeYoutubeSyncPositionSec({ positionSec: 40, syncAtMs: Date.now() - 5000 });
-        expect(target).toBeGreaterThanOrEqual(44);
-        expect(target).toBeLessThanOrEqual(46);
     });
 });

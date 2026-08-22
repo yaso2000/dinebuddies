@@ -3,6 +3,8 @@
  * Image, gradient background, title, and body text are independent layers.
  */
 
+import { resolveYoutubeSyncAtMs } from './videoEmbedUtils';
+
 export const BANNER_BG_TRANSPARENT = 'transparent';
 
 export const BANNER_FONT_SIZES = {
@@ -605,6 +607,23 @@ export function normalizeCommunityBanner(data) {
     const youtubeShort = data?.banner_youtube_short === true;
     const youtubeLive = data?.banner_youtube_live === true;
     const youtubeMusic = data?.banner_youtube_music === true;
+    const youtubePaused = data?.banner_youtube_paused === true;
+    const youtubePositionSec = Math.max(
+        0,
+        Math.floor(Number(data?.banner_youtube_position_sec) || 0)
+    );
+    const hasYoutube = Boolean(youtubeId || youtubePlaylistId);
+    const youtubeSyncServerAt = hasYoutube
+        ? firestoreTimestampToMs(data?.banner_youtube_sync_at) ||
+          firestoreTimestampToMs(data?.banner_updated_at)
+        : 0;
+    const youtubeSyncClientAt = hasYoutube
+        ? Math.max(0, Math.floor(Number(data?.banner_youtube_sync_client_ms) || 0))
+        : 0;
+    // Prefer host client wall-clock (no serverTimestamp lag) when close to server time.
+    const youtubeSyncAt = hasYoutube
+        ? resolveYoutubeSyncAtMs(youtubeSyncServerAt, youtubeSyncClientAt)
+        : 0;
     const title = String(data?.banner_title || '').trim();
     const texts = normalizeBannerBodySlots(data);
     const titleStyle = normalizeBannerTitleStyle(data);
@@ -642,6 +661,9 @@ export function normalizeCommunityBanner(data) {
         youtubeShort,
         youtubeLive,
         youtubeMusic,
+        youtubePaused,
+        youtubePositionSec,
+        youtubeSyncAt,
         title,
         text,
         texts,
@@ -671,14 +693,6 @@ export function normalizeCommunityBanner(data) {
         voiceUpdatedAt: firestoreTimestampToMs(data?.banner_voice_updated_at) || 0,
         /** Host opt-in: replay voice after it ends. Default off (play once). */
         voiceLoop: data?.banner_voice_loop === true,
-        /**
-         * Host-broadcast YouTube play/pause + position anchor. `youtubePositionSec`
-         * is the position at the moment `youtubeSyncAt` was written; combine them
-         * to get "where the host is right now" (see computeYoutubeSyncPositionSec).
-         */
-        youtubePaused: data?.banner_youtube_paused === true,
-        youtubePositionSec: Math.max(0, Math.floor(Number(data?.banner_youtube_position_sec) || 0)),
-        youtubeSyncAt: firestoreTimestampToMs(data?.banner_youtube_sync_at) || 0,
     };
 }
 
@@ -728,23 +742,7 @@ export function buildBannerYoutubeClearFields() {
         banner_youtube_paused: false,
         banner_youtube_position_sec: 0,
         banner_youtube_sync_at: null,
-    };
-}
-
-/**
- * Host play/pause broadcast for the banner's YouTube media — reused for both
- * live and non-live content. `positionSec` is the host's own estimated
- * position (wall-clock elapsed since their last anchor) at the moment of this
- * action; ignored for live. Caller should overwrite `banner_youtube_sync_at`
- * with `serverTimestamp()` when writing.
- * @param {boolean} paused
- * @param {number} [positionSec]
- */
-export function buildBannerYoutubePlaybackUpdate(paused, positionSec = 0) {
-    return {
-        banner_youtube_paused: Boolean(paused),
-        banner_youtube_position_sec: Math.max(0, Math.floor(Number(positionSec) || 0)),
-        banner_youtube_sync_at: Date.now(),
+        banner_youtube_sync_client_ms: 0,
     };
 }
 
@@ -793,11 +791,11 @@ export function buildBannerYoutubeUpdate(
         banner_youtube_short: Boolean(isShort) && !isLive && Boolean(id),
         banner_youtube_live: Boolean(isLive) && Boolean(id),
         banner_youtube_music: Boolean(isMusic),
-        banner_url: '',
-        // Fresh media starts unpaused at 0 for everyone.
         banner_youtube_paused: false,
         banner_youtube_position_sec: 0,
-        banner_youtube_sync_at: Date.now(),
+        // Signals replaceBanner to stamp a fresh sync epoch (new media only).
+        banner_youtube_sync_client_ms: Date.now(),
+        banner_url: '',
     };
 }
 
@@ -818,6 +816,8 @@ export function buildBannerUpdate({
     youtubeShort,
     youtubeLive,
     youtubeMusic,
+    youtubePaused,
+    youtubePositionSec,
     titleX,
     titleY,
     textX,
@@ -876,6 +876,10 @@ export function buildBannerUpdate({
         banner_youtube_short: bannerYoutubeId ? Boolean(youtubeShort) : false,
         banner_youtube_live: hasYoutube ? Boolean(youtubeLive) && Boolean(bannerYoutubeId) : false,
         banner_youtube_music: hasYoutube ? Boolean(youtubeMusic) : false,
+        banner_youtube_paused: hasYoutube ? Boolean(youtubePaused) : false,
+        banner_youtube_position_sec: hasYoutube
+            ? Math.max(0, Math.floor(Number(youtubePositionSec) || 0))
+            : 0,
         banner_title: trimmedTitle,
         ...serializeBodySlotsToFirestore(normalizedTexts, Boolean(trimmedTitle)),
         ...serializeTitleStyleToFirestore(style),
@@ -901,6 +905,49 @@ export function buildBannerUpdate({
 
 /** @deprecated Use buildBannerUpdate */
 export const buildBannerTextUpdate = buildBannerUpdate;
+
+/**
+ * YouTube sync-epoch bookkeeping shared by every banner write path (plain
+ * `setDoc` and transactional). Only stamps a new sync epoch when the caller
+ * explicitly signals new media via `banner_youtube_sync_client_ms` in
+ * `fields` — title/text/background edits must never reset playback sync.
+ * `serverTimestampValue` is passed in (rather than imported here) so this
+ * util stays free of a firebase/firestore dependency.
+ */
+export function resolveBannerYoutubeSyncFields(fields, serverTimestampValue) {
+    if (
+        !Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_id') &&
+        !Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_playlist_id')
+    ) {
+        return {};
+    }
+    const ytId = String(fields.banner_youtube_id || '').trim();
+    const listId = String(fields.banner_youtube_playlist_id || '').trim();
+    const hasYt =
+        /^[a-zA-Z0-9_-]{11}$/.test(ytId) ||
+        (/^[a-zA-Z0-9_-]{10,64}$/.test(listId) &&
+            !(listId.length === 11 && !/^(PL|UU|RD|OL|LL|FL|WL)/i.test(listId)));
+    const extra = {};
+    if (hasYt) {
+        const refreshSync = Object.prototype.hasOwnProperty.call(
+            fields,
+            'banner_youtube_sync_client_ms'
+        );
+        if (refreshSync) {
+            extra.banner_youtube_sync_at = serverTimestampValue;
+            if (!Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_paused')) {
+                extra.banner_youtube_paused = false;
+            }
+            if (!Object.prototype.hasOwnProperty.call(fields, 'banner_youtube_position_sec')) {
+                extra.banner_youtube_position_sec = 0;
+            }
+        }
+    } else if (!ytId && !listId) {
+        extra.banner_youtube_sync_at = null;
+        extra.banner_youtube_sync_client_ms = 0;
+    }
+    return extra;
+}
 
 /** Merge a partial patch onto the current normalized banner (for split host tools). */
 export function mergeBannerPatch(current, patch = {}) {
@@ -1063,15 +1110,27 @@ export function mergeBannerPatch(current, patch = {}) {
     if (patch.youtubeMusic !== undefined) {
         youtubeMusic = Boolean(patch.youtubeMusic);
     }
+    let youtubePaused = Boolean(base.youtubePaused);
+    if (patch.youtubePaused !== undefined) {
+        youtubePaused = Boolean(patch.youtubePaused);
+    }
+    let youtubePositionSec = Math.max(0, Math.floor(Number(base.youtubePositionSec) || 0));
+    if (patch.youtubePositionSec !== undefined) {
+        youtubePositionSec = Math.max(0, Math.floor(Number(patch.youtubePositionSec) || 0));
+    }
     if (!youtubeId && !youtubePlaylistId) {
         youtubeShort = false;
         youtubeLive = false;
         youtubeMusic = false;
+        youtubePaused = false;
+        youtubePositionSec = 0;
     }
     if (patch.imageUrl !== undefined && imageUrl) {
         youtubeShort = false;
         youtubeLive = false;
         youtubeMusic = false;
+        youtubePaused = false;
+        youtubePositionSec = 0;
     }
 
     const gradientColors = hasBackground && !transparent
@@ -1108,6 +1167,8 @@ export function mergeBannerPatch(current, patch = {}) {
         youtubeShort,
         youtubeLive,
         youtubeMusic,
+        youtubePaused,
+        youtubePositionSec,
         transparent,
     };
 }

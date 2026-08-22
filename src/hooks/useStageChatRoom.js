@@ -33,17 +33,16 @@ import {
     buildBannerImageUpdate,
     buildBannerClearImageUpdate,
     buildBannerYoutubeUpdate,
-    buildBannerYoutubePlaybackUpdate,
     buildBannerVoiceUpdate,
     buildBannerVoiceClearFields,
     buildBannerVoiceLoopUpdate,
     buildBannerUpdate,
     mergeBannerPatch,
     normalizeCommunityBanner,
+    resolveBannerYoutubeSyncFields,
     sanitizeBannerAxis,
     BANNER_VOICE_MAX_DURATION_SEC,
 } from '../utils/communityChatBanner';
-import { hasYoutubeBannerMedia } from '../utils/videoEmbedUtils';
 import { buildReplyFields } from '../utils/communityChatReply';
 import { resolveCommunityBannerDisplay } from '../utils/communityBannerDisplay';
 import { DEFAULT_HOST_SPOTLIGHT_POS } from '../utils/communityHostSpotlightPosition';
@@ -662,12 +661,42 @@ export function useStageChatRoom(stageId) {
             if (!isHost || !partnerId) return;
             const payload = {
                 ...fields,
+                ...resolveBannerYoutubeSyncFields(fields, serverTimestamp()),
                 banner_updated_at: serverTimestamp(),
                 ownerId: hostId || partnerId,
             };
             await setDoc(doc(db, 'stages', partnerId), payload, { merge: true });
         },
         [hostId, isHost, partnerId]
+    );
+
+    const syncYoutubePlayback = useCallback(
+        async ({ paused, positionSec } = {}) => {
+            if (!isHost || !partnerId) return;
+            if (!banner.youtubeId && !banner.youtubePlaylistId) return;
+            try {
+                const payload = {
+                    banner_youtube_sync_at: serverTimestamp(),
+                    // Instant guest math — avoid waiting for serverTimestamp resolution.
+                    banner_youtube_sync_client_ms: Date.now(),
+                    ownerId: hostId || partnerId,
+                };
+                if (typeof paused === 'boolean') {
+                    payload.banner_youtube_paused = paused;
+                }
+                // Only update position when explicitly provided (0 = hard stop / restart from start).
+                if (positionSec !== undefined && Number.isFinite(Number(positionSec))) {
+                    payload.banner_youtube_position_sec = Math.max(
+                        0,
+                        Math.floor(Number(positionSec))
+                    );
+                }
+                await setDoc(doc(db, 'stages', partnerId), payload, { merge: true });
+            } catch (err) {
+                console.error('[useStageChatRoom] youtube sync', err);
+            }
+        },
+        [banner.youtubeId, banner.youtubePlaylistId, hostId, isHost, partnerId]
     );
 
     const setBannerImage = useCallback(
@@ -713,9 +742,8 @@ export function useStageChatRoom(stageId) {
                 if (id || listId) {
                     await unpinAllHostMessages();
                 }
-                const fields = buildBannerYoutubeUpdate(id, { isShort, isLive, isMusic, playlistId: listId });
                 await replaceBanner(
-                    id || listId ? { ...fields, banner_youtube_sync_at: serverTimestamp() } : fields
+                    buildBannerYoutubeUpdate(id, { isShort, isLive, isMusic, playlistId: listId })
                 );
                 return true;
             } catch (err) {
@@ -725,25 +753,6 @@ export function useStageChatRoom(stageId) {
             }
         },
         [isHost, partnerId, replaceBanner, unpinAllHostMessages, showToast, t]
-    );
-
-    const setBannerYoutubePlayback = useCallback(
-        async (paused, positionSec = 0) => {
-            if (!isHost || !partnerId) return false;
-            if (!hasYoutubeBannerMedia(banner)) return false;
-            try {
-                await replaceBanner({
-                    ...buildBannerYoutubePlaybackUpdate(paused, positionSec),
-                    banner_youtube_sync_at: serverTimestamp(),
-                });
-                return true;
-            } catch (err) {
-                console.error('[useStageChatRoom] banner youtube playback', err);
-                showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
-                return false;
-            }
-        },
-        [banner, isHost, partnerId, replaceBanner, showToast, t]
     );
 
     const setBannerVoice = useCallback(
@@ -846,6 +855,7 @@ export function useStageChatRoom(stageId) {
                         stageRef,
                         {
                             ...fields,
+                            ...resolveBannerYoutubeSyncFields(fields, serverTimestamp()),
                             banner_updated_at: serverTimestamp(),
                             ownerId: hostId || partnerId,
                         },
@@ -1523,10 +1533,10 @@ export function useStageChatRoom(stageId) {
         setBannerImage,
         clearBannerImage,
         setBannerYoutube,
-        setBannerYoutubePlayback,
         setBannerVoice,
         clearBannerVoice,
         setBannerVoiceLoop,
+        syncYoutubePlayback,
         updateBanner,
         currentUserId: uid,
         participants,
