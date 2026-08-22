@@ -11,10 +11,10 @@ import {
     syncYoutubeEmbedPlayback,
 } from '../../utils/videoEmbedUtils';
 
-const HIDE_AFTER_MS = 3200;
-
 /**
- * Host YouTube controls (2 buttons, bottom; auto-hide while playing):
+ * Host YouTube controls — pinned to the bottom of the banner itself, shown
+ * and hidden together with the rest of the host tools (`visible` prop, driven
+ * by the same toggle as CommunityHostBannerComposerTools):
  * - ▶ / ⏸  Play resumes from pause point (synced). Pause freezes at current point (synced).
  * - ■      Hard stop to 0 + synced. Next play starts from the beginning.
  *
@@ -28,19 +28,15 @@ export default function CommunityBannerYoutubeHostControls({
     isLive = false,
     onPlaybackSync,
     visible = false,
-    layout = 'overlay',
 }) {
     const { t } = useTranslation();
     const [isPaused, setIsPaused] = useState(Boolean(paused));
-    const [chromeOpen, setChromeOpen] = useState(Boolean(paused));
-    const hideTimerRef = useRef(null);
     const clockRef = useRef({
         syncAtMs: Number(syncAtMs) || 0,
         positionSec: normalizeYoutubePositionSec(positionSec),
         paused: Boolean(paused),
     });
     const pauseBusyRef = useRef(false);
-    const prevPausedRef = useRef(Boolean(paused));
 
     // Adopt remote banner clock only when we are not mid local pause/play.
     useEffect(() => {
@@ -60,40 +56,7 @@ export default function CommunityBannerYoutubeHostControls({
         };
 
         setIsPaused((prev) => (prev === nextPaused ? prev : nextPaused));
-        if (nextPaused) setChromeOpen(true);
     }, [paused, positionSec, syncAtMs]);
-
-    const clearHideTimer = useCallback(() => {
-        if (hideTimerRef.current) {
-            window.clearTimeout(hideTimerRef.current);
-            hideTimerRef.current = null;
-        }
-    }, []);
-
-    const scheduleHideWhilePlaying = useCallback(() => {
-        clearHideTimer();
-        setChromeOpen(true);
-        hideTimerRef.current = window.setTimeout(() => {
-            setChromeOpen(false);
-            hideTimerRef.current = null;
-        }, HIDE_AFTER_MS);
-    }, [clearHideTimer]);
-
-    useEffect(() => () => clearHideTimer(), [clearHideTimer]);
-
-    // Open chrome only on pause / resume transitions — never on unrelated prop ticks.
-    useEffect(() => {
-        const wasPaused = prevPausedRef.current;
-        prevPausedRef.current = isPaused;
-        if (isPaused) {
-            clearHideTimer();
-            setChromeOpen(true);
-            return;
-        }
-        if (wasPaused) {
-            scheduleHideWhilePlaying();
-        }
-    }, [clearHideTimer, isPaused, scheduleHideWhilePlaying]);
 
     const withIframe = useCallback(
         (runner) => {
@@ -164,8 +127,7 @@ export default function CommunityBannerYoutubeHostControls({
         });
         setIsPaused(false);
         publishSync({ paused: false, positionSec: at });
-        scheduleHideWhilePlaying();
-    }, [isLive, publishSync, scheduleHideWhilePlaying, withIframe]);
+    }, [isLive, publishSync, withIframe]);
 
     /** ⏸ Freeze at trusted playhead. Sync everyone. */
     const handlePause = useCallback(async () => {
@@ -184,13 +146,11 @@ export default function CommunityBannerYoutubeHostControls({
                 syncYoutubeEmbedPlayback(frame, at, { paused: true });
             });
             setIsPaused(true);
-            setChromeOpen(true);
-            clearHideTimer();
             publishSync({ paused: true, positionSec: at });
         } finally {
             pauseBusyRef.current = false;
         }
-    }, [clearHideTimer, iframeRef, isLive, publishSync, wallClockSec, withIframe]);
+    }, [iframeRef, isLive, publishSync, wallClockSec, withIframe]);
 
     const handleTogglePlayPause = useCallback(
         (event) => {
@@ -210,113 +170,48 @@ export default function CommunityBannerYoutubeHostControls({
                 syncYoutubeEmbedPlayback(iframe, 0, { paused: true });
             });
             setIsPaused(true);
-            setChromeOpen(true);
-            clearHideTimer();
             publishSync({ paused: true, positionSec: 0 });
         },
-        [clearHideTimer, publishSync, withIframe]
-    );
-
-    const handleReveal = useCallback(
-        (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setChromeOpen(true);
-            if (!isPaused) scheduleHideWhilePlaying();
-        },
-        [isPaused, scheduleHideWhilePlaying]
+        [publishSync, withIframe]
     );
 
     if (!visible) return null;
 
-    if (layout === 'toolbar') {
-        return (
-            <div
-                className="community-banner-host-tools community-banner-host-tools--inline community-banner-host-tools--youtube-toolbar"
-                role="toolbar"
-                aria-label={t('community_banner_youtube_host_controls', 'Video controls')}
-            >
-                <button
-                    type="button"
-                    className="community-banner-host-tools__btn community-banner-host-tools__btn--youtube"
-                    onClick={handleTogglePlayPause}
-                    aria-label={
-                        isPaused
-                            ? t('community_banner_youtube_play', 'Play from here (sync everyone)')
-                            : t('community_banner_youtube_pause', 'Pause here (sync everyone)')
-                    }
-                    title={
-                        isPaused
-                            ? t('community_banner_youtube_play', 'Play from here (sync everyone)')
-                            : t('community_banner_youtube_pause', 'Pause here (sync everyone)')
-                    }
-                >
-                    {isPaused ? <FaPlay size={18} aria-hidden /> : <FaPause size={18} aria-hidden />}
-                </button>
-
-                <button
-                    type="button"
-                    className="community-banner-host-tools__btn community-banner-host-tools__btn--youtube"
-                    onClick={handleHardStop}
-                    aria-label={t('community_banner_youtube_hard_stop', 'Stop and restart from beginning')}
-                    title={t('community_banner_youtube_hard_stop', 'Stop and restart from beginning')}
-                >
-                    <FaStop size={15} aria-hidden />
-                </button>
-            </div>
-        );
-    }
-
-    const showChrome = chromeOpen || isPaused;
-
     return (
-        <>
-            {!showChrome ? (
-                <button
-                    type="button"
-                    className="community-main-chat__banner-youtube-host-hit"
-                    aria-label={t('community_banner_youtube_show_controls', 'Show video controls')}
-                    onClick={handleReveal}
-                    onPointerDown={(event) => event.stopPropagation()}
-                />
-            ) : null}
-
-            <div
-                className={`community-main-chat__banner-youtube-host-controls${showChrome ? ' is-open' : ' is-hidden'}`}
-                role="toolbar"
-                aria-label={t('community_banner_youtube_host_controls', 'Video controls')}
-                aria-hidden={showChrome ? undefined : true}
+        <div
+            className="community-main-chat__banner-youtube-host-controls is-open"
+            role="toolbar"
+            aria-label={t('community_banner_youtube_host_controls', 'Video controls')}
+        >
+            <button
+                type="button"
+                className={`community-main-chat__banner-youtube-host-controls__btn community-main-chat__banner-youtube-host-controls__btn--toggle${isPaused ? ' is-paused' : ' is-playing'}`}
+                onClick={handleTogglePlayPause}
+                onPointerDown={(event) => event.stopPropagation()}
+                aria-label={
+                    isPaused
+                        ? t('community_banner_youtube_play', 'Play from here (sync everyone)')
+                        : t('community_banner_youtube_pause', 'Pause here (sync everyone)')
+                }
+                title={
+                    isPaused
+                        ? t('community_banner_youtube_play', 'Play from here (sync everyone)')
+                        : t('community_banner_youtube_pause', 'Pause here (sync everyone)')
+                }
             >
-                <button
-                    type="button"
-                    className={`community-main-chat__banner-youtube-host-controls__btn community-main-chat__banner-youtube-host-controls__btn--toggle${isPaused ? ' is-paused' : ' is-playing'}`}
-                    onClick={handleTogglePlayPause}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    aria-label={
-                        isPaused
-                            ? t('community_banner_youtube_play', 'Play from here (sync everyone)')
-                            : t('community_banner_youtube_pause', 'Pause here (sync everyone)')
-                    }
-                    title={
-                        isPaused
-                            ? t('community_banner_youtube_play', 'Play from here (sync everyone)')
-                            : t('community_banner_youtube_pause', 'Pause here (sync everyone)')
-                    }
-                >
-                    {isPaused ? <FaPlay size={20} aria-hidden /> : <FaPause size={20} aria-hidden />}
-                </button>
+                {isPaused ? <FaPlay size={20} aria-hidden /> : <FaPause size={20} aria-hidden />}
+            </button>
 
-                <button
-                    type="button"
-                    className="community-main-chat__banner-youtube-host-controls__btn community-main-chat__banner-youtube-host-controls__btn--stop"
-                    onClick={handleHardStop}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    aria-label={t('community_banner_youtube_hard_stop', 'Stop and restart from beginning')}
-                    title={t('community_banner_youtube_hard_stop', 'Stop and restart from beginning')}
-                >
-                    <FaStop size={17} aria-hidden />
-                </button>
-            </div>
-        </>
+            <button
+                type="button"
+                className="community-main-chat__banner-youtube-host-controls__btn community-main-chat__banner-youtube-host-controls__btn--stop"
+                onClick={handleHardStop}
+                onPointerDown={(event) => event.stopPropagation()}
+                aria-label={t('community_banner_youtube_hard_stop', 'Stop and restart from beginning')}
+                title={t('community_banner_youtube_hard_stop', 'Stop and restart from beginning')}
+            >
+                <FaStop size={17} aria-hidden />
+            </button>
+        </div>
     );
 }

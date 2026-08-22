@@ -290,18 +290,6 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
             layout="above-banner"
             hostToolsVisible={hostToolsVisible}
           />
-          {isYoutube ? (
-            <CommunityBannerYoutubeHostControls
-              iframeRef={hostYtIframeRef}
-              syncAtMs={banner.youtubeSyncAt}
-              positionSec={banner.youtubePositionSec}
-              paused={banner.youtubePaused}
-              isLive={banner.youtubeLive}
-              onPlaybackSync={room.syncYoutubePlayback}
-              visible={hostToolsVisible}
-              layout="toolbar"
-            />
-          ) : null}
           {showCornerDelete ? (
             <button
               type="button"
@@ -327,6 +315,18 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
         className={`community-main-chat__banner-wrap${reserveLowerForHost ? ' community-main-chat__banner-wrap--host-lower' : ''}${isTransparent && hasImage ? ' community-main-chat__banner-wrap--text-overlay' : ''}${isYoutube ? ' community-main-chat__banner-wrap--youtube' : ''}${isHost && isYoutube ? ' community-main-chat__banner-wrap--youtube-host' : ''}`}
       >
         <div className="community-main-chat__banner">{bannerInner}</div>
+
+        {isHost && bannerMediaActive && isYoutube ? (
+          <CommunityBannerYoutubeHostControls
+            iframeRef={hostYtIframeRef}
+            syncAtMs={banner.youtubeSyncAt}
+            positionSec={banner.youtubePositionSec}
+            paused={banner.youtubePaused}
+            isLive={banner.youtubeLive}
+            onPlaybackSync={room.syncYoutubePlayback}
+            visible={hostToolsVisible}
+          />
+        ) : null}
 
         {isHost && bannerMediaActive ? (
           <button

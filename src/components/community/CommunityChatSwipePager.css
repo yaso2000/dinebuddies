@@ -422,20 +422,8 @@
     z-index: 2;
 }
 
-/* Full-banner tap target to reveal controls while playing */
-.community-main-chat__banner-youtube-host-hit {
-    position: absolute;
-    inset: 0;
-    z-index: 17;
-    margin: 0;
-    padding: 0;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    pointer-events: auto;
-}
-
-/* Bottom bar — visible when paused/stopped or after tap; hidden while playing */
+/* Bottom bar — host video controls, shown/hidden together with the rest of
+   the host tools (visible prop), not on its own auto-hide/reveal timer. */
 .community-main-chat__banner-youtube-host-controls {
     position: absolute;
     top: auto;
@@ -453,18 +441,6 @@
     backdrop-filter: blur(14px) saturate(150%);
     -webkit-backdrop-filter: blur(14px) saturate(150%);
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.42);
-    pointer-events: auto;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.community-main-chat__banner-youtube-host-controls.is-hidden {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateX(-50%) translateY(0.4rem);
-}
-
-.community-main-chat__banner-youtube-host-controls.is-open {
-    opacity: 1;
     pointer-events: auto;
 }
 
