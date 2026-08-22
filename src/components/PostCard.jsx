@@ -18,7 +18,7 @@ import UserAvatar from './UserAvatar';
 import FeaturedPostSlideCard from './FeaturedPostSlideCard';
 import MotionPostBody from './MotionPostBody';
 import { isCommunityMotionPost, motionDocFromPost } from '../features/motion-post/motionPostFeedUtils';
-import { FaCalendarAlt, FaMapMarkerAlt, FaImage, FaYoutube, FaTiktok, FaInstagram, FaPlay } from 'react-icons/fa';
+import { FaCalendarAlt, FaMapMarkerAlt, FaImage, FaYoutube, FaTiktok, FaInstagram, FaPlay, FaPause } from 'react-icons/fa';
 import { globalMediaManager } from '../utils/mediaUtils';
 import {
   buildYoutubeEmbedSrc,
@@ -26,6 +26,8 @@ import {
   isYoutubeShortPost,
   getYoutubeThumbnailUrl,
   shouldMuteEmbedAutoplay,
+  postYoutubeEmbedCommand,
+  postYoutubeEmbedListening,
   YOUTUBE_EMBED_ALLOW } from
 '../utils/videoEmbedUtils';
 import './PostCard.css';
@@ -84,6 +86,8 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
   const [isPlaying, setIsPlaying] = useState(false);
   const [embedMuted, setEmbedMuted] = useState(false);
   const [playbackEpoch, setPlaybackEpoch] = useState(0);
+  const [youtubePaused, setYoutubePaused] = useState(false);
+  const youtubeIframeRef = useRef(null);
 
   // Optimistic likes — local state prevents flicker from onSnapshot two-phase firing
   const [localLikes, setLocalLikes] = useState(() => post.likes || []);
@@ -164,6 +168,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
   const stopPostMedia = () => {
     setIsPlaying(false);
     setEmbedMuted(false);
+    setYoutubePaused(false);
     setPlaybackEpoch((e) => e + 1);
     if (videoRef.current) {
       videoRef.current.pause();
@@ -215,6 +220,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
       if (activeId !== post.id) {
         setIsPlaying(false);
         setEmbedMuted(false);
+        setYoutubePaused(false);
         setPlaybackEpoch((e) => e + 1);
         if (videoRef.current) {
           videoRef.current.pause();
@@ -229,8 +235,18 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
   const handlePlayMedia = (e) => {
     if (e) e.stopPropagation();
     setEmbedMuted(false);
+    setYoutubePaused(false);
     setIsPlaying(true);
     globalMediaManager.play(post.id);
+  };
+
+  const handleToggleYoutubePlayback = (e) => {
+    e.stopPropagation();
+    const iframe = youtubeIframeRef.current;
+    if (!iframe) return;
+    postYoutubeEmbedListening(iframe);
+    postYoutubeEmbedCommand(iframe, youtubePaused ? 'playVideo' : 'pauseVideo');
+    setYoutubePaused((prev) => !prev);
   };
 
   // Sync from server only when there is no in-flight write
@@ -899,20 +915,30 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
             isPlaying ?
             <div
               className={`post-embed-player${isYoutubeShort ? ' post-embed-player--vertical' : ''}`}
-              onClick={(e) => e.stopPropagation()}>
+              onClick={handleToggleYoutubePlayback}>
 
                                             <iframe
+                ref={youtubeIframeRef}
                 key={`yt-${displayPost.mediaUrl}-${embedMuted ? 'm' : 'u'}-${playbackEpoch}`}
                 width="100%"
                 height="100%"
                 src={buildYoutubeEmbedSrc(displayPost.mediaUrl, {
                   autoplay: true,
-                  mute: embedMuted
+                  mute: embedMuted,
+                  controls: false
                 })}
                 frameBorder="0"
                 allow={YOUTUBE_EMBED_ALLOW}
                 allowFullScreen
                 title="YouTube" />
+
+                                            {youtubePaused &&
+              <div className="post-embed-pause-overlay" aria-hidden>
+                                                    <span className="post-embed-pause-overlay__icon">
+                                                        <FaPlay size={22} />
+                                                    </span>
+                                                </div>
+              }
 
                                             {embedMuted && isIosLikeDevice() &&
               <button

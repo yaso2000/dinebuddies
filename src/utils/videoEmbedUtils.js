@@ -179,16 +179,26 @@ export function getYoutubeThumbnailCandidates(videoId, { isShort = false } = {})
 /**
  * YouTube iframe src tuned for mobile Safari (playsinline required on iOS).
  * @param {string} videoId
- * @param {{ autoplay?: boolean; mute?: boolean }} [opts]
+ * @param {{ autoplay?: boolean; mute?: boolean; controls?: boolean }} [opts]
  */
-export function buildYoutubeEmbedSrc(videoId, { autoplay = false, mute = false } = {}) {
+export function buildYoutubeEmbedSrc(videoId, { autoplay = false, mute = false, controls = true } = {}) {
     const params = new URLSearchParams({
         autoplay: autoplay ? '1' : '0',
         playsinline: '1',
         rel: '0',
         modestbranding: '1',
-        controls: '1',
+        controls: controls ? '1' : '0',
     });
+    if (!controls) {
+        // Feed playback hides YouTube's own chrome entirely so the video reads
+        // as part of the app, not a foreign embed — enablejsapi lets the card
+        // provide its own minimal tap-to-toggle instead.
+        params.set('disablekb', '1');
+        params.set('iv_load_policy', '3');
+        params.set('cc_load_policy', '0');
+        params.set('fs', '0');
+        params.set('enablejsapi', '1');
+    }
     if (mute) params.set('mute', '1');
     if (typeof window !== 'undefined' && window.location?.origin) {
         params.set('origin', window.location.origin);

@@ -247,6 +247,34 @@
     background: #000;
 }
 
+.post-embed-player {
+    cursor: pointer;
+}
+
+.post-embed-pause-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.post-embed-pause-overlay__icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    backdrop-filter: blur(6px);
+}
+
 .post-embed-player iframe,
 .post-embed-shell iframe,
 .post-media-container > iframe {
