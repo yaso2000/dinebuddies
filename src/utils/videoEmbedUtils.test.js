@@ -6,6 +6,7 @@ import {
     buildYoutubeBannerBackgroundSrc,
     hasYoutubeBannerMedia,
     normalizeYoutubePositionSec,
+    computeYoutubeSyncPositionSec,
 } from './videoEmbedUtils.js';
 
 describe('parseYoutubeLink extended media', () => {
@@ -86,5 +87,14 @@ describe('youtube embed helpers', () => {
             hasYoutubeBannerMedia({ youtubePlaylistId: 'PLrAXtmRdnEQy6nuLMOV8u4M4xXq' })
         ).toBe(true);
         expect(hasYoutubeBannerMedia({})).toBe(false);
+    });
+
+    it('computes the host-sync position anchor', () => {
+        expect(computeYoutubeSyncPositionSec({ isLive: true, positionSec: 40, syncAtMs: Date.now() })).toBe(0);
+        expect(computeYoutubeSyncPositionSec({ paused: true, positionSec: 40, syncAtMs: Date.now() - 10000 })).toBe(40);
+        expect(computeYoutubeSyncPositionSec({ positionSec: 40 })).toBe(40);
+        const target = computeYoutubeSyncPositionSec({ positionSec: 40, syncAtMs: Date.now() - 5000 });
+        expect(target).toBeGreaterThanOrEqual(44);
+        expect(target).toBeLessThanOrEqual(46);
     });
 });

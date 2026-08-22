@@ -1769,6 +1769,8 @@
   "community_banner_image_alt": "بانر المجتمع",
   "community_banner_delete_youtube": "إزالة الفيديو",
   "community_banner_delete_image": "إزالة صورة البانر",
+  "community_banner_youtube_play_all": "استئناف الفيديو للجميع",
+  "community_banner_youtube_pause_all": "إيقاف الفيديو للجميع",
   "community_host_messages": "رسالة من المضيف",
   "community_banner_youtube_tool": "يوتيوب / موسيقى / بث مباشر",
   "community_banner_youtube_url_label": "رابط يوتيوب / موسيقى / قائمة تشغيل / بث مباشر",

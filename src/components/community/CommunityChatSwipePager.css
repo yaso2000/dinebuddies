@@ -358,6 +358,45 @@
     border-color: rgba(254, 202, 202, 0.55);
 }
 
+/* Host play/pause broadcast toggle — pauses/resumes the banner's YouTube
+   media for every viewer, live or not. */
+.community-banner-youtube-playback-toggle {
+    position: absolute;
+    top: 0.45rem;
+    inset-inline-end: 2.45rem;
+    inset-inline-start: auto;
+    z-index: 16;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.85rem;
+    height: 1.85rem;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: rgba(255, 255, 255, 0.95);
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.community-banner-youtube-playback-toggle:hover {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.community-top-media-panel__host-toolbar .community-banner-youtube-playback-toggle {
+    position: static;
+    top: auto;
+    left: auto;
+    right: auto;
+    inset-inline-start: auto;
+    inset-inline-end: auto;
+    flex-shrink: 0;
+}
+
 /* Members icon is pinned to the banner's own top corner — visible for both
    host and guest, independent of the host toolbar's visibility. */
 .community-main-chat__banner-members-btn {

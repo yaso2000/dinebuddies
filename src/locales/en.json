@@ -1610,6 +1610,8 @@
   "community_banner_image_alt": "Community banner",
   "community_banner_delete_youtube": "Remove video",
   "community_banner_delete_image": "Remove banner image",
+  "community_banner_youtube_play_all": "Resume video for everyone",
+  "community_banner_youtube_pause_all": "Pause video for everyone",
   "community_host_messages": "Message from host",
   "community_banner_youtube_tool": "YouTube / Music / Live",
   "community_banner_youtube_url_label": "YouTube / Music / playlist / live link",

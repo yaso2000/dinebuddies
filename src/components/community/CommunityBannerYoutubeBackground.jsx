@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     buildYoutubeBannerBackgroundSrc,
+    computeYoutubeSyncPositionSec,
     getYoutubeThumbnailCandidates,
     parseYoutubeEmbedMessage,
     postYoutubeEmbedCommand,
@@ -48,10 +49,13 @@ function useYoutubeEmbedPlayback({ onPlaying, onError, enabled = true }) {
 }
 
 /**
- * YouTube banner background — plain autoplay + loop, independent per viewer.
- * No cross-viewer playback sync: each viewer's own embed just plays. The only
- * shared behavior is local audio ducking (pausing while a banner voice message
- * is playing on THIS viewer's own screen), which needs no server round trip.
+ * YouTube banner background — autoplay + loop, independent per viewer. Each
+ * viewer's own embed just plays; the only cross-viewer coordination is a
+ * one-time seek anchor (see `syncAtMs`/`syncPositionSec`/`syncPaused`) so a
+ * viewer joining mid-video lands near the host's position instead of
+ * restarting at 0 — no continuous drift-correction or polling. Also handles
+ * local audio ducking (pausing while a banner voice message is playing on
+ * THIS viewer's own screen), which needs no server round trip.
  */
 export default function CommunityBannerYoutubeBackground({
     videoId,
@@ -60,6 +64,9 @@ export default function CommunityBannerYoutubeBackground({
     isLive = false,
     preview = false,
     playbackEnabled = true,
+    syncPaused = false,
+    syncPositionSec = 0,
+    syncAtMs = 0,
     iframeRef,
 }) {
     const localIframeRef = useRef(null);
@@ -67,6 +74,7 @@ export default function CommunityBannerYoutubeBackground({
     const [errored, setErrored] = useState(false);
     const mediaKey = youtubeMediaKey(videoId, playlistId, isLive);
     const lastMediaKeyRef = useRef(mediaKey);
+    const retryCountRef = useRef(0);
 
     if (lastMediaKeyRef.current !== mediaKey) {
         lastMediaKeyRef.current = mediaKey;
@@ -79,18 +87,46 @@ export default function CommunityBannerYoutubeBackground({
     const [posterIndex, setPosterIndex] = useState(0);
     const posterUrl = posterCandidates[posterIndex] || '';
 
-    const embedSrc = useMemo(
-        () =>
-            buildYoutubeBannerBackgroundSrc(videoId, {
-                muted: !preview,
-                controls: false,
-                loop: true,
-                startSec: 0,
-                playlistId,
-                isLive,
-            }),
-        [videoId, playlistId, isLive, preview, mediaKey]
-    );
+    // Sync anchor read once per mount (mediaKey change) so it seeds the
+    // initial `start` param — later anchor updates re-seek via postMessage
+    // instead of rebuilding `embedSrc` (never rewrite `src` after mount; see
+    // the iOS note on `applyMemberYoutubeSound`).
+    const initialSyncRef = useRef({ paused: syncPaused, positionSec: syncPositionSec, syncAtMs });
+    initialSyncRef.current = { paused: syncPaused, positionSec: syncPositionSec, syncAtMs };
+    const syncAtMsAtMountRef = useRef(syncAtMs);
+
+    const embedSrc = useMemo(() => {
+        const { paused, positionSec, syncAtMs: at } = initialSyncRef.current;
+        syncAtMsAtMountRef.current = at;
+        return buildYoutubeBannerBackgroundSrc(videoId, {
+            muted: !preview,
+            controls: false,
+            loop: true,
+            startSec: computeYoutubeSyncPositionSec({ isLive, paused, positionSec, syncAtMs: at }),
+            playlistId,
+            isLive,
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- only the media identity should rebuild the src; later sync updates re-seek via postMessage below.
+    }, [videoId, playlistId, isLive, preview, mediaKey]);
+
+    // Re-sync (host paused/resumed/seeked while this viewer was already
+    // watching) — one-shot seek via the JS API, no iframe reload.
+    useEffect(() => {
+        if (isLive) return undefined;
+        if (syncAtMs === syncAtMsAtMountRef.current) return undefined;
+        syncAtMsAtMountRef.current = syncAtMs;
+        const iframe = localIframeRef.current;
+        if (!iframe) return undefined;
+        const target = computeYoutubeSyncPositionSec({
+            isLive,
+            paused: syncPaused,
+            positionSec: syncPositionSec,
+            syncAtMs,
+        });
+        postYoutubeEmbedListening(iframe);
+        postYoutubeEmbedCommand(iframe, 'seekTo', [target, true]);
+        return undefined;
+    }, [syncAtMs, isLive, syncPaused, syncPositionSec]);
 
     const assignIframeRef = (node) => {
         localIframeRef.current = node;
@@ -101,6 +137,7 @@ export default function CommunityBannerYoutubeBackground({
         setPosterIndex(0);
         setRevealed(false);
         setErrored(false);
+        retryCountRef.current = 0;
     }, [mediaKey]);
 
     useEffect(() => {
@@ -108,12 +145,30 @@ export default function CommunityBannerYoutubeBackground({
         return () => window.clearTimeout(revealTimer);
     }, [mediaKey]);
 
+    // Some Android WebViews/Chrome deliver a transient onError (or the player
+    // silently stalls) a few seconds into playback even though the embed is
+    // otherwise fine — reload the iframe a few times before giving up instead
+    // of leaving the banner permanently stuck on the poster.
     useYoutubeEmbedPlayback({
         onPlaying: () => {
+            retryCountRef.current = 0;
             setErrored(false);
             setRevealed(true);
         },
-        onError: () => setErrored(true),
+        onError: () => {
+            const iframe = localIframeRef.current;
+            if (iframe && retryCountRef.current < 3) {
+                retryCountRef.current += 1;
+                const attempt = retryCountRef.current;
+                window.setTimeout(() => {
+                    if (localIframeRef.current) {
+                        localIframeRef.current.src = embedSrc;
+                    }
+                }, 1000 * attempt);
+                return;
+            }
+            setErrored(true);
+        },
     });
 
     // Local audio ducking — pause while a voice message plays on THIS viewer's

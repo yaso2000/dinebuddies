@@ -216,6 +216,22 @@ export function normalizeYoutubePositionSec(value) {
     return Math.floor(n);
 }
 
+/**
+ * Host-broadcast position anchor → the position a viewer should currently be
+ * at. Not frame-perfect (no continuous drift-correction), just a one-time
+ * seek target on load/resync: host's anchor position plus wall-clock time
+ * elapsed since that anchor was written, if still playing. Live streams have
+ * no meaningful position — always 0 (no `start` param is ever sent for live).
+ * @param {{ isLive?: boolean; paused?: boolean; positionSec?: number; syncAtMs?: number }} params
+ */
+export function computeYoutubeSyncPositionSec({ isLive = false, paused = false, positionSec = 0, syncAtMs = 0 } = {}) {
+    if (isLive) return 0;
+    const base = Math.max(0, Number(positionSec) || 0);
+    if (paused || !syncAtMs) return Math.floor(base);
+    const elapsedSec = Math.max(0, (Date.now() - syncAtMs) / 1000);
+    return Math.floor(base + elapsedSec);
+}
+
 const YOUTUBE_MESSAGE_ORIGINS = new Set([
     'https://www.youtube.com',
     'https://www.youtube-nocookie.com',

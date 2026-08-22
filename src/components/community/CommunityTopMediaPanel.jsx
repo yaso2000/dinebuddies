@@ -1,6 +1,6 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaEye, FaEyeSlash, FaGift, FaImage, FaTimes, FaUsers } from 'react-icons/fa';
+import { FaEye, FaEyeSlash, FaGift, FaImage, FaPause, FaPlay, FaTimes, FaUsers } from 'react-icons/fa';
 import { AppText } from '../base';
 import CommunityHostBannerComposerTools from './CommunityHostBannerComposerTools';
 import CommunityBannerDraggableTitle from './CommunityBannerDraggableTitle';
@@ -26,6 +26,7 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
     updateBanner,
     pendingReplyTo,
     setBannerYoutube,
+    setBannerYoutubePlayback,
     clearBannerImage,
     clearBannerVoice,
     setBannerVoiceLoop,
@@ -90,6 +91,28 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
   const hasCustomBannerImage = Boolean(String(banner.url || '').trim()) && !hasYoutube;
   const showCornerDelete =
     isHost && bannerMediaActive && hostToolsVisible && (hasYoutube || hasCustomBannerImage);
+  const showYoutubePlaybackToggle = isHost && bannerMediaActive && hostToolsVisible && hasYoutube;
+
+  // Host's own estimate of "where the video currently is" — wall-clock time
+  // elapsed since the last host-written anchor (host tools disable seeking,
+  // so this stays accurate without polling the player for its real time).
+  // Kept in sync with Firestore so a second host tab/device anchors correctly.
+  const hostPositionAnchorRef = useRef({ atMs: Date.now(), positionSec: 0 });
+  useEffect(() => {
+    hostPositionAnchorRef.current = {
+      atMs: banner.youtubeSyncAt || Date.now(),
+      positionSec: banner.youtubePositionSec || 0,
+    };
+  }, [banner.youtubeSyncAt, banner.youtubePositionSec]);
+
+  const toggleYoutubePlayback = useCallback(() => {
+    if (typeof setBannerYoutubePlayback !== 'function') return;
+    const { atMs, positionSec } = hostPositionAnchorRef.current;
+    const nextPaused = !banner.youtubePaused;
+    const elapsedSec = banner.youtubePaused ? 0 : Math.max(0, (Date.now() - atMs) / 1000);
+    const currentPositionSec = Math.floor(positionSec + elapsedSec);
+    void setBannerYoutubePlayback(nextPaused, currentPositionSec);
+  }, [banner.youtubePaused, setBannerYoutubePlayback]);
 
   const handleDeleteBannerMedia = useCallback(() => {
     if (hasYoutube) {
@@ -165,7 +188,10 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
               playlistId={bannerDisplay.youtubePlaylistId}
               isShort={bannerDisplay.youtubeShort}
               isLive={bannerDisplay.youtubeLive}
-              playbackEnabled={bannerMediaActive}
+              playbackEnabled={bannerMediaActive && !banner.youtubePaused}
+              syncPaused={banner.youtubePaused}
+              syncPositionSec={banner.youtubePositionSec}
+              syncAtMs={banner.youtubeSyncAt}
               iframeRef={ytIframeRef}
             />
           ) : bannerDisplay.isVideo ? (
@@ -216,6 +242,26 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
             layout="above-banner"
             hostToolsVisible={hostToolsVisible}
           />
+          {showYoutubePlaybackToggle ? (
+            <button
+              type="button"
+              className="community-banner-youtube-playback-toggle"
+              aria-pressed={!banner.youtubePaused}
+              aria-label={
+                banner.youtubePaused
+                  ? t('community_banner_youtube_play_all', 'Resume video for everyone')
+                  : t('community_banner_youtube_pause_all', 'Pause video for everyone')
+              }
+              title={
+                banner.youtubePaused
+                  ? t('community_banner_youtube_play_all', 'Resume video for everyone')
+                  : t('community_banner_youtube_pause_all', 'Pause video for everyone')
+              }
+              onClick={toggleYoutubePlayback}
+            >
+              {banner.youtubePaused ? <FaPlay size={12} aria-hidden /> : <FaPause size={12} aria-hidden />}
+            </button>
+          ) : null}
           {showCornerDelete ? (
             <button
               type="button"

@@ -671,6 +671,14 @@ export function normalizeCommunityBanner(data) {
         voiceUpdatedAt: firestoreTimestampToMs(data?.banner_voice_updated_at) || 0,
         /** Host opt-in: replay voice after it ends. Default off (play once). */
         voiceLoop: data?.banner_voice_loop === true,
+        /**
+         * Host-broadcast YouTube play/pause + position anchor. `youtubePositionSec`
+         * is the position at the moment `youtubeSyncAt` was written; combine them
+         * to get "where the host is right now" (see computeYoutubeSyncPositionSec).
+         */
+        youtubePaused: data?.banner_youtube_paused === true,
+        youtubePositionSec: Math.max(0, Math.floor(Number(data?.banner_youtube_position_sec) || 0)),
+        youtubeSyncAt: firestoreTimestampToMs(data?.banner_youtube_sync_at) || 0,
     };
 }
 
@@ -717,6 +725,26 @@ export function buildBannerYoutubeClearFields() {
         banner_youtube_short: false,
         banner_youtube_live: false,
         banner_youtube_music: false,
+        banner_youtube_paused: false,
+        banner_youtube_position_sec: 0,
+        banner_youtube_sync_at: null,
+    };
+}
+
+/**
+ * Host play/pause broadcast for the banner's YouTube media — reused for both
+ * live and non-live content. `positionSec` is the host's own estimated
+ * position (wall-clock elapsed since their last anchor) at the moment of this
+ * action; ignored for live. Caller should overwrite `banner_youtube_sync_at`
+ * with `serverTimestamp()` when writing.
+ * @param {boolean} paused
+ * @param {number} [positionSec]
+ */
+export function buildBannerYoutubePlaybackUpdate(paused, positionSec = 0) {
+    return {
+        banner_youtube_paused: Boolean(paused),
+        banner_youtube_position_sec: Math.max(0, Math.floor(Number(positionSec) || 0)),
+        banner_youtube_sync_at: Date.now(),
     };
 }
 
@@ -766,6 +794,10 @@ export function buildBannerYoutubeUpdate(
         banner_youtube_live: Boolean(isLive) && Boolean(id),
         banner_youtube_music: Boolean(isMusic),
         banner_url: '',
+        // Fresh media starts unpaused at 0 for everyone.
+        banner_youtube_paused: false,
+        banner_youtube_position_sec: 0,
+        banner_youtube_sync_at: Date.now(),
     };
 }
 

@@ -31,6 +31,7 @@ import {
     buildBannerImageUpdate,
     buildBannerClearImageUpdate,
     buildBannerYoutubeUpdate,
+    buildBannerYoutubePlaybackUpdate,
     buildBannerVoiceUpdate,
     buildBannerVoiceClearFields,
     buildBannerVoiceLoopUpdate,
@@ -41,6 +42,7 @@ import {
     BANNER_VOICE_MAX_DURATION_SEC,
 } from '../utils/communityChatBanner';
 import { buildReplyFields } from '../utils/communityChatReply';
+import { hasYoutubeBannerMedia } from '../utils/videoEmbedUtils';
 import { resolveCommunityBannerDisplay } from '../utils/communityBannerDisplay';
 import { DEFAULT_HOST_SPOTLIGHT_POS } from '../utils/communityHostSpotlightPosition';
 import {
@@ -560,6 +562,25 @@ export function useCommunityChatRoom(partnerId) {
             }
         },
         [isHost, partnerId, replaceBanner, unpinAllHostMessages, showToast, t]
+    );
+
+    const setBannerYoutubePlayback = useCallback(
+        async (paused, positionSec = 0) => {
+            if (!isHost || !partnerId) return false;
+            if (!hasYoutubeBannerMedia(banner)) return false;
+            try {
+                await replaceBanner({
+                    ...buildBannerYoutubePlaybackUpdate(paused, positionSec),
+                    banner_youtube_sync_at: serverTimestamp(),
+                });
+                return true;
+            } catch (err) {
+                console.error('[useCommunityChatRoom] banner youtube playback', err);
+                showToast(t('failed_send_message', 'Failed to send. Please try again.'), 'error');
+                return false;
+            }
+        },
+        [banner, isHost, partnerId, replaceBanner, showToast, t]
     );
 
     const setBannerVoice = useCallback(
@@ -1233,6 +1254,7 @@ export function useCommunityChatRoom(partnerId) {
         setBannerImage,
         clearBannerImage,
         setBannerYoutube,
+        setBannerYoutubePlayback,
         setBannerVoice,
         clearBannerVoice,
         setBannerVoiceLoop,
