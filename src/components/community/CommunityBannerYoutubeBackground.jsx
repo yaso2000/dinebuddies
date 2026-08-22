@@ -74,7 +74,6 @@ export default function CommunityBannerYoutubeBackground({
     const [errored, setErrored] = useState(false);
     const mediaKey = youtubeMediaKey(videoId, playlistId, isLive);
     const lastMediaKeyRef = useRef(mediaKey);
-    const retryCountRef = useRef(0);
 
     if (lastMediaKeyRef.current !== mediaKey) {
         lastMediaKeyRef.current = mediaKey;
@@ -137,7 +136,6 @@ export default function CommunityBannerYoutubeBackground({
         setPosterIndex(0);
         setRevealed(false);
         setErrored(false);
-        retryCountRef.current = 0;
     }, [mediaKey]);
 
     useEffect(() => {
@@ -145,30 +143,12 @@ export default function CommunityBannerYoutubeBackground({
         return () => window.clearTimeout(revealTimer);
     }, [mediaKey]);
 
-    // Some Android WebViews/Chrome deliver a transient onError (or the player
-    // silently stalls) a few seconds into playback even though the embed is
-    // otherwise fine — reload the iframe a few times before giving up instead
-    // of leaving the banner permanently stuck on the poster.
     useYoutubeEmbedPlayback({
         onPlaying: () => {
-            retryCountRef.current = 0;
             setErrored(false);
             setRevealed(true);
         },
-        onError: () => {
-            const iframe = localIframeRef.current;
-            if (iframe && retryCountRef.current < 3) {
-                retryCountRef.current += 1;
-                const attempt = retryCountRef.current;
-                window.setTimeout(() => {
-                    if (localIframeRef.current) {
-                        localIframeRef.current.src = embedSrc;
-                    }
-                }, 1000 * attempt);
-                return;
-            }
-            setErrored(true);
-        },
+        onError: () => setErrored(true),
     });
 
     // Local audio ducking — pause while a voice message plays on THIS viewer's

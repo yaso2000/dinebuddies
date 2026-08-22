@@ -551,8 +551,9 @@ export function useCommunityChatRoom(partnerId) {
                 if (id || listId) {
                     await unpinAllHostMessages();
                 }
+                const fields = buildBannerYoutubeUpdate(id, { isShort, isLive, isMusic, playlistId: listId });
                 await replaceBanner(
-                    buildBannerYoutubeUpdate(id, { isShort, isLive, isMusic, playlistId: listId })
+                    id || listId ? { ...fields, banner_youtube_sync_at: serverTimestamp() } : fields
                 );
                 return true;
             } catch (err) {
