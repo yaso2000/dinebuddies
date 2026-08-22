@@ -26,14 +26,11 @@
   box-sizing: border-box;
   line-height: 0;
   flex-shrink: 0;
-  background: conic-gradient(
-    from 210deg,
-    #ff2d55,
-    #ff6b8a,
-    #e11d48,
-    #ff2d55
+  background: var(
+    --stage-ring-gradient,
+    conic-gradient(from 210deg, #ff2d55, #ff6b8a, #e11d48, #ff2d55)
   );
-  box-shadow: 0 0 0 1px color-mix(in srgb, #ff2d55 35%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--stage-accent, #ff2d55) 35%, transparent);
   transition: transform 0.18s ease;
   overflow: visible;
 }
@@ -79,11 +76,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #ff2d55;
+  background: var(--stage-accent, #ff2d55);
   color: #fff;
   border: 2px solid var(--bg-card, #fff);
   font-size: 0.55rem;
-  box-shadow: 0 2px 6px rgba(255, 45, 85, 0.45);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--stage-accent, #ff2d55) 45%, transparent);
   z-index: 2;
 }
 
@@ -110,7 +107,7 @@
   transform: translateX(-50%);
   padding: 1px 6px;
   border-radius: 4px;
-  background: #ff2d55;
+  background: var(--stage-accent, #ff2d55);
   color: #fff;
   font-size: 0.58rem;
   font-weight: 850;

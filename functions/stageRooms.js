@@ -155,6 +155,14 @@ function resolveStageHostAvatar(stage, host) {
     return hostAvatarUrl(host) || asTrimmedString(stage?.hostAvatar) || null;
 }
 
+/** Normalized for the avatar gender ring: 'male' | 'female' | null (unspecified). */
+function resolveHostGender(host) {
+    const raw = String(host?.gender || '').toLowerCase().trim();
+    if (raw === 'male' || raw === 'm' || raw === 'man') return 'male';
+    if (raw === 'female' || raw === 'f' || raw === 'woman') return 'female';
+    return null;
+}
+
 /** 'people' | 'business' — stored on stage; fall back to host profile. */
 function resolveHostKind(stage, host) {
     const raw = asTrimmedString(stage?.hostKind || stage?.kind).toLowerCase();
@@ -690,8 +698,9 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                 const hasName = Boolean(asTrimmedString(stage.hostName));
                 const hasCoords = Boolean(parseCoordPair(stage));
                 if (!hasName || !hasCoords) hostIdsNeedingLookup.add(hostId);
-                // Always resolve host for hostKind when missing on stage.
+                // Always resolve host for hostKind/hostGender (avatar ring) — never stored on the stage doc.
                 if (!asTrimmedString(stage.hostKind)) hostIdsNeedingLookup.add(hostId);
+                hostIdsNeedingLookup.add(hostId);
             }
 
             const hostMap = new Map();
@@ -765,6 +774,7 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                     hostName,
                     hostAvatar,
                     hostKind: resolveHostKind(c.stage, host),
+                    hostGender: resolveHostGender(host),
                     visibility: c.visibility,
                     status: c.status || 'active',
                     memberCount: c.memberIds.length,
@@ -965,13 +975,8 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                     isMember: isMember || isHost,
                     status,
                 });
-                if (
-                    !asTrimmedString(stage.hostName) ||
-                    !parseCoordPair(stage) ||
-                    !asTrimmedString(stage.hostKind)
-                ) {
-                    hostIdsNeedingLookup.add(hostId);
-                }
+                // Always resolve host for hostGender (avatar ring) — never stored on the stage doc.
+                hostIdsNeedingLookup.add(hostId);
             }
 
             const hostMap = new Map();
@@ -1028,6 +1033,7 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
                     hostName,
                     hostAvatar,
                     hostKind: resolveHostKind(c.stage, host),
+                    hostGender: resolveHostGender(host),
                     visibility: c.visibility,
                     status: c.status || 'active',
                     memberCount: c.memberIds.length,
