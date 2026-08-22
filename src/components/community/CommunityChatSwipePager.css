@@ -2756,6 +2756,46 @@ body:has(.community-chat-fullscreen) {
     pointer-events: auto;
 }
 
+.community-main-chat__banner-twitch-tap {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    background: radial-gradient(circle at 50% 40%, rgba(145, 70, 255, 0.28), transparent 60%), #0d0d12;
+    color: #fff;
+    cursor: pointer;
+    z-index: 1;
+}
+
+.community-main-chat__banner-twitch-tap-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.2rem;
+    height: 3.2rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+}
+
+.community-main-chat__banner-twitch-tap-icon svg {
+    transform: translateX(2px);
+}
+
+.community-main-chat__banner-twitch-tap-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.92);
+}
+
 .community-main-chat__banner-youtube--host,
 .community-main-chat__banner-youtube--preview {
     pointer-events: auto;

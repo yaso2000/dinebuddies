@@ -1775,6 +1775,7 @@
   "community_banner_twitch_url_placeholder": "اسم القناة أو رابط twitch.tv/channel",
   "community_banner_twitch_host_hint": "يعرض القناة مباشرة — يرى الضيوف أي بث تقوم به هذه القناة الآن على Twitch، أو شاشة غير متصل عند عدم البث.",
   "community_banner_bg_image_replaces_twitch": "إضافة صورة تستبدل قناة Twitch الحالية.",
+  "community_banner_twitch_tap_to_watch": "اضغط للمشاهدة المباشرة",
   "community_host_messages": "رسالة من المضيف",
   "community_banner_youtube_tool": "يوتيوب / موسيقى / بث مباشر",
   "community_banner_youtube_url_label": "رابط يوتيوب / موسيقى / قائمة تشغيل / بث مباشر",
