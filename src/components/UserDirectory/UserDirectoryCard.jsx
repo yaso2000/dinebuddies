@@ -345,7 +345,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
             className="user-directory-card__avatar"
             loading="lazy"
             draggable={false}
-            style={mergeAvatarStyleWithGenderRing(user, { borderRadius: 0 }, { ringWidth: 3 })}
+            style={mergeAvatarStyleWithGenderRing(user, { borderRadius: 14 }, { ringWidth: 3 })}
           />
         </Link>
       ) : (
@@ -355,7 +355,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
           className="user-directory-card__avatar"
           loading="lazy"
           draggable={false}
-          style={mergeAvatarStyleWithGenderRing(user, { borderRadius: 0 }, { ringWidth: 3 })}
+          style={mergeAvatarStyleWithGenderRing(user, { borderRadius: 14 }, { ringWidth: 3 })}
         />
       )}
       <OnlineStatusBadge
