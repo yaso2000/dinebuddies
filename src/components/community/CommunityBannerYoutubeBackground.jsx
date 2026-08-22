@@ -236,6 +236,22 @@ function MemberYoutubeEmbed({
         [videoId, playlistId, isLive, mediaKey]
     );
 
+    // Stagger member embed loads — several guests opening the same banner at
+    // once all hit YouTube for the identical video within the same instant,
+    // which can trip its own anti-abuse throttling on that video (shown as a
+    // misleading "too many devices streaming" message, unrelated to any real
+    // account/device limit). The host's own embed (HostYoutubeEmbed) loads
+    // immediately since it's the sync anchor; members can afford a short
+    // random delay before their embed actually requests the video — the
+    // periodic drift-correction below catches up within a few seconds.
+    const [activeSrc, setActiveSrc] = useState('');
+    useEffect(() => {
+        setActiveSrc('');
+        const jitterMs = Math.floor(Math.random() * 4000);
+        const jitterTimer = window.setTimeout(() => setActiveSrc(embedSrc), jitterMs);
+        return () => window.clearTimeout(jitterTimer);
+    }, [embedSrc]);
+
     const iframeId = `community-yt-member-${videoId || playlistId || 'media'}`;
 
     const assignIframeRef = (node) => {
@@ -465,19 +481,21 @@ function MemberYoutubeEmbed({
             ) : (
                 <div className="community-main-chat__banner-youtube-poster community-main-chat__banner-youtube-poster--fallback" />
             )}
-            <iframe
-                ref={assignIframeRef}
-                id={iframeId}
-                key={mediaKey}
-                src={embedSrc}
-                title="YouTube banner"
-                className="community-main-chat__banner-youtube-frame"
-                allow={`${YOUTUBE_EMBED_ALLOW}; fullscreen`}
-                playsInline
-                loading="eager"
-                onLoad={handleIframeLoad}
-                style={playbackEnabled ? undefined : { visibility: 'hidden' }}
-            />
+            {activeSrc ? (
+                <iframe
+                    ref={assignIframeRef}
+                    id={iframeId}
+                    key={mediaKey}
+                    src={activeSrc}
+                    title="YouTube banner"
+                    className="community-main-chat__banner-youtube-frame"
+                    allow={`${YOUTUBE_EMBED_ALLOW}; fullscreen`}
+                    playsInline
+                    loading="eager"
+                    onLoad={handleIframeLoad}
+                    style={playbackEnabled ? undefined : { visibility: 'hidden' }}
+                />
+            ) : null}
             <div className="community-main-chat__banner-youtube-scrim" aria-hidden />
             {playbackEnabled ? (
                 <button
