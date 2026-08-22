@@ -63,11 +63,10 @@ export default function CommunityChatSwipePager({
   const activeIndexRef = useRef(defaultPage);
   const [activePageIndex, setActivePageIndex] = useState(defaultPage);
   const [membersOpen, setMembersOpen] = useState(false);
-  const isHost = Boolean(room?.isHost);
-  // Hosts get a "Members" icon inline in their banner toolbar (see CommunityTopMediaPanel) so it
-  // never overlaps the tools; fall back to the floating button when there's no toolbar to sit in
-  // (banner hidden) — guests never have that toolbar, so they always keep the floating button.
-  const showFloatingMembersBtn = !isHost || room?.bannerVisible === false;
+  // Members icon is pinned to the banner's own top corner (see CommunityTopMediaPanel), shown for
+  // both host and guest. Fall back to this floating button only when there's no banner to pin it
+  // to at all (banner hidden).
+  const showFloatingMembersBtn = room?.bannerVisible === false;
 
   const syncActiveIndex = useCallback(() => {
     const el = pagerRef.current;

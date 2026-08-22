@@ -89,7 +89,7 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
   const hasYoutube = hasYoutubeBannerMedia(banner);
   const hasCustomBannerImage = Boolean(String(banner.url || '').trim()) && !hasYoutube;
   const showCornerDelete =
-    isHost && bannerMediaActive && (hasYoutube || hasCustomBannerImage);
+    isHost && bannerMediaActive && hostToolsVisible && (hasYoutube || hasCustomBannerImage);
 
   const handleDeleteBannerMedia = useCallback(() => {
     if (hasYoutube) {
@@ -235,17 +235,6 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
               <FaTimes size={14} aria-hidden />
             </button>
           ) : null}
-          {typeof onOpenMembers === 'function' && hostToolsVisible ? (
-            <button
-              type="button"
-              className="community-top-media-panel__members-btn"
-              onClick={onOpenMembers}
-              title={t('community_participants_title', 'Online Participants')}
-              aria-label={t('community_participants_title', 'Online Participants')}
-            >
-              <FaUsers size={14} aria-hidden />
-            </button>
-          ) : null}
         </div>
       ) : null}
       <div
@@ -274,7 +263,7 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
           </button>
         ) : null}
 
-        {isHost && bannerMediaActive && !hostToolsVisible && typeof onOpenMembers === 'function' ? (
+        {bannerMediaActive && typeof onOpenMembers === 'function' ? (
           <button
             type="button"
             className="community-main-chat__banner-members-btn"
