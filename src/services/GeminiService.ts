@@ -1,5 +1,6 @@
 import { getApp } from 'firebase/app';
 import { getAI, getGenerativeModel, getImagenModel, GoogleAIBackend, VertexAIBackend } from 'firebase/ai';
+import type { ImagenAspectRatio } from 'firebase/ai';
 import {
     coalesceInvitationAiText,
     extractInvitationFieldsFromRaw,
@@ -231,6 +232,10 @@ export type MultimodalPipelineError = {
     error: string;
     code:
         | 'GEMINI_API_ERROR'
+        /* Every stage below runs through geminiFailureFromError, so a provider
+           billing failure surfaces here too — api/ai/multi-generate.ts already
+           branches on it. */
+        | 'GEMINI_PROVIDER_BILLING_EXHAUSTED'
         | 'MALFORMED_JSON'
         | 'VALIDATION_ERROR'
         | 'MODERATION_FAILED'
@@ -384,9 +389,9 @@ function buildInvitationSystemInstruction(
         if (subType === 'public') {
             toneRule +=
                 ' Public invitation: catchy title featuring the business; description highlights what makes the venue special and any active offer.';
-        } else if (subType === 'social') {
-            toneRule += ' Private invitation: exclusive, VIP tone while staying professional.';
         } else if (subType === 'private') {
+            toneRule += ' Private invitation: exclusive, VIP tone while staying professional.';
+        } else if (subType === 'date') {
             toneRule += ' Date invitation: romantic ambiance with a polished hospitality tone.';
         }
     } else {
@@ -395,9 +400,9 @@ function buildInvitationSystemInstruction(
         if (subType === 'public') {
             toneRule +=
                 ' Public invitation: catchy title (venue name allowed from context), friendly open invite for the venue type.';
-        } else if (subType === 'social') {
-            toneRule += ' Private invitation: warm, personal, close-friends tone.';
         } else if (subType === 'private') {
+            toneRule += ' Private invitation: warm, personal, close-friends tone.';
+        } else if (subType === 'date') {
             return buildPrivateInvitationSystemInstruction(cardStructure, outputLanguage);
         }
     }
@@ -492,7 +497,7 @@ function buildUserPrompt(input: GenerateContentInput): string {
 
         const dating = input.datingContext;
         if (dating) {
-            if (input.subType === 'private') {
+            if (input.subType === 'date') {
                 lines.push(...buildPrivateInvitationContextLines(dating));
             } else {
                 appendContextLine(lines, 'inviteeName', dating.inviteeName);
@@ -925,16 +930,27 @@ function sanitizeImagenPrompt(prompt: string): string {
         .slice(0, 2000);
 }
 
+/**
+ * Imagen accepts a narrower set of ratios than the app's cover picker offers.
+ * 4:5 has no Imagen equivalent, so it generates at the nearest portrait ratio
+ * and the cover is cropped to 4:5 downstream.
+ */
+function toImagenAspectRatio(aspectRatio: CoverAspectRatio): ImagenAspectRatio {
+    return aspectRatio === '4:5' ? '3:4' : aspectRatio;
+}
+
+export type CoverImageError = {
+    success: false;
+    error: string;
+    code: 'IMAGE_GENERATION_FAILED' | 'GEMINI_API_ERROR' | typeof GEMINI_PROVIDER_BILLING_CODE;
+};
+
 export async function generateCoverImage(
     imagePrompt: string,
     aspectRatio: CoverAspectRatio = '1:1',
 ): Promise<
     | { success: true; bytesBase64: string; mimeType: string; filteredReason?: string }
-    | {
-          success: false;
-          error: string;
-          code: 'IMAGE_GENERATION_FAILED' | 'GEMINI_API_ERROR' | typeof GEMINI_PROVIDER_BILLING_CODE;
-      }
+    | CoverImageError
 > {
     const safePrompt = sanitizeImagenPrompt(imagePrompt);
     if (!safePrompt) {
@@ -956,7 +972,7 @@ export async function generateCoverImage(
                     model: modelName,
                     generationConfig: {
                         numberOfImages: 1,
-                        aspectRatio,
+                        aspectRatio: toImagenAspectRatio(aspectRatio),
                     },
                 });
 
@@ -1084,10 +1100,14 @@ export async function runMultimodalPipeline(
         });
 
         if (!textResult.success) {
+            // The API type-check runs without strictNullChecks, which drops
+            // discriminated-union narrowing on `success` — name the failure
+            // shape so this reads the same in both configurations.
+            const failure = textResult as GenerateContentError;
             return {
                 success: false,
-                error: textResult.error,
-                code: textResult.code,
+                error: failure.error,
+                code: failure.code,
                 stage: 'text_generation',
             };
         }
@@ -1119,10 +1139,11 @@ export async function runMultimodalPipeline(
     stages.push('stage1_image_prompt');
     const promptResult = await generateImagePrompt(input, invitationText);
     if (!promptResult.success) {
+        const failure = promptResult as GenerateContentError;
         return {
             success: false,
-            error: promptResult.error,
-            code: promptResult.code,
+            error: failure.error,
+            code: failure.code,
             stage: 'image_prompt',
         };
     }
@@ -1135,10 +1156,11 @@ export async function runMultimodalPipeline(
         input.aspectRatio || '1:1',
     );
     if (!imageResult.success) {
+        const failure = imageResult as CoverImageError;
         return {
             success: false,
-            error: imageResult.error,
-            code: imageResult.code,
+            error: failure.error,
+            code: failure.code,
             stage: 'image_generation',
         };
     }
@@ -1149,7 +1171,7 @@ export async function runMultimodalPipeline(
         imageResult.mimeType,
     );
     if (!moderationResult.success) {
-        return moderationResult;
+        return moderationResult as MultimodalPipelineError;
     }
 
     if (!moderationResult.data.approvedForInvitationCover) {
