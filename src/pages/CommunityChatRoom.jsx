@@ -6,6 +6,8 @@ import { FaSignOutAlt, FaTimes } from 'react-icons/fa';
 import CommunityChatSwipePager from '../components/community/CommunityChatSwipePager';
 import CommunityFullChatView from '../components/community/CommunityFullChatView';
 import CommunityChatHeaderMenu from '../components/community/CommunityChatHeaderMenu';
+import MessageActionsToolbar from '../components/chat/MessageActionsToolbar';
+import ForwardMessageModal from '../components/chat/ForwardMessageModal';
 import UserAvatar from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
@@ -29,6 +31,17 @@ export default function CommunityChatRoom() {
   const { isBusiness } = useAuth();
   const { joinCommunity, leaveCommunity, currentUser: inviteUser } = useInvitations();
   const room = useCommunityChatRoom(partnerId);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [selectedMessageOptions, setSelectedMessageOptions] = useState(null);
+  const [forwardMessage, setForwardMessage] = useState(null);
+  const handleSelectMessage = useCallback((message, options) => {
+    setSelectedMessage(message);
+    setSelectedMessageOptions(options);
+  }, []);
+  const roomWithSelect = useMemo(
+    () => ({ ...room, onSelectMessage: handleSelectMessage }),
+    [room, handleSelectMessage]
+  );
   const joinedCommunityIds = inviteUser?.joinedCommunities ?? [];
   const canEnterChat =
     room.isMember ||
@@ -268,6 +281,44 @@ export default function CommunityChatRoom() {
         {...guestFrameShellAttrs}
         style={shellInlineStyle}
       >
+        {selectedMessage ? (
+          <MessageActionsToolbar
+            onBack={() => {
+              setSelectedMessage(null);
+              setSelectedMessageOptions(null);
+            }}
+            canReply={selectedMessageOptions?.canReply}
+            onReply={() => {
+              selectedMessageOptions?.onReply?.();
+              setSelectedMessage(null);
+              setSelectedMessageOptions(null);
+            }}
+            isStarred={selectedMessageOptions?.isStarred}
+            onToggleStar={selectedMessageOptions?.onToggleStar}
+            canDelete={selectedMessageOptions?.canDelete}
+            onDelete={() => {
+              selectedMessageOptions?.onDelete?.();
+              setSelectedMessage(null);
+              setSelectedMessageOptions(null);
+            }}
+            canForward
+            onForward={() => {
+              setForwardMessage(selectedMessage);
+              setSelectedMessage(null);
+              setSelectedMessageOptions(null);
+            }}
+            onCopy={
+              selectedMessage?.text
+                ? () => {
+                    navigator.clipboard?.writeText(selectedMessage.text).catch(() => {});
+                    setSelectedMessage(null);
+                    setSelectedMessageOptions(null);
+                  }
+                : undefined
+            }
+            moreActions={selectedMessageOptions?.moreActions || []}
+          />
+        ) : (
         <header className="chat-header">
           <button
             type="button"
@@ -344,12 +395,18 @@ export default function CommunityChatRoom() {
             />
           </div>
         </header>
+        )}
 
         {isDesktopShell ? (
-          <CommunityFullChatView room={room} />
+          <CommunityFullChatView room={roomWithSelect} />
         ) : (
-          <CommunityChatSwipePager room={room} />
+          <CommunityChatSwipePager room={roomWithSelect} />
         )}
+        <ForwardMessageModal
+          open={Boolean(forwardMessage)}
+          message={forwardMessage}
+          onClose={() => setForwardMessage(null)}
+        />
       </div>
     );
   }

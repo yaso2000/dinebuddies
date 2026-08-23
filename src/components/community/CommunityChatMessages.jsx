@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { FaEllipsisH } from 'react-icons/fa';
 import { AppText } from '../base';
 import UserAvatar from '../UserAvatar';
-import CommunityChatMessageMenu from './CommunityChatMessageMenu';
+import MessageReactionBar from '../chat/MessageReactionBar';
 import { useLongPress } from './useLongPress';
+import { useSwipeToReply } from '../../hooks/useSwipeToReply';
 import { prepareBidiDisplayText } from '../../utils/bidiText';
 import { formatAppDate, formatAppTime } from '../../utils/localeFormat';
 import { getMessageReceiptDisplay } from '../../utils/chatMessageReceipts';
@@ -202,6 +203,7 @@ function CommunityChatMessageSegment({
   canHideFromBanner,
   canDelete,
   onOpenMenu,
+  onReplyToMessage,
   language,
   clusterPosition = 'single',
 }) {
@@ -234,6 +236,11 @@ function CommunityChatMessageSegment({
   };
 
   const longPress = useLongPress(openMenu, { disabled: !interactive });
+  const swipe = useSwipeToReply({
+    onReply: () => onReplyToMessage?.(msg),
+    alignRight: outgoing,
+    disabled: !canReply,
+  });
 
   const segmentClass = [
     'community-main-chat__bubble-segment',
@@ -254,7 +261,26 @@ function CommunityChatMessageSegment({
       ref={segmentRef}
       className={segmentClass}
       onContextMenu={handleContextMenu}
-      {...longPress}
+      onPointerDown={(e) => {
+        longPress.onPointerDown(e);
+        swipe.handlers.onPointerDown(e);
+      }}
+      onPointerMove={(e) => {
+        longPress.onPointerMove(e);
+        swipe.handlers.onPointerMove(e);
+      }}
+      onPointerUp={(e) => {
+        longPress.onPointerUp(e);
+        swipe.handlers.onPointerUp(e);
+      }}
+      onPointerCancel={(e) => {
+        longPress.onPointerCancel(e);
+        swipe.handlers.onPointerCancel(e);
+      }}
+      style={{
+        transform: swipe.dragX ? `translateX(${swipe.dragX}px)` : undefined,
+        transition: swipe.dragX ? 'none' : 'transform 0.15s ease',
+      }}
     >
       <div className="community-main-chat__bubble-inner">
         <AppText
@@ -411,6 +437,7 @@ function CommunityChatTextStack({
                   canHideFromBanner={segmentPerms.canHideFromBanner}
                   canDelete={segmentPerms.canDelete}
                   onOpenMenu={onOpenMenu}
+                  onReplyToMessage={onReplyToMessage}
                   language={language}
                   clusterPosition={getClusterPosition(index, messages.length)}
                 />
@@ -494,6 +521,11 @@ function CommunityChatMessageAtomic({
   };
 
   const longPress = useLongPress(openMenu, { disabled: !interactive });
+  const swipe = useSwipeToReply({
+    onReply: () => onReplyToMessage?.(msg),
+    alignRight,
+    disabled: !perms.canReply,
+  });
 
   const rowClass = [
     'community-main-chat__message',
@@ -534,7 +566,26 @@ function CommunityChatMessageAtomic({
           className="community-main-chat__message-body"
           ref={bubbleRef}
           onContextMenu={handleContextMenu}
-          {...longPress}
+          onPointerDown={(e) => {
+            longPress.onPointerDown(e);
+            swipe.handlers.onPointerDown(e);
+          }}
+          onPointerMove={(e) => {
+            longPress.onPointerMove(e);
+            swipe.handlers.onPointerMove(e);
+          }}
+          onPointerUp={(e) => {
+            longPress.onPointerUp(e);
+            swipe.handlers.onPointerUp(e);
+          }}
+          onPointerCancel={(e) => {
+            longPress.onPointerCancel(e);
+            swipe.handlers.onPointerCancel(e);
+          }}
+          style={{
+            transform: swipe.dragX ? `translateX(${swipe.dragX}px)` : undefined,
+            transition: swipe.dragX ? 'none' : 'transform 0.15s ease',
+          }}
         >
           {showSender ? (
             <AppText as="span" className="community-main-chat__sender">
@@ -657,6 +708,8 @@ export default function CommunityChatMessages({
   onUnpinHostMessage,
   onShowOnBanner,
   onHideFromBanner,
+  onReactMessage,
+  onSelectMessage,
 }) {
   const { t, i18n } = useTranslation();
   const listRef = useRef(null);
@@ -724,10 +777,14 @@ export default function CommunityChatMessages({
       ? 'community-main-chat__messages community-main-chat__messages--focus'
       : 'community-main-chat__messages';
 
-  const closeMenu = () => setMenu(null);
+  const closeMenu = () => {
+    setMenu(null);
+    onSelectMessage?.(null, null);
+  };
 
   const handleOpenMenu = (message, anchorRect, options) => {
     setMenu({ message, anchorRect, ...options });
+    onSelectMessage?.(message, options);
   };
 
   return (
@@ -801,23 +858,10 @@ export default function CommunityChatMessages({
         )}
       </ul>
 
-      <CommunityChatMessageMenu
-        open={Boolean(menu)}
+      <MessageReactionBar
+        open={Boolean(menu) && Boolean(onReactMessage)}
         anchorRect={menu?.anchorRect}
-        showReply={menu?.canReply}
-        showMute={menu?.canMute}
-        showPin={menu?.canPin}
-        showUnpin={menu?.canUnpin}
-        showOnBanner={menu?.canShowOnBanner}
-        showHideFromBanner={menu?.canHideFromBanner}
-        showDelete={menu?.canDelete}
-        onReply={() => onReplyToMessage?.(menu?.message)}
-        onMute={() => onMuteMember?.(menu?.message)}
-        onPin={() => onPinHostMessage?.(menu?.message)}
-        onUnpin={() => onUnpinHostMessage?.(menu?.message)}
-        onShowOnBanner={() => onShowOnBanner?.(menu?.message)}
-        onHideFromBanner={() => onHideFromBanner?.(menu?.message)}
-        onDelete={() => onDeleteMessage?.(menu?.message)}
+        onSelectEmoji={(emoji) => onReactMessage?.(menu?.message?.id, emoji)}
         onClose={closeMenu}
       />
     </>

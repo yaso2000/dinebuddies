@@ -7,6 +7,8 @@ import { FaDoorClosed, FaDoorOpen, FaPalette, FaSignOutAlt, FaTimes } from 'reac
 import CommunityChatSwipePager from '../components/community/CommunityChatSwipePager';
 import StageDesktopLayout from '../components/community/StageDesktopLayout';
 import CommunityChatHeaderMenu from '../components/community/CommunityChatHeaderMenu';
+import MessageActionsToolbar from '../components/chat/MessageActionsToolbar';
+import ForwardMessageModal from '../components/chat/ForwardMessageModal';
 import useZoneThemeModal from '../components/community/useZoneThemeModal';
 import UserAvatar from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
@@ -36,6 +38,13 @@ export default function StageChatRoom() {
   const { isBusiness, currentUser, userProfile } = useAuth();
   const { showToast } = useToast();
   const room = useStageChatRoom(stageId);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [selectedMessageOptions, setSelectedMessageOptions] = useState(null);
+  const [forwardMessage, setForwardMessage] = useState(null);
+  const handleSelectMessage = useCallback((message, options) => {
+    setSelectedMessage(message);
+    setSelectedMessageOptions(options);
+  }, []);
   const { openGiftPicker, giftModal } = useProfileGiftPicker();
   const zoneTheme = useZoneThemeModal(room);
   const bootstrapHostId = location.state?.stageHostId || null;
@@ -152,9 +161,10 @@ export default function StageChatRoom() {
               communityChatBannerVisible: true,
             },
           };
-    if (!canGiftStreamHost) return base;
+    const withSelect = { ...base, onSelectMessage: handleSelectMessage };
+    if (!canGiftStreamHost) return withSelect;
     return {
-      ...base,
+      ...withSelect,
       onSendGiftToHost: openGiftToHost,
     };
   }, [
@@ -165,6 +175,7 @@ export default function StageChatRoom() {
     stageId,
     uid,
     t,
+    handleSelectMessage,
   ]);
 
   useEffect(() => {
@@ -505,6 +516,44 @@ export default function StageChatRoom() {
         {...guestFrameShellAttrs}
         style={shellInlineStyle}
       >
+        {selectedMessage ? (
+          <MessageActionsToolbar
+            onBack={() => {
+              setSelectedMessage(null);
+              setSelectedMessageOptions(null);
+            }}
+            canReply={selectedMessageOptions?.canReply}
+            onReply={() => {
+              selectedMessageOptions?.onReply?.();
+              setSelectedMessage(null);
+              setSelectedMessageOptions(null);
+            }}
+            isStarred={selectedMessageOptions?.isStarred}
+            onToggleStar={selectedMessageOptions?.onToggleStar}
+            canDelete={selectedMessageOptions?.canDelete}
+            onDelete={() => {
+              selectedMessageOptions?.onDelete?.();
+              setSelectedMessage(null);
+              setSelectedMessageOptions(null);
+            }}
+            canForward
+            onForward={() => {
+              setForwardMessage(selectedMessage);
+              setSelectedMessage(null);
+              setSelectedMessageOptions(null);
+            }}
+            onCopy={
+              selectedMessage?.text
+                ? () => {
+                    navigator.clipboard?.writeText(selectedMessage.text).catch(() => {});
+                    setSelectedMessage(null);
+                    setSelectedMessageOptions(null);
+                  }
+                : undefined
+            }
+            moreActions={selectedMessageOptions?.moreActions || []}
+          />
+        ) : (
         <header className="chat-header">
           <button
             type="button"
@@ -597,6 +646,7 @@ export default function StageChatRoom() {
             />
           </div>
         </header>
+        )}
 
         {room.isStageClosed ? (
           <AppText
@@ -629,6 +679,11 @@ export default function StageChatRoom() {
         )}
         {giftModal}
         {zoneTheme.modal}
+        <ForwardMessageModal
+          open={Boolean(forwardMessage)}
+          message={forwardMessage}
+          onClose={() => setForwardMessage(null)}
+        />
       </div>
     );
   }

@@ -35,6 +35,9 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
     showMessageOnBanner,
     hideMessageFromBanner,
     onSendGiftToHost,
+    reactToMessage,
+    toggleStarMessage,
+    onSelectMessage,
   } = room;
   // Stage rooms: `partnerId` is the stage document id, not the host's user id
   // — `hostId` (only present on the Stage hook) is the correct id to match
@@ -110,6 +113,69 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
     [hideMessageFromBanner]
   );
 
+  const handleSelectMessage = useCallback(
+    (message, options) => {
+      if (!message) {
+        onSelectMessage?.(null, null);
+        return;
+      }
+      const moreActions = [];
+      if (options?.canMute) {
+        moreActions.push({ key: 'mute', label: t('mute_member', 'Mute'), onClick: () => handleMute(message) });
+      }
+      if (options?.canPin) {
+        moreActions.push({
+          key: 'pin',
+          label: t('community_chat_pin_bar', 'Pin to announcement bar'),
+          onClick: () => handlePin(message),
+        });
+      }
+      if (options?.canUnpin) {
+        moreActions.push({
+          key: 'unpin',
+          label: t('community_chat_unpin_bar', 'Unpin from bar'),
+          onClick: () => handleUnpin(message),
+        });
+      }
+      if (options?.canShowOnBanner) {
+        moreActions.push({
+          key: 'showOnBanner',
+          label: t('community_chat_show_on_banner', 'Show on banner'),
+          onClick: () => handleShowOnBanner(message),
+        });
+      }
+      if (options?.canHideFromBanner) {
+        moreActions.push({
+          key: 'hideFromBanner',
+          label: t('community_chat_hide_from_banner', 'Hide from banner'),
+          onClick: () => handleHideFromBanner(message),
+        });
+      }
+      onSelectMessage?.(message, {
+        canReply: Boolean(options?.canReply),
+        onReply: () => handleReply(message),
+        canDelete: Boolean(options?.canDelete),
+        onDelete: () => handleDelete(message),
+        isStarred: Array.isArray(message.starredBy) && message.starredBy.includes(currentUserId),
+        onToggleStar: toggleStarMessage ? () => toggleStarMessage(message.id) : undefined,
+        moreActions,
+      });
+    },
+    [
+      onSelectMessage,
+      handleMute,
+      handlePin,
+      handleUnpin,
+      handleShowOnBanner,
+      handleHideFromBanner,
+      handleReply,
+      handleDelete,
+      toggleStarMessage,
+      currentUserId,
+      t,
+    ]
+  );
+
   const runMod = useCallback(async (runner) => {
     if (modBusy) return;
     setModBusy(true);
@@ -143,6 +209,8 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
             onUnpinHostMessage={isHost ? handleUnpin : undefined}
             onShowOnBanner={isHost ? handleShowOnBanner : undefined}
             onHideFromBanner={isHost ? handleHideFromBanner : undefined}
+            onReactMessage={reactToMessage}
+            onSelectMessage={handleSelectMessage}
             variant="normal"
           />
 

@@ -731,6 +731,10 @@ service cloud.firestore {
         allow update: if isSignedIn() &&
                          isSocialInvitationChatParticipant(invitationId) &&
                          isReceiptFieldsOnlyUpdate();
+        // Any participant may react to or star a message they didn't send.
+        allow update: if isSignedIn() &&
+                         isSocialInvitationChatParticipant(invitationId) &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'starredBy']);
         allow delete: if isSignedIn() &&
                          (resource.data.senderId == request.auth.uid || isAdminOrPanelStaff());
       }
@@ -805,16 +809,20 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
         // Security: constrain message create schema and sender ownership
-        allow create: if isSignedIn() && 
+        allow create: if isSignedIn() &&
                          request.resource.data.senderId == request.auth.uid &&
-                         request.resource.data.keys().hasOnly(['senderId', 'text', 'type', 'createdAt', 'status', 'deliveredTo', 'readBy', 'reactions', 'replyTo', 'audioUrl', 'imageUrl', 'fileUrl', 'duration', 'sharedContent']) &&
+                         request.resource.data.keys().hasOnly(['senderId', 'text', 'type', 'createdAt', 'status', 'deliveredTo', 'readBy', 'reactions', 'replyTo', 'audioUrl', 'imageUrl', 'fileUrl', 'duration', 'sharedContent', 'forwardedFrom']) &&
                          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
-        allow update: if isSignedIn() && 
+        allow update: if isSignedIn() &&
                          resource.data.senderId == request.auth.uid;
         allow update: if isSignedIn() &&
                          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants &&
                          isReceiptFieldsOnlyUpdate();
-        allow delete: if isSignedIn() && 
+        // Any participant may react to or star a message they didn't send.
+        allow update: if isSignedIn() &&
+                         request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'starredBy']);
+        allow delete: if isSignedIn() &&
                          (resource.data.senderId == request.auth.uid || isAdmin());
       }
     }
@@ -1048,10 +1056,10 @@ service cloud.firestore {
                          resource.data.senderId == request.auth.uid &&
                          canWriteCommunityChat(partnerId);
 
-        // Community members can update reactions only (muted members cannot react)
+        // Community members can update reactions/star only (muted members cannot react)
         allow update: if isSignedIn() &&
                          canWriteCommunityChat(partnerId) &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'starredBy']);
 
         // Readers may append only their own delivery/read receipts
         allow update: if isSignedIn() &&
@@ -1104,7 +1112,7 @@ service cloud.firestore {
 
         allow update: if isSignedIn() &&
                          canWriteStageChat(stageId) &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'starredBy']);
 
         allow update: if isSignedIn() &&
                          (isStageMember(stageId) || isAdmin()) &&

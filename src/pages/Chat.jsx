@@ -34,6 +34,11 @@ import {
   setPersistedKeyboardHeightPx,
   subscribeNativeKeyboardHeight,
 } from '../utils/emojiInputMode';
+import { useLongPress } from '../components/community/useLongPress';
+import { useSwipeToReply } from '../hooks/useSwipeToReply';
+import MessageActionsToolbar from '../components/chat/MessageActionsToolbar';
+import ForwardMessageModal from '../components/chat/ForwardMessageModal';
+import { toggleMessageStar, isMessageStarredBy } from '../utils/messageStar';
 import './Chat.css';
 import '../styles/chatReferenceTheme.css';
 import { attachChatShellToVisualViewport, shouldApplyChatVisualViewportLock } from '../utils/chatVisualViewportLock';
@@ -62,6 +67,41 @@ const RELATIONSHIP_BADGE = {
 
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
+/** Long-press (select) + swipe-inward-to-reply, merged onto one wrapper per bubble row. */
+function ChatBubbleGestures({ isOwn, onLongPress, onSwipeReply, onContextMenu, className, children }) {
+  const longPress = useLongPress(onLongPress);
+  const swipe = useSwipeToReply({ onReply: onSwipeReply, alignRight: isOwn });
+
+  return (
+    <div
+      className={className}
+      onContextMenu={onContextMenu}
+      onPointerDown={(e) => {
+        longPress.onPointerDown(e);
+        swipe.handlers.onPointerDown(e);
+      }}
+      onPointerMove={(e) => {
+        longPress.onPointerMove(e);
+        swipe.handlers.onPointerMove(e);
+      }}
+      onPointerUp={(e) => {
+        longPress.onPointerUp(e);
+        swipe.handlers.onPointerUp(e);
+      }}
+      onPointerCancel={(e) => {
+        longPress.onPointerCancel(e);
+        swipe.handlers.onPointerCancel(e);
+      }}
+      style={{
+        transform: swipe.dragX ? `translateX(${swipe.dragX}px)` : undefined,
+        transition: swipe.dragX ? 'none' : 'transform 0.15s ease',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 const Chat = () => {
   const { t, i18n } = useTranslation();
   const { goBack: goBackFromChat } = useAppBackNavigation({ fallback: '/messages' });
@@ -70,7 +110,7 @@ const Chat = () => {
   const { currentUser, userProfile } = useAuth();
   const { currentUser: invitationUser } = useInvitations();
   const { isDark } = useTheme();
-  const { getOrCreateConversation, sendMessage, markAsRead, setTypingStatus, addReaction } = useChat();
+  const { getOrCreateConversation, sendMessage, markAsRead, setTypingStatus, addReaction, deleteMessage } = useChat();
   const { showToast } = useToast();
   const { themeId: chatThemeId, setThemeId: setChatThemeId, themeStyle: chatThemeStyle } = useChatTheme();
 
@@ -85,6 +125,8 @@ const Chat = () => {
   const [activeReactionMenu, setActiveReactionMenu] = useState(null);
   const [extendedReactionPicker, setExtendedReactionPicker] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
+  const [selectedMessageId, setSelectedMessageId] = useState(null);
+  const [forwardMessage, setForwardMessage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [conversationError, setConversationError] = useState(false);
   const [retryTrigger, setRetryTrigger] = useState(0);
@@ -556,6 +598,41 @@ const Chat = () => {
     setActiveReactionMenu(null);
   };
 
+  const selectedMessage = messages.find((m) => m.id === selectedMessageId) || null;
+
+  const handleToggleStarSelected = async () => {
+    if (!selectedMessage || !currentUser?.uid || !conversationId) return;
+    const messageRef = doc(db, 'conversations', conversationId, 'messages', selectedMessage.id);
+    await toggleMessageStar(
+      messageRef,
+      currentUser.uid,
+      isMessageStarredBy(selectedMessage, currentUser.uid)
+    );
+  };
+
+  const handleDeleteSelected = async () => {
+    if (!selectedMessageId || !conversationId) return;
+    await deleteMessage(conversationId, selectedMessageId);
+    setSelectedMessageId(null);
+  };
+
+  const handleCopySelected = () => {
+    if (selectedMessage?.text) {
+      navigator.clipboard?.writeText(selectedMessage.text).catch(() => {});
+    }
+    setSelectedMessageId(null);
+  };
+
+  const handleReplySelected = () => {
+    if (selectedMessage) setReplyTo(selectedMessage);
+    setSelectedMessageId(null);
+  };
+
+  const handleForwardSelected = () => {
+    if (selectedMessage) setForwardMessage(selectedMessage);
+    setSelectedMessageId(null);
+  };
+
   // Image Upload
   const handleImageSelect = async (e) => {
     const file = e.target.files[0];
@@ -772,6 +849,20 @@ const Chat = () => {
             ) : null}
 
             {/* Header */}
+            {selectedMessage ? (
+              <MessageActionsToolbar
+                onBack={() => setSelectedMessageId(null)}
+                canReply
+                onReply={handleReplySelected}
+                isStarred={isMessageStarredBy(selectedMessage, currentUser?.uid)}
+                onToggleStar={handleToggleStarSelected}
+                canDelete={selectedMessage.senderId === currentUser?.uid}
+                onDelete={handleDeleteSelected}
+                canForward
+                onForward={handleForwardSelected}
+                onCopy={selectedMessage.text ? handleCopySelected : undefined}
+              />
+            ) : (
             <div className={`chat-header${connectionKind ? ` chat-header--${connectionKind}` : ''}`} style={{
         background: connectionKind ? undefined : 'var(--header-bg)',
         borderBottom: '1px solid var(--border-color)',
@@ -825,6 +916,7 @@ const Chat = () => {
         }
                 <ChatThemePicker value={chatThemeId} onChange={setChatThemeId} />
             </div>
+            )}
 
             <div className="chat-body-column">
             {/* Messages */}
@@ -865,14 +957,21 @@ const Chat = () => {
             return (
               <React.Fragment key={msg.id}>
               {dayChip}
-              <div
+              <ChatBubbleGestures
                 className={`message-wrapper ${isOwn ? 'own' : 'other'} message-group-${groupPosition}`}
+                isOwn={isOwn}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   if (!isOwn) {
                     setActiveReactionMenu(msg.id);
                   }
-                }}>
+                }}
+                onLongPress={() => {
+                  if (!isOwn) setActiveReactionMenu(msg.id);
+                  setSelectedMessageId(msg.id);
+                }}
+                onSwipeReply={() => setReplyTo(msg)}
+              >
                             <div className="message-content-wrapper">
                                 {msg.replyTo &&
                   <div className="reply-preview">
@@ -1008,7 +1107,7 @@ const Chat = () => {
                                     </div>
                   }
                             </div>
-                        </div>
+                        </ChatBubbleGestures>
               </React.Fragment>);
 
           })}
@@ -1193,6 +1292,12 @@ const Chat = () => {
             </>
             ) : null}
             </div>
+
+            <ForwardMessageModal
+              open={Boolean(forwardMessage)}
+              message={forwardMessage}
+              onClose={() => setForwardMessage(null)}
+            />
         </div>);
 
 };

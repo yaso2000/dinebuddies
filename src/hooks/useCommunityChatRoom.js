@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     addDoc,
+    arrayRemove,
+    arrayUnion,
     collection,
     deleteDoc,
     doc,
@@ -905,6 +907,38 @@ export function useCommunityChatRoom(partnerId) {
         [isHost, partnerId, uid, pendingReplyTo, showToast, t]
     );
 
+    const reactToMessage = useCallback(
+        async (messageId, emoji) => {
+            if (!partnerId || !messageId || !uid) return;
+            const target = messages.find((m) => m.id === messageId);
+            const reacted = Boolean(target?.reactions?.[emoji]?.includes(uid));
+            try {
+                await updateDoc(doc(db, 'communities', partnerId, 'messages', messageId), {
+                    [`reactions.${emoji}`]: reacted ? arrayRemove(uid) : arrayUnion(uid),
+                });
+            } catch (err) {
+                console.error('[useCommunityChatRoom] reactToMessage', err);
+            }
+        },
+        [messages, partnerId, uid]
+    );
+
+    const toggleStarMessage = useCallback(
+        async (messageId) => {
+            if (!partnerId || !messageId || !uid) return;
+            const target = messages.find((m) => m.id === messageId);
+            const starred = Boolean(target?.starredBy?.includes(uid));
+            try {
+                await updateDoc(doc(db, 'communities', partnerId, 'messages', messageId), {
+                    starredBy: starred ? arrayRemove(uid) : arrayUnion(uid),
+                });
+            } catch (err) {
+                console.error('[useCommunityChatRoom] toggleStarMessage', err);
+            }
+        },
+        [messages, partnerId, uid]
+    );
+
     const startReplyToMessage = useCallback(
         (message) => {
             if (!isHost || !message?.id) return;
@@ -1291,6 +1325,8 @@ export function useCommunityChatRoom(partnerId) {
         hideMessageFromBanner,
         setHostSpotlightAuto,
         deleteChatMessage,
+        reactToMessage,
+        toggleStarMessage,
         pendingReplyTo,
         startReplyToMessage,
         cancelReplyToMessage,

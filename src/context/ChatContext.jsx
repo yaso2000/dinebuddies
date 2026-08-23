@@ -7,6 +7,7 @@ import {
     onSnapshot,
     addDoc,
     updateDoc,
+    deleteDoc,
     setDoc,
     doc,
     serverTimestamp,
@@ -432,6 +433,16 @@ export const ChatProvider = ({ children }) => {
         }
     };
 
+    const deleteMessage = async (conversationId, messageId) => {
+        if (!currentUser?.uid) return;
+        try {
+            await deleteDoc(doc(db, 'conversations', conversationId, 'messages', messageId));
+        } catch (error) {
+            console.error('Error deleting message:', error);
+            showToast('Failed to delete message.', 'error');
+        }
+    };
+
     const value = {
         conversations,
         loading,
@@ -440,7 +451,8 @@ export const ChatProvider = ({ children }) => {
         sendMessage,
         markAsRead,
         setTypingStatus,
-        addReaction
+        addReaction,
+        deleteMessage
     };
 
     return (

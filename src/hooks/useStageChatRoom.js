@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     addDoc,
+    arrayRemove,
+    arrayUnion,
     collection,
     deleteDoc,
     doc,
@@ -1077,6 +1079,38 @@ export function useStageChatRoom(stageId) {
         [isHost, partnerId, uid, pendingReplyTo, showToast, t]
     );
 
+    const reactToMessage = useCallback(
+        async (messageId, emoji) => {
+            if (!partnerId || !messageId || !uid) return;
+            const target = messages.find((m) => m.id === messageId);
+            const reacted = Boolean(target?.reactions?.[emoji]?.includes(uid));
+            try {
+                await updateDoc(doc(db, 'stages', partnerId, 'messages', messageId), {
+                    [`reactions.${emoji}`]: reacted ? arrayRemove(uid) : arrayUnion(uid),
+                });
+            } catch (err) {
+                console.error('[useStageChatRoom] reactToMessage', err);
+            }
+        },
+        [messages, partnerId, uid]
+    );
+
+    const toggleStarMessage = useCallback(
+        async (messageId) => {
+            if (!partnerId || !messageId || !uid) return;
+            const target = messages.find((m) => m.id === messageId);
+            const starred = Boolean(target?.starredBy?.includes(uid));
+            try {
+                await updateDoc(doc(db, 'stages', partnerId, 'messages', messageId), {
+                    starredBy: starred ? arrayRemove(uid) : arrayUnion(uid),
+                });
+            } catch (err) {
+                console.error('[useStageChatRoom] toggleStarMessage', err);
+            }
+        },
+        [messages, partnerId, uid]
+    );
+
     const startReplyToMessage = useCallback(
         (message) => {
             if (!isHost || !message?.id) return;
@@ -1523,6 +1557,8 @@ export function useStageChatRoom(stageId) {
         hideMessageFromBanner,
         setHostSpotlightAuto,
         deleteChatMessage,
+        reactToMessage,
+        toggleStarMessage,
         pendingReplyTo,
         startReplyToMessage,
         cancelReplyToMessage,

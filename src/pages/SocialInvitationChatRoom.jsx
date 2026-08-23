@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -6,6 +6,8 @@ import { FaPalette, FaTimes } from 'react-icons/fa';
 import CommunityChatSwipePager from '../components/community/CommunityChatSwipePager';
 import StageDesktopLayout from '../components/community/StageDesktopLayout';
 import CommunityChatHeaderMenu from '../components/community/CommunityChatHeaderMenu';
+import MessageActionsToolbar from '../components/chat/MessageActionsToolbar';
+import ForwardMessageModal from '../components/chat/ForwardMessageModal';
 import useZoneThemeModal from '../components/community/useZoneThemeModal';
 import UserAvatar from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
@@ -59,18 +61,28 @@ export default function SocialInvitationChatRoom() {
     navigate(getHostedInvitationDetailsPath({ id: invitationId, ...room.partner }));
   };
 
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [selectedMessageOptions, setSelectedMessageOptions] = useState(null);
+  const [forwardMessage, setForwardMessage] = useState(null);
+  const handleSelectMessage = useCallback((message, options) => {
+    setSelectedMessage(message);
+    setSelectedMessageOptions(options);
+  }, []);
+
   const roomWithGifts = useMemo(() => {
     const canGift = canEnterChat && !room.isHost && !isBusiness && room.hostId;
-    if (!canGift) return room;
-    return {
-      ...room,
-      onSendGiftToHost: () =>
-        openGiftPicker({
-          id: room.hostId,
-          display_name: room.partner?.display_name || t('social_invitation_chat', 'Event chat'),
-        }),
-    };
-  }, [room, canEnterChat, isBusiness, openGiftPicker, t]);
+    const base = canGift
+      ? {
+          ...room,
+          onSendGiftToHost: () =>
+            openGiftPicker({
+              id: room.hostId,
+              display_name: room.partner?.display_name || t('social_invitation_chat', 'Event chat'),
+            }),
+        }
+      : room;
+    return { ...base, onSelectMessage: handleSelectMessage };
+  }, [room, canEnterChat, isBusiness, openGiftPicker, t, handleSelectMessage]);
 
   const headerMenuActions = room.isHost
     ? [
@@ -205,6 +217,44 @@ export default function SocialInvitationChatRoom() {
         {...guestFrameShellAttrs}
         style={shellInlineStyle}
       >
+        {selectedMessage ? (
+          <MessageActionsToolbar
+            onBack={() => {
+              setSelectedMessage(null);
+              setSelectedMessageOptions(null);
+            }}
+            canReply={selectedMessageOptions?.canReply}
+            onReply={() => {
+              selectedMessageOptions?.onReply?.();
+              setSelectedMessage(null);
+              setSelectedMessageOptions(null);
+            }}
+            isStarred={selectedMessageOptions?.isStarred}
+            onToggleStar={selectedMessageOptions?.onToggleStar}
+            canDelete={selectedMessageOptions?.canDelete}
+            onDelete={() => {
+              selectedMessageOptions?.onDelete?.();
+              setSelectedMessage(null);
+              setSelectedMessageOptions(null);
+            }}
+            canForward
+            onForward={() => {
+              setForwardMessage(selectedMessage);
+              setSelectedMessage(null);
+              setSelectedMessageOptions(null);
+            }}
+            onCopy={
+              selectedMessage?.text
+                ? () => {
+                    navigator.clipboard?.writeText(selectedMessage.text).catch(() => {});
+                    setSelectedMessage(null);
+                    setSelectedMessageOptions(null);
+                  }
+                : undefined
+            }
+            moreActions={selectedMessageOptions?.moreActions || []}
+          />
+        ) : (
         <header className="chat-header">
           <button
             type="button"
@@ -264,6 +314,7 @@ export default function SocialInvitationChatRoom() {
             />
           </div>
         </header>
+        )}
 
         {isDesktopShell ? (
           <StageDesktopLayout room={roomWithGifts} onGiftParticipant={openGiftPicker} />
@@ -272,6 +323,11 @@ export default function SocialInvitationChatRoom() {
         )}
         {giftModal}
         {zoneTheme.modal}
+        <ForwardMessageModal
+          open={Boolean(forwardMessage)}
+          message={forwardMessage}
+          onClose={() => setForwardMessage(null)}
+        />
       </div>
     );
   }

@@ -1,0 +1,45 @@
+.message-reaction-bar {
+  position: fixed;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 999px;
+  background: var(--bg-card, #262626);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.message-reaction-bar__emoji {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.message-reaction-bar__emoji:hover,
+.message-reaction-bar__emoji:active {
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(1.15);
+}
+
+.message-reaction-bar__more {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted, #9ca3af);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
