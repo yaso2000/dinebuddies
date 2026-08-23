@@ -354,10 +354,17 @@ const PrivacyPolicy = () => {
                         <AppText as="p">DineBuddies may use Google Maps APIs to display locations, restaurants, or invitations on maps. Use of Google Maps is subject to Google Privacy Policy and Google Maps Terms of Service.</AppText>
                         <AppText as="p"><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" data-external-allow="system" style={{ color: 'var(--primary)' }}>https://policies.google.com/privacy</a></AppText>
 
-                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.3 Analytics Services</AppText>
+                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.3 YouTube API Services</AppText>
+                        <AppText as="p">DineBuddies uses YouTube API Services to let users search for and embed YouTube videos, live streams, and music directly within posts and shared "Stage" rooms. This application uses YouTube API Services. By using this feature, you are agreeing to be bound by the YouTube Terms of Service.</AppText>
+                        <AppText as="p"><a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" data-external-allow="system" style={{ color: 'var(--primary)' }}>https://www.youtube.com/t/terms</a></AppText>
+                        <AppText as="p">Data handled through YouTube API Services is subject to the Google Privacy Policy.</AppText>
+                        <AppText as="p"><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" data-external-allow="system" style={{ color: 'var(--primary)' }}>https://policies.google.com/privacy</a></AppText>
+                        <AppText as="p">DineBuddies does not require you to sign in with a Google Account to search for or embed YouTube content, and does not access, store, or request access to your personal YouTube account data (uploads, playlists, or subscriptions). We only store the identifiers of videos you choose to embed (e.g., in your posts or Stage room banner), which you may delete at any time by removing the post or banner.</AppText>
+
+                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.4 Analytics Services</AppText>
                         <AppText as="p">We may use analytics services such as Google Analytics and Firebase Analytics. These services help us understand how users interact with the platform. Analytics data is typically aggregated and does not directly identify individual users.</AppText>
 
-                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.4 Push Notifications</AppText>
+                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.5 Push Notifications</AppText>
                         <AppText as="p">We may send push notifications related to invitations, messages, platform updates, and account activity. Users may disable notifications through device settings.</AppText>
                     </section>
 
