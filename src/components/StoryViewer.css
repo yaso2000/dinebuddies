@@ -87,14 +87,6 @@
         justify-content: center;
     }
 
-    .story-composer-layer {
-        left: 50%;
-        right: auto;
-        transform: translateX(-50%);
-        width: min(100vw, calc(100vh * 9 / 16));
-        max-width: min(100vw, calc(100vh * 9 / 16));
-    }
-
     .story-viewer-header__close--portal {
         right: max(8px, calc((100vw - min(100vw, calc(100vh * 9 / 16))) / 2 + 8px));
     }
@@ -190,6 +182,20 @@
 
 .story-composer-layer > * {
     pointer-events: auto;
+}
+
+/* Desktop: match the centred story frame instead of spanning the window. This
+   must stay AFTER the base rule — declared before it, `left: 0; right: 0` won
+   the cascade while `width` and `translateX(-50%)` did not, which anchored the
+   bar to the window's left edge and then shoved it half off-screen. */
+@media (min-width: 768px) {
+    .story-composer-layer {
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        width: min(100vw, calc(100vh * 9 / 16));
+        max-width: min(100vw, calc(100vh * 9 / 16));
+    }
 }
 
 .story-footer--composer {
