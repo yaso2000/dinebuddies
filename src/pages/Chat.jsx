@@ -14,7 +14,7 @@ import { useTheme } from '../context/ThemeContext';
 import {
   FaArrowLeft, FaCamera, FaMicrophone,
   FaPaperPlane, FaPlay, FaPause, FaFile,
-  FaDownload, FaStop, FaPlus, FaArrowDown, FaTimes } from
+  FaDownload, FaStop, FaPlus, FaArrowDown, FaTimes, FaReply } from
 'react-icons/fa';
 import { FaLock, FaBan } from 'react-icons/fa6';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -97,6 +97,23 @@ function ChatBubbleGestures({ isOwn, onLongPress, onSwipeReply, onContextMenu, c
         transition: swipe.dragX ? 'none' : 'transform 0.15s ease',
       }}
     >
+      {/* Reply hint sits at the edge the bubble is docked to and counter-moves,
+          so it stays put and is uncovered as the bubble slides inward. It is
+          first in the DOM so the bubble paints over it while still at rest. */}
+      {swipe.dragX ? (
+        <span
+          aria-hidden
+          className={`chat-swipe-reply-hint chat-swipe-reply-hint--${isOwn ? 'own' : 'other'}${
+            swipe.armed ? ' chat-swipe-reply-hint--armed' : ''
+          }`}
+          style={{
+            transform: `translateY(-50%) translateX(${-swipe.dragX}px) scale(${0.6 + 0.4 * swipe.progress})`,
+            opacity: Math.min(1, swipe.progress * 1.6),
+          }}
+        >
+          <FaReply size={13} />
+        </span>
+      ) : null}
       {children}
     </div>
   );

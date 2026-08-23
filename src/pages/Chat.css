@@ -300,6 +300,9 @@ html {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    /* Swipe-to-reply slides a full-width row sideways; without this the row
+       would push the list into a horizontal scroll mid-gesture. */
+    overflow-x: hidden;
     padding: 16px 16px 10px 16px;
     /* no extra top padding — header is sticky in flow */
     display: flex;
@@ -461,6 +464,53 @@ html {
     position: relative;
     margin-top: 2px;
     margin-bottom: 0;
+    /* Reserve horizontal movement for swipe-to-reply; the list still pans
+       vertically. Without this the browser owns the gesture and our pointer
+       stream dies mid-drag. */
+    touch-action: pan-y;
+}
+
+@media (pointer: coarse) {
+
+    /* On touch, a drag across a bubble must not start a text selection or the
+       iOS press-and-hold callout — both swallow the swipe. Copy is available
+       from the long-press toolbar instead. */
+    .message-wrapper {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+    }
+}
+
+/* Swipe-to-reply affordance */
+.chat-swipe-reply-hint {
+    position: absolute;
+    top: 50%;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-card, #1f2937);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary, #9ca3af);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    pointer-events: none;
+}
+
+.chat-swipe-reply-hint--other {
+    left: 4px;
+}
+
+.chat-swipe-reply-hint--own {
+    right: 4px;
+}
+
+.chat-swipe-reply-hint--armed {
+    background: var(--accent-color, #ec4899);
+    border-color: transparent;
+    color: #fff;
 }
 
 .message-wrapper:first-child {
@@ -836,6 +886,21 @@ html {
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
     animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Anchor the quick-reaction bar to the edge the bubble is docked to so it grows
+   inward and stays inside the row — centred on a narrow bubble it ran off the
+   screen edge, and the list now clips horizontally for swipe-to-reply. */
+.message-wrapper.other .reaction-popup-container {
+    left: 0;
+    right: auto;
+    margin: 0;
+}
+
+.message-wrapper.own .reaction-popup-container {
+    left: auto;
+    right: 0;
+    margin: 0;
 }
 
 .reaction-popup-item {
