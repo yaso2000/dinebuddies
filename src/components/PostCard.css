@@ -160,18 +160,6 @@
     max-height: 480px;
 }
 
-/* YouTube Shorts — full-width native 9:16 (no downscaling) */
-.post-card--youtube-short {
-    overflow: visible;
-}
-
-.post-media-container--vertical {
-    margin: 10px 0 0;
-    width: 100%;
-    border-radius: 0;
-    border-inline: none;
-}
-
 .post-media-preview--vertical,
 .post-media-preview--short {
     width: 100%;
@@ -311,25 +299,21 @@
 
 .post-embed-unmute-hint {
     position: absolute;
-    right: 8px;
-    bottom: 8px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     z-index: 2;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 5px 10px;
+    gap: 6px;
+    padding: 8px 14px;
     border: none;
     border-radius: 999px;
     background: rgba(0, 0, 0, 0.72);
     color: #fff;
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     font-weight: 600;
     cursor: pointer;
-}
-
-[dir="rtl"] .post-embed-unmute-hint {
-    right: auto;
-    left: 8px;
 }
 
 .post-media-content {
