@@ -48,7 +48,7 @@
  */
 .app-main.app-main--fullscreen.app-main--connect {
     background: #07070c !important;
-    padding-bottom: calc(var(--nav-height, 70px) + env(safe-area-inset-bottom, 0px) + 10px) !important;
+    padding-bottom: calc(var(--nav-height, 65px) + env(safe-area-inset-bottom, 0px) + 10px) !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
 }
@@ -991,7 +991,7 @@
 @media (max-width: 1023px) {
     .app-main.app-main--fullscreen.app-main--connect {
         /* Match mobile tab bar: nav height + safe area (+ small gap) */
-        padding-bottom: calc(var(--nav-height, 70px) + env(safe-area-inset-bottom, 0px) + 12px) !important;
+        padding-bottom: calc(var(--nav-height, 65px) + env(safe-area-inset-bottom, 0px) + 12px) !important;
     }
 }
 

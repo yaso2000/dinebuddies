@@ -419,7 +419,7 @@
 
 /* Full-bleed video in feed: extra room above bottom nav */
 .post-card--video:not(.in-chat) .post-comments-preview--video {
-    margin-bottom: calc(var(--nav-height, 64px) + env(safe-area-inset-bottom, 0px) + 20px);
+    margin-bottom: calc(var(--nav-height, 65px) + env(safe-area-inset-bottom, 0px) + 20px);
 }
 
 .post-card--video .post-comments-preview--video .post-comments-preview__last + .post-comments-preview__last {
@@ -430,7 +430,7 @@
 
 .post-card--video .comments-section--video-feed,
 .post-card--video .comments-section--video-detail {
-    margin-bottom: calc(var(--nav-height, 64px) + env(safe-area-inset-bottom, 0px) + 20px);
+    margin-bottom: calc(var(--nav-height, 65px) + env(safe-area-inset-bottom, 0px) + 20px);
     padding-bottom: 16px;
 }
 

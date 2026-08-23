@@ -98,7 +98,9 @@
 
   /* Layout */
   --header-height: 60px;
-  --nav-height: 70px;
+  /* Must match .bottom-nav's height — everything that clears the nav derives
+     its bottom padding from this. */
+  --nav-height: 65px;
   --max-width: 500px;
   /* Desktop: fixed iPad-like shell — left | center | right = 300 + 650 + 300 (1250 total) */
   --ds-shell-max: 1250px;
@@ -1170,27 +1172,10 @@ body {
   display: none;
 }
 
-/* Bottom Nav — fixed, horizontally aligned with centered .app-layout column */
-.bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: var(--max-width);
-  box-sizing: border-box;
-  height: var(--nav-height);
-  background: rgba(11, 8, 18, 0.85);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border-top: 1px solid rgba(139, 92, 246, 0.12);
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  z-index: 100;
-  padding-bottom: 15px;
-  box-shadow: 0 -8px 32px rgba(80, 20, 120, 0.2);
-}
+/* Bottom Nav — see the single definition under "Navigation Styles" below. An
+   earlier duplicate lived here; every one of its declarations was overridden
+   by that later block except -webkit-backdrop-filter, which left WebKit with a
+   different blur from every other engine. */
 
 .back-btn {
   width: 40px;
@@ -1693,10 +1678,10 @@ html:not([data-theme='light']) .app-header .app-name {
   width: 100%;
   max-width: var(--max-width);
   box-sizing: border-box;
-  height: 65px;
-  /* Reduced from 85px */
+  height: var(--nav-height);
   background: var(--bg-card);
   backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
   border-top: 1px solid var(--border-color);
   display: flex !important;
   justify-content: space-around !important;

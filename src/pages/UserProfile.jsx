@@ -775,7 +775,7 @@ const UserProfile = () => {
     return (
       <div
         id="user-profile-root"
-        className="user-profile-page relative mx-auto min-h-dvh max-w-md pb-[calc(var(--nav-height,70px)+env(safe-area-inset-bottom,0px))]">
+        className="user-profile-page relative mx-auto min-h-dvh max-w-md pb-[calc(var(--nav-height,65px)+env(safe-area-inset-bottom,0px))]">
         <ProfilePersonaSkeleton />
       </div>);
   }
@@ -960,7 +960,7 @@ const UserProfile = () => {
   const blockedShell = (message, action = null) =>
   <div
     id="user-profile-root"
-    className="user-profile-page relative mx-auto min-h-dvh max-w-md px-5 pb-[calc(var(--nav-height,70px)+env(safe-area-inset-bottom,0px))] pt-8">
+    className="user-profile-page relative mx-auto min-h-dvh max-w-md px-5 pb-[calc(var(--nav-height,65px)+env(safe-area-inset-bottom,0px))] pt-8">
     <button
       type="button"
       className="user-profile-float-btn mb-8"
@@ -1001,7 +1001,7 @@ const UserProfile = () => {
   return (
     <div
       id="user-profile-root"
-      className="user-profile-page relative mx-auto min-h-dvh max-w-md pb-[calc(var(--nav-height,70px)+env(safe-area-inset-bottom,0px))]"
+      className="user-profile-page relative mx-auto min-h-dvh max-w-md pb-[calc(var(--nav-height,65px)+env(safe-area-inset-bottom,0px))]"
       onClick={() => menuOpen && setMenuOpen(false)}>
       <ProfileHero
         profile={profileModel}

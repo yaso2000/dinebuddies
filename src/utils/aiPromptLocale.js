@@ -8,8 +8,11 @@ import i18n from '../i18n';
  */
 export function getAiUserPromptFallback(postType, subType, t = i18n.t.bind(i18n)) {
     if (postType === 'invitation') {
-        if (subType === 'private') return t('ai_prompt_private_default');
-        if (subType === 'social') return t('ai_prompt_social_invitation_default');
+        // 'date' is the romantic one-to-one invite; 'private' is a social
+        // invitation kept off the public feed. These were off by one slot,
+        // leaving 'date' on the public copy and a dead 'social' branch.
+        if (subType === 'date') return t('ai_prompt_private_default');
+        if (subType === 'private') return t('ai_prompt_social_invitation_default');
         return t('ai_prompt_public_invitation_default');
     }
     if (postType === 'featured_post') {

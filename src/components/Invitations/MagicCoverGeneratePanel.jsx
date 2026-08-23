@@ -62,9 +62,9 @@ export default function MagicCoverGeneratePanel({
     setAspectRatio(defaultAspectRatio);
   }, [defaultAspectRatio]);
 
-  const lockAspectRatio = subType === 'social' || subType === 'private' || subType === 'public';
+  const lockAspectRatio = subType === 'date' || subType === 'private' || subType === 'public';
   const effectiveAspectRatio =
-  subType === 'social' || subType === 'private' ?
+  subType === 'date' || subType === 'private' ?
   '9:16' :
   subType === 'public' ?
   defaultAspectRatio || '4:5' :

@@ -4,10 +4,13 @@ export const AI_USER_PROMPT_MAX_CHARS = 300;
 /** English fallbacks when the client sends an empty prompt (API safety net). */
 export function getAiUserPromptDefaultEn(postType, subType) {
     if (postType === 'invitation') {
-        if (subType === 'private') {
+        // subType is 'public' | 'private' | 'date' — 'date' is the romantic
+        // one-to-one invite. A rename once shifted these one slot, which left
+        // the romantic copy on 'private' and a dead 'social' branch below it.
+        if (subType === 'date') {
             return 'Write a private invite title and a short romantic message suited to the occasion.';
         }
-        if (subType === 'social') {
+        if (subType === 'private') {
             return 'Write a private invitation title and welcoming message suited to the occasion and venue.';
         }
         return 'Write an invitation title and welcoming message suited to the context above.';
