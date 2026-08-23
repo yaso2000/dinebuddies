@@ -757,6 +757,8 @@ const Chat = () => {
                 hasCustomMyImage={Boolean(myPanelImage)}
                 onEditMyPanel={() => panelImageInputRef.current?.click()}
                 onResetMyPanel={handleResetMyPanelImage}
+                connectionKind={connectionKind}
+                relationshipBadge={relationshipBadge}
               />
             ) : null}
 

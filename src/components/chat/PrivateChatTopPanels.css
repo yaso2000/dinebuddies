@@ -1,4 +1,5 @@
 .private-chat-top-panels {
+    position: relative;
     display: flex;
     width: 100%;
     height: 120px;
@@ -69,4 +70,56 @@
 
 .private-chat-top-panels__reset-btn:hover {
     background: rgba(0, 0, 0, 0.8);
+}
+
+/* Relationship-kind connector — straddles the divider between the two
+   photos, same palette as the chat header's relationship icon so the two
+   surfaces read as the same idea. */
+.private-chat-top-panels__link {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+}
+
+.private-chat-top-panels__link-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    border: 3px solid #0f172a;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.private-chat-top-panels__link--dating .private-chat-top-panels__link-icon {
+    background: linear-gradient(145deg, #fb7185, #e11d48);
+}
+
+.private-chat-top-panels__link--friendship .private-chat-top-panels__link-icon {
+    background: linear-gradient(145deg, #38bdf8, #0284c7);
+}
+
+.private-chat-top-panels__link--acquaintance .private-chat-top-panels__link-icon {
+    background: linear-gradient(145deg, #fbbf24, #ea580c);
+}
+
+.private-chat-top-panels__link-label {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    white-space: nowrap;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
 }

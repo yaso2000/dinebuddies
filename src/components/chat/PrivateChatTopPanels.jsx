@@ -20,6 +20,8 @@ export default function PrivateChatTopPanels({
   hasCustomMyImage = false,
   onEditMyPanel,
   onResetMyPanel,
+  connectionKind,
+  relationshipBadge,
 }) {
   const { t } = useTranslation();
 
@@ -32,6 +34,19 @@ export default function PrivateChatTopPanels({
           <div className="private-chat-top-panels__img private-chat-top-panels__img--fallback" />
         )}
       </div>
+      {relationshipBadge ? (
+        <div
+          className={`private-chat-top-panels__link private-chat-top-panels__link--${connectionKind}`}
+          title={t(relationshipBadge.labelKey, relationshipBadge.label)}
+        >
+          <span className="private-chat-top-panels__link-icon" aria-hidden>
+            <relationshipBadge.icon size={16} />
+          </span>
+          <span className="private-chat-top-panels__link-label">
+            {t(relationshipBadge.labelKey, relationshipBadge.label)}
+          </span>
+        </div>
+      ) : null}
       <div
         className="private-chat-top-panels__panel private-chat-top-panels__panel--mine"
         onClick={onEditMyPanel}
