@@ -17,6 +17,7 @@ const FILTERS = [
 export default function YoutubeSearchModal({ open, onClose, onSelect }) {
   const { t } = useTranslation();
   const inputRef = useRef(null);
+  const overlayRef = useRef(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [results, setResults] = useState([]);
@@ -45,6 +46,40 @@ export default function YoutubeSearchModal({ open, onClose, onSelect }) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open, onClose]);
+
+  // Keep the sheet inside the visible viewport above the iOS/Android keyboard —
+  // `position: fixed; inset: 0` alone stays pinned to the full layout viewport
+  // on iOS, so an open keyboard covers the input instead of shrinking the sheet.
+  useEffect(() => {
+    if (!open) return undefined;
+    const overlay = overlayRef.current;
+    if (!overlay || typeof window === 'undefined') return undefined;
+
+    const vv = window.visualViewport;
+    const clearGeometry = () => {
+      overlay.style.top = '';
+      overlay.style.left = '';
+      overlay.style.width = '';
+      overlay.style.height = '';
+    };
+    if (!vv) return clearGeometry;
+
+    const sync = () => {
+      overlay.style.top = `${vv.offsetTop}px`;
+      overlay.style.left = `${vv.offsetLeft}px`;
+      overlay.style.width = `${vv.width}px`;
+      overlay.style.height = `${vv.height}px`;
+    };
+
+    sync();
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    return () => {
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
+      clearGeometry();
+    };
+  }, [open]);
 
   if (!open || typeof document === 'undefined') return null;
 
@@ -82,6 +117,7 @@ export default function YoutubeSearchModal({ open, onClose, onSelect }) {
 
   return createPortal(
     <div
+      ref={overlayRef}
       className="youtube-search-modal"
       role="dialog"
       aria-modal="true"
