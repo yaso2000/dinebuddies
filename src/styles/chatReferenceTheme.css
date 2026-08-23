@@ -347,12 +347,25 @@
   font-weight: 800 !important;
 }
 
+/* The quoted reply lives inside the bubble now — it keeps the bubble's own fill
+   and is separated from the reply text by a hairline divider only. */
 .chat-root .reply-preview {
-  background: rgba(15, 23, 42, 0.06) !important;
-  border-left-color: rgba(255, 79, 151, 0.88) !important;
+  background: transparent !important;
+  border-left: none !important;
 }
 
-.chat-root .reply-text,
+.chat-root .message-wrapper.own .reply-preview {
+  border-bottom-color: rgba(255, 255, 255, 0.35) !important;
+}
+
+.chat-root .message-wrapper.other .reply-preview {
+  border-bottom-color: rgba(15, 23, 42, 0.18) !important;
+}
+
+.chat-root .reply-text {
+  color: inherit !important;
+}
+
 .chat-root .reply-message {
   color: var(--chat-ref-muted) !important;
 }

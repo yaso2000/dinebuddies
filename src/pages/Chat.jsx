@@ -833,21 +833,6 @@ const Chat = () => {
             <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelect} />
             <input ref={panelImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePanelImageSelect} />
 
-            {/* Top panels — one per participant, defaults to profile photo */}
-            {otherUser ? (
-              <PrivateChatTopPanels
-                myImageUrl={myPanelImage || getSafeAvatar(userProfile) || currentUser?.photoURL}
-                theirImageUrl={theirPanelImage || otherUser.photoURL}
-                myAlt={userProfile?.displayName || currentUser?.displayName || ''}
-                theirAlt={otherUser.displayName}
-                hasCustomMyImage={Boolean(myPanelImage)}
-                onEditMyPanel={() => panelImageInputRef.current?.click()}
-                onResetMyPanel={handleResetMyPanelImage}
-                connectionKind={connectionKind}
-                relationshipBadge={relationshipBadge}
-              />
-            ) : null}
-
             {/* Header */}
             {selectedMessage ? (
               <MessageActionsToolbar
@@ -918,6 +903,21 @@ const Chat = () => {
             </div>
             )}
 
+            {/* Top panels — one per participant, defaults to profile photo */}
+            {otherUser ? (
+              <PrivateChatTopPanels
+                myImageUrl={myPanelImage || getSafeAvatar(userProfile) || currentUser?.photoURL}
+                theirImageUrl={theirPanelImage || otherUser.photoURL}
+                myAlt={userProfile?.displayName || currentUser?.displayName || ''}
+                theirAlt={otherUser.displayName}
+                hasCustomMyImage={Boolean(myPanelImage)}
+                onEditMyPanel={() => panelImageInputRef.current?.click()}
+                onResetMyPanel={handleResetMyPanelImage}
+                connectionKind={connectionKind}
+                relationshipBadge={relationshipBadge}
+              />
+            ) : null}
+
             <div className="chat-body-column">
             {/* Messages */}
             {/* dir=ltr keeps own bubbles on the physical right in Arabic UI */}
@@ -973,14 +973,13 @@ const Chat = () => {
                 onSwipeReply={() => setReplyTo(msg)}
               >
                             <div className="message-content-wrapper">
-                                {msg.replyTo &&
-                  <div className="reply-preview">
-                                        <div className="reply-line" />
-                                        <div className="reply-content"><AppText as="p" className="reply-text" dir="auto">{msg.replyTo.text}</AppText></div>
-                                    </div>
-                  }
-
                                 <div className="message-bubble" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                                    {/* Quoted reply sits inside the bubble: same fill, split by a divider */}
+                                    {msg.replyTo &&
+                      <div className="reply-preview">
+                                            <div className="reply-content"><AppText as="p" className="reply-text" dir="auto">{msg.replyTo.text}</AppText></div>
+                                        </div>
+                      }
                                     {msg.type === 'shared_content' &&
                     <div style={{ marginBottom: msg.text ? '8px' : '0' }}>
                                             <SharedContentBubble data={msg.sharedContent} />
@@ -1054,7 +1053,7 @@ const Chat = () => {
                       filter(([_, users]) => users && users.length > 0).
                       slice(0, 3).
                       map(([emoji, users]) =>
-                      <AppText as="span" key={emoji}>{emoji} {users.length > 1 && <AppText as="span" style={{ fontSize: '9px', marginLeft: '1px' }}>{users.length}</AppText>}</AppText>
+                      <AppText as="span" key={emoji} className="message-reaction-badge__item">{emoji}{users.length > 1 && <AppText as="span" className="message-reaction-badge__count">{users.length}</AppText>}</AppText>
                       )
                       }
                                         </div>

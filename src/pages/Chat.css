@@ -715,18 +715,28 @@ html {
     color: rgba(255, 255, 255, 0.6);
 }
 
-/* Reply Preview */
+/* Quoted reply — rendered inside the bubble so the quote and the reply read as
+   one bubble: no separate fill, just a hairline divider between the two. */
 .reply-preview {
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
-    padding: 8px;
-    margin-bottom: 4px;
+    align-self: stretch;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 0;
+    padding: 0 0 6px;
+    margin: 0;
     display: flex;
-    border-left: 3px solid var(--accent-color);
+    min-width: 0;
+}
+
+.message-wrapper.other .reply-preview {
+    border-bottom-color: rgba(15, 23, 42, 0.18);
 }
 
 .reply-content {
     overflow: hidden;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .reply-text {
@@ -735,7 +745,8 @@ html {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: rgba(255, 255, 255, 0.8);
+    color: inherit;
+    opacity: 0.75;
 }
 
 /* Message Reactions */
@@ -747,28 +758,53 @@ html {
     padding: 0 4px;
 }
 
-/* Message Reactions Badge */
-.message-reaction-badge {
+/* Message Reactions Badge — scoped to .chat-root because CommunityChatRoom.css
+   also defines .message-reaction-badge and pins inset-inline-end; with this
+   file's `left` that pinned both edges and stretched the pill bubble-wide. */
+.chat-root .message-reaction-badge {
     position: absolute;
-    bottom: -12px;
+    bottom: -16px;
     left: 8px;
+    right: auto;
+    inset-inline-end: auto;
+    width: fit-content;
     background: var(--bg-card, #1f2937);
     border: 1px solid var(--border-color);
-    border-radius: 20px;
-    padding: 2px 10px;
-    font-size: 12px;
+    border-radius: 999px;
+    padding: 1px 6px;
+    font-size: 13px;
+    line-height: 1.1;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     z-index: 5;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
+    white-space: nowrap;
     backdrop-filter: blur(8px);
 }
 
+/* The pill hangs below the bubble — reserve the room so it never lands on the
+   next message. Padding, not margin: chatReferenceTheme.css pins every
+   .message-wrapper to margin-bottom: 0 !important. */
+.chat-root .message-wrapper:has(.message-reaction-badge) {
+    padding-bottom: 18px;
+}
+
+.chat-root .message-reaction-badge__item {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.1;
+}
+
+.chat-root .message-reaction-badge__count {
+    font-size: 9px;
+    margin-inline-start: 1px;
+}
+
 /* Position badge on the right for own messages (Outwards anchor, growing Inwards/Left) */
-.message-wrapper.own .message-reaction-badge {
+.chat-root .message-wrapper.own .message-reaction-badge {
     left: auto;
-    inset-inline-end: 10px;
+    right: 10px;
 }
 
 .reaction-item {
