@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { FaSearch, FaTimes } from 'react-icons/fa';
-import { searchYoutubeVideos } from '../utils/youtubeSearchClient';
+import { getYoutubeSearchSuggestions, searchYoutubeVideos } from '../utils/youtubeSearchClient';
 import './YoutubeSearchModal.css';
 
 const FILTERS = [
@@ -23,6 +23,8 @@ export default function YoutubeSearchModal({ open, onClose, onSelect }) {
   const [results, setResults] = useState([]);
   const [status, setStatus] = useState('idle'); // idle | loading | error | quota | done
   const [errorMessage, setErrorMessage] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -31,9 +33,31 @@ export default function YoutubeSearchModal({ open, onClose, onSelect }) {
     setResults([]);
     setStatus('idle');
     setErrorMessage('');
+    setSuggestions([]);
+    setShowSuggestions(false);
     const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 50);
     return () => window.clearTimeout(focusTimer);
   }, [open]);
+
+  // Free-tier autocomplete (Google's unofficial "suggest" endpoint) — debounced
+  // so we only fire once typing pauses, not on every keystroke.
+  useEffect(() => {
+    if (!open) return undefined;
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setSuggestions([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      const result = await getYoutubeSearchSuggestions({ query: trimmed });
+      if (!cancelled) setSuggestions(result);
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, query]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -101,10 +125,30 @@ export default function YoutubeSearchModal({ open, onClose, onSelect }) {
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    setShowSuggestions(false);
     runSearch(filter);
   };
 
+  const handlePickSuggestion = (suggestion) => {
+    setQuery(suggestion);
+    setShowSuggestions(false);
+    setStatus('loading');
+    setErrorMessage('');
+    (async () => {
+      const outcome = await searchYoutubeVideos({ query: suggestion, filter });
+      if (!outcome.ok) {
+        setStatus(outcome.quotaExhausted ? 'quota' : 'error');
+        setErrorMessage(outcome.message);
+        setResults([]);
+        return;
+      }
+      setResults(outcome.results);
+      setStatus('done');
+    })();
+  };
+
   const handleFilterClick = (key) => {
+    setShowSuggestions(false);
     if (key === filter) return;
     setFilter(key);
     if (query.trim()) runSearch(key);
@@ -141,20 +185,38 @@ export default function YoutubeSearchModal({ open, onClose, onSelect }) {
           </button>
         </div>
 
-        <form className="youtube-search-modal__search-row" onSubmit={handleSubmit}>
-          <input
-            ref={inputRef}
-            type="search"
-            className="youtube-search-modal__input"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t('youtube_search_placeholder', 'Search videos, live streams, music…')}
-            autoComplete="off"
-          />
-          <button type="submit" className="youtube-search-modal__submit" aria-label={t('search', 'Search')}>
-            <FaSearch />
-          </button>
-        </form>
+        <div className="youtube-search-modal__search-wrap">
+          <form className="youtube-search-modal__search-row" onSubmit={handleSubmit}>
+            <input
+              ref={inputRef}
+              type="search"
+              className="youtube-search-modal__input"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              placeholder={t('youtube_search_placeholder', 'Search videos, live streams, music…')}
+              autoComplete="off"
+            />
+            <button type="submit" className="youtube-search-modal__submit" aria-label={t('search', 'Search')}>
+              <FaSearch />
+            </button>
+          </form>
+          {showSuggestions && suggestions.length > 0 ? (
+            <ul className="youtube-search-modal__suggestions">
+              {suggestions.map((suggestion) => (
+                <li key={suggestion}>
+                  <button type="button" onClick={() => handlePickSuggestion(suggestion)}>
+                    <FaSearch size={11} aria-hidden />
+                    <span>{suggestion}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
 
         <div className="youtube-search-modal__tabs" role="tablist">
           {FILTERS.map((f) => (
@@ -171,7 +233,7 @@ export default function YoutubeSearchModal({ open, onClose, onSelect }) {
           ))}
         </div>
 
-        <div className="youtube-search-modal__body">
+        <div className="youtube-search-modal__body" onMouseDown={() => setShowSuggestions(false)}>
           {status === 'loading' ? (
             <div className="youtube-search-modal__state">
               {t('youtube_search_loading', 'Searching…')}

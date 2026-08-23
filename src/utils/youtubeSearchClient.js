@@ -15,3 +15,17 @@ export async function searchYoutubeVideos({ query, filter = 'all' }) {
         return { ok: false, quotaExhausted, message: err?.message || 'search_failed' };
     }
 }
+
+/**
+ * @param {{ query: string }} args
+ * @returns {Promise<string[]>}
+ */
+export async function getYoutubeSearchSuggestions({ query }) {
+    const fn = httpsCallable(getFunctions(app, 'us-central1'), 'getYoutubeSearchSuggestions');
+    try {
+        const result = await fn({ query });
+        return Array.isArray(result?.data?.suggestions) ? result.data.suggestions : [];
+    } catch {
+        return [];
+    }
+}

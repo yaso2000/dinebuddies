@@ -2145,6 +2145,9 @@ registerSocialInvitationMembership(exports, { db, admin, enforceCallableRateLimi
 const { registerYoutubeSearch } = require('./youtubeSearch');
 registerYoutubeSearch(exports, { db, admin, enforceCallableRateLimit });
 
+const { registerYoutubeSearchSuggestions } = require('./youtubeSearchSuggestions');
+registerYoutubeSearchSuggestions(exports, { enforceCallableRateLimit });
+
 // ─── Trusted callable: resolve business uid by placeId ───────────────────────
 exports.lookupBusinessByPlaceId = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
