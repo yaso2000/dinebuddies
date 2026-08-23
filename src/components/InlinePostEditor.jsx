@@ -13,9 +13,10 @@ import { extractAIContentFields } from '../utils/aiContentFieldMapper';
 import { buildRegularPostAiUserPrompt } from '../utils/aiPromptLocale';
 import AIFloatingLauncher from './AIFloatingLauncher';
 import FeedAiImageLauncher from './FeedAiImageLauncher';
-import { FaImage, FaTimes, FaSmile, FaPaperPlane } from 'react-icons/fa';
+import { FaImage, FaTimes, FaSmile, FaPaperPlane, FaYoutube } from 'react-icons/fa';
 import TikTokEmbed from './TikTokEmbed';
 import { buildYoutubeEmbedSrc, parseYoutubeLink, YOUTUBE_EMBED_ALLOW } from '../utils/videoEmbedUtils';
+import YoutubeSearchModal from './YoutubeSearchModal';
 import { useEditorSessionAutosave } from '../hooks/useEditorSessionAutosave';
 import {
   inlinePostDraftKey,
@@ -88,6 +89,7 @@ const InlinePostEditor = ({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isCheckingImage, setIsCheckingImage] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showYoutubeSearch, setShowYoutubeSearch] = useState(false);
   const [attachedInvitation, setAttachedInvitation] = useState(attachedInvitationProp);
 
   const fileInputRef = useRef(null);
@@ -512,6 +514,14 @@ const InlinePostEditor = ({
                         <FaImage size={18} color="#45bd62" /> {t('photo', 'Photo')}
                     </button>
 
+                    <button
+            type="button"
+            onClick={() => setShowYoutubeSearch(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 8px', borderRadius: '8px' }}>
+
+                        <FaYoutube size={18} color="#ff0033" /> {t('youtube_search_button', 'Search YouTube')}
+                    </button>
+
                     {showComposerEmojiButton() ? (
                     <div style={{ position: 'relative' }}>
                         <button
@@ -574,7 +584,15 @@ const InlinePostEditor = ({
         onChange={handleFileSelect}
         accept="image/*"
         style={{ display: 'none' }} />
-      
+
+      <YoutubeSearchModal
+        open={showYoutubeSearch}
+        onClose={() => setShowYoutubeSearch(false)}
+        onSelect={(video) => {
+          setEmbedData({ type: 'youtube', id: video.id, isShort: false });
+          setMedia(null);
+        }}
+      />
         </div>);
 
 };

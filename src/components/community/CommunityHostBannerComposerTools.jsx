@@ -65,6 +65,7 @@ import {
 import CommunityBannerYoutubeBackground from './CommunityBannerYoutubeBackground';
 import BannerGradientPresetCarousel from './BannerGradientPresetCarousel';
 import useZoneThemeModal from './useZoneThemeModal';
+import YoutubeSearchModal from '../YoutubeSearchModal';
 
 const TITLE_FONT_FAMILY_OPTIONS = [
   { key: 'system', labelKey: 'community_banner_font_system', fallback: 'System' },
@@ -398,6 +399,7 @@ export default function CommunityHostBannerComposerTools({
   const [fontSizeDraft, setFontSizeDraft] = useState(DEFAULT_BANNER_FONT_SIZE);
   const [showCamera, setShowCamera] = useState(false);
   const [youtubeDraft, setYoutubeDraft] = useState('');
+  const [showYoutubeSearch, setShowYoutubeSearch] = useState(false);
   const [voiceRecording, setVoiceRecording] = useState(false);
   const [voiceRecordingSec, setVoiceRecordingSec] = useState(0);
   const [voicePublishing, setVoicePublishing] = useState(false);
@@ -1109,18 +1111,29 @@ export default function CommunityHostBannerComposerTools({
           <label className="community-banner-modal__label" htmlFor="community-banner-youtube-url">
             {t('community_banner_youtube_url_label', 'YouTube / Music / playlist / live link')}
           </label>
-          <AppTextInput
-            id="community-banner-youtube-url"
-            type="url"
-            className="community-banner-modal__textarea"
-            placeholder={t(
-              'community_banner_youtube_url_placeholder',
-              'Video, live, playlist, or music.youtube.com link'
-            )}
-            value={youtubeDraft}
-            onChange={(e) => setYoutubeDraft(e.target.value)}
-            autoComplete="off"
-          />
+          <div className="community-banner-modal__youtube-input-row">
+            <AppTextInput
+              id="community-banner-youtube-url"
+              type="url"
+              className="community-banner-modal__textarea"
+              placeholder={t(
+                'community_banner_youtube_url_placeholder',
+                'Video, live, playlist, or music.youtube.com link'
+              )}
+              value={youtubeDraft}
+              onChange={(e) => setYoutubeDraft(e.target.value)}
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              className="community-banner-modal__icon-btn"
+              aria-label={t('youtube_search_button', 'Search YouTube')}
+              title={t('youtube_search_button', 'Search YouTube')}
+              onClick={() => setShowYoutubeSearch(true)}
+            >
+              <FaYoutube />
+            </button>
+          </div>
           <AppText as="p" className="community-banner-modal__hint">
             {t(
               'community_banner_youtube_host_hint',
@@ -1371,6 +1384,11 @@ export default function CommunityHostBannerComposerTools({
       {bodyTextModal}
       {backgroundModal}
       {youtubeModal}
+      <YoutubeSearchModal
+        open={showYoutubeSearch}
+        onClose={() => setShowYoutubeSearch(false)}
+        onSelect={(video) => setYoutubeDraft(`https://www.youtube.com/watch?v=${video.id}`)}
+      />
       {zoneTheme.modal}
       {templatesModal}
 

@@ -3262,6 +3262,25 @@ body:has(.community-chat-fullscreen) {
     line-height: 1;
 }
 
+.community-banner-modal__youtube-input-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.community-banner-modal__youtube-input-row .community-banner-modal__textarea {
+    flex: 1;
+    min-width: 0;
+}
+
+.community-banner-modal__youtube-input-row .community-banner-modal__icon-btn {
+    flex-shrink: 0;
+    height: 2.4rem;
+    min-width: 2.4rem;
+    font-size: 1rem;
+    color: #ff0033;
+}
+
 .community-banner-modal__stroke-slider {
     flex: 1 1 4.5rem;
     min-width: 4.5rem;
