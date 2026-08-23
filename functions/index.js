@@ -2139,6 +2139,9 @@ registerSetUserFollow(exports, { db, isBusinessUserDoc, enforceCallableRateLimit
 const { registerPrivateInvitationConnection } = require('./privateInvitationConnection');
 registerPrivateInvitationConnection(exports, { db, isBusinessUserDoc, enforceCallableRateLimit });
 
+const { registerSocialInvitationMembership } = require('./socialInvitationMembership');
+registerSocialInvitationMembership(exports, { db, admin, enforceCallableRateLimit });
+
 // ─── Trusted callable: resolve business uid by placeId ───────────────────────
 exports.lookupBusinessByPlaceId = functions.https.onCall(async (data, context) => {
     if (!context.auth) {

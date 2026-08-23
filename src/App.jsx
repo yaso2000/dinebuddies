@@ -80,6 +80,7 @@ import PublicSocialInvitationJoin from './pages/PublicSocialInvitationJoin';
 // Eager for the same reason as PublicSocialInvitationJoin above — reached via external share links.
 import PublicStoryView from './pages/PublicStoryView';
 const InvitationChatRoom = lazy(() => import('./pages/InvitationChatRoom'));
+const SocialInvitationChatRoom = lazy(() => import('./pages/SocialInvitationChatRoom'));
 const FollowersList = lazy(() => import('./pages/FollowersList'));
 const CreateInvitation = lazy(() => import('./pages/CreateInvitation'));
 const CreateInvitationManualHub = lazy(() => import('./pages/CreateInvitationManualHub'));
@@ -250,7 +251,7 @@ function App() {
                                                     <Route path="/invitation/social/preview/:id" element={<SocialInvitationPreview />} />
                                                     <Route path="/invitation/private/preview/:id" element={<SocialInvitationPreview />} />
                                                     <Route path="/invitation/social/:id" element={<SocialInvitationDetails />} />
-                                                    <Route path="/invitation/social/:id/chat" element={<GuestBlockedRoute><InvitationChatRoom /></GuestBlockedRoute>} />
+                                                    <Route path="/invitation/social/:id/chat" element={<GuestBlockedRoute><SocialInvitationChatRoom /></GuestBlockedRoute>} />
                                                     <Route
                                                         path="/invitation/private/:id/chat"
                                                         element={<GuestBlockedRoute><InvitationChatRoom /></GuestBlockedRoute>}
