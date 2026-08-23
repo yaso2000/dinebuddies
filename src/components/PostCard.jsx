@@ -28,6 +28,7 @@ import {
   shouldMuteEmbedAutoplay,
   postYoutubeEmbedCommand,
   postYoutubeEmbedListening,
+  setYoutubeEmbedMuted,
   YOUTUBE_EMBED_ALLOW } from
 '../utils/videoEmbedUtils';
 import './PostCard.css';
@@ -87,6 +88,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
   const [embedMuted, setEmbedMuted] = useState(false);
   const [playbackEpoch, setPlaybackEpoch] = useState(0);
   const [youtubePaused, setYoutubePaused] = useState(false);
+  const [soundUnlocked, setSoundUnlocked] = useState(false);
   const youtubeIframeRef = useRef(null);
 
   // Optimistic likes — local state prevents flicker from onSnapshot two-phase firing
@@ -169,6 +171,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     setIsPlaying(false);
     setEmbedMuted(false);
     setYoutubePaused(false);
+    setSoundUnlocked(false);
     setPlaybackEpoch((e) => e + 1);
     if (videoRef.current) {
       videoRef.current.pause();
@@ -221,6 +224,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         setIsPlaying(false);
         setEmbedMuted(false);
         setYoutubePaused(false);
+        setSoundUnlocked(false);
         setPlaybackEpoch((e) => e + 1);
         if (videoRef.current) {
           videoRef.current.pause();
@@ -236,6 +240,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     if (e) e.stopPropagation();
     setEmbedMuted(false);
     setYoutubePaused(false);
+    setSoundUnlocked(false);
     setIsPlaying(true);
     globalMediaManager.play(post.id);
   };
@@ -940,13 +945,30 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                                                 </div>
               }
 
-                                            {embedMuted && isIosLikeDevice() &&
+                                            {embedMuted && isIosLikeDevice() && !soundUnlocked &&
               <button
                 type="button"
                 className="post-embed-unmute-hint"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setEmbedMuted(false);
+                  // Never rewrite the iframe src to unmute on iOS — that remounts
+                  // the embed and Safari often fails to resume playback with
+                  // sound afterward. Unmute the already-playing embed in place
+                  // via the JS API instead, repeated once shortly after in case
+                  // the first message lands before the player is ready.
+                  const iframe = youtubeIframeRef.current;
+                  if (iframe) {
+                    postYoutubeEmbedListening(iframe);
+                    setYoutubeEmbedMuted(iframe, false);
+                    postYoutubeEmbedCommand(iframe, 'playVideo');
+                    window.setTimeout(() => {
+                      if (youtubeIframeRef.current) {
+                        postYoutubeEmbedListening(youtubeIframeRef.current);
+                        setYoutubeEmbedMuted(youtubeIframeRef.current, false);
+                      }
+                    }, 180);
+                  }
+                  setSoundUnlocked(true);
                 }}>
 
                                                     <FaPlay size={10} />
