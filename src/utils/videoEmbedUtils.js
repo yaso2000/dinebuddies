@@ -203,7 +203,12 @@ export function buildYoutubeEmbedSrc(videoId, { autoplay = false, mute = false, 
     if (typeof window !== 'undefined' && window.location?.origin) {
         params.set('origin', window.location.origin);
     }
-    return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
+    // youtube-nocookie.com (Google's own "privacy-enhanced mode") avoids using
+    // the viewer's signed-in YouTube/Google cookies at all — this also means a
+    // viewer's own YouTube Premium session can't trip Google's per-account
+    // concurrent-stream cap ("too many devices streaming on your plan") inside
+    // our embed. Fully supported by the same JS API postMessage origin allowlist.
+    return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
 }
 
 /** @param {unknown} ts Firestore Timestamp or ms number */
@@ -602,7 +607,10 @@ export function buildYoutubeBannerBackgroundSrc(
     if (typeof window !== 'undefined' && window.location?.origin) {
         params.set('origin', window.location.origin);
     }
-    return `https://www.youtube.com/embed/${pathId}?${params.toString()}`;
+    // See buildYoutubeEmbedSrc above — nocookie mode avoids the viewer's own
+    // YouTube session/cookies so a guest's personal Premium concurrent-stream
+    // limit can't trigger "too many devices streaming" inside the banner.
+    return `https://www.youtube-nocookie.com/embed/${pathId}?${params.toString()}`;
 }
 
 /** Whether banner has any YouTube media (video and/or playlist). */
