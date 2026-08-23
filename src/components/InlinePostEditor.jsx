@@ -147,6 +147,21 @@ const InlinePostEditor = ({
     }
   };
 
+  // Pasting a video link into the title field never triggered embed detection
+  // (only the body textarea did) — same extraction, applied here too.
+  const handleTitleChange = (e) => {
+    let val = e.target.value.slice(0, POST_TITLE_MAX);
+    const { text: newTitle, embed } = extractAndRemoveLink(val);
+
+    if (embed) {
+      setEmbedData(embed);
+      setMedia(null);
+      val = newTitle;
+    }
+
+    setTitle(val);
+  };
+
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -374,7 +389,7 @@ const InlinePostEditor = ({
             className="composer-field__title"
             placeholder={t('post_headline_placeholder')}
             value={title}
-            onChange={(e) => setTitle(e.target.value.slice(0, POST_TITLE_MAX))}
+            onChange={handleTitleChange}
             maxLength={POST_TITLE_MAX} />
           
                     <AppTextInput as="textarea"
