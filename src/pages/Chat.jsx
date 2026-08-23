@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import React, { Suspense, lazy, useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
@@ -363,13 +363,22 @@ const Chat = () => {
 
   useEffect(() => {
     if (!conversationId) return;
-    const messagesQuery = query(
-      collection(db, 'conversations', conversationId, 'messages'),
-      orderBy('createdAt', 'asc')
-    );
+    // No orderBy('createdAt') here on purpose: a just-sent message's createdAt
+    // is an unresolved serverTimestamp() while the write is still pending on
+    // the sender's own client, and Firestore excludes docs from query results
+    // when the field they're ordered by hasn't resolved yet — so the sender
+    // (and only the sender, since every other client only ever sees the doc
+    // after the server has resolved it) could see the whole message list
+    // freeze until the chat is reopened. Sort in JS instead, after the fact.
+    const messagesQuery = query(collection(db, 'conversations', conversationId, 'messages'));
     const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
-      latestMessageDocsRef.current = snapshot.docs;
-      const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const sortedDocs = [...snapshot.docs].sort((a, b) => {
+        const aMs = a.data().createdAt?.toMillis?.() ?? Infinity;
+        const bMs = b.data().createdAt?.toMillis?.() ?? Infinity;
+        return aMs - bMs;
+      });
+      latestMessageDocsRef.current = sortedDocs;
+      const msgs = sortedDocs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setMessages(msgs);
       setLoading(false);
       if (!connectionLocked && currentUser?.uid) {
