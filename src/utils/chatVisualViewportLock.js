@@ -58,8 +58,15 @@ function isInsideComposerRoot(el) {
     return Boolean(el?.closest?.(COMPOSER_ROOT_SELECTOR));
 }
 
+// Largest visualViewport.height ever observed this session — the de facto
+// "no keyboard" baseline for the device's current orientation.
+let maxObservedViewportHeight = 0;
+
 function isKeyboardOpenByViewport(vv) {
     if (!vv) return false;
+    if (vv.height > maxObservedViewportHeight) {
+        maxObservedViewportHeight = vv.height;
+    }
     if (window.innerHeight - vv.height > 100) return true;
     // iOS Safari 16.4+ honors <meta ... interactive-widget=resizes-content>
     // (set in index.html) by shrinking window.innerHeight itself when the
@@ -70,6 +77,17 @@ function isKeyboardOpenByViewport(vv) {
     // state catches that case and keeps the shell explicitly pinned to the
     // live visualViewport rect instead of trusting CSS fixed-positioning to
     // track a resize WebKit doesn't always repaint against reliably.
+    //
+    // But focus alone must never be trusted to mean "still open": iOS's own
+    // swipe-down/chevron keyboard-dismiss retracts the keyboard WITHOUT
+    // blurring the composer field, so relying on focus to detect the CLOSE
+    // transition leaves the banner hidden forever until something else
+    // happens to blur the field. Once the viewport has recovered to (near)
+    // its largest-ever height, trust that real resize over a stale focus
+    // signal and report the keyboard closed regardless of what has focus.
+    if (maxObservedViewportHeight > 0 && vv.height >= maxObservedViewportHeight - 40) {
+        return false;
+    }
     const active = document.activeElement;
     return isComposerField(active) || isInsideComposerRoot(active);
 }
