@@ -2873,38 +2873,6 @@ body:has(.community-chat-fullscreen) {
     }
 }
 
-.community-main-chat__banner-youtube-guest-sync-btn {
-    position: absolute;
-    inset-inline-start: 3.35rem;
-    bottom: 0.55rem;
-    z-index: 12;
-    pointer-events: auto;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-    user-select: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    height: 2.5rem;
-    padding: 0 0.7rem;
-    border-radius: 0.75rem;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    background: rgba(15, 23, 42, 0.55);
-    backdrop-filter: blur(12px) saturate(140%);
-    -webkit-backdrop-filter: blur(12px) saturate(140%);
-    color: rgba(255, 255, 255, 0.95);
-    font-size: 0.78rem;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow:
-        0 4px 14px rgba(0, 0, 0, 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-
-.community-main-chat__banner-youtube-guest-sync-btn:active {
-    transform: scale(0.96);
-}
-
 .community-main-chat__banner-youtube-sound-btn {
     position: absolute;
     inset-inline-start: 0.55rem;
