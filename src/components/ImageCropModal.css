@@ -29,11 +29,55 @@
 }
 
 .image-crop-modal__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   padding: 1rem 1.25rem 0.5rem;
 }
 
+.image-crop-modal__zoom-btn {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #fff);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.image-crop-modal__zoom-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
 .image-crop-modal__zoom-slider {
+  position: relative;
+  z-index: 1;
   width: 100%;
+  margin: 0;
+  background: transparent;
+}
+
+/* Tick marking the photo's original size, where the handle rests. */
+.image-crop-modal__zoom-detent {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 10px;
+  margin-left: -1px;
+  margin-top: -5px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
 }
 
 .image-crop-modal__actions {

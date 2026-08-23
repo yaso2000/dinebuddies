@@ -1234,3 +1234,62 @@
         padding: 1.15rem 1.15rem 1.05rem;
     }
 }
+/* ── Profile edit: floating Save / Cancel ──────────────────────────────────
+   The edit form is long enough that the old inline buttons sat far below the
+   fold, so a half-finished edit was easy to walk away from. Pin them just
+   above the app's bottom nav for the whole editing session. */
+.profile-edit-actionbar {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    /* .bottom-nav is a hard 65px tall — --nav-height (70px) is stale, and the
+       5px gap it leaves shows page content through the strip. */
+    bottom: 65px;
+    width: 100%;
+    max-width: var(--max-width, 500px);
+    box-sizing: border-box;
+    z-index: 99998;
+    padding: 10px 16px;
+    background: rgba(11, 8, 18, 0.92);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border-top: 1px solid var(--border-color);
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme='light'] .profile-edit-actionbar {
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.12);
+}
+
+/* The nav hides itself while the keyboard is up — take its place rather than
+   leaving a floating gap. */
+@media (max-width: 1023px) {
+    html[data-keyboard-open] .profile-edit-actionbar {
+        bottom: 0;
+        padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+    }
+}
+
+/* No bottom nav on desktop shells — sit on the viewport edge instead, matching
+   the wider centre column. */
+@media (min-width: 1024px) {
+    .profile-edit-actionbar {
+        bottom: 0;
+        max-width: 640px;
+    }
+}
+
+.profile-edit-actionbar__inner {
+    display: flex;
+    gap: 10px;
+}
+
+.profile-edit-actionbar__btn {
+    flex: 1;
+}
+
+/* Keeps the last field clear of the pinned bar. */
+.profile-edit-actionbar__spacer {
+    height: 76px;
+}

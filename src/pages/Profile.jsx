@@ -14,7 +14,7 @@ import GiftShieldSection from '../components/gifts/GiftShieldSection';
 import { FavoritePlaces } from '../components/ProfileEnhancementsExtended';
 import { useTheme } from '../context/ThemeContext';
 import { FaSun, FaMoon } from 'react-icons/fa';
-import { getSafeAvatar, getGenderBorderColor, isUserUploadedPhotoUrl, isProviderAccountPhotoUrl, buildAvatarPersistFields } from '../utils/avatarUtils';
+import { getSafeAvatar, getGenderBorderColor, isUserUploadedPhotoUrl, isProviderAccountPhotoUrl, buildAvatarPersistFields, getAvatarUrlOrNull, isGeneratedAvatarUrl } from '../utils/avatarUtils';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { goToLogin } from '../utils/goToLogin';
 import { normalizeBusinessTier } from '../utils/businessSubscription';
@@ -525,6 +525,38 @@ const Profile = () => {
     }
   };
 
+  /* A generated initials/placeholder avatar is not a photo — nothing to remove. */
+  const savedAvatarUrl = getAvatarUrlOrNull(realtimeUser || userProfile) || '';
+  const canRemoveAvatar = Boolean(savedAvatarUrl) && !isGeneratedAvatarUrl(savedAvatarUrl);
+
+  /**
+   * Clear the saved photo as soon as the user taps ✕, mirroring how picking one
+   * saves right away. This used to only drop the staged file, so the saved
+   * photo stayed and the button looked broken.
+   */
+  const handleAvatarRemove = async () => {
+    if (!currentUser?.uid || avatarSaving) return;
+
+    setAvatarFile(null);
+    setUploadProgress(0);
+
+    if (!canRemoveAvatar) return;
+
+    setAvatarSaving(true);
+    try {
+      const clearedPhotoFields = { avatar: '', avatarUrl: '', photo_url: '', photoURL: '' };
+      await updateProfile(clearedPhotoFields);
+      setFormData((prev) => ({ ...prev, avatar: '' }));
+      setRealtimeUser((prev) => ({ ...(prev || {}), ...clearedPhotoFields }));
+      showToast(t('profile_photo_removed', 'Profile photo removed.'), 'success');
+    } catch (error) {
+      console.error('Avatar remove failed:', error);
+      showToast(t('failed_upload_image', 'Could not update your photo.'), 'error');
+    } finally {
+      setAvatarSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     const trimmedName = (formData.name || '').trim();
     if (!trimmedName) {
@@ -747,7 +779,8 @@ const Profile = () => {
                                     <ImageUpload
                       currentImage={formData.avatar || getSafeAvatar(realtimeUser || userProfile)}
                       onImageSelect={handleAvatarSelect}
-                      onImageRemove={() => setAvatarFile(null)}
+                      onImageRemove={handleAvatarRemove}
+                      allowRemove={canRemoveAvatar}
                       shape="circle"
                       size="large"
                       label={t('change_photo')}
@@ -1271,24 +1304,34 @@ const Profile = () => {
           
 
                     {isEditing &&
-          <div style={{ display: 'flex', gap: '10px', marginTop: '0.85rem' }}>
-                            <button type="button" className="ui-btn ui-btn--primary" onClick={handleSave} disabled={isSaving} style={{ flex: 1 }}>
-                                {isSaving ? t('saving') : t('save_btn')}
-                            </button>
-                            <button
-              type="button"
-              className="ui-btn ui-btn--ghost"
-              onClick={() => {
-                setAvatarFile(null);
-                setUploadProgress(0);
-                setIsEditing(false);
-              }}
-              disabled={isSaving}
-              style={{ flex: 1 }}>
-              
-                                {t('cancel_btn')}
-                            </button>
+          <>
+                        {/* Reserves the strip the pinned bar covers. */}
+                        <div className="profile-edit-actionbar__spacer" aria-hidden />
+                        <div className="profile-edit-actionbar">
+                            <div className="profile-edit-actionbar__inner">
+                                <button
+                type="button"
+                className="ui-btn ui-btn--primary profile-edit-actionbar__btn"
+                onClick={handleSave}
+                disabled={isSaving}>
+
+                                    {isSaving ? t('saving') : t('save_btn')}
+                                </button>
+                                <button
+                type="button"
+                className="ui-btn ui-btn--ghost profile-edit-actionbar__btn"
+                onClick={() => {
+                  setAvatarFile(null);
+                  setUploadProgress(0);
+                  setIsEditing(false);
+                }}
+                disabled={isSaving}>
+
+                                    {t('cancel_btn')}
+                                </button>
+                            </div>
                         </div>
+                    </>
           }
 
                     {!isEditing &&

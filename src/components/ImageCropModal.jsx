@@ -2,9 +2,20 @@ import React, { useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Cropper from 'react-easy-crop';
 import { useTranslation } from 'react-i18next';
+import { FaSearchMinus, FaSearchPlus } from 'react-icons/fa';
 import './ImageCropModal.css';
 
 const OUTPUT_SIZE = 512;
+
+/**
+ * The slider runs on an exponential scale so its rest position is the middle of
+ * the track: -1 → half size, 0 → the photo as it lands in the frame, +1 → double.
+ * A linear 0.5–2 range would park 1× a fifth of the way along instead.
+ */
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 2;
+const sliderToZoom = (value) => 2 ** Number(value);
+const zoomToSlider = (zoom) => Math.log2(zoom);
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -21,17 +32,35 @@ async function cropImageToFile(imageSrc, croppedAreaPixels) {
   canvas.width = OUTPUT_SIZE;
   canvas.height = OUTPUT_SIZE;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(
-    image,
-    croppedAreaPixels.x,
-    croppedAreaPixels.y,
-    croppedAreaPixels.width,
-    croppedAreaPixels.height,
-    0,
-    0,
-    OUTPUT_SIZE,
-    OUTPUT_SIZE
-  );
+
+  // Zooming out puts frame area outside the photo. Paint the backdrop first so
+  // those margins come out white rather than as black JPEG transparency.
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+
+  // Clip the source rect to the photo and place it proportionally, so an
+  // out-of-bounds crop keeps its scale instead of stretching to fill.
+  const scaleX = OUTPUT_SIZE / croppedAreaPixels.width;
+  const scaleY = OUTPUT_SIZE / croppedAreaPixels.height;
+  const sx = Math.max(0, croppedAreaPixels.x);
+  const sy = Math.max(0, croppedAreaPixels.y);
+  const sw = Math.min(image.width, croppedAreaPixels.x + croppedAreaPixels.width) - sx;
+  const sh = Math.min(image.height, croppedAreaPixels.y + croppedAreaPixels.height) - sy;
+
+  if (sw > 0 && sh > 0) {
+    ctx.drawImage(
+      image,
+      sx,
+      sy,
+      sw,
+      sh,
+      (sx - croppedAreaPixels.x) * scaleX,
+      (sy - croppedAreaPixels.y) * scaleY,
+      sw * scaleX,
+      sh * scaleY
+    );
+  }
+
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
   return new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
 }
@@ -49,6 +78,24 @@ export default function ImageCropModal({ imageSrc, cropShape = 'round', onCancel
   const handleCropComplete = useCallback((_croppedArea, pixels) => {
     setCroppedAreaPixels(pixels);
   }, []);
+
+  /* Below 1× the whole photo already fits the frame, so there is nothing to pan
+     to — and panning there could drag it clean out of frame and save a blank
+     avatar. Recentre on the way down and ignore drags while zoomed out. */
+  const applyZoom = (next) => {
+    const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
+    if (clamped < 1) setCrop({ x: 0, y: 0 });
+    setZoom(clamped);
+  };
+
+  const handleCropChange = (next) => {
+    if (zoom < 1) return;
+    setCrop(next);
+  };
+
+  const nudgeZoom = (factor) => {
+    applyZoom(zoom * factor);
+  };
 
   const handleSave = async () => {
     if (!croppedAreaPixels || saving) return;
@@ -81,23 +128,49 @@ export default function ImageCropModal({ imageSrc, cropShape = 'round', onCancel
             aspect={1}
             cropShape={cropShape}
             showGrid={false}
-            onCropChange={setCrop}
-            onZoomChange={setZoom}
+            minZoom={MIN_ZOOM}
+            maxZoom={MAX_ZOOM}
+            /* Must be off to zoom below 1 — otherwise the photo is pinned to
+               cover the frame and can never be made smaller than it. Kept on
+               from 1× up so a zoomed-in photo still can't leave the frame. */
+            restrictPosition={zoom >= 1}
+            onCropChange={handleCropChange}
+            onZoomChange={applyZoom}
             onCropComplete={handleCropComplete}
           />
         </div>
 
         <div className="image-crop-modal__controls">
-          <input
-            type="range"
-            min={1}
-            max={3}
-            step={0.01}
-            value={zoom}
-            onChange={(event) => setZoom(Number(event.target.value))}
-            className="image-crop-modal__zoom-slider"
-            aria-label={t('image_crop_zoom', 'Zoom')}
-          />
+          <button
+            type="button"
+            className="image-crop-modal__zoom-btn"
+            onClick={() => nudgeZoom(1 / 1.15)}
+            aria-label={t('image_crop_zoom_out', 'Zoom out')}
+          >
+            <FaSearchMinus aria-hidden />
+          </button>
+          <div className="image-crop-modal__zoom-track">
+            <input
+              type="range"
+              min={zoomToSlider(MIN_ZOOM)}
+              max={zoomToSlider(MAX_ZOOM)}
+              step={0.01}
+              value={zoomToSlider(zoom)}
+              onChange={(event) => applyZoom(sliderToZoom(event.target.value))}
+              onDoubleClick={() => applyZoom(1)}
+              className="image-crop-modal__zoom-slider"
+              aria-label={t('image_crop_zoom', 'Zoom')}
+            />
+            <span className="image-crop-modal__zoom-detent" aria-hidden />
+          </div>
+          <button
+            type="button"
+            className="image-crop-modal__zoom-btn"
+            onClick={() => nudgeZoom(1.15)}
+            aria-label={t('image_crop_zoom_in', 'Zoom in')}
+          >
+            <FaSearchPlus aria-hidden />
+          </button>
         </div>
 
         <div className="image-crop-modal__actions">
