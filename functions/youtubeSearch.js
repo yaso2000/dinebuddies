@@ -6,17 +6,30 @@
  * per-user rate limit this enforces a hard daily budget cutoff and fails
  * gracefully with a distinct error code the client can turn into "search is
  * unavailable right now, paste the link instead" rather than a broken UI.
+ *
+ * Results for non-live queries are cached in Firestore so repeated/popular
+ * searches across all users are served for free without touching Google's
+ * quota at all — the 90/day cap becomes ~90 *unique* queries per cache
+ * window, not 90 searches total. Live results are never cached since
+ * "is this stream live right now" goes stale within minutes.
  */
 const functions = require('firebase-functions');
+const crypto = require('node:crypto');
 
 const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search';
 const DAILY_BUDGET_CAP = 90;
 const MAX_RESULTS = 25;
 const VALID_FILTERS = new Set(['all', 'live', 'music']);
 const MUSIC_CATEGORY_ID = '10';
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 function asTrimmedString(v) {
     return typeof v === 'string' ? v.trim() : '';
+}
+
+function cacheKeyFor(filter, query) {
+    const normalized = query.toLowerCase().trim().replace(/\s+/g, ' ');
+    return crypto.createHash('sha1').update(`${filter}:${normalized}`).digest('hex');
 }
 
 async function reserveDailySearchBudget(db, admin) {
@@ -57,6 +70,22 @@ function registerYoutubeSearch(exportsObj, { db, admin, enforceCallableRateLimit
             perHour: 30,
             cooldownMs: 1000,
         });
+
+        const cacheable = filter !== 'live';
+        const cacheRef = cacheable
+            ? db.collection('youtube_search_cache').doc(cacheKeyFor(filter, query))
+            : null;
+
+        if (cacheRef) {
+            const cacheSnap = await cacheRef.get();
+            if (cacheSnap.exists) {
+                const cached = cacheSnap.data();
+                const cachedAtMs = cached?.cachedAt?.toMillis?.() || 0;
+                if (Array.isArray(cached?.results) && Date.now() - cachedAtMs < CACHE_TTL_MS) {
+                    return { results: cached.results, cached: true };
+                }
+            }
+        }
 
         const apiKey = process.env.YOUTUBE_API_KEY;
         if (!apiKey) {
@@ -112,6 +141,12 @@ function registerYoutubeSearch(exportsObj, { db, admin, enforceCallableRateLimit
                 isLive: item.snippet?.liveBroadcastContent === 'live',
                 publishedAt: item.snippet?.publishedAt || null,
             }));
+
+        if (cacheRef) {
+            cacheRef
+                .set({ results, cachedAt: admin.firestore.FieldValue.serverTimestamp() })
+                .catch(() => {});
+        }
 
         return { results };
     });
