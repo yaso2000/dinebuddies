@@ -1127,8 +1127,8 @@
     transform: scale(0.94);
 }
 
-/* Host bubbles — right-aligned orange for guests viewing host */
-.community-main-chat__message--host.community-main-chat__message--outgoing .community-main-chat__bubble,
+/* Host bubbles — orange color on the recipient (incoming) side; the host is
+   told apart by color, never by flipping to the physical outgoing side. */
 .community-main-chat__bubble--host {
     background: #e86e2e;
     color: #fff;
@@ -2273,21 +2273,19 @@ body:has(.community-chat-fullscreen) {
     border-radius: 0.35rem 1.15rem 1.15rem 1.15rem;
 }
 
-/* Outgoing / host cluster radii (physical right) */
+/* Outgoing cluster radii (physical right) — host bubbles never take this
+   shape: host always pairs with --incoming now (only your own messages sit
+   on the outgoing side), so the incoming radii above already apply to them. */
 .community-main-chat__bubble-stack--outgoing .community-main-chat__bubble-segment--single,
-.community-main-chat__bubble-stack--outgoing .community-main-chat__bubble-segment--first,
-.community-main-chat__bubble-stack--host .community-main-chat__bubble-segment--single,
-.community-main-chat__bubble-stack--host .community-main-chat__bubble-segment--first {
+.community-main-chat__bubble-stack--outgoing .community-main-chat__bubble-segment--first {
     border-radius: 1.15rem 1.15rem 0.35rem 1.15rem;
 }
 
-.community-main-chat__bubble-stack--outgoing .community-main-chat__bubble-segment--middle,
-.community-main-chat__bubble-stack--host .community-main-chat__bubble-segment--middle {
+.community-main-chat__bubble-stack--outgoing .community-main-chat__bubble-segment--middle {
     border-radius: 1.15rem 0.35rem 0.35rem 1.15rem;
 }
 
-.community-main-chat__bubble-stack--outgoing .community-main-chat__bubble-segment--last,
-.community-main-chat__bubble-stack--host .community-main-chat__bubble-segment--last {
+.community-main-chat__bubble-stack--outgoing .community-main-chat__bubble-segment--last {
     border-radius: 1.15rem 0.35rem 1.15rem 1.15rem;
 }
 
@@ -2415,9 +2413,19 @@ body:has(.community-chat-fullscreen) {
 }
 
 .community-main-chat__bubble--outgoing,
-.community-main-chat__bubble--host,
 .community-main-chat__message--outgoing .community-main-chat__bubble:not(.community-main-chat__bubble--emoji):not(.community-main-chat__bubble--image) {
     border-radius: 1.15rem 1.15rem 0.35rem 1.15rem;
+    background: var(--cchat-zone-outgoing-bg, #e86e2e);
+    color: var(--cchat-zone-outgoing-text, #fff);
+    border-color: var(--cchat-zone-outgoing-border, transparent);
+    box-shadow: var(--cchat-zone-outgoing-shadow, none);
+}
+
+/* Host color only — never the shape. Host bubbles stay on the recipient's
+   physical side (only your own messages sit on the other side), so this must
+   not carry --outgoing's right-tail radius; the base .bubble/.bubble-segment
+   left-tail shape (incoming side) already applies underneath it. */
+.community-main-chat__bubble--host {
     background: var(--cchat-zone-outgoing-bg, #e86e2e);
     color: var(--cchat-zone-outgoing-text, #fff);
     border-color: var(--cchat-zone-outgoing-border, transparent);

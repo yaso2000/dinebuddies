@@ -238,7 +238,7 @@ function CommunityChatMessageSegment({
   const segmentClass = [
     'community-main-chat__bubble-segment',
     `community-main-chat__bubble-segment--${clusterPosition}`,
-    outgoing || isHostMessage
+    outgoing
       ? 'community-main-chat__bubble-segment--outgoing'
       : 'community-main-chat__bubble-segment--incoming',
     isHostMessage && !outgoing ? 'community-main-chat__bubble-segment--host' : '',
@@ -303,8 +303,11 @@ function CommunityChatTextStack({
     onHideFromBanner,
     onDeleteMessage,
   });
-  // Own + host stay on the physical right (list is dir=ltr for sides).
-  const alignRight = perms.outgoing || perms.isHostMessage;
+  // Only your own messages sit on the physical right (list is dir=ltr for
+  // sides) — the host is told apart by bubble color/badge, not by side,
+  // matching standard chat UX (WhatsApp/Telegram/Messenger/Discord all
+  // reserve side for self-vs-everyone-else, never a specific role).
+  const alignRight = perms.outgoing;
   const showGuestChrome = !alignRight;
   const showSender =
     showGuestChrome && Boolean(first.senderName || first.senderId);
@@ -453,7 +456,9 @@ function CommunityChatMessageAtomic({
     onHideFromBanner,
     onDeleteMessage,
   });
-  const alignRight = perms.outgoing || perms.isHostMessage;
+  // Only your own messages sit on the physical right — see the comment on
+  // the matching line in CommunityChatTextStack above.
+  const alignRight = perms.outgoing;
   const showGuestChrome = !alignRight;
   const showSender = showGuestChrome && !isBigEmoji;
   const interactive =
@@ -502,8 +507,8 @@ function CommunityChatMessageAtomic({
     .join(' ');
 
   const bubbleToneClass = alignRight
-    ? `community-main-chat__bubble--outgoing${perms.isHostMessage && !perms.outgoing ? ' community-main-chat__bubble--host' : ''}`
-    : 'community-main-chat__bubble--incoming';
+    ? 'community-main-chat__bubble--outgoing'
+    : `community-main-chat__bubble--incoming${perms.isHostMessage ? ' community-main-chat__bubble--host' : ''}`;
 
   return (
     <li className={rowClass}>
