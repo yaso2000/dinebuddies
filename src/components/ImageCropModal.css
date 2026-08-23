@@ -1,0 +1,68 @@
+.image-crop-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.image-crop-modal__panel {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card, #1a1a1a);
+  border-radius: 1.25rem;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.image-crop-modal__stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #000;
+}
+
+.image-crop-modal__controls {
+  padding: 1rem 1.25rem 0.5rem;
+}
+
+.image-crop-modal__zoom-slider {
+  width: 100%;
+}
+
+.image-crop-modal__actions {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.75rem 1.25rem 1.25rem;
+}
+
+.image-crop-modal__btn {
+  flex: 1;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  border: none;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.image-crop-modal__btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.image-crop-modal__btn--cancel {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #fff);
+}
+
+.image-crop-modal__btn--save {
+  background: var(--primary, #e86e2e);
+  color: #fff;
+}

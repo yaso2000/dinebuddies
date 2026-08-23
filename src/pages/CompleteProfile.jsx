@@ -279,7 +279,9 @@ const CompleteProfile = () => {
                         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem', position: 'relative' }}>
                             <ImageUpload
                 onImageSelect={handleImageSelect}
-                currentImage={formData.photoURL || currentUser?.photoURL} />
+                currentImage={formData.photoURL || currentUser?.photoURL}
+                enableCrop
+                cropShape="round" />
               
                             {uploadProgress > 0 && uploadProgress < 100 &&
               <div style={{

@@ -752,6 +752,8 @@ const Profile = () => {
                       size="large"
                       label={t('change_photo')}
                       busy={avatarSaving || isSaving}
+                      enableCrop
+                      cropShape="round"
                     />
                     
                                     {(avatarSaving || (uploadProgress > 0 && uploadProgress < 100)) &&

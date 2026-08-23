@@ -3,6 +3,7 @@ import { FaCamera, FaTimes } from 'react-icons/fa';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
 import { prepareImageFileForUpload } from '../utils/imageUpload';
+import ImageCropModal from './ImageCropModal';
 import './ImageUpload.css';
 import { AppText } from './base';
 
@@ -35,14 +36,28 @@ const ImageUpload = ({
   showPreview = true,
   allowRemove = true,
   busy = false,
+  enableCrop = false,
+  cropShape = 'round',
 }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [localPreview, setLocalPreview] = useState(null);
   const [preparing, setPreparing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [cropSourceUrl, setCropSourceUrl] = useState(null);
   const fileInputRef = useRef(null);
   const objectUrlRef = useRef(null);
+  const cropSourceUrlRef = useRef(null);
+
+  const revokeCropSource = () => {
+    if (cropSourceUrlRef.current) {
+      URL.revokeObjectURL(cropSourceUrlRef.current);
+      cropSourceUrlRef.current = null;
+    }
+    setCropSourceUrl(null);
+  };
+
+  useEffect(() => () => revokeCropSource(), []);
 
   const revokeLocalPreview = () => {
     if (objectUrlRef.current) {
@@ -78,6 +93,17 @@ const ImageUpload = ({
   const displaySrc = localPreview || currentImage || null;
   const isBusy = busy || preparing;
 
+  const commitFile = async (finalFile) => {
+    revokeLocalPreview();
+    const objectUrl = URL.createObjectURL(finalFile);
+    objectUrlRef.current = objectUrl;
+    setLocalPreview(objectUrl);
+
+    if (onImageSelect) {
+      await Promise.resolve(onImageSelect(finalFile));
+    }
+  };
+
   const handleFileSelect = async (file) => {
     if (!file || isBusy) return;
 
@@ -92,16 +118,20 @@ const ImageUpload = ({
     }
 
     setPreparing(true);
+    let enteredCropFlow = false;
     try {
       const prepared = await prepareImageFileForUpload(file);
-      revokeLocalPreview();
-      const objectUrl = URL.createObjectURL(prepared);
-      objectUrlRef.current = objectUrl;
-      setLocalPreview(objectUrl);
 
-      if (onImageSelect) {
-        await Promise.resolve(onImageSelect(prepared));
+      if (enableCrop) {
+        revokeCropSource();
+        const objectUrl = URL.createObjectURL(prepared);
+        cropSourceUrlRef.current = objectUrl;
+        setCropSourceUrl(objectUrl);
+        enteredCropFlow = true;
+        return;
       }
+
+      await commitFile(prepared);
     } catch (err) {
       console.error('Image prepare failed:', err);
       showToast(
@@ -110,8 +140,22 @@ const ImageUpload = ({
       );
       revokeLocalPreview();
     } finally {
+      if (!enteredCropFlow) setPreparing(false);
+    }
+  };
+
+  const handleCropSave = async (croppedFile) => {
+    revokeCropSource();
+    try {
+      await commitFile(croppedFile);
+    } finally {
       setPreparing(false);
     }
+  };
+
+  const handleCropCancel = () => {
+    revokeCropSource();
+    setPreparing(false);
   };
 
   const handleInputChange = (e) => {
@@ -214,6 +258,15 @@ const ImageUpload = ({
         onChange={handleInputChange}
         style={{ display: 'none' }}
       />
+
+      {enableCrop && cropSourceUrl ? (
+        <ImageCropModal
+          imageSrc={cropSourceUrl}
+          cropShape={cropShape}
+          onCancel={handleCropCancel}
+          onSave={handleCropSave}
+        />
+      ) : null}
     </div>
   );
 };
