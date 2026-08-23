@@ -185,7 +185,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     const embedTypes = ['video', 'youtube', 'tiktok', 'instagram'];
     if (!embedTypes.includes(type)) return;
 
-    const MIN_VISIBLE_RATIO = 0.35;
+    const MIN_VISIBLE_RATIO = 0.75;
 
     const observer = new IntersectionObserver(([entry]) => {
       const visibleEnough = entry.isIntersecting && entry.intersectionRatio >= MIN_VISIBLE_RATIO;
