@@ -3,9 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { adminApi } from '../api';
 import { AppText } from '../../components/base';
+import { useConfirm } from '../../context/ConfirmContext';
 
 export default function BusinessesPage() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cursor, setCursor] = useState(null);
@@ -34,7 +36,7 @@ export default function BusinessesPage() {
   }, [load]);
 
   const remove = async (biz) => {
-    if (!window.confirm(t('admin_businesses_confirm_delete', { name: biz.name }))) return;
+    if (!(await confirm({ message: t('admin_businesses_confirm_delete', { name: biz.name }), tone: 'danger' }))) return;
     setActing(biz.id);
     try {
       await adminApi.deleteBusiness(biz.id);

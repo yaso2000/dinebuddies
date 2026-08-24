@@ -74,6 +74,7 @@ import {
 import { AI_IMAGE_GENERATION_CREDITS } from '../utils/aiCreditCosts';
 import { syncMessageReceiptDocs } from '../utils/chatMessageReceipts';
 import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
+import { useConfirm } from '../context/ConfirmContext';
 
 /**
  * Real-time community chat room state (messages + single-slot banner + membership).
@@ -81,6 +82,7 @@ import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
  */
 export function useCommunityChatRoom(partnerId) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const { currentUser, userProfile } = useAuth();
     const { currentUser: inviteCurrentUser } = useInvitations();
     const { showToast } = useToast();
@@ -955,12 +957,10 @@ export function useCommunityChatRoom(partnerId) {
         async (memberId) => {
             if (!isHost || !partnerId || !memberId || memberId === partnerId) return false;
 
-            const confirmMute = window.confirm(
-                t(
+            const confirmMute = (await confirm({ message: t(
                     'mute_member_confirm',
                     'Mute this member? They can read the chat but cannot write or react.'
-                )
-            );
+                ), tone: 'danger' }));
             if (!confirmMute) return false;
 
             try {

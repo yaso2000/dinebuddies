@@ -5,6 +5,7 @@ import { FaTrash } from 'react-icons/fa';
 import { LuUsers } from 'react-icons/lu';
 import { useInvitations } from '../../context/InvitationContext';
 import { AppText } from '../base';
+import { useConfirm } from '../../context/ConfirmContext';
 
 export default function CommunitiesChatPanel({
   communities = [],
@@ -13,6 +14,7 @@ export default function CommunitiesChatPanel({
   onLeaveCommunity,
 }) {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const { leaveCommunity } = useInvitations();
 
@@ -23,9 +25,7 @@ export default function CommunitiesChatPanel({
   const handleLeave = async (e, communityId, communityName) => {
     e.stopPropagation();
     if (
-      !window.confirm(
-        `${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${communityName}?`
-      )
+      !(await confirm({ message: `${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${communityName}?`, tone: 'danger' }))
     ) {
       return;
     }

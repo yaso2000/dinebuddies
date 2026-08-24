@@ -24,9 +24,11 @@ import '../components/community/community-chat-theme.css';
 import '../components/community/CommunityChatSwipePager.css';
 import '../styles/chatReferenceTheme.css';
 import { AppText } from '../components/base';
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function CommunityChatRoom() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { partnerId } = useParams();
   const { isBusiness } = useAuth();
   const { joinCommunity, leaveCommunity, currentUser: inviteUser } = useInvitations();
@@ -106,9 +108,7 @@ export default function CommunityChatRoom() {
   const handleLeaveCommunity = useCallback(async () => {
     const name = room.partner?.display_name || t('community_chat', 'Community Chat');
     if (
-      !window.confirm(
-        `${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${name}?`
-      )
+      !(await confirm({ message: `${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${name}?`, tone: 'danger' }))
     ) {
       return;
     }

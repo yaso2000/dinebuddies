@@ -16,9 +16,11 @@ import { getAppOrigin } from '../utils/appOrigin';
 import ShareButtons from './ShareButtons';
 import { goToLogin } from '../utils/goToLogin';
 import { AppText } from "./base";
+import { useConfirm } from '../context/ConfirmContext';
 
 const InvitationCard = ({ invitation }) => {
   const { t, i18n } = useTranslation();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const { currentUser, toggleFollow, submitReport, deleteInvitation, requestToJoin } = useInvitations();
   const { userProfile } = useAuth();
@@ -692,7 +694,7 @@ const InvitationCard = ({ invitation }) => {
                                 </button>
             }
                             {(userProfile?.role === 'admin' || userProfile?.email?.includes('admin') || userProfile?.email === 'info@dinebuddies.com.au' || currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33') &&
-            <button type="button" onClick={async (e) => {e.stopPropagation();if (window.confirm(t('confirm_delete'))) await deleteInvitation(id);}} style={{ ...actionBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}>
+            <button type="button" onClick={async (e) => {e.stopPropagation();if ((await confirm({ message: t('confirm_delete'), tone: 'danger' }))) await deleteInvitation(id);}} style={{ ...actionBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}>
                                     <FaTimes size={16} />
                                 </button>
             }
@@ -873,7 +875,7 @@ const InvitationCard = ({ invitation }) => {
                         </button>
               }
                     {(userProfile?.role === 'admin' || userProfile?.email?.includes('admin') || userProfile?.email === 'info@dinebuddies.com.au' || currentUser?.uid === 'xTgHC1v00LZIZ6ESA9YGjGU5zW33') &&
-              <button type="button" onClick={async (e) => {e.stopPropagation();if (window.confirm(t('confirm_delete'))) await deleteInvitation(id);}} style={{ ...actionBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}>
+              <button type="button" onClick={async (e) => {e.stopPropagation();if ((await confirm({ message: t('confirm_delete'), tone: 'danger' }))) await deleteInvitation(id);}} style={{ ...actionBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}>
                             <FaTimes size={16} />
                         </button>
               }

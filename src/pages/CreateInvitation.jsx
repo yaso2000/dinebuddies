@@ -43,6 +43,7 @@ import { goToLogin } from '../utils/goToLogin';
 import { resolveVenueCountryIso } from '../utils/countryIso';
 import { AppText, AppTextInput } from "../components/base";
 import { resolveHostInvitationNavigationState } from '../utils/hostInvitationFromBusiness';
+import { useConfirm } from '../context/ConfirmContext';
 
 const MAX_PUBLIC_GUESTS = 10;
 
@@ -62,6 +63,7 @@ function stripUndefined(obj) {
 
 const CreateInvitation = () => {
   const { t, i18n } = useTranslation();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -478,7 +480,7 @@ const CreateInvitation = () => {
     if (!validation.valid) {
       const confirmMessage = `${validation.error}\n\nDo you want to go to your current invitation?`;
 
-      if (window.confirm(confirmMessage)) {
+      if ((await confirm({ message: confirmMessage, tone: 'danger' }))) {
         navigate(`/invitation/${validation.existingInvitation.id}`);
       }
       return;

@@ -30,9 +30,11 @@ import '../styles/chatReferenceTheme.css';
 import { AppText } from '../components/base';
 import { APP_HOME_PATH } from '../utils/appRouteShell';
 import app from '../firebase/config';
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function StageChatRoom() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { stageId } = useParams();
   const location = useLocation();
   const { isBusiness, currentUser, userProfile } = useAuth();
@@ -200,7 +202,7 @@ export default function StageChatRoom() {
           'Leave and permanently delete this Stage for everyone? This cannot be undone.'
         )
       : `${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${name}?`;
-    if (!window.confirm(confirmMsg)) {
+    if (!(await confirm({ message: confirmMsg, tone: 'danger' }))) {
       return;
     }
     setLeaving(true);
@@ -226,12 +228,10 @@ export default function StageChatRoom() {
   // Back / X only closes the screen — room status unchanged.
   const handleSoftCloseStage = async () => {
     if (
-      !window.confirm(
-        t(
+      !(await confirm({ message: t(
           'stage_close_confirm',
           'Close the Stage for now? Guests cannot write until you reopen. The room stays available for 24 hours from creation.'
-        )
-      )
+        ), tone: 'danger' }))
     ) {
       return;
     }

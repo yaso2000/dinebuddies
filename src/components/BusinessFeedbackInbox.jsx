@@ -8,9 +8,11 @@ import { FaCheckCircle, FaPhoneAlt, FaClock, FaExclamationCircle, FaLightbulb, F
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 import { AppText } from "./base";
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function BusinessFeedbackInbox() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
 
@@ -51,7 +53,7 @@ export default function BusinessFeedbackInbox() {
   }, [currentUser]);
 
   const handleMarkResolved = async (feedbackId) => {
-    if (!window.confirm(t('feedback_resolve_confirm', 'Are you sure you want to mark this issue as resolved?'))) return;
+    if (!(await confirm({ message: t('feedback_resolve_confirm', 'Are you sure you want to mark this issue as resolved?'), tone: 'default' }))) return;
 
     try {
       setResolvingId(feedbackId);

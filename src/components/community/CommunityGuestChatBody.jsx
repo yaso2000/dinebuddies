@@ -4,6 +4,7 @@ import CommunityChatMessages from './CommunityChatMessages';
 import CommunityChatComposer from './CommunityChatComposer';
 import StageHostGuestModerationMenu from './StageHostGuestModerationMenu';
 import { getAppTextDirection } from '../../utils/bidiText';
+import { useConfirm } from '../../context/ConfirmContext';
 
 /**
  * Bubbles zone includes the text editor — one shared frame (not a separate bar below).
@@ -11,6 +12,7 @@ import { getAppTextDirection } from '../../utils/bidiText';
  */
 export default function CommunityGuestChatBody({ room, className = '' }) {
   const { t, i18n } = useTranslation();
+  const confirm = useConfirm();
   const contentDir = getAppTextDirection(i18n.language);
   const {
     messages,
@@ -258,24 +260,20 @@ export default function CommunityGuestChatBody({ room, className = '' }) {
           }
           onKick={() =>
             runMod(async () => {
-              const ok = window.confirm(
-                t(
+              const ok = (await confirm({ message: t(
                   'stage_remove_member_confirm',
                   'Remove this member from the Stage? They will lose access to the chat.'
-                )
-              );
+                ), tone: 'danger' }));
               if (!ok) return;
               await kickMemberFromStage?.(modMenu?.member?.id);
             })
           }
           onBlock={() =>
             runMod(async () => {
-              const ok = window.confirm(
-                t(
+              const ok = (await confirm({ message: t(
                   'stage_block_member_confirm',
                   'Block this guest from all your future Stages? They will be removed from this broadcast too.'
-                )
-              );
+                ), tone: 'danger' }));
               if (!ok) return;
               await blockMemberFromStages?.(modMenu?.member?.id);
             })

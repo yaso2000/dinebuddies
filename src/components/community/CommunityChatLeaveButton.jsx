@@ -3,19 +3,19 @@ import { useTranslation } from 'react-i18next';
 import { FaSignOutAlt } from 'react-icons/fa';
 import { useInvitations } from '../../context/InvitationContext';
 import { AppText } from '../base';
+import { useConfirm } from '../../context/ConfirmContext';
 
 /** Direct leave / unjoin button for regular community members (desktop + mobile header). */
 export default function CommunityChatLeaveButton({ partnerId, partnerName, onLeft }) {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { leaveCommunity } = useInvitations();
   const [leaving, setLeaving] = useState(false);
 
   const handleLeave = async () => {
     const name = partnerName || t('community_chat', 'Community Chat');
     if (
-      !window.confirm(
-        `${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${name}?`
-      )
+      !(await confirm({ message: `${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${name}?`, tone: 'danger' }))
     ) {
       return;
     }

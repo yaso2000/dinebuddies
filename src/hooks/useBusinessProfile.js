@@ -48,6 +48,7 @@ import {
   isVirtualGoogleImportProfile } from
 '../utils/normalizeRestaurantBusinessProfile';
 import { googlePlaceTypesToCategoryBadges } from '../utils/googlePlacesBusiness';
+import { useConfirm } from '../context/ConfirmContext';
 
 export const BUSINESS_TYPES = [
 'Restaurant', 'Cafe', 'Bar', 'Night Club', 'Food Truck', 'Fast Food'];
@@ -186,6 +187,7 @@ export function useBusinessProfile(profileId) {
   const { setBrandColor } = useTheme();
   const { joinCommunity, currentUser: inviteCurrentUser } = useInvitations();
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { showToast } = useToast();
 
   // Brand Kit preview mode — reads live state from localStorage when ?preview=1
@@ -1084,7 +1086,7 @@ export function useBusinessProfile(profileId) {
   };
 
   const handleDeleteService = async (index) => {
-    if (!window.confirm(t('delete_service_confirm'))) return;
+    if (!(await confirm({ message: t('delete_service_confirm'), tone: 'danger' }))) return;
     const previous = services;
     const updated = services.filter((_, i) => i !== index);
     setServices(updated);

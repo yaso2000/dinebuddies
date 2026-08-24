@@ -33,9 +33,11 @@ import { goToLogin } from '../utils/goToLogin';
 import { getHostedInvitationDetailsPath } from '../utils/hostedInvitationRoutes';
 import { loadHostedInvitationById } from '../utils/staleInvitationNotifications';
 import { AppText } from "../components/base";
+import { useConfirm } from '../context/ConfirmContext';
 
 const InvitationDetails = () => {
   const { t, i18n } = useTranslation();
+  const confirm = useConfirm();
   const { id } = useParams();
   const navigate = useNavigate();
   const routerLocation = useLocation();
@@ -501,7 +503,7 @@ const InvitationDetails = () => {
       return;
     }
 
-    if (!window.confirm(t('confirm_complete_invitation'))) {
+    if (!(await confirm({ message: t('confirm_complete_invitation'), tone: 'danger' }))) {
       return;
     }
 

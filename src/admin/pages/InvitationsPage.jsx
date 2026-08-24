@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { adminApi } from '../api';
 import AdminCreateDemoInvitationForm from '../components/AdminCreateDemoInvitationForm';
 import { AppText } from "../../components/base";
+import { useConfirm } from '../../context/ConfirmContext';
 
 const TYPE_TABS = [
 { id: 'all', labelKey: 'admin_invitations_type_all' },
@@ -19,6 +20,7 @@ const TYPE_LABEL_KEYS = {
 
 export default function InvitationsPage() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [inviteType, setInviteType] = useState('all');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +54,7 @@ export default function InvitationsPage() {
   }, [load]);
 
   const moderate = async (inv, action) => {
-    if (!window.confirm(t('admin_invitations_confirm_action', { action }))) return;
+    if (!(await confirm({ message: t('admin_invitations_confirm_action', { action }), tone: 'danger' }))) return;
     setActing(inv.id);
     try {
       await adminApi.moderateInvitation(inv.id, action, inv.inviteType);

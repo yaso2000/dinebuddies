@@ -117,6 +117,7 @@ const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
 
 // Contexts
 import { ToastProvider } from './context/ToastContext';
+import { ConfirmProvider } from './context/ConfirmContext';
 import GlobalImageUploadIndicator from './components/GlobalImageUploadIndicator';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
@@ -171,6 +172,7 @@ function App() {
     return (
         <ThemeProvider>
             <ToastProvider>
+                <ConfirmProvider>
                 <GlobalImageUploadIndicator />
                 <Router>
                     <LoginRouterBridge />
@@ -392,6 +394,7 @@ function App() {
                         </ExternalLinkGuardProvider>
                     </AuthProvider>
                 </Router>
+                </ConfirmProvider>
             </ToastProvider>
         </ThemeProvider>
     );

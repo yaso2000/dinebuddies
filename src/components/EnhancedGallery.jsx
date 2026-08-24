@@ -27,6 +27,7 @@ import { getBusinessPlanLimits, normalizeBusinessTier } from '../utils/businessS
 import './EnhancedGallery.css';
 import { shouldBlockDirectImageLoad } from '../utils/avatarUtils';
 import { AppText, AppTextInput } from "./base";
+import { useConfirm } from '../context/ConfirmContext';
 
 const CATEGORIES = [
 { id: 'food', label: 'Food', icon: FaUtensils, color: '#f59e0b' },
@@ -153,6 +154,7 @@ function SortableGalleryItem({
 const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
   const partnerId = profileId;
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { showToast } = useToast();
   const tc = theme?.colors || null;
   const th = (themed, fallback) => tc ? themed : fallback;
@@ -357,7 +359,7 @@ const EnhancedGallery = ({ profileId, business, isOwner, theme }) => {
   };
 
   const handleDeleteImage = async (index) => {
-    if (!window.confirm(t('confirm_delete_image', 'Delete this image?'))) return;
+    if (!(await confirm({ message: t('confirm_delete_image', 'Delete this image?'), tone: 'danger' }))) return;
 
     try {
       const imageToDelete = gallery[index];

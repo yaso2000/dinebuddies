@@ -19,6 +19,7 @@ import { CSS } from '@dnd-kit/utilities';
 import './MenuShowcase.css';
 import { AppText, AppTextInput } from "./base";
 import BusinessServiceIconPicker from './BusinessServiceIconPicker';
+import { useConfirm } from '../context/ConfirmContext';
 
 function normalizeMenuData(raw) {
   if (!Array.isArray(raw)) return [];
@@ -195,6 +196,7 @@ const EMPTY_FORM = {
 const MenuShowcase = ({ partnerId, profileId, menuData = [], menuListingType = 'menu', isOwner, isPaid = true, theme, onListingTypeChange }) => {
   const businessId = partnerId ?? profileId;
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { showToast } = useToast();
   const tc = theme?.colors || null;
   const th = (themed, fallback) => tc ? themed : fallback;
@@ -477,7 +479,7 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], menuListingType = '
 
   /* ---- delete --------------------------------------------------- */
   const handleDelete = async (itemId) => {
-    if (!window.confirm(t('confirm_delete_item', 'Delete this menu item?'))) return;
+    if (!(await confirm({ message: t('confirm_delete_item', 'Delete this menu item?'), tone: 'danger' }))) return;
     const updated = menuItems.filter((i) => i.id !== itemId);
     setMenuItems(updated);
     await saveToFirestore(updated);

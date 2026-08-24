@@ -17,6 +17,7 @@ import { FaUsers, FaUserPlus, FaHeart, FaComments, FaChartLine, FaArchive, FaEye
 import { useNotifications } from '../context/NotificationContext';
 import { hasBusinessSessionHint } from '../utils/accountRole';
 import { AppText } from "../components/base";
+import { useConfirm } from '../context/ConfirmContext';
 
 const DASHBOARD_LOADING_STYLE = {
   padding: '2rem',
@@ -127,6 +128,7 @@ const SCROLLABLE_ANCHORS = [PUBLISH_ANCHOR, NOTIFICATIONS_ANCHOR, FEEDBACK_INBOX
 
 const BusinessDashboard = () => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser, userProfile, loading: authLoading, isBusiness, profileServerSynced } = useAuth();
@@ -348,7 +350,7 @@ const BusinessDashboard = () => {
   const handleUnpublishProfile = async () => {
     if (!currentUser?.uid) return;
     const confirmMsg = t('business_unpublish_confirm', 'Hide your business from the Partners page? (e.g. temporarily closed) You can republish anytime.');
-    if (!window.confirm(confirmMsg)) return;
+    if (!(await confirm({ message: confirmMsg, tone: 'danger' }))) return;
     try {
       setPublishingProfile(true);
       const userRef = doc(db, 'users', currentUser.uid);

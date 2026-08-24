@@ -8,6 +8,7 @@ import PrivateProfileFields from '../../components/profile/PrivateProfileFields'
 import { fetchCityBoundingBox } from '../../utils/osmPhotonSearch';
 import { adminApi } from '../api';
 import { AppText, AppTextInput } from '../../components/base';
+import { useConfirm } from '../../context/ConfirmContext';
 
 const EMPTY_GEO = {
   countryCode: '',
@@ -39,6 +40,7 @@ const EMPTY_PROFILE = {
 
 export default function DemoUsersPage() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [geo, setGeo] = useState(EMPTY_GEO);
   const [coords, setCoords] = useState(null);
   const [profile, setProfile] = useState(EMPTY_PROFILE);
@@ -178,12 +180,10 @@ export default function DemoUsersPage() {
       return;
     }
     if (
-      !window.confirm(
-        t('admin_demo_user_create_confirm', {
+      !(await confirm({ message: t('admin_demo_user_create_confirm', {
           name: profile.displayName.trim(),
           city: geo.city,
-        })
-      )
+        }), tone: 'danger' }))
     ) {
       return;
     }
@@ -233,12 +233,10 @@ export default function DemoUsersPage() {
   const handleDelete = async (row) => {
     if (!row?.uid) return;
     if (
-      !window.confirm(
-        t('admin_demo_user_delete_confirm', {
+      !(await confirm({ message: t('admin_demo_user_delete_confirm', {
           name: row.displayName || row.uid,
           city: row.city,
-        })
-      )
+        }), tone: 'danger' }))
     ) {
       return;
     }

@@ -5,6 +5,7 @@ import { FaMicrophone, FaTrash } from 'react-icons/fa';
 import { AppText } from '../base';
 import { useAuth } from '../../context/AuthContext';
 import { useMyLiveStage } from '../../hooks/useMyLiveStage';
+import { useConfirm } from '../../context/ConfirmContext';
 
 export default function StagesChatPanel({
   stages = [],
@@ -13,6 +14,7 @@ export default function StagesChatPanel({
   onLeaveStage,
 }) {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const { cannotCreateInvitations, isBusiness } = useAuth();
   const { stageId: myLiveStageId, hasLiveStage, loading: myLiveLoading } = useMyLiveStage();
@@ -35,9 +37,7 @@ export default function StagesChatPanel({
       return;
     }
     if (
-      !window.confirm(
-        `${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${stage.name}?`
-      )
+      !(await confirm({ message: `${t('Are you sure you want to leave', 'Are you sure you want to leave')} ${stage.name}?`, tone: 'danger' }))
     ) {
       return;
     }

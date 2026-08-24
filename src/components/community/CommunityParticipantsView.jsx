@@ -6,6 +6,7 @@ import { useLongPress } from './useLongPress';
 import StageHostGuestModerationMenu from './StageHostGuestModerationMenu';
 import StageParticipantPreviewCard from './StageParticipantPreviewCard';
 import StageParticipantActions from './StageParticipantActions';
+import { useConfirm } from '../../context/ConfirmContext';
 
 function ParticipantRow({
   member,
@@ -130,6 +131,7 @@ export default function CommunityParticipantsView({
   hideTitle = false,
 }) {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [menu, setMenu] = useState(null); // { member, rect }
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState(null); // { member, rect }
@@ -237,24 +239,20 @@ export default function CommunityParticipantsView({
           }
           onKick={() =>
             runAction(async () => {
-              const ok = window.confirm(
-                t(
+              const ok = (await confirm({ message: t(
                   'stage_remove_member_confirm',
                   'Remove this member from the Stage? They will lose access to the chat.'
-                )
-              );
+                ), tone: 'danger' }));
               if (!ok) return;
               await onKickMember?.(menu?.member?.id);
             })
           }
           onBlock={() =>
             runAction(async () => {
-              const ok = window.confirm(
-                t(
+              const ok = (await confirm({ message: t(
                   'stage_block_member_confirm',
                   'Block this guest from all your future Stages? They will be removed from this broadcast too.'
-                )
-              );
+                ), tone: 'danger' }));
               if (!ok) return;
               await onBlockMember?.(menu?.member?.id);
             })

@@ -1,0 +1,91 @@
+.confirm-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.confirm-dialog {
+    width: 100%;
+    max-width: 380px;
+    box-sizing: border-box;
+    padding: 1.5rem 1.35rem 1.2rem;
+    border-radius: 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    text-align: center;
+}
+
+.confirm-dialog__icon {
+    width: 52px;
+    height: 52px;
+    margin: 0 auto 0.9rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    background: rgba(139, 92, 246, 0.14);
+    color: var(--primary, #8b5cf6);
+}
+
+.confirm-dialog--danger .confirm-dialog__icon {
+    background: rgba(239, 68, 68, 0.14);
+    color: #ef4444;
+}
+
+.confirm-dialog__title {
+    margin: 0 0 0.45rem;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.confirm-dialog__message {
+    margin: 0 0 1.35rem;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--text-secondary, var(--text-muted));
+    overflow-wrap: anywhere;
+}
+
+.confirm-dialog__actions {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.confirm-dialog__btn {
+    flex: 1;
+    min-height: 2.75rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.85rem;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-main);
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.confirm-dialog__btn--confirm {
+    border-color: transparent;
+    background: var(--primary, #8b5cf6);
+    color: #fff;
+}
+
+.confirm-dialog--danger .confirm-dialog__btn--confirm {
+    background: #ef4444;
+}
+
+.confirm-dialog__btn:focus-visible {
+    outline: 2px solid var(--primary, #8b5cf6);
+    outline-offset: 2px;
+}

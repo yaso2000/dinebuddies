@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { adminApi } from '../api';
 import { AppText } from "../../components/base";
+import { useConfirm } from '../../context/ConfirmContext';
 
 const SECTIONS = [
 { id: 'accounts', types: new Set(['user', 'partner']), labelKey: 'admin_reports_accounts' },
@@ -11,6 +12,7 @@ const SECTIONS = [
 
 export default function ReportsPage() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [section, setSection] = useState('accounts');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,11 +40,9 @@ export default function ReportsPage() {
 
   const resolve = async (id, status) => {
     if (
-    !window.confirm(
-      status === 'resolved' ?
+    !(await confirm({ message: status === 'resolved' ?
       t('admin_report_accept_confirm') :
-      t('admin_report_dismiss_confirm')
-    ))
+      t('admin_report_dismiss_confirm'), tone: 'danger' })))
     {
       return;
     }

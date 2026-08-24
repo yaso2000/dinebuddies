@@ -32,6 +32,7 @@ import { asUidArray } from '../utils/userSocialLists';
 import { goToLogin, getCurrentReturnPath } from '../utils/goToLogin';
 import { isPrivateInvitationDraft } from '../utils/socialInvitationDraft';
 import { normalizePersonalInviteCategory } from '../constants/personalInviteCategories';
+import { useConfirm } from '../context/ConfirmContext';
 
 /** Stable string uid for Firestore comparisons (rules use request.auth.uid as string). */import { AppText } from "../components/base";
 function normUid(v) {
@@ -46,6 +47,7 @@ function normUid(v) {
 const SocialInvitationDetails = () => {
   const { id } = useParams();
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const { currentUser, userProfile, loading: authLoading } = useAuth();
   const { respondToPrivateInvitation, deleteInvitation } = useInvitations();
@@ -692,7 +694,7 @@ const SocialInvitationDetails = () => {
                         <button
             style={{ width: '54px', height: '54px', borderRadius: '18px', border: '1px solid rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             onClick={async () => {
-              if (window.confirm(t('confirm_delete_invitation', 'Are you sure you want to delete this invitation?'))) {
+              if ((await confirm({ message: t('confirm_delete_invitation', 'Are you sure you want to delete this invitation?'), tone: 'danger' }))) {
                 const success = await deleteInvitation(invitation.id, true);
                 if (success) {
                   navigate('/');

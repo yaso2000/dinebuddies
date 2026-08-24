@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { adminApi } from '../api';
 import { AppText, AppTextInput } from "../../components/base";
+import { useConfirm } from '../../context/ConfirmContext';
 
 const AUDIENCE_OPTIONS = [
 { id: 'all', labelKey: 'admin_sender_audience_all' },
@@ -13,6 +14,7 @@ const AUDIENCE_OPTIONS = [
 
 export default function SmartSenderPage() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [audience, setAudience] = useState('all');
   const [targetUid, setTargetUid] = useState('');
   const [message, setMessage] = useState('');
@@ -58,9 +60,7 @@ export default function SmartSenderPage() {
     const label = audienceLabel(audience);
     const uidSuffix = audience === 'id' ? ` (${targetUid.trim()})` : '';
     if (
-    !window.confirm(
-      t('admin_sender_confirm_mass', { label, uidSuffix })
-    ))
+    !(await confirm({ message: t('admin_sender_confirm_mass', { label, uidSuffix }), tone: 'danger' })))
     {
       return;
     }

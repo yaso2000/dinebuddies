@@ -8,6 +8,7 @@ import UserAvatar from './UserAvatar';
 import MotionPostBody from './MotionPostBody';
 import { deleteFeedPostCascade } from '../utils/postDeleteCascade';
 import { AppText } from "./base";
+import { useConfirm } from '../context/ConfirmContext';
 
 const formatFeedTime = (ts) => {
   if (!ts) return '';
@@ -22,6 +23,7 @@ const formatFeedTime = (ts) => {
  */
 export default function MotionPostFeedCard({ post, communityPostId = null }) {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
@@ -54,9 +56,7 @@ export default function MotionPostFeedCard({ post, communityPostId = null }) {
   const handleDelete = async (e) => {
     e.stopPropagation();
     if (
-    !window.confirm(
-      t('post_delete_confirm')
-    ))
+    !(await confirm({ message: t('post_delete_confirm'), tone: 'danger' })))
     {
       return;
     }

@@ -13,6 +13,7 @@ import { useChat } from '../context/ChatContext';
 import { getCallableErrorReason } from '../utils/callableErrorDetails';
 import './CommunityManagement.css';
 import { AppText, AppTextInput } from "./base";
+import { useConfirm } from '../context/ConfirmContext';
 
 const FUNCTIONS_REGION = 'us-central1';
 
@@ -21,6 +22,7 @@ const CommunityManagement = ({ businessId, businessName, canUseMemberNotificatio
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { getCommunityMembers } = useInvitations();
   const { getOrCreateConversation, sendMessage: sendDirectMessage } = useChat();
   const [members, setMembers] = useState([]);
@@ -100,7 +102,7 @@ const CommunityManagement = ({ businessId, businessName, canUseMemberNotificatio
   const deselectAll = () => setSelectedMembers([]);
 
   const blockMember = async (memberId) => {
-    if (!confirm(t('block_member_confirm', 'Block this member? They will be removed and cannot rejoin until unblocked.'))) {
+    if (!(await confirm({ message: t('block_member_confirm', 'Block this member? They will be removed and cannot rejoin until unblocked.'), tone: 'danger' }))) {
       return;
     }
     setModeratingId(memberId);
@@ -151,9 +153,9 @@ const CommunityManagement = ({ businessId, businessName, canUseMemberNotificatio
   const toggleMute = async (member) => {
     const action = member.isMuted ? 'unmuteMember' : 'muteMember';
     const confirmKey = member.isMuted ? 'unmute_member_confirm' : 'mute_member_confirm';
-    if (!confirm(t(confirmKey, member.isMuted ?
+    if (!(await confirm({ message: t(confirmKey, member.isMuted ?
     'Allow this member to write in the group chat again?' :
-    'Mute this member? They can read the chat but cannot write or react.'))) {
+    'Mute this member? They can read the chat but cannot write or react.'), tone: 'danger' }))) {
       return;
     }
     setModeratingId(member.id);

@@ -3,9 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { adminApi } from '../api';
 import AdminCreateDemoPostForm from '../components/AdminCreateDemoPostForm';
 import { AppText } from '../../components/base';
+import { useConfirm } from '../../context/ConfirmContext';
 
 export default function PostsPage() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cursor, setCursor] = useState(null);
@@ -49,7 +51,7 @@ export default function PostsPage() {
   }, [load]);
 
   const remove = async (post) => {
-    if (!window.confirm(t('admin_posts_confirm_delete'))) return;
+    if (!(await confirm({ message: t('admin_posts_confirm_delete'), tone: 'danger' }))) return;
     setActing(post.id);
     try {
       await adminApi.moderatePost(post.id, 'delete', post.source || 'community');

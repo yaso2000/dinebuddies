@@ -60,6 +60,7 @@ import { useInvitationArchives } from '../hooks/useInvitationArchives';
 import { sortInvitationsByDateDesc, formatArchiveDateRange, isPublicInvitationExpiredForArchive } from '../utils/invitationExpiry';
 import '../pages/SettingsPages.css';
 import { AppText, AppTextInput } from "../components/base";
+import { useConfirm } from '../context/ConfirmContext';
 
 const InvitationListItem = ({ inv, navigate, t }) => {
   const isArchived = Boolean(inv.isArchived);
@@ -145,6 +146,7 @@ const InvitationListItem = ({ inv, navigate, t }) => {
 
 const Profile = () => {
   const { t, i18n } = useTranslation();
+  const confirm = useConfirm();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const { currentUser, updateProfile, invitations, privateInvitations, restaurants, updateRestaurant, toggleFollow, deleteInvitation } = useInvitations();
@@ -1378,7 +1380,7 @@ const Profile = () => {
                         type="button"
                         className="ui-btn ui-btn--danger-outline"
                         onClick={async () => {
-                          if (window.confirm(t('confirm_delete_all_private', 'Are you sure you want to delete all your private invitations?'))) {
+                          if ((await confirm({ message: t('confirm_delete_all_private', 'Are you sure you want to delete all your private invitations?'), tone: 'danger' }))) {
                             for (const inv of privatePosted) {
                               const inPrivateColl = (privateInvitations || []).some((p) => p.id === inv.id);
                               await deleteInvitation(inv.id, inPrivateColl);

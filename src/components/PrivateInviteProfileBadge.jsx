@@ -5,6 +5,7 @@ import { goToLogin } from '../utils/goToLogin';
 import { useToast } from '../context/ToastContext';
 import { isUserAvailableForPrivateInvite, getPrivateInviteeDisplayName, senderFollowsInvitee } from '../utils/privateInviteAvailability';
 import './PrivateInviteProfileBadge.css';
+import { useConfirm } from '../context/ConfirmContext';
 
 /**
  * Site logo badge on profile avatars — tap to send a private invite when available.
@@ -16,6 +17,7 @@ export default function PrivateInviteProfileBadge({
     logoSrc = '/db-logo.svg',
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const navigate = useNavigate();
     const { showToast } = useToast();
 
@@ -25,7 +27,7 @@ export default function PrivateInviteProfileBadge({
     const displayName = getPrivateInviteeDisplayName(user) || t('user', 'User');
 
     const handleClick = useCallback(
-        (e) => {
+        async (e) => {
             e.preventDefault();
             e.stopPropagation();
 
@@ -56,12 +58,10 @@ export default function PrivateInviteProfileBadge({
                 return;
             }
 
-            const confirmed = window.confirm(
-                t('private_send_invite_confirm', {
+            const confirmed = (await confirm({ message: t('private_send_invite_confirm', {
                     name: displayName,
                     defaultValue: `Send a Private Invite invitation to ${displayName}?`,
-                })
-            );
+                }), tone: 'default' }));
             if (!confirmed) return;
 
             navigate('/create-private', {
@@ -79,7 +79,7 @@ export default function PrivateInviteProfileBadge({
                 },
             });
         },
-        [canInvite, followsInvitee, currentUser, displayName, navigate, showToast, t, user]
+        [canInvite, confirm, followsInvitee, currentUser, displayName, navigate, showToast, t, user]
     );
 
     if (!user?.id) return null;

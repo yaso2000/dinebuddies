@@ -69,6 +69,7 @@ import { sortInvitationsByDateDesc, formatArchiveDateRange } from '../utils/invi
 import './UserProfile.tailwind.css';
 import { DEFAULT_PROFILE_COVER_FALLBACK } from '../constants/defaultProfileMedia';
 import { AppText } from "../components/base";
+import { useConfirm } from '../context/ConfirmContext';
 
 const PROFILE_SECTION_PREVIEW_MAX = 3;
 
@@ -395,6 +396,7 @@ const InvitationListItem = ({ inv, navigate, t }) => {
 
 const UserProfile = () => {
   const { t, i18n } = useTranslation();
+  const confirm = useConfirm();
   const { userId } = useParams();
   const navigate = useNavigate();
   const { goBack: goBackFromProfile } = useAppBackNavigation();
@@ -808,7 +810,7 @@ const UserProfile = () => {
   activeList :
   activeList.slice(0, PROFILE_SECTION_PREVIEW_MAX);
 
-  const handlePrivateInvite = () => {
+  const handlePrivateInvite = async () => {
     if (!canPrivateInvite) {
       showToast(
         t(
@@ -833,12 +835,10 @@ const UserProfile = () => {
       goToLogin({ returnPath: `/profile/${userId}` });
       return;
     }
-    const confirmed = window.confirm(
-      t('private_send_invite_confirm', {
+    const confirmed = (await confirm({ message: t('private_send_invite_confirm', {
         name: displayName,
         defaultValue: `Send a Private Invite invitation to ${displayName}?`
-      })
-    );
+      }), tone: 'default' }));
     if (!confirmed) return;
     navigate('/create-private', {
       state: {
@@ -936,9 +936,7 @@ const UserProfile = () => {
       return;
     }
     if (
-    !window.confirm(
-      t('block_user_confirm', 'Block this user? You will no longer see their profile, posts, or invitations.')
-    ))
+    !(await confirm({ message: t('block_user_confirm', 'Block this user? You will no longer see their profile, posts, or invitations.'), tone: 'danger' })))
     {
       return;
     }

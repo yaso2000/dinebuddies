@@ -6,6 +6,7 @@ import { adminApi } from '../api';
 import { AppText, AppTextInput } from "../../components/base";
 import { normalizeBusinessTier } from '../../utils/businessSubscription';
 import { getPurchaseCredits, getSavedCredits } from '../../utils/walletCredits';
+import { useConfirm } from '../../context/ConfirmContext';
 
 const USER_TABS = [
 {
@@ -85,6 +86,7 @@ function CreditsCell({ u, t }) {
 
 export default function UsersPage() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [tab, setTab] = useState('regular');
   const cfg = USER_TABS.find((row) => row.id === tab) || USER_TABS[0];
 
@@ -151,7 +153,7 @@ export default function UsersPage() {
   }, [tab, load]);
 
   const act = async (uid, fn) => {
-    if (!window.confirm(t('admin_action_confirm'))) return;
+    if (!(await confirm({ message: t('admin_action_confirm'), tone: 'danger' }))) return;
     setActing(uid);
     try {
       await fn();
@@ -277,7 +279,7 @@ export default function UsersPage() {
             className="db-btn db-btn--danger"
             disabled={acting === u.id}
             onClick={async () => {
-              if (!window.confirm(t('admin_delete_partner_confirm', { name: nameForTab(tab, u) }))) return;
+              if (!(await confirm({ message: t('admin_delete_partner_confirm', { name: nameForTab(tab, u) }), tone: 'danger' }))) return;
               setActing(u.id);
               try {
                 await adminApi.deletePartner(u.id);

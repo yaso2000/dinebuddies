@@ -15,6 +15,7 @@ import { deleteFilesAtFirebaseDownloadUrls } from '../utils/firebaseStorageDelet
 import { downloadStoryMedia } from '../utils/storyMediaExport';
 import { getAppOrigin } from '../utils/appOrigin';
 import ShareButtons from './ShareButtons';
+import { useConfirm } from '../context/ConfirmContext';
 
 /** Shown inline in the footer bar (Instagram-style). */import { AppText, AppTextInput } from "./base";
 const INLINE_EMOJIS = ['😂', '🥰', '🥺'];
@@ -47,6 +48,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
   const { sendMessage, getOrCreateConversation } = useChat();
   const { showToast } = useToast();
   const { t } = useTranslation();
+  const confirm = useConfirm();
 
   const { allUserStories, initialUserIndex } = viewingData;
 
@@ -502,9 +504,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
 
   const handleDeleteStory = async () => {
     if (!currentStory?.id || !isOwnStory) return;
-    const confirmed = window.confirm(
-      t('story_delete_confirm', 'Delete this story? This cannot be undone.')
-    );
+    const confirmed = (await confirm({ message: t('story_delete_confirm', 'Delete this story? This cannot be undone.'), tone: 'danger' }));
     if (!confirmed) return;
     try {
       const storyId = currentStory.id;

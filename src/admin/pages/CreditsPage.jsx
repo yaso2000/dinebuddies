@@ -6,6 +6,7 @@ import { searchUsers } from '../../utils/adminUserQueries';
 import { getPurchaseCredits, getSavedCredits } from '../../utils/walletCredits';
 import { adminApi } from '../api';
 import { AppText, AppTextInput } from '../../components/base';
+import { useConfirm } from '../../context/ConfirmContext';
 
 function isDemoAdminUser(u) {
   if (!u) return true;
@@ -23,6 +24,7 @@ function walletSnapshot(u) {
 
 export default function CreditsPage() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -94,12 +96,10 @@ export default function CreditsPage() {
       return;
     }
     if (
-      !window.confirm(
-        t('admin_grant_paid_confirm', {
+      !(await confirm({ message: t('admin_grant_paid_confirm', {
           count: n,
           defaultValue: `Grant ${n} purchase credits?`,
-        })
-      )
+        }), tone: 'danger' }))
     ) {
       return;
     }
@@ -152,12 +152,10 @@ export default function CreditsPage() {
       return;
     }
     if (
-      !window.confirm(
-        t(
+      !(await confirm({ message: t(
           'admin_reset_credits_confirm',
           'This zeros paid + savings credits for every user. Subscription tiers are unchanged. Continue?'
-        )
-      )
+        ), tone: 'danger' }))
     ) {
       return;
     }

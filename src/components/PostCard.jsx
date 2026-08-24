@@ -48,7 +48,10 @@ import {
 import { getHostedInvitationDetailsPath } from '../utils/hostedInvitationRoutes';
 
 // Detect if a post object is an elite featured slide
-import { AppText, AppTextInput } from "./base";const isFeaturedSlide = (p) =>
+import { AppText, AppTextInput } from "./base";
+import { useConfirm } from '../context/ConfirmContext';
+
+const isFeaturedSlide = (p) =>
 p && (
 p._isFeatured === true ||
 p.type === 'elite_slide' ||
@@ -64,6 +67,7 @@ const getCommentTimeMs = (c) => {
 
 const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) => {
   const { t, i18n } = useTranslation();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const { currentUser, userProfile } = useAuth();
   const { showToast } = useToast();
@@ -288,7 +292,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
 
   const handleHide = async (e) => {
     e.stopPropagation();
-    if (!window.confirm("Are you sure you want to hide this post? It will be moved to your drafts.")) return;
+    if (!(await confirm({ message: "Are you sure you want to hide this post? It will be moved to your drafts.", tone: 'default' }))) return;
     try {
       await updateDoc(doc(db, collectionName, postDocId), { status: 'draft' });
       showToast(t('post_hidden_success', 'Post hidden from feed.'), 'success');
@@ -391,7 +395,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
 
   const handleDelete = async (e) => {
     e.stopPropagation();
-    if (!window.confirm("Are you sure you want to delete this post? This cannot be undone.")) return;
+    if (!(await confirm({ message: "Are you sure you want to delete this post? This cannot be undone.", tone: 'danger' }))) return;
 
     try {
       await deleteFeedPostCascade(post);
