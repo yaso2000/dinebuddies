@@ -221,8 +221,12 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    margin: 2px 0 4px 56px;
-    padding: 4px 16px 4px 0;
+    /* Indent under the avatar on whichever side the thread starts. */
+    margin: 2px 0 4px;
+    margin-inline-start: 56px;
+    padding-block: 4px;
+    padding-inline-end: 16px;
+    padding-inline-start: 0;
     border: none;
     background: transparent;
     font-size: 0.8125rem;
@@ -271,7 +275,12 @@
 .fb-comment-composer__input {
     width: 100%;
     box-sizing: border-box;
-    padding: 10px 44px 10px 14px;
+    /* Logical, to match the send button's inset-inline-end: a physical 44px on
+       the right reserved space on the wrong side in Arabic, so the button sat
+       on top of the text. */
+    padding-block: 10px;
+    padding-inline-end: 44px;
+    padding-inline-start: 14px;
     border-radius: 20px;
     color: var(--text-main);
     font-size: 0.9375rem;
@@ -395,7 +404,10 @@
 
 .fb-comment-reply-float .fb-comment-composer__input {
     height: 32px;
-    padding: 0 36px 0 12px;
+    /* Same logical pairing as the main composer above. */
+    padding-block: 0;
+    padding-inline-end: 36px;
+    padding-inline-start: 12px;
     border: none;
     border-radius: 999px;
     background: var(--bg-input);

@@ -1,4 +1,5 @@
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
+import { resolveCountryIso2 } from './countryIso';
 import { db } from '../firebase/config';
 import { getSafeAvatar } from './avatarUtils';
 import { sortDineBuddiesVenues } from './invitationVenueSearch';
@@ -18,11 +19,27 @@ function venueMatchesCity(venue, cityToken) {
     return hay.includes(cityToken);
 }
 
-function venueMatchesCountry(venue, countryCode) {
-    if (!countryCode) return true;
-    const cc = String(countryCode).trim().toUpperCase();
-    const venueCc = String(venue.countryCode || '').trim().toUpperCase();
-    return !venueCc || venueCc === cc;
+/**
+ * Venues store whatever their signup captured: an ISO code for some, a full
+ * country name ("Australia") for others. Comparing a name against the picker's
+ * ISO code matched nothing, so Country scope came back empty. Normalise both.
+ *
+ * @param {object} venue
+ * @param {string} wantedIso already normalised by the caller
+ * @param {Map<string, string>} cache country text → ISO, this search only
+ */
+function venueMatchesCountry(venue, wantedIso, cache) {
+    if (!wantedIso) return true;
+    const raw = String(venue.countryCode || venue.country || '').trim();
+    // No country on the venue at all — keep it rather than hide it.
+    if (!raw) return true;
+    let iso = cache.get(raw);
+    if (iso === undefined) {
+        iso = resolveCountryIso2(raw);
+        cache.set(raw, iso);
+    }
+    // Unrecognised text is not evidence of a different country.
+    return !iso || iso === wantedIso;
 }
 
 function mapPublicProfileToVenue(docSnap) {
@@ -167,11 +184,14 @@ export async function searchPublishedAppVenues({
         mapped = await queryPublishedSample(80);
     }
 
+    const wantedIso = scope === 'country' ? resolveCountryIso2(countryCode) : '';
+    const countryIsoCache = new Map();
+
     const rows = [];
     for (const row of mapped) {
         if (qLower && !rowMatchesQuery(row, qLower)) continue;
 
-        if (scope === 'country' && !venueMatchesCountry(row, countryCode)) continue;
+        if (scope === 'country' && !venueMatchesCountry(row, wantedIso, countryIsoCache)) continue;
 
         if (scope === 'local' && cityToken && !venueMatchesCity(row, cityToken)) {
             if (!softCityFilter) continue;
@@ -202,3 +222,6 @@ export function mapAppVenueToFavoritePlace(venue) {
         addedAt: new Date().toISOString(),
     };
 }
+
+/** Internal, exposed for tests only. */
+export const __testables = { venueMatchesCountry };
