@@ -13,6 +13,7 @@ import {
   handleBusinessCommunityJoinClick,
   isJoinedToBusinessCommunity,
   resolveBusinessCommunityId,
+  resolveBusinessLiveStage,
 } from '../utils/businessCommunityJoin';
 import { AppText } from "../components/base";
 
@@ -76,6 +77,7 @@ const RestaurantDetails = () => {
     isVirtual: restaurant?.isVirtual === true,
   });
   const isJoined = isJoinedToBusinessCommunity(joinedCommunities, communityId);
+  const { liveStageId, stageOpen } = resolveBusinessLiveStage(restaurant);
 
   const handleCommunityJoinClick = () => {
     handleBusinessCommunityJoinClick({
@@ -86,6 +88,8 @@ const RestaurantDetails = () => {
       isJoined,
       joinCommunity,
       returnPath: `/restaurant/${id}`,
+      liveStageId,
+      stageOpen,
     });
   };
 
@@ -158,6 +162,7 @@ const RestaurantDetails = () => {
                         {!isBusinessAccount &&
             <button
               onClick={handleCommunityJoinClick}
+              disabled={isJoined && !stageOpen}
               style={{
                 background: isJoined ?
                 'linear-gradient(135deg, #1a2744 0%, #0f1729 100%)' :
@@ -177,16 +182,18 @@ const RestaurantDetails = () => {
                 gap: '6px'
               }}>
               
-                                {isJoined ? (
-                                  <>
-                                    <FaComments aria-hidden />
-                                    {t('business_grid_join_chat', 'Join chat')}
-                                  </>
-                                ) : (
+                                {!isJoined ? (
                                   <>
                                     <FaUserPlus aria-hidden />
                                     {t('join_plus')}
                                   </>
+                                ) : stageOpen ? (
+                                  <>
+                                    <FaComments aria-hidden />
+                                    {t('business_enter_stage', 'Enter Stage')}
+                                  </>
+                                ) : (
+                                  t('business_stage_closed', 'Stage not open')
                                 )}
                             </button>
             }

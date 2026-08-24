@@ -40,6 +40,7 @@ import { goToLogin } from '../utils/goToLogin';
 import {
   isJoinedToBusinessCommunity,
   resolveBusinessCommunityId,
+  resolveBusinessLiveStage,
 } from '../utils/businessCommunityJoin';
 import {
   normalizeRestaurantToBusinessProfile,
@@ -263,21 +264,10 @@ export function useBusinessProfile(profileId) {
   const effectiveIsMember =
     isJoinedToBusinessCommunity(joinedCommunities, profileCommunityId) || isMember;
 
-  // The business advertises its currently-open Stage on its profile. Ignore a
-  // pointer that has aged past its expiry (the hourly purge clears it a little
-  // later than the actual expiry).
-  const businessLiveStageId =
-    business?.liveStageId || business?.businessInfo?.liveStageId || null;
-  const businessLiveStageExpiresAt =
-    business?.liveStageExpiresAt || business?.businessInfo?.liveStageExpiresAt || null;
-  const businessStageOpen = Boolean(
-    businessLiveStageId &&
-      (() => {
-        if (!businessLiveStageExpiresAt) return true;
-        const ms = Date.parse(businessLiveStageExpiresAt);
-        return Number.isNaN(ms) || ms > Date.now();
-      })()
-  );
+  // The business advertises its currently-open Stage on its profile; a member's
+  // button enters that Stage and is disabled when none is open.
+  const { liveStageId: businessLiveStageId, stageOpen: businessStageOpen } =
+    resolveBusinessLiveStage(business);
 
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [selectorState, setSelectorState] = useState(null);

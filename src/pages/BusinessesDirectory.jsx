@@ -30,9 +30,9 @@ import '../components/MapStyles.css';
 import { goToLogin } from '../utils/goToLogin';
 import {
   handleBusinessCommunityJoinClick,
-  isBusinessCommunityChatEnabled,
   isJoinedToBusinessCommunity,
   resolveBusinessCommunityId,
+  resolveBusinessLiveStage,
 } from '../utils/businessCommunityJoin';
 import {
   detachLeafletMap,
@@ -416,7 +416,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
   };
 
   const effectiveJoined = isJoined;
-  const chatEnabled = isBusinessCommunityChatEnabled(res.subscriptionTier);
+  const { liveStageId, stageOpen } = resolveBusinessLiveStage(res);
 
   const handleJoinOrChat = async (e) => {
     if (joinInProgress) return;
@@ -431,18 +431,13 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
         isJoined: effectiveJoined,
         joinCommunity,
         returnPath: `/business/${res.id}`,
-        chatEnabled,
+        liveStageId,
+        stageOpen,
       });
       if (result?.reason === 'missing_community') {
         showToast(t('community_join_failed', 'Could not join the community. Try again.'), 'error');
-      } else if (result?.reason === 'chat_disabled') {
-        showToast(
-          t(
-            'community_chat_paid_only_member_hint',
-            'Group chat is available when this business has a Paid plan.'
-          ),
-          'info'
-        );
+      } else if (false) {
+        // (chat-disabled path removed — business chat is the Stage)
       }
     } finally {
       setJoinInProgress(false);
@@ -738,27 +733,27 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
                 type="button"
                 className={`community-join-btn restaurant-list-card__footer-btn${effectiveJoined ? ' community-join-btn--chat' : ''}`}
                 onClick={handleJoinOrChat}
-                disabled={joinInProgress}
+                disabled={joinInProgress || (effectiveJoined && !stageOpen)}
                 title={
                   effectiveJoined
-                    ? chatEnabled
-                      ? t('business_grid_join_chat', 'Join chat')
-                      : t('joined', 'Joined')
+                    ? stageOpen
+                      ? t('business_enter_stage', 'Enter Stage')
+                      : t('business_stage_closed', 'Stage not open')
                     : t('join_plus', '+ Join')
                 }
                 aria-label={
                   effectiveJoined
-                    ? chatEnabled
-                      ? t('business_grid_join_chat', 'Join chat')
-                      : t('joined', 'Joined')
+                    ? stageOpen
+                      ? t('business_enter_stage', 'Enter Stage')
+                      : t('business_stage_closed', 'Stage not open')
                     : t('join_plus', '+ Join')
                 }>
                 {effectiveJoined ? (
                   <>
                     <FaComments aria-hidden />
-                    {chatEnabled
-                      ? t('business_grid_join_chat', 'Join chat')
-                      : t('joined', 'Joined')}
+                    {stageOpen
+                      ? t('business_enter_stage', 'Enter Stage')
+                      : t('business_stage_closed', 'Stage not open')}
                   </>
                 ) : (
                   joinInProgress ? '…' : t('join_plus', '+ Join')

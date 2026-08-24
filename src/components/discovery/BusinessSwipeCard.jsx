@@ -12,9 +12,9 @@ import { goToLogin } from '../../utils/goToLogin';
 import { getBusinessCardCity } from '../../utils/businessCardLocation';
 import {
   handleBusinessCommunityJoinClick,
-  isBusinessCommunityChatEnabled,
   isJoinedToBusinessCommunity,
   resolveBusinessCommunityId,
+  resolveBusinessLiveStage,
 } from '../../utils/businessCommunityJoin';
 import {
   buildHostInvitationNavigationState,
@@ -78,7 +78,7 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
     isVirtual: res.isVirtual === true || res.source === 'google_places',
   });
   const isJoined = isJoinedToBusinessCommunity(joinedCommunities, communityId);
-  const chatEnabled = isBusinessCommunityChatEnabled(res.subscriptionTier);
+  const { liveStageId, stageOpen } = resolveBusinessLiveStage(res);
   const isBusinessAccount = isBusiness;
   const city = getBusinessCardCity(res) || item.locationLabel || '';
   const address =
@@ -128,18 +128,11 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
         isJoined,
         joinCommunity,
         returnPath: `/business/${res.id}`,
-        chatEnabled,
+        liveStageId,
+        stageOpen,
       });
       if (result?.reason === 'missing_community') {
         showToast(t('community_join_failed', 'Could not join the community. Try again.'), 'error');
-      } else if (result?.reason === 'chat_disabled') {
-        showToast(
-          t(
-            'community_chat_paid_only_member_hint',
-            'Group chat is available when this business has a Paid plan.'
-          ),
-          'info'
-        );
       }
     } finally {
       setJoinInProgress(false);
@@ -169,11 +162,11 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
     setInviteSelectorOpen(true);
   };
 
-  const joinLabel = isJoined
-    ? chatEnabled
-      ? t('business_grid_join_chat', 'Join chat')
-      : t('joined', 'Joined')
-    : t('join_community', 'Join community');
+  const joinLabel = !isJoined
+    ? t('join_community', 'Join community')
+    : stageOpen
+      ? t('business_enter_stage', 'Enter Stage')
+      : t('business_stage_closed', 'Stage not open');
 
   return (
     <>
@@ -283,7 +276,7 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
                 <button
                   type="button"
                   className="discovery-card__cta discovery-card__action discovery-card__action--glass discovery-card__action--join"
-                  disabled={joinInProgress || (isJoined && !chatEnabled)}
+                  disabled={joinInProgress || (isJoined && !stageOpen)}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={handleJoin}
                 >

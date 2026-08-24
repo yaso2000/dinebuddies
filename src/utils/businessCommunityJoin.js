@@ -30,6 +30,30 @@ export function isJoinedToBusinessCommunity(joinedCommunities = [], communityId)
   return Boolean(communityId && (joinedCommunities || []).includes(communityId));
 }
 
+/**
+ * A business's chat is its Stage — the permanent community chat was retired.
+ * A member can only enter when the business has an open Stage. Reads the pointer
+ * projected onto the business row (public_profiles.businessPublic.liveStageId),
+ * from whichever shape the caller holds, and ignores a pointer past its expiry
+ * (the hourly purge clears the field a little after the real expiry).
+ *
+ * @param {object|null|undefined} business
+ * @returns {{ liveStageId: string|null, stageOpen: boolean }}
+ */
+export function resolveBusinessLiveStage(business) {
+  if (!business || typeof business !== 'object') return { liveStageId: null, stageOpen: false };
+  const bi = business.businessInfo && typeof business.businessInfo === 'object' ? business.businessInfo : {};
+  const bp = business.businessPublic && typeof business.businessPublic === 'object' ? business.businessPublic : {};
+  const liveStageId =
+    business.liveStageId || bi.liveStageId || bp.liveStageId || null;
+  const expiresAt =
+    business.liveStageExpiresAt || bi.liveStageExpiresAt || bp.liveStageExpiresAt || null;
+  if (!liveStageId) return { liveStageId: null, stageOpen: false };
+  if (!expiresAt) return { liveStageId, stageOpen: true };
+  const ms = Date.parse(expiresAt);
+  return { liveStageId, stageOpen: Number.isNaN(ms) || ms > Date.now() };
+}
+
 /** Whether this business listing may open permanent community group chat. */
 export function isBusinessCommunityChatEnabled(subscriptionTier) {
   return getBusinessSubscriptionAccess(subscriptionTier).canUseCommunityGroupChat === true;
@@ -57,7 +81,10 @@ export async function handleBusinessCommunityJoinClick({
   isJoined,
   joinCommunity,
   returnPath,
-  chatEnabled = true,
+  // Business chat is the Stage. A member's tap enters the open Stage; with no
+  // open Stage the button is disabled in the UI, so this is a guard.
+  liveStageId = null,
+  stageOpen = false,
 }) {
   event?.stopPropagation?.();
   event?.preventDefault?.();
@@ -71,11 +98,12 @@ export async function handleBusinessCommunityJoinClick({
   if (typeof joinCommunity !== 'function') return { ok: false, reason: 'unavailable' };
 
   if (isJoined) {
-    if (!chatEnabled) {
-      return { ok: true, reason: 'chat_disabled' };
+    if (stageOpen && liveStageId) {
+      navigate(`/stage/${liveStageId}`);
+      return { ok: true, navigated: true };
     }
-    navigate(`/community/${communityId}`);
-    return { ok: true, navigated: true };
+    // Member, but the business has no open Stage — nothing to enter.
+    return { ok: true, reason: 'no_open_stage' };
   }
 
   try {
