@@ -16,7 +16,6 @@ export default function BusinessProfileAboutTab({ profile }) {
     isOwner,
     showColorRail,
     setShowColorRail,
-    setShowBrandKitModal,
     businessInfo,
     categoryBadges,
     navigate,
@@ -52,7 +51,7 @@ export default function BusinessProfileAboutTab({ profile }) {
       }>
 
                 {isOwner && showColorRail &&
-      <BrandColorSwatchRail onMore={() => { setShowColorRail(false); setShowBrandKitModal(true); }} />
+      <BrandColorSwatchRail />
       }
 
                 {(businessInfo.businessType || businessInfo.cuisineType || categoryBadges.length > 0) &&

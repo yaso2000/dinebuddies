@@ -190,23 +190,6 @@ export function useBusinessProfile(profileId) {
   const confirm = useConfirm();
   const { showToast } = useToast();
 
-  // Brand Kit preview mode — reads live state from localStorage when ?preview=1
-  const isPreviewMode = new URLSearchParams(location.search).get('preview') === '1';
-  const [previewBrandKit, setPreviewBrandKit] = useState(() => {
-    if (!isPreviewMode) return null;
-    try {return JSON.parse(localStorage.getItem('bk_preview') || 'null');} catch {return null;}
-  });
-  useEffect(() => {
-    if (!isPreviewMode) return;
-    const onStorage = (e) => {
-      if (e.key === 'bk_preview') {
-        try {setPreviewBrandKit(JSON.parse(e.newValue || 'null'));} catch {}
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, [isPreviewMode]);
-
   // Ref to prevent snapshot from overwriting optimistic join/leave state
   const joiningRef = useRef(false);
   /** Last applied users/{profileId} payload signature — avoids setState when Firestore re-delivers the same doc. */
@@ -304,7 +287,6 @@ export function useBusinessProfile(profileId) {
   const [savingInfo, setSavingInfo] = useState(false);
 
 
-  const [showBrandKitModal, setShowBrandKitModal] = useState(false);
   const [showColorRail, setShowColorRail] = useState(false);
 
   const [coverUploading, setCoverUploading] = useState(false);
@@ -674,8 +656,7 @@ export function useBusinessProfile(profileId) {
   }, [servicesKey]);
 
   // Keep activeTab valid when visible tabs change (visitor: some tabs hidden when empty)
-  const isOwnerProfile =
-  !isPreviewMode && isBusinessProfileOwner(currentUser?.uid, profileId, business);
+  const isOwnerProfile = isBusinessProfileOwner(currentUser?.uid, profileId, business);
   useEffect(() => {
     const info = business?.businessInfo;
     if (!info) return;
@@ -1269,7 +1250,7 @@ export function useBusinessProfile(profileId) {
     } catch (err) {showToast(t('save_failed'), 'error');} finally {setSavingInfo(false);}
   };
 
-  const isOwner = !isPreviewMode && isBusinessProfileOwner(currentUser?.uid, profileId, business);
+  const isOwner = isBusinessProfileOwner(currentUser?.uid, profileId, business);
   const showClaimCta = businessShowsClaimCta(business) && !isOwner;
 
   useEffect(() => {
@@ -1351,7 +1332,7 @@ export function useBusinessProfile(profileId) {
 
 
   // ── Theme & Brand Kit Engine ──
-  const brandKit = isPreviewMode && previewBrandKit ? previewBrandKit : businessInfo?.brandKit || {};
+  const brandKit = businessInfo?.brandKit || {};
   const _p = brandKit.primaryColor || null;
   const uiThemeId = resolveBusinessProfileThemeId(
     businessInfo?.theme || brandKit.templateId
@@ -1486,8 +1467,6 @@ export function useBusinessProfile(profileId) {
     handleCreateInvitation,
     showColorRail,
     setShowColorRail,
-    showBrandKitModal,
-    setShowBrandKitModal,
     showFeedbackModal,
     setShowFeedbackModal,
     showReviewModal,

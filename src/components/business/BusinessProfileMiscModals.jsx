@@ -6,7 +6,6 @@ import { getSafeAvatar, getShareableCoverImage } from '../../utils/avatarUtils';
 import ShareButtons from '../ShareButtons';
 import CreateInvitationSelector from '../CreateInvitationSelector';
 import FeedbackSubmissionModal from '../FeedbackSubmissionModal';
-import BrandKit from '../../pages/business-pro/BrandKit';
 
 export default function BusinessProfileMiscModals({ profile }) {
   const { t } = useTranslation();
@@ -24,8 +23,6 @@ export default function BusinessProfileMiscModals({ profile }) {
     showFeedbackModal,
     setShowFeedbackModal,
     profileId,
-    showBrandKitModal,
-    setShowBrandKitModal,
   } = profile;
 
   return (
@@ -206,15 +203,6 @@ export default function BusinessProfileMiscModals({ profile }) {
       onClose={() => setShowFeedbackModal(false)}
       businessId={profileId} />
 
-
-            {/* Brand Kit Modal Editor */}
-            {
-    showBrandKitModal &&
-    <div className="brand-kit-overlay">
-                    <BrandKit inAppColumn onBack={() => setShowBrandKitModal(false)} />
-                </div>
-
-    }
         </>);
 
 }
