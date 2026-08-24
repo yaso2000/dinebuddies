@@ -8,8 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { FaArrowLeft, FaArrowRight, FaPaperPlane, FaSpinner, FaExclamationCircle, FaLightbulb } from 'react-icons/fa';
 import UserAvatar from '../components/UserAvatar';
-import { AppText } from '../components/base';
-import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
+import { attachChatShellToVisualViewport, preventComposerControlBlur } from '../utils/chatVisualViewportLock';
 
 const STATUS_COLOR = { open: '#f59e0b', in_progress: '#3b82f6', resolved: '#22c55e', archived: '#94a3b8' };
 const statusOf = (tk) => (tk?.status && STATUS_COLOR[tk.status] ? tk.status : (tk?.isResolved ? 'resolved' : 'open'));
@@ -30,16 +29,16 @@ export default function BusinessThreadRoom() {
   const containerRef = useRef(null);
   const isRtl = i18n.dir() === 'rtl';
 
-  // Keep the input above the on-screen keyboard (same visual-viewport lock the
-  // normal chat uses) instead of the keyboard covering the reply box.
+  const functions = useMemo(() => getFunctions(app, 'us-central1'), []);
+
+  // Pin the shell above the on-screen keyboard — same mechanism the normal chat
+  // uses; relies on the chat-root/chat-container/message-input class names below.
   useEffect(() => {
     const { detach } = attachChatShellToVisualViewport(() => containerRef.current, {
       onViewportChange: () => endRef.current?.scrollIntoView({ block: 'end' }),
     });
     return detach;
   }, []);
-
-  const functions = useMemo(() => getFunctions(app, 'us-central1'), []);
 
   useEffect(() => {
     if (!ticketId) return;
@@ -95,9 +94,9 @@ export default function BusinessThreadRoom() {
   const isSuggestion = ticket?.type === 'suggestion';
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden', background: 'var(--bg-main)' }} dir={i18n.dir()}>
+    <div ref={containerRef} className="chat-root chat-container" dir={i18n.dir()} style={{ background: 'var(--bg-main)' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <header className="chat-header" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
         <button onClick={() => navigate(-1)} aria-label={t('back', 'Back')} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', fontSize: '1.1rem', cursor: 'pointer', padding: 4 }}>
           <BackIcon />
         </button>
@@ -112,55 +111,58 @@ export default function BusinessThreadRoom() {
             {ticket && <span style={{ color: STATUS_COLOR[s], marginInlineStart: 6 }}>· {t(`feedback_status_${s}`, s)}</span>}
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Thread */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {notFound ? (
-          <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>{t('feedback_thread_gone', 'This conversation is no longer available.')}</div>
-        ) : (
-          messages.map((m) => {
-            const mine = m.senderRole === 'user';
-            return (
-              <div key={m.id} style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start' }}>
-                <div style={{
-                  maxWidth: '78%', padding: '10px 14px', borderRadius: 16,
-                  background: mine ? 'var(--brand-primary)' : 'var(--bg-elevated)',
-                  color: mine ? '#fff' : 'var(--text-main)',
-                  fontSize: '0.94rem', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word'
-                }}>
-                  {m.text}
-                  <div style={{ fontSize: '0.62rem', opacity: 0.7, marginTop: 4, textAlign: 'end' }}>{fmt(m.createdAt)}</div>
+      <div className="chat-body-column">
+        {/* Thread */}
+        <div className="messages-area" style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {notFound ? (
+            <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>{t('feedback_thread_gone', 'This conversation is no longer available.')}</div>
+          ) : (
+            messages.map((m) => {
+              const mine = m.senderRole === 'user';
+              return (
+                <div key={m.id} style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start' }}>
+                  <div style={{
+                    maxWidth: '78%', padding: '10px 14px', borderRadius: 16,
+                    background: mine ? 'var(--brand-primary)' : 'var(--bg-elevated)',
+                    color: mine ? '#fff' : 'var(--text-main)',
+                    fontSize: '0.94rem', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word'
+                  }}>
+                    {m.text}
+                    <div style={{ fontSize: '0.62rem', opacity: 0.7, marginTop: 4, textAlign: 'end' }}>{fmt(m.createdAt)}</div>
+                  </div>
                 </div>
-              </div>
-            );
-          })
-        )}
-        <div ref={endRef} />
-      </div>
-
-      {/* Reply box */}
-      {!notFound && (
-        <div style={{ padding: 12, borderTop: '1px solid var(--border-color)', display: 'flex', gap: 8, alignItems: 'flex-end', background: 'var(--bg-card)' }}>
-          <textarea
-            value={reply}
-            onChange={(e) => setReply(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={t('feedback_reply_ph', 'Write a reply…')}
-            rows={1}
-            style={{
-              flex: 1, resize: 'none', maxHeight: 120, padding: '11px 14px', borderRadius: 14, border: '1px solid var(--border-color)',
-              background: 'var(--bg-elevated)', color: 'var(--text-main)', fontSize: '0.94rem', fontFamily: 'inherit', boxSizing: 'border-box'
-            }} />
-          <button onClick={send} disabled={sending || !reply.trim()} aria-label={t('send', 'Send')} style={{
-            width: 46, height: 46, borderRadius: '50%', border: 'none', flexShrink: 0,
-            background: reply.trim() ? 'var(--brand-primary)' : 'var(--border-color)', color: '#fff',
-            cursor: sending || !reply.trim() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}>
-            {sending ? <FaSpinner className="spin" /> : <FaPaperPlane />}
-          </button>
+              );
+            })
+          )}
+          <div ref={endRef} />
         </div>
-      )}
+
+        {/* Reply box */}
+        {!notFound && (
+          <div className="input-area" style={{ flexShrink: 0, display: 'flex', gap: 8, alignItems: 'flex-end', padding: 12, borderTop: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+            <textarea
+              className="message-input"
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder={t('feedback_reply_ph', 'Write a reply…')}
+              rows={1}
+              style={{
+                flex: 1, resize: 'none', maxHeight: 120, padding: '11px 14px', borderRadius: 14, border: '1px solid var(--border-color)',
+                background: 'var(--bg-elevated)', color: 'var(--text-main)', fontSize: '0.94rem', fontFamily: 'inherit', boxSizing: 'border-box'
+              }} />
+            <button onClick={send} onMouseDown={preventComposerControlBlur} disabled={sending || !reply.trim()} aria-label={t('send', 'Send')} style={{
+              width: 46, height: 46, borderRadius: '50%', border: 'none', flexShrink: 0,
+              background: reply.trim() ? 'var(--brand-primary)' : 'var(--border-color)', color: '#fff',
+              cursor: sending || !reply.trim() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              {sending ? <FaSpinner className="spin" /> : <FaPaperPlane />}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
