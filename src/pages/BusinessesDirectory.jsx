@@ -502,7 +502,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
 
                 {/* Background Image */}
                 <img
-          src={resolveBusinessCoverImageUrl(res) || pickSafeDisplayImageUrl(res.image, res.businessInfo?.coverImage) || DEFAULT_BUSINESS_COVER}
+          src={resolveBusinessCoverImageUrl(res, { preferProxy: true }) || pickSafeDisplayImageUrl(res.image, res.businessInfo?.coverImage) || DEFAULT_BUSINESS_COVER}
           alt={res.name}
           onError={(e) => handleBusinessCoverImageError(e, res)}
           style={{
@@ -1158,7 +1158,7 @@ const BusinessesDirectory = () => {
           res.image,
           res.businessInfo?.image
         ) ||
-        resolveBusinessCoverImageUrl(res) ||
+        resolveBusinessCoverImageUrl(res, { preferProxy: true }) ||
         DEFAULT_BUSINESS_COVER;
 
         // Create custom marker with logo - gold border for all restaurants
@@ -1188,7 +1188,7 @@ const BusinessesDirectory = () => {
         const popupContent = `
                     <div class="compact-popup" dir="auto" style="unicode-bidi:isolate;text-align:start">
                         <div style="position: relative;">
-                            <img src="${resolveBusinessCoverImageUrl(res) || pickSafeDisplayImageUrl(res.image, res.businessInfo?.coverImage) || DEFAULT_BUSINESS_COVER}" class="compact-popup-image" />
+                            <img src="${resolveBusinessCoverImageUrl(res, { preferProxy: true }) || pickSafeDisplayImageUrl(res.image, res.businessInfo?.coverImage) || DEFAULT_BUSINESS_COVER}" class="compact-popup-image" />
                             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; padding: 4px; background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);">
                                 <span style="background: ${markerColor}; color: black; padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; font-weight: 700; position: absolute; bottom: 4px; left: 4px; unicode-bidi:isolate;" dir="auto">${escapeHtmlText(formatBiDiText(res.type || t('venue', 'Venue')))}</span>
                             </div>

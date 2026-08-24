@@ -1305,7 +1305,7 @@ export function useBusinessProfile(profileId) {
 
   const profileMapCoords = business ? getUserDocLatLng(business) : null;
   const profileCoverUrl = business ? (
-  resolveBusinessCoverImageUrl(business) ||
+  resolveBusinessCoverImageUrl(business, { preferProxy: true }) ||
   pickSafeDisplayImageUrl(
     businessInfo.coverImage,
     business.photo_url,

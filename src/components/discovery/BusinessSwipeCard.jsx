@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
+import { handleBusinessCoverImageError } from '../../utils/businessCoverImage';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
@@ -202,6 +203,7 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
             alt=""
             className="discovery-card__photo discovery-card__photo--profile"
             draggable={false}
+            onError={(e) => handleBusinessCoverImageError(e, { placeId: item.id })}
           />
           <div className="discovery-card__gradient discovery-card__gradient--entity" aria-hidden />
 

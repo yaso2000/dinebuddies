@@ -96,7 +96,7 @@ export function useBusinessSwipeDeck() {
             : null;
         const city = getBusinessCardCity(res) || '';
         const coverImage =
-          resolveBusinessCoverImageUrl(res) ||
+          resolveBusinessCoverImageUrl(res, { preferProxy: true }) ||
           pickSafeDisplayImageUrl(res.image, res.businessInfo?.coverImage) ||
           DEFAULT_BUSINESS_COVER;
 

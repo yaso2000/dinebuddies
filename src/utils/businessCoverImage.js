@@ -90,6 +90,22 @@ export function handleBusinessCoverImageError(e, businessOrOpts, handlers = {}) 
         img.src = direct;
         return;
     }
+
+    // Direct URL is dead (imported covers held ephemeral Google CDN links that
+    // expire). The proxy serves the cached Storage copy and re-downloads from
+    // Google when the cache is missing — try it before giving up.
+    const placeId = String(
+        (isInlineOpts ? row.placeId || row.docId : row.uid || row.id || row.googlePlaceId) || '',
+    ).trim();
+    if (placeId && img.dataset.coverTriedProxy !== '1') {
+        const proxied = businessCoverProxyUrl(placeId);
+        if (proxied && img.src !== proxied) {
+            img.dataset.coverTriedProxy = '1';
+            img.src = proxied;
+            return;
+        }
+    }
+
     if (img.src !== DEFAULT_BUSINESS_COVER) {
         img.src = DEFAULT_BUSINESS_COVER;
     }
