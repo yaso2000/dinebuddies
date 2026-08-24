@@ -2323,7 +2323,26 @@
   "feedback_resolved_error": "Ein Fehler ist aufgetreten, bitte versuche es später erneut.",
   "feedback_resolved_success": "Nachricht als gelöst markiert ✅",
   "feedback_success": "Deine Nachricht wurde erfolgreich gesendet. Wir melden uns bald bei dir.",
-  "feedback_title": "Feedback & Beschwerden",
+  "feedback_title": "Feedback & Beschwerden",
+  "broadcast_cta": "Angebot senden",
+  "broadcast_title": "An deine Community senden",
+  "broadcast_intro": "Erreicht jedes Mitglied deiner Community in seinem Unternehmens-Posteingang — getrennt vom persönlichen Chat.",
+  "broadcast_kind_offer": "Angebot",
+  "broadcast_kind_announcement": "Ankündigung",
+  "broadcast_field_title": "Titel",
+  "broadcast_title_ph_offer": "z. B. 20% Rabatt dieses Wochenende",
+  "broadcast_title_ph_ann": "z. B. Neue Filiale eröffnet",
+  "broadcast_field_body": "Nachricht",
+  "broadcast_body_ph": "Details schreiben…",
+  "broadcast_field_discount": "Rabatt",
+  "broadcast_field_expiry": "Läuft ab",
+  "broadcast_send": "An Community senden",
+  "broadcast_req_content": "Füge einen Titel oder eine Nachricht hinzu.",
+  "broadcast_sent": "An {{count}} Mitglieder gesendet.",
+  "broadcast_no_members": "Noch keine Community-Mitglieder zum Senden.",
+  "broadcast_paid_only": "Angebote zu senden erfordert einen kostenpflichtigen Business-Plan.",
+  "broadcast_rate_limited": "Du sendest zu schnell. Bitte warte.",
+  "broadcast_error": "Senden fehlgeschlagen. Erneut versuchen.",
   "messages_tab_business": "Unternehmen",
   "business_inbox_empty_title": "Keine Unternehmensnachrichten",
   "business_inbox_empty_hint": "Feedback, das du an ein Unternehmen sendest, und deren Antworten erscheinen hier.",

@@ -9,11 +9,12 @@ import { useTranslation } from 'react-i18next';
 import CommunityManagement from '../components/CommunityManagement';
 import BusinessMemberNotificationsPanel from '../components/business/BusinessMemberNotificationsPanel';
 import BusinessFeedbackInbox from '../components/BusinessFeedbackInbox';
+import BusinessBroadcastComposer from '../components/business/BusinessBroadcastComposer';
 import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import BusinessPaidFeatureGate from '../components/business/BusinessPaidFeatureGate';
 import { syncBusinessPublicProfile } from '../services/businessPublicProfileSync';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { FaUsers, FaUserPlus, FaHeart, FaComments, FaChartLine, FaArchive, FaEye, FaStar, FaEdit, FaCalendar, FaCog, FaCheckCircle, FaGlobe, FaSearch, FaBell } from 'react-icons/fa';
+import { FaUsers, FaUserPlus, FaHeart, FaComments, FaChartLine, FaArchive, FaEye, FaStar, FaEdit, FaCalendar, FaCog, FaCheckCircle, FaGlobe, FaSearch, FaBell, FaBullhorn } from 'react-icons/fa';
 import { useNotifications } from '../context/NotificationContext';
 import { hasBusinessSessionHint } from '../utils/accountRole';
 import { AppText } from "../components/base";
@@ -147,6 +148,7 @@ const BusinessDashboard = () => {
   });
   const [recentActivity, setRecentActivity] = useState([]);
   const [publishingProfile, setPublishingProfile] = useState(false);
+  const [showBroadcast, setShowBroadcast] = useState(false);
 
   const tierAccess = getBusinessSubscriptionAccess(userProfile?.subscriptionTier);
   const hasBusinessAccess =
@@ -805,8 +807,19 @@ const BusinessDashboard = () => {
                         <AppText as="span" style={{ fontSize: '1.4rem' }}>📥</AppText>
                         {t('feedback_box_title', 'Feedback & Complaints Inbox')}
                     </AppText>
+                    <button
+                        type="button"
+                        onClick={() => setShowBroadcast(true)}
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 12,
+                            background: 'var(--brand-primary)', color: '#fff', fontWeight: 700, fontSize: '0.85rem',
+                            border: 'none', cursor: 'pointer', whiteSpace: 'nowrap'
+                        }}>
+                        <FaBullhorn /> {t('broadcast_cta', 'Send offer')}
+                    </button>
                 </div>
                 <BusinessFeedbackInbox />
+                <BusinessBroadcastComposer isOpen={showBroadcast} onClose={() => setShowBroadcast(false)} />
             </div>
 
             <BusinessMemberNotificationsPanel

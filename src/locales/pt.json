@@ -2323,7 +2323,26 @@
   "feedback_resolved_error": "Ocorreu um erro. Tente novamente mais tarde.",
   "feedback_resolved_success": "Mensagem marcada como resolvida ✅",
   "feedback_success": "Sua mensagem foi enviada com sucesso. Entraremos em contato em breve.",
-  "feedback_title": "Feedback e reclamações",
+  "feedback_title": "Feedback e reclamações",
+  "broadcast_cta": "Enviar oferta",
+  "broadcast_title": "Enviar para sua comunidade",
+  "broadcast_intro": "Chega a todos os membros da sua comunidade na caixa de Negócios — separada do chat pessoal.",
+  "broadcast_kind_offer": "Oferta",
+  "broadcast_kind_announcement": "Anúncio",
+  "broadcast_field_title": "Título",
+  "broadcast_title_ph_offer": "ex. 20% off neste fim de semana",
+  "broadcast_title_ph_ann": "ex. Nova filial aberta",
+  "broadcast_field_body": "Mensagem",
+  "broadcast_body_ph": "Escreva os detalhes…",
+  "broadcast_field_discount": "Desconto",
+  "broadcast_field_expiry": "Expira",
+  "broadcast_send": "Enviar para a comunidade",
+  "broadcast_req_content": "Adicione um título ou uma mensagem.",
+  "broadcast_sent": "Enviado para {{count}} membros.",
+  "broadcast_no_members": "Ainda não há membros para enviar.",
+  "broadcast_paid_only": "Transmitir ofertas requer um plano de Negócio pago.",
+  "broadcast_rate_limited": "Você está enviando rápido demais. Aguarde.",
+  "broadcast_error": "Não foi possível enviar. Tente novamente.",
   "messages_tab_business": "Negócios",
   "business_inbox_empty_title": "Nenhuma mensagem de negócios",
   "business_inbox_empty_hint": "O feedback que você envia a um negócio e as respostas aparecem aqui.",

@@ -1,4 +1,5 @@
 const functions = require('firebase-functions');
+const { normalizeBusinessSubscriptionTier } = require('./creditsCore');
 
 /**
  * Business complaints & suggestions — ticket system (server side).
@@ -116,6 +117,7 @@ function registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit 
         const ticketRef = db.collection('business_feedback').doc();
 
         const ticket = {
+            kind: 'support',
             businessId,
             businessName: target.name || null,
             businessAvatar: target.avatar || null,
@@ -330,6 +332,131 @@ function registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit 
 
         await batch.commit();
         return { ok: true, status };
+    });
+
+    // ── Business broadcast: send an offer / announcement to community members ──
+    // Lands in each member's Business Inbox as a thread (kind: offer|announcement),
+    // separate from personal chat. Paid business plan only.
+    exports.sendBusinessBroadcast = functions.https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Please sign in.');
+        }
+        const uid = context.auth.uid;
+        const kind = asTrimmed(data?.kind).toLowerCase();
+        const title = asTrimmed(data?.title);
+        const body = asTrimmed(data?.body);
+        const image = asTrimmed(data?.image) || null;
+        const discountLabel = asTrimmed(data?.discountLabel) || null;
+        const expiresAt = asTrimmed(data?.expiresAt) || null;
+
+        if (kind !== 'offer' && kind !== 'announcement') {
+            throw new functions.https.HttpsError('invalid-argument', 'kind must be offer or announcement.');
+        }
+        if (!title && !body) {
+            throw new functions.https.HttpsError('invalid-argument', 'A title or message is required.');
+        }
+        const text = [title, body].filter(Boolean).join('\n');
+        if (text.length > MAX_CONTENT) {
+            throw new functions.https.HttpsError('invalid-argument', 'Message is too long.');
+        }
+
+        const senderSnap = await db.collection('users').doc(uid).get();
+        const sender = senderSnap.exists ? senderSnap.data() || {} : {};
+        const senderRole = String(sender.role || sender.accountType || sender.accountRole || '').toLowerCase();
+        const senderIsBusiness = senderRole === 'business' || senderRole === 'partner' || sender.isBusiness === true;
+        if (!senderIsBusiness) {
+            throw new functions.https.HttpsError('permission-denied', 'Only a business can broadcast.');
+        }
+        if (normalizeBusinessSubscriptionTier(sender.subscriptionTier) !== 'paid') {
+            throw new functions.https.HttpsError('failed-precondition', 'Broadcasting offers requires a Paid Business plan.');
+        }
+
+        await enforceCallableRateLimit(uid, 'business_broadcast', {
+            cooldownMs: 10 * 1000,
+            perHour: 20,
+            perDay: 100,
+        });
+
+        const membersSnap = await db
+            .collection('users')
+            .where('joinedCommunities', 'array-contains', uid)
+            .limit(500)
+            .get();
+        const recipients = membersSnap.docs
+            .map((d) => ({ id: d.id, data: d.data() || {} }))
+            .filter((r) => r.id !== uid);
+        if (!recipients.length) return { ok: true, sent: 0 };
+
+        const businessName =
+            asTrimmed(sender.displayName) || asTrimmed(sender.display_name) || 'Business';
+        const businessAvatar = sender.photoURL || sender.photo_url || sender.avatarUrl || null;
+        const now = admin.firestore.FieldValue.serverTimestamp();
+
+        let sent = 0;
+        const CHUNK = 100; // 3 writes per recipient stays well under the 500-op batch cap
+        for (let i = 0; i < recipients.length; i += CHUNK) {
+            const slice = recipients.slice(i, i + CHUNK);
+            const batch = db.batch();
+            for (const r of slice) {
+                const ticketRef = db.collection('business_feedback').doc();
+                batch.set(ticketRef, {
+                    kind, // offer | announcement
+                    businessId: uid,
+                    businessName,
+                    businessAvatar,
+                    userId: r.id,
+                    userName: asTrimmed(r.data.displayName) || asTrimmed(r.data.display_name) || 'Member',
+                    userAvatar: r.data.photoURL || r.data.photo_url || r.data.avatarUrl || null,
+                    type: kind,
+                    rating: null,
+                    title: title || null,
+                    image,
+                    discountLabel,
+                    expiresAt,
+                    content: text,
+                    phoneNumber: null,
+                    status: 'open',
+                    priority: 'normal',
+                    category: null,
+                    sentiment: null,
+                    sentimentScore: null,
+                    aiSummary: null,
+                    aiSuggestedReply: null,
+                    aiProcessed: false,
+                    unreadForBusiness: false,
+                    unreadForUser: true,
+                    messageCount: 1,
+                    lastMessageRole: 'business',
+                    lastMessageAt: now,
+                    createdAt: now,
+                    updatedAt: now,
+                    resolvedAt: null,
+                    isResolved: false,
+                });
+                const msgRef = ticketRef.collection('messages').doc();
+                batch.set(msgRef, { senderId: uid, senderRole: 'business', text, createdAt: now, readAt: null });
+                const notifRef = db.collection('notifications').doc();
+                batch.set(notifRef, {
+                    userId: r.id,
+                    type: `business_${kind}`,
+                    title: businessName,
+                    message: (title || body).slice(0, 120),
+                    actionUrl: `/business-thread/${ticketRef.id}`,
+                    fromUserId: uid,
+                    fromUserName: businessName,
+                    fromUserAvatar: businessAvatar,
+                    senderId: uid,
+                    senderName: businessName,
+                    metadata: { source: 'business_broadcast', feedbackId: ticketRef.id, kind },
+                    createdAt: now,
+                    read: false,
+                });
+                sent += 1;
+            }
+            await batch.commit();
+        }
+
+        return { ok: true, sent };
     });
 }
 

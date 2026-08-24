@@ -62,10 +62,17 @@ export default function BusinessFeedbackInbox() {
     return () => unsub();
   }, [currentUser?.uid]);
 
+  // The dashboard inbox is the support desk — broadcast copies (offer/announcement)
+  // the business sent to members are excluded here.
+  const supportTickets = useMemo(
+    () => tickets.filter((tk) => (tk.kind || 'support') === 'support'),
+    [tickets]
+  );
+
   const stats = useMemo(() => {
     let open = 0, inProgress = 0, resolved = 0, archived = 0, complaints = 0, suggestions = 0;
     let ratingSum = 0, ratingCount = 0;
-    for (const f of tickets) {
+    for (const f of supportTickets) {
       const s = normalizeStatus(f);
       if (s === 'open') open++;
       else if (s === 'in_progress') inProgress++;
@@ -74,16 +81,16 @@ export default function BusinessFeedbackInbox() {
       if (f.type === 'suggestion') suggestions++; else complaints++;
       if (Number.isFinite(f.rating) && f.rating > 0) { ratingSum += f.rating; ratingCount++; }
     }
-    const total = tickets.length;
+    const total = supportTickets.length;
     const closed = resolved + archived;
     const resolutionRate = total ? Math.round((closed / total) * 100) : 0;
     const avgRating = ratingCount ? (ratingSum / ratingCount) : 0;
     return { total, open, inProgress, resolved, archived, complaints, suggestions, resolutionRate, avgRating, ratingCount };
-  }, [tickets]);
+  }, [supportTickets]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return tickets.filter((f) => {
+    return supportTickets.filter((f) => {
       if (filterStatus !== 'all' && normalizeStatus(f) !== filterStatus) return false;
       if (filterType !== 'all' && (f.type || 'complaint') !== filterType) return false;
       if (term) {
@@ -92,7 +99,7 @@ export default function BusinessFeedbackInbox() {
       }
       return true;
     });
-  }, [tickets, filterStatus, filterType, search]);
+  }, [supportTickets, filterStatus, filterType, search]);
 
   const fmtDate = (ts) => {
     if (!ts?.toDate) return '';

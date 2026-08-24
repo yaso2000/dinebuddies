@@ -2323,7 +2323,26 @@
   "feedback_resolved_error": "ایک خرابی پیش آگئی، براہ کرم بعد میں دوبارہ کوشش کریں۔",
   "feedback_resolved_success": "پیغام کو حل شدہ کے بطور نشان زد کیا گیا ✅",
   "feedback_success": "آپ کا پیغام کامیابی سے بھیج دیا گیا ہے۔ ہم جلد ہی آپ سے رابطہ کریں گے۔",
-  "feedback_title": "تاثرات اور شکایات",
+  "feedback_title": "تاثرات اور شکایات",
+  "broadcast_cta": "آفر بھیجیں",
+  "broadcast_title": "اپنی کمیونٹی کو بھیجیں",
+  "broadcast_intro": "آپ کی کمیونٹی کے ہر رکن تک کاروبار کے ان باکس میں پہنچتا ہے — ذاتی چیٹ سے الگ۔",
+  "broadcast_kind_offer": "آفر",
+  "broadcast_kind_announcement": "اعلان",
+  "broadcast_field_title": "عنوان",
+  "broadcast_title_ph_offer": "مثلاً اس ہفتے 20% رعایت",
+  "broadcast_title_ph_ann": "مثلاً نئی برانچ کھل گئی",
+  "broadcast_field_body": "پیغام",
+  "broadcast_body_ph": "تفصیلات لکھیں…",
+  "broadcast_field_discount": "رعایت",
+  "broadcast_field_expiry": "ختم",
+  "broadcast_send": "کمیونٹی کو بھیجیں",
+  "broadcast_req_content": "عنوان یا پیغام شامل کریں۔",
+  "broadcast_sent": "{{count}} اراکین کو بھیج دیا۔",
+  "broadcast_no_members": "ابھی بھیجنے کے لیے کوئی رکن نہیں۔",
+  "broadcast_paid_only": "آفرز نشر کرنے کے لیے ادا شدہ کاروباری پلان درکار ہے۔",
+  "broadcast_rate_limited": "آپ بہت تیزی سے بھیج رہے ہیں۔ انتظار کریں۔",
+  "broadcast_error": "بھیجا نہ جا سکا۔ دوبارہ کوشش کریں۔",
   "messages_tab_business": "کاروبار",
   "business_inbox_empty_title": "کوئی کاروباری پیغام نہیں",
   "business_inbox_empty_hint": "آپ کسی کاروبار کو جو رائے بھیجتے ہیں اور ان کے جوابات یہاں ظاہر ہوتے ہیں۔",

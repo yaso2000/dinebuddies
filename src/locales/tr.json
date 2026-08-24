@@ -2150,7 +2150,26 @@
   "feedback_resolved_error": "Bir hata oluştu, lütfen daha sonra tekrar dene.",
   "feedback_resolved_success": "Mesaj çözüldü olarak işaretlendi ✅",
   "feedback_success": "Mesajın başarıyla gönderildi. Kısa süre içinde seninle iletişime geçeceğiz.",
-  "feedback_title": "Geri Bildirim ve Şikayetler",
+  "feedback_title": "Geri Bildirim ve Şikayetler",
+  "broadcast_cta": "Teklif gönder",
+  "broadcast_title": "Topluluğuna gönder",
+  "broadcast_intro": "Topluluğunun her üyesine İşletme kutusunda ulaşır — kişisel sohbetten ayrı.",
+  "broadcast_kind_offer": "Teklif",
+  "broadcast_kind_announcement": "Duyuru",
+  "broadcast_field_title": "Başlık",
+  "broadcast_title_ph_offer": "örn. bu hafta sonu %20 indirim",
+  "broadcast_title_ph_ann": "örn. Yeni şube açıldı",
+  "broadcast_field_body": "Mesaj",
+  "broadcast_body_ph": "Ayrıntıları yaz…",
+  "broadcast_field_discount": "İndirim",
+  "broadcast_field_expiry": "Bitiş",
+  "broadcast_send": "Topluluğa gönder",
+  "broadcast_req_content": "Bir başlık veya mesaj ekle.",
+  "broadcast_sent": "{{count}} üyeye gönderildi.",
+  "broadcast_no_members": "Henüz gönderilecek topluluk üyesi yok.",
+  "broadcast_paid_only": "Teklif yayınlamak Ücretli İşletme planı gerektirir.",
+  "broadcast_rate_limited": "Çok hızlı gönderiyorsun. Lütfen bekle.",
+  "broadcast_error": "Gönderilemedi. Tekrar dene.",
   "messages_tab_business": "İşletmeler",
   "business_inbox_empty_title": "İşletme mesajı yok",
   "business_inbox_empty_hint": "Bir işletmeye gönderdiğin geri bildirimler ve yanıtları burada görünür.",

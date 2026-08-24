@@ -2353,7 +2353,26 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "broadcast_cta": "Send offer",
+  "broadcast_title": "Send to your community",
+  "broadcast_intro": "Reaches every member of your community in their Business inbox — separate from personal chat.",
+  "broadcast_kind_offer": "Offer",
+  "broadcast_kind_announcement": "Announcement",
+  "broadcast_field_title": "Title",
+  "broadcast_title_ph_offer": "e.g. 20% off this weekend",
+  "broadcast_title_ph_ann": "e.g. New branch now open",
+  "broadcast_field_body": "Message",
+  "broadcast_body_ph": "Write the details…",
+  "broadcast_field_discount": "Discount",
+  "broadcast_field_expiry": "Expires",
+  "broadcast_send": "Send to community",
+  "broadcast_req_content": "Add a title or a message.",
+  "broadcast_sent": "Sent to {{count}} members.",
+  "broadcast_no_members": "No community members to send to yet.",
+  "broadcast_paid_only": "Broadcasting offers requires a Paid Business plan.",
+  "broadcast_rate_limited": "You are sending broadcasts too fast. Please wait.",
+  "broadcast_error": "Could not send the broadcast. Try again.",
   "messages_tab_business": "Business",
   "business_inbox_empty_title": "No business messages",
   "business_inbox_empty_hint": "Feedback you send to a business, and their replies, appear here.",

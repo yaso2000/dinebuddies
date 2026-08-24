@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaExclamationCircle, FaLightbulb, FaCircle, FaStore } from 'react-icons/fa';
+import { FaExclamationCircle, FaLightbulb, FaCircle, FaStore, FaTag, FaBullhorn } from 'react-icons/fa';
 import UserAvatar from '../UserAvatar';
 import { AppText } from '../base';
 
@@ -45,7 +45,13 @@ export default function BusinessInboxPanel({ threads = [], loading, searchQuery 
     <div className="messages-page__list">
       {list.map((th) => {
         const s = statusOf(th);
+        const kind = th.kind || 'support';
         const isSuggestion = th.type === 'suggestion';
+        const meta = kind === 'offer'
+          ? { Icon: FaTag, color: '#f59e0b', label: t('broadcast_kind_offer', 'Offer') }
+          : kind === 'announcement'
+            ? { Icon: FaBullhorn, color: '#3b82f6', label: t('broadcast_kind_announcement', 'Announcement') }
+            : { Icon: isSuggestion ? FaLightbulb : FaExclamationCircle, color: isSuggestion ? '#22c55e' : '#ef4444', label: null };
         const snippet = (th.content || '').length > 60 ? th.content.slice(0, 60) + '…' : (th.content || '');
         return (
           <button
@@ -66,14 +72,21 @@ export default function BusinessInboxPanel({ threads = [], loading, searchQuery 
                 <AppText as="span" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{fmt(th.lastMessageAt || th.createdAt)}</AppText>
               </div>
               <div style={{ fontSize: '0.85rem', color: th.unreadForUser ? 'var(--text-main)' : 'var(--text-secondary)', fontWeight: th.unreadForUser ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                <span style={{ color: isSuggestion ? '#22c55e' : '#ef4444', marginInlineEnd: 6 }}>
-                  {isSuggestion ? <FaLightbulb /> : <FaExclamationCircle />}
+                <span style={{ color: meta.color, marginInlineEnd: 6 }}>
+                  <meta.Icon />
                 </span>
                 {snippet}
               </div>
-              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: STATUS_COLOR[s] }}>
-                {t(`feedback_status_${s}`, s)}
-              </span>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: meta.color }}>
+                  {meta.label || t(`feedback_status_${s}`, s)}
+                </span>
+                {kind === 'offer' && th.discountLabel && (
+                  <span style={{ fontSize: '0.66rem', fontWeight: 800, color: '#fff', background: '#f59e0b', borderRadius: 6, padding: '1px 6px' }}>
+                    {th.discountLabel}
+                  </span>
+                )}
+              </div>
             </div>
             {th.unreadForUser && <FaCircle style={{ fontSize: 9, color: 'var(--brand-primary)', flexShrink: 0 }} />}
           </button>

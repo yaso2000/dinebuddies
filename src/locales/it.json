@@ -2525,7 +2525,26 @@
   "feedback_resolved_error": "Si è verificato un errore, riprova più tardi.",
   "feedback_resolved_success": "Messaggio segnato come risolto ✅",
   "feedback_success": "Il tuo messaggio è stato inviato con successo. Ti contatteremo a breve.",
-  "feedback_title": "Feedback e reclami",
+  "feedback_title": "Feedback e reclami",
+  "broadcast_cta": "Invia offerta",
+  "broadcast_title": "Invia alla tua community",
+  "broadcast_intro": "Raggiunge ogni membro della tua community nella sua casella Attività — separata dalla chat personale.",
+  "broadcast_kind_offer": "Offerta",
+  "broadcast_kind_announcement": "Annuncio",
+  "broadcast_field_title": "Titolo",
+  "broadcast_title_ph_offer": "es. 20% di sconto questo weekend",
+  "broadcast_title_ph_ann": "es. Nuova sede aperta",
+  "broadcast_field_body": "Messaggio",
+  "broadcast_body_ph": "Scrivi i dettagli…",
+  "broadcast_field_discount": "Sconto",
+  "broadcast_field_expiry": "Scade",
+  "broadcast_send": "Invia alla community",
+  "broadcast_req_content": "Aggiungi un titolo o un messaggio.",
+  "broadcast_sent": "Inviato a {{count}} membri.",
+  "broadcast_no_members": "Nessun membro a cui inviare per ora.",
+  "broadcast_paid_only": "La diffusione di offerte richiede un piano Business a pagamento.",
+  "broadcast_rate_limited": "Stai inviando troppo velocemente. Attendi.",
+  "broadcast_error": "Impossibile inviare. Riprova.",
   "messages_tab_business": "Attività",
   "business_inbox_empty_title": "Nessun messaggio dalle attività",
   "business_inbox_empty_hint": "I feedback che invii a un’attività e le loro risposte appaiono qui.",

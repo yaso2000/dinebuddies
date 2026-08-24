@@ -2150,7 +2150,26 @@
   "feedback_resolved_error": "Une erreur s'est produite, veuillez réessayer plus tard.",
   "feedback_resolved_success": "Message marqué comme résolu ✅",
   "feedback_success": "Votre message a bien été envoyé. Nous vous contacterons prochainement.",
-  "feedback_title": "Commentaires et réclamations",
+  "feedback_title": "Commentaires et réclamations",
+  "broadcast_cta": "Envoyer une offre",
+  "broadcast_title": "Envoyer à votre communauté",
+  "broadcast_intro": "Atteint chaque membre de votre communauté dans sa boîte Entreprises — séparée du chat personnel.",
+  "broadcast_kind_offer": "Offre",
+  "broadcast_kind_announcement": "Annonce",
+  "broadcast_field_title": "Titre",
+  "broadcast_title_ph_offer": "ex. -20% ce week-end",
+  "broadcast_title_ph_ann": "ex. Nouvelle succursale ouverte",
+  "broadcast_field_body": "Message",
+  "broadcast_body_ph": "Écrivez les détails…",
+  "broadcast_field_discount": "Remise",
+  "broadcast_field_expiry": "Expire",
+  "broadcast_send": "Envoyer à la communauté",
+  "broadcast_req_content": "Ajoutez un titre ou un message.",
+  "broadcast_sent": "Envoyé à {{count}} membres.",
+  "broadcast_no_members": "Aucun membre de la communauté pour le moment.",
+  "broadcast_paid_only": "Diffuser des offres nécessite un forfait Entreprise payant.",
+  "broadcast_rate_limited": "Vous envoyez trop vite. Veuillez patienter.",
+  "broadcast_error": "Impossible d’envoyer la diffusion. Réessayez.",
   "messages_tab_business": "Entreprises",
   "business_inbox_empty_title": "Aucun message d’entreprise",
   "business_inbox_empty_hint": "Les avis que vous envoyez à une entreprise et leurs réponses apparaissent ici.",

@@ -6,7 +6,7 @@ import app, { db } from '../firebase/config';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { FaArrowLeft, FaArrowRight, FaPaperPlane, FaSpinner, FaExclamationCircle, FaLightbulb } from 'react-icons/fa';
+import { FaArrowLeft, FaArrowRight, FaPaperPlane, FaSpinner, FaExclamationCircle, FaLightbulb, FaTag, FaBullhorn } from 'react-icons/fa';
 import UserAvatar from '../components/UserAvatar';
 import { attachChatShellToVisualViewport, preventComposerControlBlur } from '../utils/chatVisualViewportLock';
 
@@ -92,6 +92,13 @@ export default function BusinessThreadRoom() {
   const BackIcon = isRtl ? FaArrowRight : FaArrowLeft;
   const s = statusOf(ticket);
   const isSuggestion = ticket?.type === 'suggestion';
+  const kind = ticket?.kind || 'support';
+  const meta = kind === 'offer'
+    ? { Icon: FaTag, color: '#f59e0b', label: t('broadcast_kind_offer', 'Offer') }
+    : kind === 'announcement'
+      ? { Icon: FaBullhorn, color: '#3b82f6', label: t('broadcast_kind_announcement', 'Announcement') }
+      : { Icon: isSuggestion ? FaLightbulb : FaExclamationCircle, color: isSuggestion ? '#22c55e' : '#ef4444', label: isSuggestion ? t('suggestion', 'Suggestion') : t('complaint', 'Complaint') };
+  const isSupport = kind === 'support';
 
   return (
     <div ref={containerRef} className="chat-root chat-container" dir={i18n.dir()} style={{ background: 'var(--bg-main)' }}>
@@ -105,10 +112,10 @@ export default function BusinessThreadRoom() {
           <div style={{ fontWeight: 800, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {ticket?.businessName || t('business', 'Business')}
           </div>
-          <div style={{ fontSize: '0.75rem', color: isSuggestion ? '#22c55e' : '#ef4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-            {isSuggestion ? <FaLightbulb /> : <FaExclamationCircle />}
-            {isSuggestion ? t('suggestion', 'Suggestion') : t('complaint', 'Complaint')}
-            {ticket && <span style={{ color: STATUS_COLOR[s], marginInlineStart: 6 }}>· {t(`feedback_status_${s}`, s)}</span>}
+          <div style={{ fontSize: '0.75rem', color: meta.color, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <meta.Icon />
+            {meta.label}
+            {ticket && isSupport && <span style={{ color: STATUS_COLOR[s], marginInlineStart: 6 }}>· {t(`feedback_status_${s}`, s)}</span>}
           </div>
         </div>
       </header>

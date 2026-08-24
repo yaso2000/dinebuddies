@@ -2150,7 +2150,26 @@
   "feedback_resolved_error": "एक त्रुटि घटित हुई है, कृपया बाद में पुन: प्रयास करें।",
   "feedback_resolved_success": "संदेश को समाधान के रूप में चिह्नित किया गया ✅",
   "feedback_success": "आपका संदेश सफलतापूर्वक प्रेषित किया गया। ",
-  "feedback_title": "प्रतिक्रिया एवं शिकायतें",
+  "feedback_title": "प्रतिक्रिया एवं शिकायतें",
+  "broadcast_cta": "ऑफ़र भेजें",
+  "broadcast_title": "अपने समुदाय को भेजें",
+  "broadcast_intro": "आपके समुदाय के हर सदस्य तक व्यवसाय इनबॉक्स में पहुँचता है — व्यक्तिगत चैट से अलग।",
+  "broadcast_kind_offer": "ऑफ़र",
+  "broadcast_kind_announcement": "घोषणा",
+  "broadcast_field_title": "शीर्षक",
+  "broadcast_title_ph_offer": "जैसे इस सप्ताहांत 20% छूट",
+  "broadcast_title_ph_ann": "जैसे नई शाखा अब खुली",
+  "broadcast_field_body": "संदेश",
+  "broadcast_body_ph": "विवरण लिखें…",
+  "broadcast_field_discount": "छूट",
+  "broadcast_field_expiry": "समाप्ति",
+  "broadcast_send": "समुदाय को भेजें",
+  "broadcast_req_content": "शीर्षक या संदेश जोड़ें।",
+  "broadcast_sent": "{{count}} सदस्यों को भेजा गया।",
+  "broadcast_no_members": "भेजने के लिए अभी कोई सदस्य नहीं।",
+  "broadcast_paid_only": "ऑफ़र प्रसारित करने के लिए सशुल्क व्यवसाय योजना आवश्यक है।",
+  "broadcast_rate_limited": "आप बहुत तेज़ी से भेज रहे हैं। प्रतीक्षा करें।",
+  "broadcast_error": "भेजा नहीं जा सका। पुनः प्रयास करें।",
   "messages_tab_business": "व्यवसाय",
   "business_inbox_empty_title": "कोई व्यवसाय संदेश नहीं",
   "business_inbox_empty_hint": "किसी व्यवसाय को भेजी गई प्रतिक्रिया और उनके उत्तर यहाँ दिखते हैं।",
