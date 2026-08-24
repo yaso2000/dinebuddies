@@ -26,22 +26,22 @@ function loadImage(src) {
   });
 }
 
-async function cropImageToFile(imageSrc, croppedAreaPixels) {
+async function cropImageToFile(imageSrc, croppedAreaPixels, { width, height, fileName }) {
   const image = await loadImage(imageSrc);
   const canvas = document.createElement('canvas');
-  canvas.width = OUTPUT_SIZE;
-  canvas.height = OUTPUT_SIZE;
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext('2d');
 
   // Zooming out puts frame area outside the photo. Paint the backdrop first so
   // those margins come out white rather than as black JPEG transparency.
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+  ctx.fillRect(0, 0, width, height);
 
   // Clip the source rect to the photo and place it proportionally, so an
   // out-of-bounds crop keeps its scale instead of stretching to fill.
-  const scaleX = OUTPUT_SIZE / croppedAreaPixels.width;
-  const scaleY = OUTPUT_SIZE / croppedAreaPixels.height;
+  const scaleX = width / croppedAreaPixels.width;
+  const scaleY = height / croppedAreaPixels.height;
   const sx = Math.max(0, croppedAreaPixels.x);
   const sy = Math.max(0, croppedAreaPixels.y);
   const sw = Math.min(image.width, croppedAreaPixels.x + croppedAreaPixels.width) - sx;
@@ -62,13 +62,29 @@ async function cropImageToFile(imageSrc, croppedAreaPixels) {
   }
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-  return new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
+  return new File([blob], fileName, { type: 'image/jpeg' });
 }
 
 /**
- * @param {{ imageSrc: string, cropShape?: 'round'|'rect', onCancel: () => void, onSave: (file: File) => void }} props
+ * @param {{
+ *   imageSrc: string,
+ *   cropShape?: 'round'|'rect',
+ *   aspect?: number,
+ *   outputWidth?: number,
+ *   fileName?: string,
+ *   onCancel: () => void,
+ *   onSave: (file: File) => void,
+ * }} props
  */
-export default function ImageCropModal({ imageSrc, cropShape = 'round', onCancel, onSave }) {
+export default function ImageCropModal({
+  imageSrc,
+  cropShape = 'round',
+  aspect = 1,
+  outputWidth = OUTPUT_SIZE,
+  fileName = 'avatar.jpg',
+  onCancel,
+  onSave,
+}) {
   const { t } = useTranslation();
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -101,7 +117,11 @@ export default function ImageCropModal({ imageSrc, cropShape = 'round', onCancel
     if (!croppedAreaPixels || saving) return;
     setSaving(true);
     try {
-      const file = await cropImageToFile(imageSrc, croppedAreaPixels);
+      const file = await cropImageToFile(imageSrc, croppedAreaPixels, {
+        width: outputWidth,
+        height: Math.round(outputWidth / aspect),
+        fileName,
+      });
       onSave(file);
     } finally {
       setSaving(false);
@@ -120,12 +140,12 @@ export default function ImageCropModal({ imageSrc, cropShape = 'round', onCancel
       }}
     >
       <div className="image-crop-modal__panel">
-        <div className="image-crop-modal__stage">
+        <div className="image-crop-modal__stage" style={{ '--crop-stage-aspect': aspect }}>
           <Cropper
             image={imageSrc}
             crop={crop}
             zoom={zoom}
-            aspect={1}
+            aspect={aspect}
             cropShape={cropShape}
             showGrid={false}
             minZoom={MIN_ZOOM}

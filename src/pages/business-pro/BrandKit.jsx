@@ -6,7 +6,6 @@ import { db } from '../../firebase/config';
 import { FaArrowLeft, FaSave, FaCheck, FaPalette, FaExternalLinkAlt, FaUndo } from 'react-icons/fa';
 import { BUSINESS_THEMES } from '../../utils/businessThemes';
 import PremiumBadge from '../../components/PremiumBadge';
-import PremiumPaywallModal from '../../components/PremiumPaywallModal';
 import DraftSavedModal from '../../components/DraftSavedModal';
 import { getBusinessSubscriptionAccess } from '../../utils/businessSubscription';
 // ─── 12 Curated Brand Templates ─────────────────────────────────────────────
@@ -63,7 +62,6 @@ const BrandKit = ({ onBack, inAppColumn = true }) => {
   const [allProps, setAllProps] = useState({ ...brandKit });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [showPaywall, setShowPaywall] = useState(false);
   const [showDraftSavedModal, setShowDraftSavedModal] = useState(false);
   const iframeRef = useRef(null);
 

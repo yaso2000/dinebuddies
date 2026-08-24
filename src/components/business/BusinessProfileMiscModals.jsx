@@ -4,7 +4,6 @@ import { FaTimes } from 'react-icons/fa';
 import { AppText } from '../base';
 import { getSafeAvatar, getShareableCoverImage } from '../../utils/avatarUtils';
 import ShareButtons from '../ShareButtons';
-import PremiumPaywallModal from '../PremiumPaywallModal';
 import CreateInvitationSelector from '../CreateInvitationSelector';
 import FeedbackSubmissionModal from '../FeedbackSubmissionModal';
 import BrandKit from '../../pages/business-pro/BrandKit';
@@ -19,9 +18,6 @@ export default function BusinessProfileMiscModals({ profile }) {
     setLightboxIndex,
     showShareModal,
     setShowShareModal,
-    showPaywall,
-    setShowPaywall,
-    paywallFeature,
     isSelectorOpen,
     setIsSelectorOpen,
     selectorState,
@@ -197,14 +193,6 @@ export default function BusinessProfileMiscModals({ profile }) {
                 </div>
 
     }
-            {/* Invitation Type Selector Modal */}
-            <PremiumPaywallModal
-      isOpen={showPaywall}
-      onClose={() => setShowPaywall(false)}
-      featureName={paywallFeature} />
-
-
-
             {/* Invitation Type Selector Modal */}
             <CreateInvitationSelector
       isOpen={isSelectorOpen}

@@ -24,7 +24,9 @@
 .image-crop-modal__stage {
   position: relative;
   width: 100%;
-  aspect-ratio: 1 / 1;
+  /* Follows the crop frame so a wide cover isn't letterboxed inside a square. */
+  aspect-ratio: var(--crop-stage-aspect, 1);
+  min-height: 200px;
   background: #000;
 }
 

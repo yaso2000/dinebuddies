@@ -1,11 +1,12 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaCrown, FaComments, FaEnvelope, FaHeart, FaRegHeart, FaShare, FaStar, FaUserPlus, FaUsers } from 'react-icons/fa';
+import { FaCrown, FaComments, FaEnvelope, FaHeart, FaRegHeart, FaShare, FaStar, FaTimes, FaUserPlus, FaUsers } from 'react-icons/fa';
 import { AppText } from '../base';
 import { handleBusinessCoverImageError } from '../../utils/businessCoverImage';
 import { resolveBusinessOpenNow } from '../../utils/googlePlacesBusiness';
 import { goToLogin } from '../../utils/goToLogin';
 import BusinessClaimPanel from '../BusinessClaimPanel';
+import ImageCropModal from '../ImageCropModal';
 
 export default function BusinessProfileHero({ profile }) {
   const { t } = useTranslation();
@@ -30,6 +31,11 @@ export default function BusinessProfileHero({ profile }) {
     handleLogoUpload,
     coverUploading,
     handleCoverUpload,
+    handleRemoveLogo,
+    handleRemoveCover,
+    imageCropRequest,
+    clearImageCropRequest,
+    handleCroppedImageSave,
     memberCount,
     averageRating,
     reviews,
@@ -186,6 +192,18 @@ export default function BusinessProfileHero({ profile }) {
                                 <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLogoUpload} disabled={logoUploading} />
                             </label>
           }
+                        {isOwner && profileLogoUrl &&
+          <button
+            type="button"
+            className="business-hero-logo-remove"
+            onClick={handleRemoveLogo}
+            disabled={logoUploading}
+            title={t('remove_logo', 'Remove logo')}
+            aria-label={t('remove_logo', 'Remove logo')}>
+
+                                <FaTimes size={11} aria-hidden />
+                            </button>
+          }
                         {isPaid && !isOwner &&
           <div className="business-hero-plan-badge" title={t('biz_plan_paid_name', 'Paid Business')}>👑</div>
           }
@@ -196,10 +214,24 @@ export default function BusinessProfileHero({ profile }) {
                 </div>
 
                 {isOwner &&
-      <label className="business-hero-edit-cover">
-                        {coverUploading ? `⏳ ${t('uploading', 'Uploading...')}` : `📷 ${t('edit_cover', 'Edit Cover')}`}
-                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleCoverUpload} disabled={coverUploading} />
-                    </label>
+      <div className="business-hero-cover-actions">
+                        <label className="business-hero-edit-cover">
+                            {coverUploading ? `⏳ ${t('uploading', 'Uploading...')}` : `📷 ${t('edit_cover', 'Edit Cover')}`}
+                            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleCoverUpload} disabled={coverUploading} />
+                        </label>
+                        {businessInfo.coverImage ?
+        <button
+          type="button"
+          className="business-hero-edit-cover business-hero-remove-cover"
+          onClick={handleRemoveCover}
+          disabled={coverUploading}
+          title={t('remove_cover', 'Remove cover')}
+          aria-label={t('remove_cover', 'Remove cover')}>
+
+                                <FaTimes size={12} aria-hidden />
+                            </button> :
+        null}
+                    </div>
       }
             </div>
 
@@ -294,6 +326,19 @@ export default function BusinessProfileHero({ profile }) {
                     </button>
       }
             </div>
+
+            {/* Frame the logo / cover before uploading, same step as the personal profile */}
+            {imageCropRequest ?
+      <ImageCropModal
+        imageSrc={imageCropRequest.src}
+        cropShape={imageCropRequest.kind === 'logo' ? 'round' : 'rect'}
+        aspect={imageCropRequest.kind === 'logo' ? 1 : 16 / 9}
+        outputWidth={imageCropRequest.kind === 'logo' ? 512 : 1600}
+        fileName={imageCropRequest.kind === 'logo' ? 'logo.jpg' : 'cover.jpg'}
+        onCancel={clearImageCropRequest}
+        onSave={handleCroppedImageSave} /> :
+
+      null}
         </div>);
 
 }

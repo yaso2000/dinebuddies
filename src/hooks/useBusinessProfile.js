@@ -4,7 +4,7 @@ import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, onSnaps
 import { auth, db } from '../firebase/config';
 import { subscribeBusinessLiked, toggleBusinessLike, incrementBusinessShareCount } from '../services/businessLikeService';
 import { useInvitations } from '../context/InvitationContext';
-import { uploadImage, deleteImage } from '../utils/imageUpload';
+import { uploadImage } from '../utils/imageUpload';
 import { ImageUploadZone } from '../services/imageUploadZones';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { useAuth } from '../context/AuthContext';
@@ -240,10 +240,7 @@ export function useBusinessProfile(profileId) {
   const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
   const [submittingReview, setSubmittingReview] = useState(false);
 
-  const [featuredPosts, setFeaturedPosts] = useState([]);
-
   // Gallery states
-  const [uploadingImage, setUploadingImage] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
@@ -258,13 +255,6 @@ export function useBusinessProfile(profileId) {
     events: [],
     loading: true
   });
-  const [isMobileView, setIsMobileView] = useState(window.innerWidth < 1024);
-
-  useEffect(() => {
-    const handleResize = () => setIsMobileView(window.innerWidth < 1024);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
   const [tempDeliveryLinks, setTempDeliveryLinks] = useState([]);
 
   // Like/share counts: single source of truth = Firestore (onSnapshot). No local override state.
@@ -312,15 +302,14 @@ export function useBusinessProfile(profileId) {
   const [savingInfo, setSavingInfo] = useState(false);
 
 
-  // Premium / Paywall state
-  const [showPaywall, setShowPaywall] = useState(false);
-  const [paywallFeature, setPaywallFeature] = useState('');
-
   const [showBrandKitModal, setShowBrandKitModal] = useState(false);
   const [showColorRail, setShowColorRail] = useState(false);
 
   const [coverUploading, setCoverUploading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  /** Pending crop for the logo/cover picker: { src, kind: 'logo' | 'cover' }. */
+  const [imageCropRequest, setImageCropRequest] = useState(null);
+  const cropObjectUrlRef = useRef(null);
 
 
   const applySnapshotBusinessData = useCallback((data, docSnap) => {
@@ -402,21 +391,6 @@ export function useBusinessProfile(profileId) {
     }
   };
 
-  const fetchFeaturedPosts = async () => {
-    if (!profileId) return;
-    try {
-      const q = query(
-        collection(db, 'featured_posts'),
-        where('partnerId', '==', profileId),
-        orderBy('createdAt', 'desc'),
-        limit(12)
-      );
-      const snap = await getDocs(q);
-      setFeaturedPosts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    } catch (e) {
-      setFeaturedPosts([]);
-    }
-  };
 
   useEffect(() => {
     if (authLoading) return;
@@ -669,9 +643,6 @@ export function useBusinessProfile(profileId) {
         fetchActiveInvitations(),
         fetchReviews()]
         );
-        if (getBusinessSubscriptionAccess(business?.subscriptionTier).isPaid) {
-          fetchFeaturedPosts();
-        }
       }
     };
     loadAllData();
@@ -890,72 +861,7 @@ export function useBusinessProfile(profileId) {
       });
   };
 
-  // Gallery Functions
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
 
-    const currentGallery = business?.businessInfo?.gallery || [];
-    if (currentGallery.length >= 6) {
-      showToast(t('gallery_max_images'), 'error');
-      return;
-    }
-
-    try {
-      setUploadingImage(true);
-
-      // Upload to Firebase Storage using Utility
-      const timestamp = Date.now();
-      const path = `gallery/${profileId}/${timestamp}.jpg`;
-
-      const options = {
-        maxSizeMB: 0.5,
-        maxWidthOrHeight: 1200,
-        useWebWorker: true,
-        fileType: 'image/jpeg',
-        initialQuality: 0.85
-      };
-
-      const downloadURL = await uploadImage(file, path, null, options, {
-        moderationZone: ImageUploadZone.GALLERY,
-        userId: profileId
-      });
-
-      // Update Firestore
-      const updatedGallery = [...currentGallery, downloadURL];
-      const businessRef = doc(db, 'users', profileId);
-      await updateDoc(businessRef, {
-        'businessInfo.gallery': updatedGallery
-      });
-
-    } catch (error) {
-      console.error('❌ Error uploading image:', error);
-      notifyImageUploadError(showToast, error, t, 'upload_image_failed');
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  const handleDeleteImage = async (imageUrl, index) => {
-    if (!window.confirm(t('confirm_delete_image'))) return;
-
-    try {
-      // Delete from Storage using Utility
-      await deleteImage(imageUrl);
-
-      // Update Firestore
-      const currentGallery = business?.businessInfo?.gallery || [];
-      const updatedGallery = currentGallery.filter((_, i) => i !== index);
-      const businessRef = doc(db, 'users', profileId);
-      await updateDoc(businessRef, {
-        'businessInfo.gallery': updatedGallery
-      });
-
-    } catch (error) {
-      console.error('❌ Error deleting image:', error);
-      showToast(t('delete_image_failed'), 'error');
-    }
-  };
 
   const handleCreateInvitation = () => {
     if (!currentUser) {
@@ -980,24 +886,7 @@ export function useBusinessProfile(profileId) {
     setIsSelectorOpen(true);
   };
 
-  const handleBookInvitation = () => {
-    if (!currentUser) {
-      goToLogin();
-      return;
-    }
 
-    // Navigate to partner's community/invitations page
-    navigate(`/business/${profileId}/invitations`);
-  };
-
-  const formatTime = (time) => {
-    if (!time) return '';
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes} ${ampm}`;
-  };
 
   // Like: write to Firestore then update favoritePlaces so snapshot has new value before context re-renders; keep optimistic override so count doesn’t disappear on stale snapshot
   const handleToggleLike = async () => {
@@ -1134,14 +1023,21 @@ export function useBusinessProfile(profileId) {
 
   // Inline edit handlers
   // handleAddService: for editing existing (via modal) — saves immediately
-  const handleAddService = (serviceData) => {
-    if (editingService !== null) {
-      const updated = services.map((s, i) => i === editingService ? serviceData : s);
-      setServices(updated);
-      const userRef = doc(db, 'users', profileId);
-      updateDoc(userRef, { 'businessInfo.services': updated }).catch(console.error);
-      setShowServiceModal(false);
-      setEditingService(null);
+  const handleAddService = async (serviceData) => {
+    if (editingService === null) return;
+    const previous = services;
+    const updated = services.map((s, i) => i === editingService ? serviceData : s);
+    setServices(updated);
+    setShowServiceModal(false);
+    setEditingService(null);
+    try {
+      await updateDoc(doc(db, 'users', profileId), { 'businessInfo.services': updated });
+    } catch (err) {
+      // Put the old list back — leaving the edit on screen would tell the owner
+      // it saved when it did not.
+      console.error('Error saving service:', err);
+      setServices(previous);
+      showToast(t('save_failed', 'Could not save. Please try again.'), 'error');
     }
   };
 
@@ -1159,11 +1055,12 @@ export function useBusinessProfile(profileId) {
   const handleSaveAllServices = async () => {
     if (pendingServices.length === 0) return;
     setSavingServices(true);
+    const updated = [...services, ...pendingServices];
     try {
-      const updated = [...services, ...pendingServices];
+      await updateDoc(doc(db, 'users', profileId), { 'businessInfo.services': updated });
+      // Only adopt the new list once the write lands — showing it first made a
+      // failed save look successful until the next reload.
       setServices(updated);
-      const userRef = doc(db, 'users', profileId);
-      await updateDoc(userRef, { 'businessInfo.services': updated });
       setPendingServices([]);
       setShowServiceAddForm(false);
       setServiceForm({ name: '', description: '', icon: '⚙️' });
@@ -1171,8 +1068,12 @@ export function useBusinessProfile(profileId) {
         setShowServiceDraftBanner(true);
         setTimeout(() => setShowServiceDraftBanner(false), 30000);
       }
-    } catch (err) {console.error('Error saving services:', err);} finally
-    {setSavingServices(false);}
+    } catch (err) {
+      console.error('Error saving services:', err);
+      showToast(t('save_failed', 'Could not save. Please try again.'), 'error');
+    } finally {
+      setSavingServices(false);
+    }
   };
 
   const handleDiscardServices = () => {
@@ -1184,37 +1085,94 @@ export function useBusinessProfile(profileId) {
 
   const handleDeleteService = async (index) => {
     if (!window.confirm(t('delete_service_confirm'))) return;
+    const previous = services;
     const updated = services.filter((_, i) => i !== index);
     setServices(updated);
-    const userRef = doc(db, 'users', profileId);
-    await updateDoc(userRef, { 'businessInfo.services': updated });
+    try {
+      await updateDoc(doc(db, 'users', profileId), { 'businessInfo.services': updated });
+    } catch (err) {
+      // The row was already gone from the list; put it back rather than let it
+      // silently reappear on the next load.
+      console.error('Error deleting service:', err);
+      setServices(previous);
+      showToast(t('save_failed', 'Could not save. Please try again.'), 'error');
+    }
   };
 
-  const handleCoverUpload = async (e) => {
-    const file = e.target.files[0];
+  /* Logo and cover both go through the same crop step the personal profile
+     uses, so the owner frames their brand rather than leaving it to object-fit.
+     Note uploadImage ignores its `path` argument once a moderationZone and
+     userId are given — the managed uploader picks the storage path. */
+  const clearImageCropRequest = useCallback(() => {
+    if (cropObjectUrlRef.current) {
+      URL.revokeObjectURL(cropObjectUrlRef.current);
+      cropObjectUrlRef.current = null;
+    }
+    setImageCropRequest(null);
+  }, []);
+
+  const openImageCrop = (e, kind) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    try {
-      setCoverUploading(true);
-      const url = await uploadImage(file, `covers/${profileId}/cover.jpg`, null, { maxSizeMB: 1, maxWidthOrHeight: 1600 }, {
-        moderationZone: ImageUploadZone.COVER,
-        userId: profileId
-      });
-      await updateDoc(doc(db, 'users', profileId), { 'businessInfo.coverImage': url });
-    } catch (err) {notifyImageUploadError(showToast, err, t, 'cover_upload_failed');} finally {setCoverUploading(false);}
+    clearImageCropRequest();
+    const src = URL.createObjectURL(file);
+    cropObjectUrlRef.current = src;
+    setImageCropRequest({ src, kind });
   };
 
-  const handleLogoUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const handleCoverUpload = (e) => openImageCrop(e, 'cover');
+  const handleLogoUpload = (e) => openImageCrop(e, 'logo');
+
+  const handleCroppedImageSave = async (croppedFile) => {
+    const kind = imageCropRequest?.kind;
+    clearImageCropRequest();
+    if (!kind) return;
+
+    const isLogo = kind === 'logo';
+    const setBusy = isLogo ? setLogoUploading : setCoverUploading;
     try {
-      setLogoUploading(true);
-      const url = await uploadImage(file, `logos/${profileId}/logo.jpg`, null, { maxSizeMB: 0.5, maxWidthOrHeight: 400 }, {
-        moderationZone: ImageUploadZone.LOGO,
-        userId: profileId
-      });
-      await updateDoc(doc(db, 'users', profileId), { photo_url: url });
-    } catch (err) {notifyImageUploadError(showToast, err, t, 'logo_upload_failed');} finally {setLogoUploading(false);}
+      setBusy(true);
+      const url = await uploadImage(
+        croppedFile,
+        null,
+        null,
+        isLogo ? { maxSizeMB: 0.5, maxWidthOrHeight: 400 } : { maxSizeMB: 1, maxWidthOrHeight: 1600 },
+        {
+          moderationZone: isLogo ? ImageUploadZone.LOGO : ImageUploadZone.COVER,
+          userId: profileId,
+        }
+      );
+      await updateDoc(
+        doc(db, 'users', profileId),
+        isLogo ? { photo_url: url } : { 'businessInfo.coverImage': url }
+      );
+    } catch (err) {
+      notifyImageUploadError(showToast, err, t, isLogo ? 'logo_upload_failed' : 'cover_upload_failed');
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const removeBusinessImage = async (kind) => {
+    const isLogo = kind === 'logo';
+    const setBusy = isLogo ? setLogoUploading : setCoverUploading;
+    try {
+      setBusy(true);
+      await updateDoc(
+        doc(db, 'users', profileId),
+        isLogo ? { photo_url: '' } : { 'businessInfo.coverImage': '' }
+      );
+    } catch (err) {
+      console.error('Business image remove failed:', err);
+      showToast(t('save_failed', 'Could not save. Please try again.'), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRemoveLogo = () => removeBusinessImage('logo');
+  const handleRemoveCover = () => removeBusinessImage('cover');
 
   const openBasicInfoModal = () => {
     setBasicInfoForm({
@@ -1389,7 +1347,6 @@ export function useBusinessProfile(profileId) {
   businessInfo.facebook ||
   businessInfo.tiktok;
 
-  const hasDrafts = isOwner && rawBusinessInfo.drafts && Object.keys(rawBusinessInfo.drafts).length > 0;
 
   // ── Theme & Brand Kit Engine ──
   const brandKit = isPreviewMode && previewBrandKit ? previewBrandKit : businessInfo?.brandKit || {};
@@ -1406,8 +1363,6 @@ export function useBusinessProfile(profileId) {
   // IMPORTANT FIX: checks if themed is undefined, otherwise falls back
   const th = (val, f) => tc && val !== undefined && val !== null ? val : f;
 
-  // Verified = profile has both cover image and logo
-  const isVerified = !!(businessInfo.coverImage && business?.photo_url);
   // ── Global Save: always saves directly (theme & all features are free) ──────────────────
   const handleGlobalSave = async () => {
     if (!currentUser || currentUser.uid !== profileId) return;
@@ -1467,7 +1422,6 @@ export function useBusinessProfile(profileId) {
     businessInfo,
     isOwner,
     isPaid,
-    isPreviewMode,
     profileCoverUrl,
     heroCoverSrc,
     profileLogoUrl,
@@ -1518,12 +1472,16 @@ export function useBusinessProfile(profileId) {
     handleShare,
     handleLogoUpload,
     handleCoverUpload,
+    handleRemoveLogo,
+    handleRemoveCover,
+    imageCropRequest,
+    clearImageCropRequest,
+    handleCroppedImageSave,
     headerCardPreviewUrl,
     closeHeaderPreview,
     handleShareFromOverlay,
     handleJoinCommunity,
     handleCreateInvitation,
-    handleBookInvitation,
     showColorRail,
     setShowColorRail,
     showBrandKitModal,
@@ -1556,14 +1514,12 @@ export function useBusinessProfile(profileId) {
     showServiceAddForm,
     setShowServiceAddForm,
     pendingServices,
-    setPendingServices,
     serviceForm,
     setServiceForm,
     serviceIconSearch,
     setServiceIconSearch,
     savingServices,
     services,
-    setServices,
     showServiceModal,
     setShowServiceModal,
     editingService,
@@ -1579,21 +1535,8 @@ export function useBusinessProfile(profileId) {
     setLightboxOpen,
     lightboxIndex,
     setLightboxIndex,
-    showPaywall,
-    setShowPaywall,
-    paywallFeature,
-    setPaywallFeature,
     isSelectorOpen,
     setIsSelectorOpen,
     selectorState,
-    setSelectorState,
-    uploadingImage,
-    handleImageUpload,
-    handleDeleteImage,
-    formatTime,
-    isVerified,
-    hasDrafts,
-    isMobileView,
-    featuredPosts,
   };
 }
