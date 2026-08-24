@@ -1869,6 +1869,9 @@ export const InvitationProvider = ({ children }) => {
             void addUserNotification({
                 userId: partnerId,
                 type: 'new_community_member',
+                fromUserId: userId,
+                fromUserName: currentUser.name || currentUser.displayName || '',
+                // Kept for older clients; NotificationsPanel translates by type.
                 title: '🎉 New Community Member!',
                 message: `${currentUser.name || currentUser.displayName || 'Someone'} has joined your community.`,
                 actionUrl: '/business-dashboard',

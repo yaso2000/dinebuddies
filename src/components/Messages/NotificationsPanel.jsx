@@ -63,6 +63,8 @@ const getNotifTitle = (notif, t) => {
     case 'business_feedback':return t('notif_title_business_feedback', 'Customer feedback');
     case 'business_post':return t('notif_title_business_post', 'New post');
     case 'stage_invite':return t('notif_title_stage_invite', 'Stage invitation');
+    case 'new_community_member':
+    case 'community_member':return t('notif_title_new_community_member', 'New community member');
     default:return notif.title || t('notification', 'Notification');
   }
 };
@@ -77,6 +79,9 @@ const getNotifMessage = (notif, t) => {
   switch (notif.type) {
     case 'follow':
       return t('notif_msg_follow', '{{name}} started following you', { name });
+    case 'new_community_member':
+    case 'community_member':
+      return t('notif_msg_new_community_member', '{{name}} joined your community', { name });
     case 'invitation_accepted':
       return t('notif_msg_accepted', '{{name}} accepted your invitation', { name });
     case 'invitation_rejected':

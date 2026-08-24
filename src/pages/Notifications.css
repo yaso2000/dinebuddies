@@ -607,3 +607,13 @@
 .notifications-list--embedded {
     padding: 6px 0.5rem 10px;
 }
+
+/* The panel scrolls right down to the screen edge while the bottom nav floats
+   over it, so 10px left the final card tucked behind the bar. Clear the nav and
+   the gesture inset outright rather than relying on the few px the flex chain
+   happens to leave. */
+@media (max-width: 1023px) {
+    .notifications-list--embedded {
+        padding-bottom: calc(var(--nav-height, 65px) + env(safe-area-inset-bottom, 0px) + 12px);
+    }
+}

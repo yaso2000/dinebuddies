@@ -258,6 +258,13 @@
     padding-bottom: 8px;
 }
 
+/* Same as the notifications list: the last row otherwise sits under the nav. */
+@media (max-width: 1023px) {
+    .app-main:has(.messages-page) .messages-page__body {
+        padding-bottom: calc(var(--nav-height, 65px) + env(safe-area-inset-bottom, 0px) + 12px);
+    }
+}
+
 .messages-page__list {
     display: flex;
     flex-direction: column;
