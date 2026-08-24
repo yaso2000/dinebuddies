@@ -408,8 +408,18 @@ export default function StageChatRoom() {
 
   let shellContent;
 
-  // Enter as soon as membership/host is known — do not wait forever on Firestore.
-  if (room.loading && !canEnterChat && !room.loadError) {
+  // A deleted Stage (host left → hard delete) is not enterable by anyone. This
+  // must win over canEnterChat: a stale `joinedStages` entry or a bootstrap-host
+  // flag would otherwise let a member/host back into a room that no longer
+  // exists, rendering an empty shell.
+  const stageWasDeleted = room.loadError === 'not-found';
+
+  if (stageWasDeleted) {
+    shellContent = renderJoinGate(
+      t('stage_ended_title', 'This Stage has ended'),
+      t('stage_ended_hint', 'The host closed this Stage. It is no longer available.')
+    );
+  } else if (room.loading && !canEnterChat && !room.loadError) {
     shellContent = (
       <div
         ref={containerRef}

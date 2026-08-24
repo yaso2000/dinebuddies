@@ -2570,7 +2570,9 @@
   "join_btn": "Demander à rejoindre",
   "join_community": "Rejoindre la communauté",
   "business_enter_stage": "Entrer sur la scène",
-  "business_stage_closed": "Scène non ouverte",
+  "business_stage_closed": "Scène non ouverte",
+  "stage_ended_title": "Cette scène est terminée",
+  "stage_ended_hint": "L'hôte a fermé cette scène. Elle n'est plus disponible.",
   "joining": "Adhésion…",
   "join_plus": "+ Rejoindre",
   "join_reason_activity_partner": "Partenaire pour activités & événements 🎟️",

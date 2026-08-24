@@ -2759,7 +2759,9 @@
   "join_btn": "شامل ہونے کی درخواست",
   "join_community": "کمیونٹی میں شامل ہوں۔",
   "business_enter_stage": "اسٹیج میں داخل ہوں",
-  "business_stage_closed": "اسٹیج کھلا نہیں",
+  "business_stage_closed": "اسٹیج کھلا نہیں",
+  "stage_ended_title": "یہ اسٹیج ختم ہو گیا",
+  "stage_ended_hint": "میزبان نے یہ اسٹیج بند کر دیا۔ اب یہ دستیاب نہیں۔",
   "joining": "شامل ہو رہے ہیں…",
   "join_plus": "+ شامل ہوں۔",
   "join_reason_activity_partner": "سرگرمیوں اور واقعات کے لیے پارٹنر 🎟️",

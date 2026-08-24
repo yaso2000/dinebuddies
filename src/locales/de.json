@@ -2759,7 +2759,9 @@
   "join_btn": "Beitritt anfragen",
   "join_community": "Der Community beitreten",
   "business_enter_stage": "Stage betreten",
-  "business_stage_closed": "Stage nicht geöffnet",
+  "business_stage_closed": "Stage nicht geöffnet",
+  "stage_ended_title": "Dieser Stage ist beendet",
+  "stage_ended_hint": "Der Host hat diesen Stage geschlossen. Er ist nicht mehr verfügbar.",
   "joining": "Beitreten…",
   "join_plus": "+ Beitreten",
   "join_reason_activity_partner": "Partner für Aktivitäten & Events 🎟️",

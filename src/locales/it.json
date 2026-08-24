@@ -2942,7 +2942,9 @@
   "join_btn": "Richiedi di unirti",
   "join_community": "Unisciti alla community",
   "business_enter_stage": "Entra nello Stage",
-  "business_stage_closed": "Stage non aperto",
+  "business_stage_closed": "Stage non aperto",
+  "stage_ended_title": "Questo Stage è terminato",
+  "stage_ended_hint": "L'host ha chiuso questo Stage. Non è più disponibile.",
   "joining": "Adesione…",
   "join_plus": "+ Unisciti",
   "join_reason_activity_partner": "Partner per attività ed eventi 🎟️",

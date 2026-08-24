@@ -2570,7 +2570,9 @@
   "join_btn": "Katılmak İçin İste",
   "join_community": "Topluluğa katıl",
   "business_enter_stage": "Sahneye Gir",
-  "business_stage_closed": "Sahne açık değil",
+  "business_stage_closed": "Sahne açık değil",
+  "stage_ended_title": "Bu Sahne sona erdi",
+  "stage_ended_hint": "Sunucu bu Sahneyi kapattı. Artık kullanılamıyor.",
   "joining": "Katılıyor…",
   "join_plus": "+ Katıl",
   "join_reason_activity_partner": "Aktivite ve etkinlik partneri 🎟️",

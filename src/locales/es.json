@@ -2759,7 +2759,9 @@
   "join_btn": "Solicitar unirse",
   "join_community": "Únete a la comunidad",
   "business_enter_stage": "Entrar al escenario",
-  "business_stage_closed": "Escenario no abierto",
+  "business_stage_closed": "Escenario no abierto",
+  "stage_ended_title": "Este escenario ha terminado",
+  "stage_ended_hint": "El anfitrión cerró este escenario. Ya no está disponible.",
   "joining": "Uniéndose…",
   "join_plus": "+ Unirse",
   "join_reason_activity_partner": "Compañero/a para actividades y eventos 🎟️",
