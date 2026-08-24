@@ -70,6 +70,10 @@ import './UserProfile.tailwind.css';
 import { DEFAULT_PROFILE_COVER_FALLBACK } from '../constants/defaultProfileMedia';
 import { AppText } from "../components/base";
 import { useConfirm } from '../context/ConfirmContext';
+import {
+  followCancelConfirmOptions,
+  likeCancelConfirmOptions,
+} from '../utils/connectionCancelConfirm';
 
 const PROFILE_SECTION_PREVIEW_MAX = 3;
 
@@ -427,7 +431,7 @@ const UserProfile = () => {
 
   const myUid = currentUser?.uid || currentUser?.id;
   const viewerProfile = userProfile || currentUser;
-  const useDatingLike = profileShowsLikeButton(viewerProfile);
+  const useDatingLike = profileShowsLikeButton(viewerProfile, user);
   const { liked } = useDiscoveryActionStatus(myUid, userId);
 
   const profileModel = useMemo(() => mapUserDocToProfileModel(user), [user]);
@@ -595,6 +599,8 @@ const UserProfile = () => {
       return;
     }
     if (likeBusy || !user) return;
+    // Undoing costs a 24h lock — never on a single stray tap.
+    if (liked && !(await confirm(likeCancelConfirmOptions(t)))) return;
 
     setLikeBusy(true);
     try {
@@ -635,7 +641,7 @@ const UserProfile = () => {
     } finally {
       setLikeBusy(false);
     }
-  }, [
+  }, [confirm, 
     celebrateMatch,
     currentUser,
     liked,
@@ -659,6 +665,7 @@ const UserProfile = () => {
       return;
     }
     if (followBusy) return;
+    if (currentUser?.following?.includes(userId) && !(await confirm(followCancelConfirmOptions(t)))) return;
 
     setFollowBusy(true);
     try {
@@ -687,7 +694,7 @@ const UserProfile = () => {
     } finally {
       setFollowBusy(false);
     }
-  }, [
+  }, [confirm, 
     celebrateMatch,
     currentUser,
     followBusy,

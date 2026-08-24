@@ -7,6 +7,11 @@ import { db } from '../../firebase/config';
 import { getSafeAvatar, mergeAvatarStyleWithGenderRing } from '../../utils/avatarUtils';
 import { getPrivateInviteeDisplayName } from '../../utils/privateInviteAvailability';
 import { goToLogin } from '../../utils/goToLogin';
+import { useConfirm } from '../../context/ConfirmContext';
+import {
+  followCancelConfirmOptions,
+  likeCancelConfirmOptions,
+} from '../../utils/connectionCancelConfirm';
 import {
   likeDiscoveryProfile,
   unlikeDiscoveryProfile,
@@ -45,6 +50,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { showToast, showPersistentWarning } = useToast();
+  const confirm = useConfirm();
   const { isDark } = useTheme();
   const { userProfile, isGuest } = useAuth();
   const { toggleFollow, currentUser: invitationUser } = useInvitations();
@@ -58,7 +64,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
     live: false,
   });
   const profilePath = profileUid ? `/profile/${profileUid}` : null;
-  const useDatingLike = profileShowsLikeButton(userProfile || invitationUser || currentUser);
+  const useDatingLike = profileShowsLikeButton(userProfile || invitationUser || currentUser, user);
   const { liked, greetedToday } = useDiscoveryActionStatus(viewerUid, profileUid);
 
   const [likeBusy, setLikeBusy] = useState(false);
@@ -149,6 +155,8 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
         return;
       }
       if (isSelf || likeBusy) return;
+      // Undoing costs a 24h lock — never on a single stray tap.
+      if (liked && !(await confirm(likeCancelConfirmOptions(t)))) return;
 
       setLikeBusy(true);
       try {
@@ -190,7 +198,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
         setLikeBusy(false);
       }
     },
-    [
+    [confirm, 
       celebrateMatch,
       currentUser,
       displayName,
@@ -222,6 +230,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
         return;
       }
       if (isSelf || followBusy) return;
+      if (isFollowingUser && !(await confirm(followCancelConfirmOptions(t)))) return;
 
       setFollowBusy(true);
       try {
@@ -251,7 +260,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
         setFollowBusy(false);
       }
     },
-    [
+    [confirm, 
       celebrateMatch,
       currentUser,
       displayName,

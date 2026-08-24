@@ -14,6 +14,11 @@ import {
   unlikeDiscoveryProfile,
 } from '../../utils/discoveryProfile';
 import { showLikeCooldownWarning } from '../../utils/connectionActionCooldown';
+import {
+  followCancelConfirmOptions,
+  likeCancelConfirmOptions,
+} from '../../utils/connectionCancelConfirm';
+import { useConfirm } from '../../context/ConfirmContext';
 import { isFollowing as checkIsFollowing } from '../../utils/followHelpers';
 import { checkCanMessage } from '../../utils/chatHelpers';
 import {
@@ -62,13 +67,14 @@ export default function DiscoveryCard({
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { showToast, showPersistentWarning } = useToast();
+  const confirm = useConfirm();
   const { currentUser, userProfile } = useAuth();
   const { toggleFollow, currentUser: invitationUser } = useInvitations();
   const { celebrateMatch } = useMatchCelebration();
   const targetUser = profile?.user || profile;
   const isOnline = useUserPresence(profile?.id, { fallback: Boolean(targetUser?.isOnline) });
   const viewerProfile = userProfile || currentUser || invitationUser;
-  const useDatingLike = profileShowsLikeButton(viewerProfile);
+  const useDatingLike = profileShowsLikeButton(viewerProfile, targetUser);
   const viewerUid = currentUser?.uid || currentUser?.id;
   const viewerFollowing = useMemo(
     () => invitationUser?.following || [],
@@ -216,6 +222,9 @@ export default function DiscoveryCard({
       return;
     }
 
+    // Undoing costs a 24h lock — never on a single stray tap.
+    if (liked && !(await confirm(likeCancelConfirmOptions(t)))) return;
+
     setLikeBusy(true);
     try {
       if (liked) {
@@ -269,6 +278,8 @@ export default function DiscoveryCard({
   const handleFollow = async (e) => {
     e.stopPropagation();
     if (!isTop || followBusy) return;
+    if (isFollowingUser && !(await confirm(followCancelConfirmOptions(t)))) return;
+
     setFollowBusy(true);
     try {
       const wasFollowing = isFollowingUser;

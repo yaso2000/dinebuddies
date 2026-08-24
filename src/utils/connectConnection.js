@@ -13,9 +13,19 @@ export const CONNECTION_KIND = {
     FRIENDSHIP: 'friendship',
 };
 
-/** Primary action on a profile card — determined by profile owner only. */
-export function profileShowsLikeButton(profile) {
-    return isUserOpenToDating(profile);
+/**
+ * Primary action on a profile card, anywhere it appears — swipe deck, list card
+ * or profile page.
+ *
+ * The heart is the dating action, so it only makes sense when BOTH sides are
+ * open to dating; if either has dating switched off the pair can only be a
+ * friendship or an acquaintance, and the follow icon is the correct action.
+ *
+ * @param {object | null | undefined} viewerProfile
+ * @param {object | null | undefined} targetProfile
+ */
+export function profileShowsLikeButton(viewerProfile, targetProfile) {
+    return isUserOpenToDating(viewerProfile) && isUserOpenToDating(targetProfile);
 }
 
 /**
