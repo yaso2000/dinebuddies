@@ -3889,6 +3889,12 @@ select.input-field {
     padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
   }
 
+  /* PullToRefresh wraps the hub in two plain divs, so .messages-page is no
+     longer a direct child here. Without passing the height down, the page sizes
+     to its content inside an overflow:hidden .app-main — nothing scrolls and
+     everything past the fold is clipped with no way to reach it. */
+  .app-main:has(.messages-page) > .pull-to-refresh-page,
+  .app-main:has(.messages-page) > .pull-to-refresh-page > .pull-to-refresh-page__content,
   .app-main:has(.messages-page) > .chat-list-container,
   .app-main:has(.messages-page) > .messages-page {
     flex: 1 1 auto;

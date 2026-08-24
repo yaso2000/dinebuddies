@@ -37,9 +37,12 @@
         padding-top: 0.35rem;
     }
 
+    /* Must stay height-bound: .app-main is overflow:hidden here, so letting the
+       page grow to its content puts everything past the fold out of reach —
+       the list below has to be the thing that scrolls. */
     .app-main--messages-index .messages-page {
-        min-height: auto;
-        height: auto;
+        min-height: 0;
+        height: 100%;
         flex: 1 1 auto;
     }
 }
@@ -256,13 +259,6 @@
 
 .app-main:has(.messages-page) .messages-page__body {
     padding-bottom: 8px;
-}
-
-/* Same as the notifications list: the last row otherwise sits under the nav. */
-@media (max-width: 1023px) {
-    .app-main:has(.messages-page) .messages-page__body {
-        padding-bottom: calc(var(--nav-height, 65px) + env(safe-area-inset-bottom, 0px) + 12px);
-    }
 }
 
 .messages-page__list {
