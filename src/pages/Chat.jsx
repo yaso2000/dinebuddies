@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import React, { Suspense, lazy, useState, useEffect, useRef, useCallback } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, query, onSnapshot, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -153,8 +153,12 @@ const Chat = () => {
 
   const [isSupportPeer, setIsSupportPeer] = useState(false);
 
-  const viewerFollowing =
-    invitationUser?.following || userProfile?.following || [];
+  // Stable identity — a fresh [] each render used to restart the connection
+  // gate's listeners before it could settle.
+  const viewerFollowing = useMemo(
+    () => invitationUser?.following || userProfile?.following || [],
+    [invitationUser?.following, userProfile?.following]
+  );
   const { allowed: connectionAllowed, loading: connectionCheckLoading, targetProfile } =
     useConversationConnectionAllowed(currentUser?.uid, userId, viewerFollowing, {
       enabled: Boolean(currentUser?.uid && userId),
