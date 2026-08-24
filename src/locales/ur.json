@@ -2323,7 +2323,8 @@
   "feedback_resolved_error": "ایک خرابی پیش آگئی، براہ کرم بعد میں دوبارہ کوشش کریں۔",
   "feedback_resolved_success": "پیغام کو حل شدہ کے بطور نشان زد کیا گیا ✅",
   "feedback_success": "آپ کا پیغام کامیابی سے بھیج دیا گیا ہے۔ ہم جلد ہی آپ سے رابطہ کریں گے۔",
-  "feedback_title": "تاثرات اور شکایات",
+  "feedback_title": "تاثرات اور شکایات",
+  "inbox_and_complaints": "ان باکس اور شکایات",
   "ai_analyze_all": "تمام آراء کا تجزیہ کریں",
   "ai_analyze_ticket": "اے آئی سے تجزیہ کریں",
   "ai_credits_n": "{{n}} کریڈٹ",

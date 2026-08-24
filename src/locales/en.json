@@ -2353,7 +2353,8 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "inbox_and_complaints": "Inbox & complaints",
   "ai_analyze_all": "Analyze all feedback",
   "ai_analyze_ticket": "Analyze with AI",
   "ai_credits_n": "{{n}} credits",

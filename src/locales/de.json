@@ -2323,7 +2323,8 @@
   "feedback_resolved_error": "Ein Fehler ist aufgetreten, bitte versuche es später erneut.",
   "feedback_resolved_success": "Nachricht als gelöst markiert ✅",
   "feedback_success": "Deine Nachricht wurde erfolgreich gesendet. Wir melden uns bald bei dir.",
-  "feedback_title": "Feedback & Beschwerden",
+  "feedback_title": "Feedback & Beschwerden",
+  "inbox_and_complaints": "Posteingang & Beschwerden",
   "ai_analyze_all": "Alle Rückmeldungen analysieren",
   "ai_analyze_ticket": "Mit KI analysieren",
   "ai_credits_n": "{{n}} Credits",

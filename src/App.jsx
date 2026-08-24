@@ -73,6 +73,7 @@ const BusinessProfile = lazy(() => import('./pages/BusinessProfile'));
 const BusinessSignup = lazy(() => import('./components/BusinessSignup'));
 const BusinessOnboarding = lazy(() => import('./pages/BusinessOnboarding'));
 const BusinessDashboard = lazy(() => import('./pages/BusinessDashboard'));
+const BusinessInboxManage = lazy(() => import('./pages/BusinessInboxManage'));
 // Eager — lazy chunks here caused ChunkLoadError on mobile after deploy → feed redirect.
 import SocialInvitationDetails from './pages/SocialInvitationDetails';
 import SocialInvitationPreview from './pages/SocialInvitationPreview';
@@ -277,6 +278,7 @@ function App() {
                                                     <Route path="/business/:businessId" element={<BusinessProfile />} />
 
                                                     <Route path="/business-dashboard" element={<GuestBlockedRoute><BusinessDashboard /></GuestBlockedRoute>} />
+                                                    <Route path="/business-dashboard/inbox" element={<GuestBlockedRoute><BusinessInboxManage /></GuestBlockedRoute>} />
 
                                                     <Route
                                                         path="/search"
@@ -348,7 +350,7 @@ function App() {
 
                                                     <Route path="/plans" element={<Navigate to="/pricing" replace />} />
                                                     <Route path="/my-community" element={<Navigate to="/business-dashboard" replace />} />
-                                                    <Route path="/my-community/inbox" element={<Navigate to="/business-dashboard#business-feedback-inbox" replace />} />
+                                                    <Route path="/my-community/inbox" element={<Navigate to="/business-dashboard/inbox" replace />} />
                                                     <Route path="/my-community/archive" element={<GuestBlockedRoute><BusinessHostedArchive /></GuestBlockedRoute>} />
                                                     <Route path="/my-community/analytics" element={<GuestBlockedRoute><BusinessDashboardAnalytics /></GuestBlockedRoute>} />
                                                     <Route path="/ai-marketing-studio/saved-posts" element={<GuestBlockedRoute><Navigate to="/business-dashboard" replace /></GuestBlockedRoute>} />

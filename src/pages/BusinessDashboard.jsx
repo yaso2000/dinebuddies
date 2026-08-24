@@ -6,14 +6,11 @@ import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import CommunityManagement from '../components/CommunityManagement';
-import BusinessFeedbackInbox from '../components/BusinessFeedbackInbox';
-import BusinessBroadcastComposer from '../components/business/BusinessBroadcastComposer';
 import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import BusinessPaidFeatureGate from '../components/business/BusinessPaidFeatureGate';
 import { syncBusinessPublicProfile } from '../services/businessPublicProfileSync';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { FaUsers, FaUserPlus, FaHeart, FaComments, FaChartLine, FaArchive, FaEye, FaStar, FaEdit, FaCalendar, FaCog, FaCheckCircle, FaGlobe, FaSearch, FaBell, FaBullhorn } from 'react-icons/fa';
+import { FaUsers, FaUserPlus, FaHeart, FaComments, FaChartLine, FaArchive, FaEye, FaStar, FaEdit, FaCalendar, FaCog, FaCheckCircle, FaGlobe, FaSearch, FaBell, FaInbox } from 'react-icons/fa';
 import { useNotifications } from '../context/NotificationContext';
 import { hasBusinessSessionHint } from '../utils/accountRole';
 import { AppText } from "../components/base";
@@ -123,8 +120,7 @@ function BusinessDashboardLoading({ label }) {
 
 const PUBLISH_ANCHOR = 'business-publish-profile';
 const NOTIFICATIONS_ANCHOR = 'business-notifications';
-const FEEDBACK_INBOX_ANCHOR = 'business-feedback-inbox';
-const SCROLLABLE_ANCHORS = [PUBLISH_ANCHOR, NOTIFICATIONS_ANCHOR, FEEDBACK_INBOX_ANCHOR];
+const SCROLLABLE_ANCHORS = [PUBLISH_ANCHOR, NOTIFICATIONS_ANCHOR];
 
 const BusinessDashboard = () => {
   const { t } = useTranslation();
@@ -147,7 +143,6 @@ const BusinessDashboard = () => {
   });
   const [recentActivity, setRecentActivity] = useState([]);
   const [publishingProfile, setPublishingProfile] = useState(false);
-  const [showBroadcast, setShowBroadcast] = useState(false);
 
   const tierAccess = getBusinessSubscriptionAccess(userProfile?.subscriptionTier);
   const hasBusinessAccess =
@@ -659,9 +654,9 @@ const BusinessDashboard = () => {
                 {/* Quick Actions */}
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     <QuickActionButton
-            icon={<FaEye />}
-            label={t('btn_view_profile', 'View Profile')}
-            onClick={() => currentUser && navigate(`/business/${currentUser.uid}?preview=1`)} />
+            icon={<FaInbox />}
+            label={t('inbox_and_complaints', 'Inbox & complaints')}
+            onClick={() => navigate('/business-dashboard/inbox')} />
 
                     <QuickActionButton
             icon={<FaEdit />}
@@ -785,49 +780,6 @@ const BusinessDashboard = () => {
         }
             </div>
 
-            {/* Feedback Inbox */}
-            <div id={FEEDBACK_INBOX_ANCHOR} style={{
-        marginTop: '1.5rem',
-        marginBottom: '1.5rem',
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-color)',
-        borderRadius: '16px',
-        padding: '1.5rem'
-      }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <AppText as="h3" style={{
-            fontSize: '1.2rem',
-            fontWeight: '800',
-            margin: 0,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-                        <AppText as="span" style={{ fontSize: '1.4rem' }}>📥</AppText>
-                        {t('feedback_box_title', 'Feedback & Complaints Inbox')}
-                    </AppText>
-                    <button
-                        type="button"
-                        onClick={() => setShowBroadcast(true)}
-                        style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 12,
-                            background: 'var(--brand-primary)', color: '#fff', fontWeight: 700, fontSize: '0.85rem',
-                            border: 'none', cursor: 'pointer', whiteSpace: 'nowrap'
-                        }}>
-                        <FaBullhorn /> {t('broadcast_cta', 'Send offer')}
-                    </button>
-                </div>
-                <BusinessFeedbackInbox />
-                <BusinessBroadcastComposer isOpen={showBroadcast} onClose={() => setShowBroadcast(false)} />
-            </div>
-
-            {/* Community Management */}
-            <div id="community-management" style={{ marginTop: '1rem' }}>
-                <CommunityManagement
-          businessId={currentUser.uid}
-          businessName={userProfile?.display_name || userProfile?.businessInfo?.name} />
-
-            </div>
         </div>);
 
 };

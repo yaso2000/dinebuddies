@@ -2525,7 +2525,8 @@
   "feedback_resolved_error": "Si è verificato un errore, riprova più tardi.",
   "feedback_resolved_success": "Messaggio segnato come risolto ✅",
   "feedback_success": "Il tuo messaggio è stato inviato con successo. Ti contatteremo a breve.",
-  "feedback_title": "Feedback e reclami",
+  "feedback_title": "Feedback e reclami",
+  "inbox_and_complaints": "Messaggi e reclami",
   "ai_analyze_all": "Analizza tutti i feedback",
   "ai_analyze_ticket": "Analizza con l’IA",
   "ai_credits_n": "{{n}} crediti",

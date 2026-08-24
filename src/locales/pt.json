@@ -2323,7 +2323,8 @@
   "feedback_resolved_error": "Ocorreu um erro. Tente novamente mais tarde.",
   "feedback_resolved_success": "Mensagem marcada como resolvida ✅",
   "feedback_success": "Sua mensagem foi enviada com sucesso. Entraremos em contato em breve.",
-  "feedback_title": "Feedback e reclamações",
+  "feedback_title": "Feedback e reclamações",
+  "inbox_and_complaints": "Mensagens e reclamações",
   "ai_analyze_all": "Analisar todos os comentários",
   "ai_analyze_ticket": "Analisar com IA",
   "ai_credits_n": "{{n}} créditos",

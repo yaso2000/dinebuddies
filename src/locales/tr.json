@@ -2150,7 +2150,8 @@
   "feedback_resolved_error": "Bir hata oluştu, lütfen daha sonra tekrar dene.",
   "feedback_resolved_success": "Mesaj çözüldü olarak işaretlendi ✅",
   "feedback_success": "Mesajın başarıyla gönderildi. Kısa süre içinde seninle iletişime geçeceğiz.",
-  "feedback_title": "Geri Bildirim ve Şikayetler",
+  "feedback_title": "Geri Bildirim ve Şikayetler",
+  "inbox_and_complaints": "Gelen kutusu & şikayetler",
   "ai_analyze_all": "Tüm geri bildirimleri analiz et",
   "ai_analyze_ticket": "Yapay zeka ile analiz et",
   "ai_credits_n": "{{n}} kredi",
