@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaUsers, FaBan, FaEnvelope, FaUserShield, FaCrown, FaVolumeMute, FaVolumeUp, FaUnlock } from 'react-icons/fa';
-import { useNavigate } from 'react-router-dom';
+import { FaUsers, FaBan, FaUserShield, FaVolumeMute, FaVolumeUp, FaUnlock } from 'react-icons/fa';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 import { useTranslation } from 'react-i18next';
@@ -9,37 +8,29 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { createNotification } from '../utils/notificationHelpers';
 import { useToast } from '../context/ToastContext';
 import { useInvitations } from '../context/InvitationContext';
-import { useChat } from '../context/ChatContext';
 import { getCallableErrorReason } from '../utils/callableErrorDetails';
 import './CommunityManagement.css';
-import { AppText, AppTextInput } from "./base";
+import { AppText } from './base';
 import { useConfirm } from '../context/ConfirmContext';
 
 const FUNCTIONS_REGION = 'us-central1';
 
-const CommunityManagement = ({ businessId, businessName, canUseMemberNotifications = false, compact = false }) => {
+/**
+ * Community moderation only — member list with mute / block / unblock.
+ * Business→member messaging was retired: business↔user communication happens
+ * solely through the Business Inbox (offers/announcements/support) and Stage
+ * rooms, keeping personal chat user↔user.
+ */
+const CommunityManagement = ({ businessId, businessName, compact = false }) => {
   const profileId = businessId;
-  const navigate = useNavigate();
   const { showToast } = useToast();
   const { t } = useTranslation();
   const confirm = useConfirm();
   const { getCommunityMembers } = useInvitations();
-  const { getOrCreateConversation, sendMessage: sendDirectMessage } = useChat();
   const [members, setMembers] = useState([]);
   const [blockedMembers, setBlockedMembers] = useState([]);
-  const [selectedMembers, setSelectedMembers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showMessageModal, setShowMessageModal] = useState(false);
-  const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
   const [moderatingId, setModeratingId] = useState(null);
-  const broadcastCallableRef = React.useRef(null);
-  if (!broadcastCallableRef.current) {
-    broadcastCallableRef.current = httpsCallable(
-      getFunctions(app, FUNCTIONS_REGION),
-      'broadcastCommunityMemberMessage'
-    );
-  }
 
   useEffect(() => {
     loadMembers();
@@ -90,17 +81,6 @@ const CommunityManagement = ({ businessId, businessName, canUseMemberNotificatio
     return setCommunityMembership({ partnerId: profileId, action, memberId });
   };
 
-  const toggleMemberSelection = (memberId) => {
-    setSelectedMembers((prev) =>
-    prev.includes(memberId) ?
-    prev.filter((id) => id !== memberId) :
-    [...prev, memberId]
-    );
-  };
-
-  const selectAll = () => setSelectedMembers(members.map((m) => m.id));
-  const deselectAll = () => setSelectedMembers([]);
-
   const blockMember = async (memberId) => {
     if (!(await confirm({ message: t('block_member_confirm', 'Block this member? They will be removed and cannot rejoin until unblocked.'), tone: 'danger' }))) {
       return;
@@ -117,7 +97,6 @@ const CommunityManagement = ({ businessId, businessName, canUseMemberNotificatio
         actionUrl: `/business/${profileId}`,
         metadata: { partnerId: profileId }
       });
-      setSelectedMembers((prev) => prev.filter((id) => id !== memberId));
       setMembers((prev) => prev.filter((m) => m.id !== memberId));
       if (snapshot) {
         setBlockedMembers((prev) =>
@@ -177,155 +156,6 @@ const CommunityManagement = ({ businessId, businessName, canUseMemberNotificatio
     }
   };
 
-  const promptUpgradeForMessaging = () => {
-    showToast(t('member_notifications_locked', 'Member messaging is included in the paid business plan.'), 'info');
-    navigate('/settings/subscription');
-  };
-
-  const sendMessageToMembers = async () => {
-    if (!canUseMemberNotifications) {
-      promptUpgradeForMessaging();
-      return;
-    }
-    if (!message.trim()) {
-      showToast(t('please_enter_message', 'Please enter a message'), 'error');
-      return;
-    }
-    if (selectedMembers.length === 0) {
-      showToast(t('please_select_member', 'Please select at least one member'), 'error');
-      return;
-    }
-
-    const text = message.trim().slice(0, 500);
-    const title = (businessName || t('community_update', 'Community update')).slice(0, 120);
-
-    const finishToast = (delivered, failedCount) => {
-      if (delivered > 0 && failedCount === 0) {
-        showToast(
-          `${t('message_sent', 'Message sent to')} ${delivered} ${t('members_count', 'members')}`,
-          'success'
-        );
-        setMessage('');
-        setShowMessageModal(false);
-        deselectAll();
-      } else if (delivered > 0) {
-        showToast(
-          t('message_sent_partial', {
-            defaultValue: `Sent to ${delivered} member(s); ${failedCount} failed.`,
-            sent: delivered,
-            failed: failedCount,
-          }),
-          'warning'
-        );
-        setMessage('');
-      } else {
-        showToast(
-          t('message_sent_error', 'Failed to send messages. Please try again.'),
-          'error'
-        );
-      }
-    };
-
-    /** Client fallback when broadcast CF is not deployed yet. */
-    const sendViaClientFallback = async () => {
-      let chatCount = 0;
-      let notifyCount = 0;
-      let failedCount = 0;
-      for (const memberId of selectedMembers) {
-        let ok = false;
-        try {
-          const conversationId = await getOrCreateConversation(memberId);
-          if (conversationId) {
-            const sent = await sendDirectMessage(conversationId, { text, type: 'text' });
-            if (sent) {
-              chatCount += 1;
-              ok = true;
-            }
-          }
-        } catch (err) {
-          console.error('Failed to DM member', memberId, err);
-        }
-        try {
-          // type:message → ChatList "Messages" tab + unread badge (same as server broadcast).
-          // community_message alone only appears under the Notifications panel.
-          const res = await createNotification({
-            userId: memberId,
-            type: 'message',
-            title,
-            message: text,
-            actionUrl: `/chat/${profileId}`,
-            metadata: {
-              partnerId: profileId,
-              source: 'community_member_broadcast_client',
-            },
-          });
-          if (res?.ok) {
-            notifyCount += 1;
-            ok = true;
-          }
-        } catch (err) {
-          console.error('Failed to notify member', memberId, err);
-        }
-        if (!ok) failedCount += 1;
-      }
-      finishToast(Math.max(chatCount, notifyCount), failedCount);
-    };
-
-    setSending(true);
-    try {
-      // Server path: chat DM + inbox notification (FCM) for each member.
-      const result = await broadcastCallableRef.current({
-        partnerId: profileId,
-        memberIds: selectedMembers,
-        message: text,
-      });
-      const data = result?.data || {};
-      const chatCount = Number(data.chatCount) || 0;
-      const notifyCount = Number(data.notifyCount) || 0;
-      const failedCount = Number(data.failedCount) || 0;
-      finishToast(Math.max(chatCount, notifyCount), failedCount);
-    } catch (error) {
-      const code = String(error?.code || '');
-      const msg = String(error?.message || '');
-      const notDeployed =
-        code === 'functions/not-found' ||
-        code === 'functions/unimplemented' ||
-        /not found|NOT_FOUND/i.test(msg);
-      // Prefer client delivery when CF is missing or crashing; do not bypass paid-plan gate.
-      const serverUnavailable =
-        notDeployed ||
-        code === 'functions/internal' ||
-        code === 'functions/unavailable' ||
-        code === 'functions/deadline-exceeded';
-      const paidPlanRejected =
-        code === 'functions/failed-precondition' &&
-        /paid business plan|subscription/i.test(msg);
-
-      if (serverUnavailable) {
-        console.warn('[CommunityManagement] broadcast CF unavailable — client fallback', error);
-        try {
-          await sendViaClientFallback();
-        } catch (fallbackErr) {
-          console.error('Client broadcast fallback failed:', fallbackErr);
-          showToast(t('message_sent_error', 'Failed to send messages'), 'error');
-        }
-      } else {
-        console.error('Error sending messages:', error);
-        showToast(
-          paidPlanRejected
-            ? t('member_notifications_locked', 'Member messaging is included in the paid business plan.')
-            : getCallableErrorReason(error) || t('message_sent_error', 'Failed to send messages'),
-          paidPlanRejected ? 'info' : 'error'
-        );
-        if (paidPlanRejected) {
-          navigate('/settings/subscription');
-        }
-      }
-    } finally {
-      setSending(false);
-    }
-  };
-
   if (loading) {
     return (
       <div style={{ padding: compact ? '1rem' : '2rem', textAlign: 'center' }}>
@@ -342,110 +172,8 @@ const CommunityManagement = ({ businessId, businessName, canUseMemberNotificatio
                     {t('community_management', 'Community Management')}
                 </AppText>
 
-                {!canUseMemberNotifications &&
-        <div
-          style={{
-            marginBottom: '1rem',
-            padding: '12px 14px',
-            borderRadius: '10px',
-            background: 'rgba(245, 158, 11, 0.1)',
-            border: '1px solid rgba(245, 158, 11, 0.35)',
-            fontSize: '0.85rem',
-            color: 'var(--text-muted)',
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '10px'
-          }}>
-
-                        <FaCrown style={{ color: '#f59e0b', flexShrink: 0, marginTop: '2px' }} />
-                        <div>
-                            <div style={{ fontWeight: '700', color: 'var(--text-main)', marginBottom: '4px' }}>
-                                {t('group_messaging', 'Group messaging')}
-                            </div>
-                            {t('member_notifications_locked', 'Member messaging is included in the paid business plan.')}
-                            <button
-              type="button"
-              onClick={() => navigate('/settings/subscription')}
-              style={{
-                display: 'block',
-                marginTop: '8px',
-                padding: 0,
-                border: 'none',
-                background: 'none',
-                color: 'var(--primary)',
-                fontWeight: '700',
-                cursor: 'pointer',
-                fontSize: '0.85rem'
-              }}>
-
-                                {t('upgrade_now', 'Upgrade Now')} →
-                            </button>
-                        </div>
-                    </div>
-        }
-
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                    {canUseMemberNotifications && selectedMembers.length > 0 ?
-          <>
-                            <button
-              type="button"
-              onClick={() => setShowMessageModal(true)}
-              style={{
-                padding: '0.5rem 1rem',
-                background: 'var(--primary-color)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                flex: '1',
-                justifyContent: 'center',
-                fontWeight: '600'
-              }}>
-
-                                <FaEnvelope />
-                                {t('message_selected', 'Message Selected')}
-                            </button>
-                            <button
-              type="button"
-              onClick={deselectAll}
-              style={{
-                padding: '0.5rem 1rem',
-                background: 'var(--bg-body)',
-                color: 'white',
-                border: '1px solid var(--border-color)',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: '500'
-              }}>
-
-                                {t('deselect_all', 'Deselect All')}
-                            </button>
-                        </> :
-          canUseMemberNotifications && members.length > 0 ?
-          <button
-            type="button"
-            onClick={selectAll}
-            style={{
-              padding: '0.5rem 1rem',
-              background: 'var(--bg-body)',
-              color: 'white',
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              width: '100%',
-              fontWeight: '500'
-            }}>
-
-                            {t('select_all_broadcast', 'Select All (Group Message)')}
-                        </button> :
-          null}
-                </div>
-
                 <AppText as="p" style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                    {members.length} {t('members_count', 'members')} • <AppText as="span" style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{selectedMembers.length} {t('selected_count', 'selected')}</AppText>
+                    {members.length} {t('members_count', 'members')}
                 </AppText>
             </div>
 
@@ -457,14 +185,7 @@ const CommunityManagement = ({ businessId, businessName, canUseMemberNotificatio
 
       <div className="cm-member-list">
                     {members.map((member) =>
-        <div
-          key={member.id}
-          role="button"
-          tabIndex={0}
-          onClick={() => toggleMemberSelection(member.id)}
-          onKeyDown={(e) => e.key === 'Enter' && toggleMemberSelection(member.id)}
-          className={`cm-member-card${selectedMembers.includes(member.id) ? ' cm-member-card--selected' : ''}`}>
-
+        <div key={member.id} className="cm-member-card">
                             <div className="cm-member-avatar-wrap">
                                 <UserAvatar
               user={member}
@@ -484,7 +205,7 @@ const CommunityManagement = ({ businessId, businessName, canUseMemberNotificatio
                                 <button
               type="button"
               disabled={moderatingId === member.id}
-              onClick={(e) => {e.stopPropagation();toggleMute(member);}}
+              onClick={() => toggleMute(member)}
               className={`cm-action-btn cm-action-btn--icon ${member.isMuted ? 'cm-action-btn--unmute' : 'cm-action-btn--mute'}`}
               aria-label={member.isMuted ? t('unmute_member', 'Unmute') : t('mute_member', 'Mute in chat')}
               title={member.isMuted ? t('unmute_member', 'Unmute') : t('mute_member', 'Mute in chat')}>
@@ -494,7 +215,7 @@ const CommunityManagement = ({ businessId, businessName, canUseMemberNotificatio
                                 <button
               type="button"
               disabled={moderatingId === member.id}
-              onClick={(e) => {e.stopPropagation();blockMember(member.id);}}
+              onClick={() => blockMember(member.id)}
               className="cm-action-btn cm-action-btn--icon cm-action-btn--block"
               aria-label={t('block_member', 'Block member')}
               title={t('block_member', 'Block member')}>
@@ -538,85 +259,6 @@ const CommunityManagement = ({ businessId, businessName, canUseMemberNotificatio
                     </div>
         }
             </div>
-
-            {showMessageModal &&
-      <div style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.8)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 3000,
-        padding: '1rem'
-      }}>
-                    <div style={{
-          background: 'var(--bg-card)',
-          borderRadius: '16px',
-          padding: '1.5rem',
-          width: '100%',
-          maxWidth: '500px'
-        }}>
-                        <AppText as="h3" style={{ margin: '0 0 1rem 0' }}>
-                            {t('send_message_to_members', 'Send Message to')} {selectedMembers.length} {t('members_count', 'Members')}
-                        </AppText>
-
-                        <AppTextInput as="textarea"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder={t('type_message_placeholder', 'Type your message here...')}
-          rows={6}
-          style={{
-            width: '100%',
-            padding: '0.75rem',
-            background: 'var(--bg-body)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '8px',
-            color: 'white',
-            fontSize: '1rem',
-            resize: 'vertical',
-            boxSizing: 'border-box'
-          }} />
-
-
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
-                            <button
-              type="button"
-              onClick={() => setShowMessageModal(false)}
-              disabled={sending}
-              style={{
-                flex: 1,
-                padding: '0.75rem',
-                background: 'var(--bg-body)',
-                color: 'white',
-                border: '1px solid var(--border-color)',
-                borderRadius: '8px',
-                cursor: 'pointer'
-              }}>
-
-                                {t('btn_cancel', 'Cancel')}
-                            </button>
-                            <button
-              type="button"
-              onClick={sendMessageToMembers}
-              disabled={sending || !message.trim()}
-              style={{
-                flex: 1,
-                padding: '0.75rem',
-                background: 'var(--primary-color)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: sending ? 'not-allowed' : 'pointer',
-                opacity: sending || !message.trim() ? 0.5 : 1
-              }}>
-
-                                {sending ? t('sending_message', 'Sending...') : t('send_message', 'Send Message')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-      }
         </div>);
 
 };

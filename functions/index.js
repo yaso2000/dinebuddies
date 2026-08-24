@@ -122,9 +122,7 @@ const {
     isCommunityOwnerRequester,
     collectCommunityMemberIds,
 } = require('./communityOwner');
-const { registerCommunityMemberBroadcast } = require('./communityMemberBroadcast');
 const { sendPushToUser, registerNotificationPushTrigger } = createPushMessaging({ db, admin });
-registerCommunityMemberBroadcast(exports, { db, admin });
 /** @param {Record<string, unknown>} inv */
 function isPrivateInvitationDocForBilling(inv) {
     if (!inv || typeof inv !== 'object') return false;
@@ -1778,19 +1776,18 @@ exports.createOrGetConversation = functions.https.onCall(async (data, context) =
     }
 
     const isSystemPeer = reqData.isSystemAccount === true || othData.isSystemAccount === true;
-    // Paid business member messaging: owner may DM community members (and vice versa)
-    // without a dating/friendship Connect connection.
-    const reqIsBusiness = isBusinessUserDoc(reqData);
-    const othIsBusiness = isBusinessUserDoc(othData);
-    const othJoined = Array.isArray(othData.joinedCommunities) ? othData.joinedCommunities : [];
-    const reqJoined = Array.isArray(reqData.joinedCommunities) ? reqData.joinedCommunities : [];
-    const reqMembers = Array.isArray(reqData.communityMembers) ? reqData.communityMembers : [];
-    const othMembers = Array.isArray(othData.communityMembers) ? othData.communityMembers : [];
-    const isBusinessMemberChannel =
-        (reqIsBusiness && (othJoined.includes(uid) || reqMembers.includes(otherUserId))) ||
-        (othIsBusiness && (reqJoined.includes(otherUserId) || othMembers.includes(uid)));
+    // Complete social/professional separation: personal chat is user↔user only.
+    // A business never opens (or receives) a personal conversation — business↔user
+    // communication happens solely via the Business Inbox and Stage rooms. Reject
+    // any business participant outright, then require a real Connect connection.
+    if (isBusinessUserDoc(reqData) || isBusinessUserDoc(othData)) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'Business accounts use the Business inbox, not personal chat.'
+        );
+    }
 
-    if (!isSystemPeer && !isBusinessMemberChannel) {
+    if (!isSystemPeer) {
         const hasConnection = await hasConnectConnection(uid, otherUserId, reqData, othData);
         if (!hasConnection) {
             throw new functions.https.HttpsError(

@@ -26,27 +26,6 @@ import { notifyNewMessage } from '../utils/notificationHelpers';
 import { asUidArray, messagingRestrictedBetweenUsers } from '../utils/userSocialLists';
 import { checkCanMessage, resolveCanMessageMap } from '../utils/chatHelpers';
 
-function isBusinessAccountProfile(data) {
-    if (!data) return false;
-    const role = String(data.role || '').toLowerCase();
-    return role === 'business' || role === 'partner' || data.isBusiness === true;
-}
-
-/** Business ↔ community member channel (joinedCommunities and/or communityMembers). */
-function isBusinessMemberMessagingChannel(viewerUid, viewerData, otherUid, otherData) {
-    if (!viewerUid || !otherUid) return false;
-    const viewerIsBusiness = isBusinessAccountProfile(viewerData);
-    const otherIsBusiness = isBusinessAccountProfile(otherData);
-    const otherJoined = Array.isArray(otherData?.joinedCommunities) ? otherData.joinedCommunities : [];
-    const viewerJoined = Array.isArray(viewerData?.joinedCommunities) ? viewerData.joinedCommunities : [];
-    const viewerMembers = Array.isArray(viewerData?.communityMembers) ? viewerData.communityMembers : [];
-    const otherMembers = Array.isArray(otherData?.communityMembers) ? otherData.communityMembers : [];
-    return (
-        (viewerIsBusiness && (otherJoined.includes(viewerUid) || viewerMembers.includes(otherUid))) ||
-        (otherIsBusiness && (viewerJoined.includes(otherUid) || otherMembers.includes(viewerUid)))
-    );
-}
-
 const ChatContext = createContext();
 
 export const useChat = () => {
@@ -195,24 +174,6 @@ export const ChatProvider = ({ children }) => {
         if (cached?.promise) return cached.promise;
 
         const promise = (async () => {
-            const ensureClientConversation = async () => {
-                const conversationId = [currentUser.uid, otherUserId].sort().join('_');
-                const convRef = doc(db, 'conversations', conversationId);
-                const snap = await getDoc(convRef);
-                if (!snap.exists()) {
-                    await setDoc(convRef, {
-                        participants: [currentUser.uid, otherUserId].sort(),
-                        createdAt: serverTimestamp(),
-                        lastMessageTime: serverTimestamp(),
-                        lastMessage: null,
-                        unreadBy: [],
-                        isBusinessMemberThread: true,
-                        businessId: isBusinessAccountProfile(userProfile) ? currentUser.uid : otherUserId,
-                    });
-                }
-                return conversationId;
-            };
-
             try {
                 const result = await createOrGetConversationCallableRef.current({ otherUserId });
                 return result?.data?.conversationId || null;
@@ -222,36 +183,12 @@ export const ChatProvider = ({ children }) => {
                 const msg = error?.message || '';
                 console.error('Error creating conversation:', code, msg, error);
 
-                // Older CF may still require Connect — open business↔member threads client-side.
-                if (error?.code === 'functions/failed-precondition') {
-                    try {
-                        const otherSnap = await getDoc(doc(db, 'users', otherUserId));
-                        const otherData = otherSnap.exists() ? otherSnap.data() : {};
-                        const viewerData = {
-                            ...(userProfile || {}),
-                            joinedCommunities:
-                                invitationUser?.joinedCommunities || userProfile?.joinedCommunities || [],
-                            communityMembers: userProfile?.communityMembers || [],
-                        };
-                        if (
-                            isBusinessMemberMessagingChannel(
-                                currentUser.uid,
-                                viewerData,
-                                otherUserId,
-                                otherData
-                            )
-                        ) {
-                            return await ensureClientConversation();
-                        }
-                    } catch (fallbackErr) {
-                        console.error('Client conversation fallback failed:', fallbackErr);
-                    }
-                    return null;
-                }
                 if (error?.code === 'functions/unauthenticated') {
                     showToast('Please sign in to start a conversation.', 'error');
                 } else if (error?.code === 'functions/resource-exhausted') {
                     showToast('Please wait a moment and try again.', 'error');
+                } else if (error?.code === 'functions/failed-precondition') {
+                    showToast('You cannot start this conversation.', 'error');
                 } else {
                     showToast('Failed to start conversation. Try again.', 'error');
                 }
@@ -295,24 +232,7 @@ export const ChatProvider = ({ children }) => {
                     invitationUser?.following || userProfile?.following || [];
                 const isSupportPeer =
                     userProfile?.isSystemAccount === true || otherData.isSystemAccount === true;
-                const viewerData = {
-                    ...(userProfile || {}),
-                    joinedCommunities: Array.isArray(invitationUser?.joinedCommunities)
-                        ? invitationUser.joinedCommunities
-                        : Array.isArray(userProfile?.joinedCommunities)
-                          ? userProfile.joinedCommunities
-                          : [],
-                    communityMembers: Array.isArray(userProfile?.communityMembers)
-                        ? userProfile.communityMembers
-                        : [],
-                };
-                const isBusinessMemberChannel = isBusinessMemberMessagingChannel(
-                    currentUser.uid,
-                    viewerData,
-                    otherUserIdPre,
-                    otherData
-                );
-                if (!isSupportPeer && !isBusinessMemberChannel) {
+                if (!isSupportPeer) {
                     const allowed = await checkCanMessage(
                         currentUser.uid,
                         otherUserIdPre,

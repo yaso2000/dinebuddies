@@ -252,7 +252,7 @@ const Settings = () => {
         value: bizTier.canUseMemberNotifications ?
         t('enabled', 'Enabled') :
         t('paid_plan', 'Paid'),
-        onClick: () => navigate('/business-dashboard#business-notifications'),
+        onClick: () => navigate('/business-dashboard#business-feedback-inbox'),
         color: '#ec4899'
       }]
 

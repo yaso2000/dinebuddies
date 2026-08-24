@@ -7,7 +7,6 @@ import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
 import CommunityManagement from '../components/CommunityManagement';
-import BusinessMemberNotificationsPanel from '../components/business/BusinessMemberNotificationsPanel';
 import BusinessFeedbackInbox from '../components/BusinessFeedbackInbox';
 import BusinessBroadcastComposer from '../components/business/BusinessBroadcastComposer';
 import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
@@ -822,18 +821,11 @@ const BusinessDashboard = () => {
                 <BusinessBroadcastComposer isOpen={showBroadcast} onClose={() => setShowBroadcast(false)} />
             </div>
 
-            <BusinessMemberNotificationsPanel
-        tierAccess={tierAccess}
-        memberCount={stats.memberCount} />
-
-
             {/* Community Management */}
             <div id="community-management" style={{ marginTop: '1rem' }}>
                 <CommunityManagement
           businessId={currentUser.uid}
-          businessName={userProfile?.display_name || userProfile?.businessInfo?.name}
-          currentUserId={currentUser.uid}
-          canUseMemberNotifications={tierAccess.canUseMemberNotifications} />
+          businessName={userProfile?.display_name || userProfile?.businessInfo?.name} />
 
             </div>
         </div>);

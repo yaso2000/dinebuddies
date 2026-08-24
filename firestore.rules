@@ -785,6 +785,20 @@ service cloud.firestore {
     // CONVERSATIONS COLLECTION (1-on-1 Chats)
     // ============================================
     
+    // Personal chat is user↔user only. A business account never participates in
+    // a personal conversation — business↔user communication is the Business Inbox
+    // and Stage rooms. (Orphan Google-imported businesses have no users/ doc and
+    // no auth session, so they can't open chats anyway; the callable is the
+    // primary enforcement, this is defense-in-depth for real business accounts.)
+    function convoDocIsBusiness(d) {
+      return d.role == 'business' || d.accountType == 'business' ||
+             d.accountRole == 'business' || d.role == 'partner' || d.isBusiness == true;
+    }
+    function convoParticipantIsBusiness(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)) &&
+             convoDocIsBusiness(get(/databases/$(database)/documents/users/$(uid)).data);
+    }
+
     match /conversations/{conversationId} {
       // getDoc on missing doc has resource == null — must allow before checking fields.
       allow get: if isSignedIn() && (
@@ -792,12 +806,14 @@ service cloud.firestore {
         request.auth.uid in resource.data.participants
       );
       allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
-      
+
       // Security: enforce strict 1:1 participant shape to prevent forged conversation graphs
       allow create: if isSignedIn() &&
                       request.resource.data.participants is list &&
                       request.resource.data.participants.size() == 2 &&
-                      request.auth.uid in request.resource.data.participants;
+                      request.auth.uid in request.resource.data.participants &&
+                      !convoParticipantIsBusiness(request.resource.data.participants[0]) &&
+                      !convoParticipantIsBusiness(request.resource.data.participants[1]);
       
       // Only participants can update (lastMessage, unreadBy, typing)
       allow update: if isSignedIn() && request.auth.uid in resource.data.participants;
