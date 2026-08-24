@@ -141,7 +141,7 @@ export default function BusinessThreadRoom() {
 
         {/* Reply box */}
         {!notFound && (
-          <div className="input-area" style={{ flexShrink: 0, display: 'flex', gap: 8, alignItems: 'flex-end', padding: 12, borderTop: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+          <div className="input-area" style={{ flexShrink: 0, display: 'flex', gap: 8, alignItems: 'flex-end', paddingInline: 12, paddingTop: 12, paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))', borderTop: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
             <textarea
               className="message-input"
               value={reply}
