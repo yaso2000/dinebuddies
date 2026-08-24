@@ -32,6 +32,17 @@ import { APP_HOME_PATH } from '../utils/appRouteShell';
 import app from '../firebase/config';
 import { useConfirm } from '../context/ConfirmContext';
 
+// A community member already has the right to enter a business Stage, so the
+// "join the Stage" gate is shown only once (a welcome + short explanation);
+// afterwards they are taken straight in. Remembered per device.
+const STAGE_INTRO_SEEN_KEY = 'db_stage_intro_seen_v1';
+function hasSeenStageIntro() {
+  try { return localStorage.getItem(STAGE_INTRO_SEEN_KEY) === '1'; } catch { return false; }
+}
+function markStageIntroSeen() {
+  try { localStorage.setItem(STAGE_INTRO_SEEN_KEY, '1'); } catch { /* private mode */ }
+}
+
 export default function StageChatRoom() {
   const { t } = useTranslation();
   const confirm = useConfirm();
@@ -369,7 +380,37 @@ export default function StageChatRoom() {
     }
   };
 
-  const renderJoinGate = (title, description, { showJoin = false } = {}) => (
+  const [stageIntroSeen, setStageIntroSeen] = useState(() => hasSeenStageIntro());
+  const autoEnterRef = useRef(false);
+
+  const handleEnterStageFirstTime = () => {
+    markStageIntroSeen();
+    setStageIntroSeen(true);
+    autoEnterRef.current = true;
+    void handleJoin();
+  };
+
+  // A returning community member has already seen the welcome and already has the
+  // right to be here — take them straight in instead of showing the gate again.
+  useEffect(() => {
+    if (
+      isBusinessStage &&
+      canRequestJoin &&
+      !canEnterChat &&
+      stageIntroSeen &&
+      !joining &&
+      !autoEnterRef.current &&
+      !room.isBlockedFromCommunity &&
+      !room.isStageClosed
+    ) {
+      autoEnterRef.current = true;
+      void handleJoin();
+    }
+    // One-shot auto-enter; handleJoin is intentionally omitted from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBusinessStage, canRequestJoin, canEnterChat, stageIntroSeen, joining, room.isBlockedFromCommunity, room.isStageClosed]);
+
+  const renderJoinGate = (title, description, { showJoin = false, joinLabel = null, onJoin = null } = {}) => (
     <div
       ref={containerRef}
       className={`${shellClass} community-chat-join-gate`}
@@ -395,12 +436,12 @@ export default function StageChatRoom() {
       {showJoin ? (
         <button
           type="button"
-          onClick={() => void handleJoin()}
+          onClick={() => void (onJoin ? onJoin() : handleJoin())}
           className="community-chat-join-gate__back"
           disabled={joining}
           style={{ marginBottom: 10 }}
         >
-          {joining ? t('joining', 'Joining…') : t('stage_join', 'Join Stage')}
+          {joining ? t('joining', 'Joining…') : (joinLabel || t('stage_join', 'Join Stage'))}
         </button>
       ) : null}
       <button type="button" onClick={closeChat} className="community-chat-join-gate__back">
@@ -471,14 +512,44 @@ export default function StageChatRoom() {
         t('stage_join_closed_hint', 'This Stage is closed right now. Try again when the host reopens it.')
       );
     } else if (canRequestJoin) {
-      shellContent = renderJoinGate(
-        room.partner?.display_name || t('stage_chat', 'Stage'),
-        isBusinessStage
-          ? t(
+      const stageName = room.partner?.display_name || t('stage_chat', 'Stage');
+      if (isBusinessStage) {
+        // Members already have the right to be here. First time: a warm welcome
+        // that explains what a Stage is. After that: enter straight away.
+        if (!stageIntroSeen) {
+          shellContent = renderJoinGate(
+            t('stage_welcome_title', 'Welcome 👋'),
+            t(
+              'stage_welcome_community_hint',
+              'A Stage is a temporary live room (24 hours) a business opens to talk with its community. You are already a member — just step in and enjoy.'
+            ),
+            {
+              showJoin: true,
+              joinLabel: t('stage_enter', 'Enter Stage'),
+              onJoin: handleEnterStageFirstTime,
+            }
+          );
+        } else if (joining || !autoEnterRef.current) {
+          // Taking a returning member straight in.
+          shellContent = renderJoinGate(
+            stageName,
+            t('stage_entering', 'Entering the Stage…')
+          );
+        } else {
+          // Auto-enter finished without landing in — let them retry by hand.
+          shellContent = renderJoinGate(
+            stageName,
+            t(
               'stage_join_community_hint',
               'This business Stage is for community members. Join to enter the chat.'
-            )
-          : stageVisibility === 'public'
+            ),
+            { showJoin: true, joinLabel: t('stage_enter', 'Enter Stage') }
+          );
+        }
+      } else {
+        shellContent = renderJoinGate(
+          stageName,
+          stageVisibility === 'public'
             ? t('stage_join_public_hint', 'This Stage is public. Join to enter the chat.')
             : stageVisibility === 'invite_only'
               ? t(
@@ -489,8 +560,9 @@ export default function StageChatRoom() {
                   'stage_join_followers_hint',
                   'This Stage is for followers of the host. Join to enter.'
                 ),
-        { showJoin: true }
-      );
+          { showJoin: true }
+        );
+      }
     } else {
       shellContent = renderJoinGate(
         isBusinessStage
