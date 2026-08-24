@@ -297,6 +297,22 @@ async function purgeStageRoom(db, admin, stageId, stageData) {
     }
     batch.delete(db.collection('stages').doc(stageId));
     await batch.commit();
+
+    // The host's liveStageId lives on its own user doc, not on the stage — clear
+    // it only if it still points at the room we just deleted.
+    if (hostId) {
+        const hostSnap = await db.collection('users').doc(hostId).get();
+        if (String(hostSnap.data()?.liveStageId || '') === stageId) {
+            await db.collection('users').doc(hostId).set(
+                {
+                    liveStageId: admin.firestore.FieldValue.delete(),
+                    liveStageExpiresAt: admin.firestore.FieldValue.delete(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                },
+                { merge: true }
+            );
+        }
+    }
 }
 
 /**
@@ -444,14 +460,17 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
 
             const batch = db.batch();
             for (const uid of memberIds) {
-                batch.set(
-                    db.collection('users').doc(uid),
-                    {
-                        joinedStages: admin.firestore.FieldValue.arrayUnion(stageId),
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    },
-                    { merge: true }
-                );
+                const memberPatch = {
+                    joinedStages: admin.firestore.FieldValue.arrayUnion(stageId),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                };
+                // A business host advertises its open Stage on its own doc so the
+                // profile projection can surface it to visitors.
+                if (hostIsBusiness && uid === hostId) {
+                    memberPatch.liveStageId = stageId;
+                    memberPatch.liveStageExpiresAt = expiresAt.toDate().toISOString();
+                }
+                batch.set(db.collection('users').doc(uid), memberPatch, { merge: true });
             }
             await batch.commit();
 
@@ -1324,12 +1343,29 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
             return { success: true, blocked: true };
         }
 
+        // Whether this host currently advertises THIS stage as its live one —
+        // only clear/refresh the pointer when it matches, never stomp a newer one.
+        const hostAdvertisesThisStage = async () => {
+            const hostSnap = await db.collection('users').doc(hostId).get();
+            return String(hostSnap.data()?.liveStageId || '') === stageId;
+        };
+
         if (action === 'close_stage') {
             await stageRef.update({
                 status: 'closed',
                 closedAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
+            if (await hostAdvertisesThisStage()) {
+                await db.collection('users').doc(hostId).set(
+                    {
+                        liveStageId: admin.firestore.FieldValue.delete(),
+                        liveStageExpiresAt: admin.firestore.FieldValue.delete(),
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    },
+                    { merge: true }
+                );
+            }
             return { success: true, closed: true };
         }
 
@@ -1342,6 +1378,22 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
             reopenedAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        // Re-advertise for a business host, unless the stage has since expired.
+        if (
+            String(stage.hostKind || '').toLowerCase() === 'business' &&
+            !isExpired(stage, Date.now())
+        ) {
+            await db.collection('users').doc(hostId).set(
+                {
+                    liveStageId: stageId,
+                    liveStageExpiresAt: resolveExpiresMs(stage)
+                        ? new Date(resolveExpiresMs(stage)).toISOString()
+                        : null,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                },
+                { merge: true }
+            );
+        }
         return { success: true, reopened: true };
     });
 

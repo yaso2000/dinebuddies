@@ -43,6 +43,8 @@ export default function BusinessProfileHero({ profile }) {
     setShowReviewModal,
     memberAvatars,
     effectiveIsMember,
+    businessStageOpen,
+    joiningCommunity,
     currentUser,
     userProfile,
     isGuest,
@@ -274,7 +276,12 @@ export default function BusinessProfileHero({ profile }) {
             {/* Actions Row */}
             <div className="business-profile-actions-row">
                 {currentUser?.uid !== profileId && !userProfile?.isBusiness &&
-      <button onClick={() => {if (isGuest) {goToLogin();return;}handleJoinCommunity();}} className={`business-profile-cta ${effectiveIsMember ? 'business-profile-cta--joined' : 'business-profile-cta--primary'}`}>
+      <button
+        type="button"
+        disabled={effectiveIsMember && !businessStageOpen}
+        aria-disabled={effectiveIsMember && !businessStageOpen}
+        onClick={() => {if (isGuest) {goToLogin();return;}handleJoinCommunity();}}
+        className={`business-profile-cta ${effectiveIsMember ? 'business-profile-cta--joined' : 'business-profile-cta--primary'}${effectiveIsMember && !businessStageOpen ? ' business-profile-cta--disabled' : ''}`}>
                         <>
                                 {/* Overlapping member avatars — always visible */}
                                 {memberCount > 0 && memberAvatars.length > 0 &&
@@ -302,15 +309,17 @@ export default function BusinessProfileHero({ profile }) {
                                         </AppText>
                                     </div>
           }
-                                {effectiveIsMember ? (
+                                {!effectiveIsMember ? (
+                                  joiningCommunity
+                                    ? t('joining', 'Joining…')
+                                    : `+ ${t('join_community', 'Join Community')}`
+                                ) : businessStageOpen ? (
                                   <>
                                     <FaComments style={{ fontSize: '1.1rem' }} aria-hidden />
-                                    {isPaid
-                                      ? t('business_grid_join_chat', 'Join chat')
-                                      : t('joined', 'Joined')}
+                                    {t('business_enter_stage', 'Enter Stage')}
                                   </>
                                 ) : (
-                                  `+ ${t('join_community', 'Join Community')}`
+                                  t('business_stage_closed', 'Stage not open')
                                 )}
                             </>
                     </button>

@@ -615,6 +615,13 @@ function toPublicProfile(userDocData, uid) {
                     endDate,
                 };
             })(),
+            // Pointer to this business's currently-open Stage, so a profile
+            // visitor can tell whether the "Enter Stage" action is live without
+            // querying the (list-denied) stages collection. Written by the Stage
+            // lifecycle callables; the expiry lets the client ignore a pointer
+            // that has aged out before the hourly purge clears it.
+            liveStageId: asTrimmedString(userData.liveStageId) || null,
+            liveStageExpiresAt: asTrimmedString(userData.liveStageExpiresAt) || null,
         }
         : null;
 

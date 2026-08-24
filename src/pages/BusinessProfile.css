@@ -256,6 +256,13 @@
     box-shadow: 0 4px 14px rgba(15, 23, 41, 0.45);
 }
 
+/* Member, but the business has no open Stage — the button is inert. */
+.business-profile-cta--disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+    box-shadow: none;
+}
+
 .business-profile-cta--secondary {
     padding: 16px;
     background: var(--bg-primary);

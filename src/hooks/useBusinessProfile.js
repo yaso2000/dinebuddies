@@ -86,6 +86,8 @@ async function loadBusinessFromPublicProfileProjection(profileId) {
       _fromPublicProfileProjection: true,
       createdBy: p.createdBy || 'admin',
       _sourceCollection: p.sourceCollection || 'restaurants',
+      liveStageId: bp.liveStageId || null,
+      liveStageExpiresAt: bp.liveStageExpiresAt || null,
       coverImageStoragePath: bp.coverImageStoragePath || p.coverImageStoragePath || null,
       businessInfo: {
         businessName: p.displayName || 'Business',
@@ -260,6 +262,23 @@ export function useBusinessProfile(profileId) {
   });
   const effectiveIsMember =
     isJoinedToBusinessCommunity(joinedCommunities, profileCommunityId) || isMember;
+
+  // The business advertises its currently-open Stage on its profile. Ignore a
+  // pointer that has aged past its expiry (the hourly purge clears it a little
+  // later than the actual expiry).
+  const businessLiveStageId =
+    business?.liveStageId || business?.businessInfo?.liveStageId || null;
+  const businessLiveStageExpiresAt =
+    business?.liveStageExpiresAt || business?.businessInfo?.liveStageExpiresAt || null;
+  const businessStageOpen = Boolean(
+    businessLiveStageId &&
+      (() => {
+        if (!businessLiveStageExpiresAt) return true;
+        const ms = Date.parse(businessLiveStageExpiresAt);
+        return Number.isNaN(ms) || ms > Date.now();
+      })()
+  );
+
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [selectorState, setSelectorState] = useState(null);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -827,8 +846,13 @@ export function useBusinessProfile(profileId) {
     const cid = profileCommunityId || profileId;
     if (!cid) return;
 
+    // Already a member: the button only acts when the business has an open
+    // Stage — enter it. With no open Stage the button is disabled in the UI, so
+    // this is just a guard.
     if (effectiveIsMember) {
-      navigate(`/community/${cid}`);
+      if (businessStageOpen && businessLiveStageId) {
+        navigate(`/stage/${businessLiveStageId}`);
+      }
       return;
     }
 
@@ -1434,6 +1458,8 @@ export function useBusinessProfile(profileId) {
     userProfile,
     effectiveIsMember,
     isMember,
+    businessStageOpen,
+    joiningCommunity,
     memberCount,
     memberAvatars,
     activeInvitationsCount,
