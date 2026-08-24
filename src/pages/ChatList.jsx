@@ -117,10 +117,11 @@ const ChatList = () => {
   const { userProfile, isBusiness } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
 
+  // A business owns a community, it never joins one — so neither joined
+  // communities nor Stages can contribute to its badge.
   const messagesBadge =
     chatUnreadCount +
-    communityUnread +
-    (isBusiness ? 0 : stageUnread) +
+    (isBusiness ? 0 : communityUnread + stageUnread) +
     unreadMessageCount;
   const notificationsBadge = unreadBellCount;
 
@@ -129,6 +130,12 @@ const ChatList = () => {
       goToLogin();
     }
   }, [userProfile, navigate]);
+
+  useEffect(() => {
+    // A business can still land on ?tab=communities from a stale link.
+    if (!isBusiness || searchParams.get('tab') !== TAB_COMMUNITIES) return;
+    setSearchParams({}, { replace: true });
+  }, [searchParams, isBusiness, setSearchParams]);
 
   useEffect(() => {
     if (searchParams.get('tab') !== TAB_STAGES) return;
@@ -145,7 +152,7 @@ const ChatList = () => {
       setSearchParams({ panel: PANEL_NOTIFICATIONS }, { replace: true });
     } else {
       const tab = searchParams.get('tab');
-      if (tab === TAB_COMMUNITIES || (!isBusiness && tab === TAB_STAGES)) {
+      if (!isBusiness && (tab === TAB_COMMUNITIES || tab === TAB_STAGES)) {
         setSearchParams({ tab }, { replace: true });
       } else {
         setSearchParams({}, { replace: true });
@@ -161,6 +168,7 @@ const ChatList = () => {
       return;
     }
     if (tab === TAB_COMMUNITIES) {
+      if (isBusiness) return;
       setSearchParams({ tab: TAB_COMMUNITIES }, { replace: true });
     } else {
       setSearchParams({}, { replace: true });
@@ -245,13 +253,25 @@ const ChatList = () => {
         onLeaveStage={leaveStage}
       />
     );
-  } else {
+  } else if (!isBusiness) {
     messagesBody = (
       <CommunitiesChatPanel
         communities={communities}
         loading={communitiesLoading}
         searchQuery={searchQuery}
         onLeaveCommunity={removeCommunity}
+      />
+    );
+  } else {
+    // Communities was the catch-all here, so a business with any tab but
+    // `chats` in the URL landed on a list it can never have an entry in.
+    messagesBody = (
+      <MessagesEmpty
+        title={t('no_conversations', 'No conversations yet')}
+        message={t(
+          'messages_empty_hint',
+          'Connect with members from their profile — like, follow, or send a greeting to open a chat.'
+        )}
       />
     );
   }
@@ -316,19 +336,21 @@ const ChatList = () => {
               onClick={() => setActiveTab(TAB_CHATS)}>
               {t('messages_tab_chats', 'Chats')}
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === TAB_COMMUNITIES}
-              className={`messages-page__tab${activeTab === TAB_COMMUNITIES ? ' active' : ''}`}
-              onClick={() => setActiveTab(TAB_COMMUNITIES)}>
-              {t('messages_tab_communities', 'Communities')}
-              {communityUnread > 0 ? (
-                <AppText as="span" className="messages-page__tab-badge">
-                  {communityUnread > 99 ? '99+' : communityUnread}
-                </AppText>
-              ) : null}
-            </button>
+            {!isBusiness ? (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === TAB_COMMUNITIES}
+                className={`messages-page__tab${activeTab === TAB_COMMUNITIES ? ' active' : ''}`}
+                onClick={() => setActiveTab(TAB_COMMUNITIES)}>
+                {t('messages_tab_communities', 'Communities')}
+                {communityUnread > 0 ? (
+                  <AppText as="span" className="messages-page__tab-badge">
+                    {communityUnread > 99 ? '99+' : communityUnread}
+                  </AppText>
+                ) : null}
+              </button>
+            ) : null}
             {!isBusiness ? (
               <button
                 type="button"

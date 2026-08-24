@@ -199,7 +199,9 @@ const Layout = ({ children }) => {
   // Fetch communities the current user has JOINED (from userProfile.joinedCommunities)
   useEffect(() => {
     const ids = userProfile?.joinedCommunities;
-    if (!ids || ids.length === 0) {setJoinedCommunityData([]);return;}
+    // A business never joins a community — do not spend reads resolving a list
+    // that is always empty for it.
+    if (isBusiness || !ids || ids.length === 0) {setJoinedCommunityData([]);return;}
     let cancelled = false;
     Promise.all(
       ids.map(async (partnerId) => {
@@ -221,7 +223,7 @@ const Layout = ({ children }) => {
       if (!cancelled) setJoinedCommunityData(results.filter(Boolean));
     });
     return () => {cancelled = true;};
-  }, [userProfile?.joinedCommunities, userProfile?.id]);
+  }, [userProfile?.joinedCommunities, userProfile?.id, isBusiness, t]);
 
   // 1. Wait for auth to settle before running guards (must be after all hooks — see React #310).
   // Never return null here: <Outlet /> would not mount, so GuestBlockedRoute never runs and users
@@ -413,18 +415,34 @@ const Layout = ({ children }) => {
   const CommunitySidebar = () => {
     const { t: tl } = useTranslation();
     const activeCommunityId = location.pathname.split('/community/')[1];
+    // A business owns its community and joins none, so the joined list is
+    // always empty for it — this used to tell an owner sitting in their own
+    // community that they had not joined any.
+    const communityList = isBusinessAccount
+      ? [
+          {
+            id: currentUser?.uid,
+            name:
+              userProfile?.businessInfo?.businessName ||
+              userProfile?.display_name ||
+              tl('layout_community_fallback', 'Community'),
+            logo: userProfile?.photo_url || userProfile?.photoURL || userProfile?.avatar || null,
+            memberCount: userProfile?.communityMembers?.length || 0,
+          },
+        ].filter((c) => c.id)
+      : joinedCommunityData;
     return (
       <aside className="ds-left-sidebar">
                 {/* Label */}
                 <div style={{ padding: '6px 14px 8px', fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)', borderBottom: '1px solid var(--border-color)', marginBottom: '6px' }}>
-                    👥 {tl('my_communities', 'My Communities')}
+                    👥 {isBusinessAccount ? tl('community_sidebar_owner_title', 'My Community') : tl('my_communities', 'My Communities')}
                 </div>
-                {joinedCommunityData.length === 0 &&
+                {communityList.length === 0 &&
         <div style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                         {tl('no_communities_joined', 'No communities joined yet')}
                     </div>
         }
-                {joinedCommunityData.map((c) => {
+                {communityList.map((c) => {
           const isActiveC = activeCommunityId === c.id;
           return (
             <div

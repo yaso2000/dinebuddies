@@ -84,6 +84,8 @@ function formatBusinessDistanceLabel(t, distanceKm) {
 }
 
 const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, title }) => {
+  const { isBusiness: viewerIsBusiness } = useAuth();
+
   if (!members) return null;
 
   // Local following Set — prevents stale-closure mismatch where toggling one member
@@ -236,7 +238,7 @@ const MembersModal = ({ members, onClose, currentUser, onToggleFollow, onChat, t
                                                     <FaComments size={14} />
                                                 </button>
 
-                                                {!(currentUser?.role === 'business' || currentUser?.isBusiness) &&
+                                                {!viewerIsBusiness &&
                     <button
                       onClick={() => handleToggle(member.id)}
                       style={{
@@ -271,7 +273,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
-  const { userProfile, updateUserProfile, currentUser: authCurrentUser, isGuest } = useAuth();
+  const { userProfile, updateUserProfile, currentUser: authCurrentUser, isGuest, isBusiness: viewerIsBusiness } = useAuth();
   const context = useInvitations();
   const { isDark } = useTheme();
   const currentUser = context?.currentUser || {};
@@ -323,7 +325,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
   });
   const isJoined = isJoinedToBusinessCommunity(joinedCommunities, communityId);
   const isOwner = currentUser?.id === res.ownerId || (currentUser?.ownedRestaurants || []).includes(res.id);
-  const isBusinessAccount = userProfile?.isBusiness || false;
+  const isBusinessAccount = viewerIsBusiness;
   const isOnline = useUserPresence(res.ownerId || res.id, { fallback: Boolean(res.isOnline) });
   const distanceLabel = formatBusinessDistanceLabel(t, res.distanceKm);
   const isOpenNow = useMemo(

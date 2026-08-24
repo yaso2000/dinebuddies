@@ -78,7 +78,7 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
   });
   const isJoined = isJoinedToBusinessCommunity(joinedCommunities, communityId);
   const chatEnabled = isBusinessCommunityChatEnabled(res.subscriptionTier);
-  const isBusinessAccount = isBusiness || userProfile?.role === 'business';
+  const isBusinessAccount = isBusiness;
   const city = getBusinessCardCity(res) || item.locationLabel || '';
   const address =
     res.address ||

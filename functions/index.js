@@ -1886,6 +1886,19 @@ exports.setCommunityMembership = functions.https.onCall(async (data, context) =>
         if (!userSnap.exists && action !== 'unblockMember') {
             throw new functions.https.HttpsError('not-found', 'User profile not found.');
         }
+
+        // A business owns a community; it never joins someone else's. This was
+        // only ever enforced by hiding buttons in the client, so any stale link
+        // or direct call still went through.
+        if (
+            action === 'join' &&
+            isCommunityOwnerBusiness({ source: 'users', data: userSnap.data() || {} })
+        ) {
+            throw new functions.https.HttpsError(
+                'failed-precondition',
+                'Business accounts own a community and cannot join another one.'
+            );
+        }
         if (!partnerSnap || !partnerRef) {
             throw new functions.https.HttpsError('not-found', 'Community owner not found.');
         }
