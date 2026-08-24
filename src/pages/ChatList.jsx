@@ -7,11 +7,9 @@ import { useNotifications } from '../context/NotificationContext';
 import UserAvatar from '../components/UserAvatar';
 import OnlineStatusBadge from '../components/profile/OnlineStatusBadge';
 import { useUserPresence } from '../hooks/usePresence';
-import CommunitiesChatPanel from '../components/Messages/CommunitiesChatPanel';
 import StagesChatPanel from '../components/Messages/StagesChatPanel';
 import NotificationsPanel from '../components/Messages/NotificationsPanel';
 import PullToRefresh from '../components/PullToRefresh';
-import { useJoinedCommunities } from '../hooks/useJoinedCommunities';
 import { useJoinedStages } from '../hooks/useJoinedStages';
 import AppBackButton from '../components/AppBackButton';
 import { APP_HOME_PATH } from '../utils/appRouteShell';
@@ -23,7 +21,6 @@ import { AppText, AppTextInput } from '../components/base';
 const PANEL_MESSAGES = 'messages';
 const PANEL_NOTIFICATIONS = 'notifications';
 const TAB_CHATS = 'chats';
-const TAB_COMMUNITIES = 'communities';
 const TAB_STAGES = 'stages';
 
 function readPanel(searchParams) {
@@ -32,7 +29,6 @@ function readPanel(searchParams) {
 
 function readTab(searchParams) {
   const tab = searchParams.get('tab');
-  if (tab === TAB_COMMUNITIES) return TAB_COMMUNITIES;
   if (tab === TAB_STAGES) return TAB_STAGES;
   return TAB_CHATS;
 }
@@ -106,8 +102,6 @@ const ChatList = () => {
   const activeTab = readTab(searchParams);
   const { conversations, loading: chatsLoading, unreadCount: chatUnreadCount } = useChat();
   const { unreadBellCount = 0, unreadMessageCount = 0 } = useNotifications();
-  const { communities, loading: communitiesLoading, totalUnread: communityUnread, removeCommunity } =
-    useJoinedCommunities();
   const {
     stages,
     loading: stagesLoading,
@@ -121,7 +115,7 @@ const ChatList = () => {
   // communities nor Stages can contribute to its badge.
   const messagesBadge =
     chatUnreadCount +
-    (isBusiness ? 0 : communityUnread + stageUnread) +
+    (isBusiness ? 0 : stageUnread) +
     unreadMessageCount;
   const notificationsBadge = unreadBellCount;
 
@@ -132,10 +126,10 @@ const ChatList = () => {
   }, [userProfile, navigate]);
 
   useEffect(() => {
-    // A business can still land on ?tab=communities from a stale link.
-    if (!isBusiness || searchParams.get('tab') !== TAB_COMMUNITIES) return;
+    // The Communities tab was retired — strip any stale ?tab=communities link.
+    if (searchParams.get('tab') !== 'communities') return;
     setSearchParams({}, { replace: true });
-  }, [searchParams, isBusiness, setSearchParams]);
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (searchParams.get('tab') !== TAB_STAGES) return;
@@ -152,7 +146,7 @@ const ChatList = () => {
       setSearchParams({ panel: PANEL_NOTIFICATIONS }, { replace: true });
     } else {
       const tab = searchParams.get('tab');
-      if (!isBusiness && (tab === TAB_COMMUNITIES || tab === TAB_STAGES)) {
+      if (!isBusiness && tab === TAB_STAGES) {
         setSearchParams({ tab }, { replace: true });
       } else {
         setSearchParams({}, { replace: true });
@@ -167,12 +161,7 @@ const ChatList = () => {
       navigate('/stages');
       return;
     }
-    if (tab === TAB_COMMUNITIES) {
-      if (isBusiness) return;
-      setSearchParams({ tab: TAB_COMMUNITIES }, { replace: true });
-    } else {
-      setSearchParams({}, { replace: true });
-    }
+    setSearchParams({}, { replace: true });
     setSearchQuery('');
   };
 
@@ -210,9 +199,7 @@ const ChatList = () => {
   };
 
   const searchPlaceholder =
-    activeTab === TAB_COMMUNITIES
-      ? t('search_communities', 'Search communities...')
-      : activeTab === TAB_STAGES
+    activeTab === TAB_STAGES
         ? t('search_stages', 'Search stages...')
         : t('search_conversations', 'Search conversations...');
 
@@ -253,18 +240,10 @@ const ChatList = () => {
         onLeaveStage={leaveStage}
       />
     );
-  } else if (!isBusiness) {
-    messagesBody = (
-      <CommunitiesChatPanel
-        communities={communities}
-        loading={communitiesLoading}
-        searchQuery={searchQuery}
-        onLeaveCommunity={removeCommunity}
-      />
-    );
   } else {
-    // Communities was the catch-all here, so a business with any tab but
-    // `chats` in the URL landed on a list it can never have an entry in.
+    // The permanent Communities chat was retired — a business's chat is now its
+    // 24h Stage, shown in the Stages tab and entered from the business profile.
+    // Any tab but `chats`/`stages` lands here.
     messagesBody = (
       <MessagesEmpty
         title={t('no_conversations', 'No conversations yet')}
@@ -336,21 +315,6 @@ const ChatList = () => {
               onClick={() => setActiveTab(TAB_CHATS)}>
               {t('messages_tab_chats', 'Chats')}
             </button>
-            {!isBusiness ? (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === TAB_COMMUNITIES}
-                className={`messages-page__tab${activeTab === TAB_COMMUNITIES ? ' active' : ''}`}
-                onClick={() => setActiveTab(TAB_COMMUNITIES)}>
-                {t('messages_tab_communities', 'Communities')}
-                {communityUnread > 0 ? (
-                  <AppText as="span" className="messages-page__tab-badge">
-                    {communityUnread > 99 ? '99+' : communityUnread}
-                  </AppText>
-                ) : null}
-              </button>
-            ) : null}
             {!isBusiness ? (
               <button
                 type="button"

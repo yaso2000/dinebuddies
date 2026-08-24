@@ -61,7 +61,6 @@ const InvitationArchiveDetails = lazy(() => import('./pages/InvitationArchiveDet
 const Notifications = lazy(() => import('./pages/Notifications'));
 const ChatList = lazy(() => import('./pages/ChatList'));
 const Chat = lazy(() => import('./pages/Chat'));
-const CommunityChatRoom = lazy(() => import('./pages/CommunityChatRoom'));
 const CommunityChatCastPage = lazy(() => import('./pages/CommunityChatCastPage'));
 const StageChatRoom = lazy(() => import('./pages/StageChatRoom'));
 const CreateStage = lazy(() => import('./pages/CreateStage'));
@@ -141,10 +140,17 @@ function RouteSuspenseLayout() {
     return <Outlet />;
 }
 
-/** /business/:businessId/invitations → community hub for that partner */
+/** /business/:businessId/invitations → the business profile (community chat retired). */
 function RedirectBusinessInvitationsToCommunity() {
     const { businessId } = useParams();
-    return <Navigate to={`/community/${businessId}`} replace />;
+    return <Navigate to={`/business/${businessId}`} replace />;
+}
+
+/** The permanent community chat was replaced by the business's 24h Stage —
+ *  send any /community/:id link to the business profile, where the Stage lives. */
+function RedirectCommunityToBusiness() {
+    const { partnerId } = useParams();
+    return <Navigate to={partnerId ? `/business/${partnerId}` : '/'} replace />;
 }
 
 /** Legacy comment/profile links used `/user/:id` — canonical route is `/profile/:userId`. */
@@ -355,7 +361,7 @@ function App() {
                                                         element={<Navigate to="/messages?tab=communities" replace />}
                                                     />
                                                     <Route path="/community/:partnerId/cast" element={<CommunityChatCastPage />} />
-                                                    <Route path="/community/:partnerId" element={<GuestBlockedRoute><CommunityChatRoom /></GuestBlockedRoute>} />
+                                                    <Route path="/community/:partnerId" element={<RedirectCommunityToBusiness />} />
                                                     <Route path="/stage/:stageId" element={<GuestBlockedRoute><StageChatRoom /></GuestBlockedRoute>} />
                                                     <Route path="/posts-feed" element={<PostsFeed />} />
                                                     <Route path="/invitations" element={<InvitationsSwipePage />} />
