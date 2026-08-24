@@ -836,12 +836,17 @@ export function useBusinessProfile(profileId) {
     const cid = profileCommunityId || profileId;
     if (!cid) return;
 
-    // Already a member: the button only acts when the business has an open
-    // Stage — enter it. With no open Stage the button is disabled in the UI, so
-    // this is just a guard.
+    // Membership is permanent (a form of following). A member's tap enters the
+    // Stage when one is open; when none is open the member stays a member and
+    // just gets told there is nothing to enter yet — the button is never dead.
     if (effectiveIsMember) {
       if (businessStageOpen && businessLiveStageId) {
         navigate(`/stage/${businessLiveStageId}`);
+      } else {
+        showToast(
+          t('business_member_no_stage', 'You are a member. The Stage will open here when the business starts one.'),
+          'info'
+        );
       }
       return;
     }

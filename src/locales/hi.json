@@ -2570,7 +2570,8 @@
   "join_btn": "शामिल होने का अनुरोध",
   "join_community": "समुदाय में शामिल हों",
   "business_enter_stage": "स्टेज में प्रवेश करें",
-  "business_stage_closed": "स्टेज खुला नहीं है",
+  "business_stage_closed": "स्टेज खुला नहीं है",
+  "business_member_no_stage": "आप सदस्य हैं। जब व्यवसाय स्टेज शुरू करेगा तो प्रवेश यहाँ खुलेगा।",
   "stage_ended_title": "यह स्टेज समाप्त हो गया",
   "stage_ended_hint": "होस्ट ने यह स्टेज बंद कर दिया। यह अब उपलब्ध नहीं है।",
   "joining": "शामिल हो रहे हैं…",

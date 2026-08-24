@@ -133,6 +133,8 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
       });
       if (result?.reason === 'missing_community') {
         showToast(t('community_join_failed', 'Could not join the community. Try again.'), 'error');
+      } else if (result?.reason === 'no_open_stage') {
+        showToast(t('business_member_no_stage', 'You are a member. The Stage will open here when the business starts one.'), 'info');
       }
     } finally {
       setJoinInProgress(false);
@@ -166,7 +168,7 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
     ? t('join_community', 'Join community')
     : stageOpen
       ? t('business_enter_stage', 'Enter Stage')
-      : t('business_stage_closed', 'Stage not open');
+      : t('joined', 'Joined');
 
   return (
     <>
@@ -276,7 +278,7 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
                 <button
                   type="button"
                   className="discovery-card__cta discovery-card__action discovery-card__action--glass discovery-card__action--join"
-                  disabled={joinInProgress || (isJoined && !stageOpen)}
+                  disabled={joinInProgress}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={handleJoin}
                 >

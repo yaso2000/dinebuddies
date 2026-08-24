@@ -162,7 +162,6 @@ const RestaurantDetails = () => {
                         {!isBusinessAccount &&
             <button
               onClick={handleCommunityJoinClick}
-              disabled={isJoined && !stageOpen}
               style={{
                 background: isJoined ?
                 'linear-gradient(135deg, #1a2744 0%, #0f1729 100%)' :
@@ -193,7 +192,10 @@ const RestaurantDetails = () => {
                                     {t('business_enter_stage', 'Enter Stage')}
                                   </>
                                 ) : (
-                                  t('business_stage_closed', 'Stage not open')
+                                  <>
+                                    <FaComments aria-hidden />
+                                    {t('joined', 'Joined')}
+                                  </>
                                 )}
                             </button>
             }

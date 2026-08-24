@@ -2759,7 +2759,8 @@
   "join_btn": "Beitritt anfragen",
   "join_community": "Der Community beitreten",
   "business_enter_stage": "Stage betreten",
-  "business_stage_closed": "Stage nicht geöffnet",
+  "business_stage_closed": "Stage nicht geöffnet",
+  "business_member_no_stage": "Du bist Mitglied. Der Stage öffnet sich hier, sobald das Unternehmen einen startet.",
   "stage_ended_title": "Dieser Stage ist beendet",
   "stage_ended_hint": "Der Host hat diesen Stage geschlossen. Er ist nicht mehr verfügbar.",
   "joining": "Beitreten…",

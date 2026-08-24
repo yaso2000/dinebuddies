@@ -2759,7 +2759,8 @@
   "join_btn": "Solicitar participação",
   "join_community": "Junte-se à comunidade",
   "business_enter_stage": "Entrar no Palco",
-  "business_stage_closed": "Palco não aberto",
+  "business_stage_closed": "Palco não aberto",
+  "business_member_no_stage": "Você é membro. O Palco abrirá aqui quando o negócio iniciar um.",
   "stage_ended_title": "Este Palco foi encerrado",
   "stage_ended_hint": "O anfitrião encerrou este Palco. Ele não está mais disponível.",
   "joining": "Entrando…",

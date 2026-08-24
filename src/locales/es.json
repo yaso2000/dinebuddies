@@ -2759,7 +2759,8 @@
   "join_btn": "Solicitar unirse",
   "join_community": "Únete a la comunidad",
   "business_enter_stage": "Entrar al escenario",
-  "business_stage_closed": "Escenario no abierto",
+  "business_stage_closed": "Escenario no abierto",
+  "business_member_no_stage": "Eres miembro. El escenario se abrirá aquí cuando el negocio inicie uno.",
   "stage_ended_title": "Este escenario ha terminado",
   "stage_ended_hint": "El anfitrión cerró este escenario. Ya no está disponible.",
   "joining": "Uniéndose…",

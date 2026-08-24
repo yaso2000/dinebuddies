@@ -436,8 +436,8 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
       });
       if (result?.reason === 'missing_community') {
         showToast(t('community_join_failed', 'Could not join the community. Try again.'), 'error');
-      } else if (false) {
-        // (chat-disabled path removed — business chat is the Stage)
+      } else if (result?.reason === 'no_open_stage') {
+        showToast(t('business_member_no_stage', 'You are a member. The Stage will open here when the business starts one.'), 'info');
       }
     } finally {
       setJoinInProgress(false);
@@ -733,19 +733,19 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
                 type="button"
                 className={`community-join-btn restaurant-list-card__footer-btn${effectiveJoined ? ' community-join-btn--chat' : ''}`}
                 onClick={handleJoinOrChat}
-                disabled={joinInProgress || (effectiveJoined && !stageOpen)}
+                disabled={joinInProgress}
                 title={
                   effectiveJoined
                     ? stageOpen
                       ? t('business_enter_stage', 'Enter Stage')
-                      : t('business_stage_closed', 'Stage not open')
+                      : t('joined', 'Joined')
                     : t('join_plus', '+ Join')
                 }
                 aria-label={
                   effectiveJoined
                     ? stageOpen
                       ? t('business_enter_stage', 'Enter Stage')
-                      : t('business_stage_closed', 'Stage not open')
+                      : t('joined', 'Joined')
                     : t('join_plus', '+ Join')
                 }>
                 {effectiveJoined ? (
@@ -753,7 +753,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
                     <FaComments aria-hidden />
                     {stageOpen
                       ? t('business_enter_stage', 'Enter Stage')
-                      : t('business_stage_closed', 'Stage not open')}
+                      : t('joined', 'Joined')}
                   </>
                 ) : (
                   joinInProgress ? '…' : t('join_plus', '+ Join')

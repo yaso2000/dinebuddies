@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaCrown, FaComments, FaEnvelope, FaHeart, FaRegHeart, FaShare, FaStar, FaTimes, FaUserPlus, FaUsers } from 'react-icons/fa';
+import { FaCheck, FaCrown, FaComments, FaEnvelope, FaHeart, FaRegHeart, FaShare, FaStar, FaTimes, FaUserPlus, FaUsers } from 'react-icons/fa';
 import { AppText } from '../base';
 import { handleBusinessCoverImageError } from '../../utils/businessCoverImage';
 import { resolveBusinessOpenNow } from '../../utils/googlePlacesBusiness';
@@ -278,10 +278,8 @@ export default function BusinessProfileHero({ profile }) {
                 {currentUser?.uid !== profileId && !userProfile?.isBusiness &&
       <button
         type="button"
-        disabled={effectiveIsMember && !businessStageOpen}
-        aria-disabled={effectiveIsMember && !businessStageOpen}
         onClick={() => {if (isGuest) {goToLogin();return;}handleJoinCommunity();}}
-        className={`business-profile-cta ${effectiveIsMember ? 'business-profile-cta--joined' : 'business-profile-cta--primary'}${effectiveIsMember && !businessStageOpen ? ' business-profile-cta--disabled' : ''}`}>
+        className={`business-profile-cta ${effectiveIsMember ? 'business-profile-cta--joined' : 'business-profile-cta--primary'}`}>
                         <>
                                 {/* Overlapping member avatars — always visible */}
                                 {memberCount > 0 && memberAvatars.length > 0 &&
@@ -319,7 +317,10 @@ export default function BusinessProfileHero({ profile }) {
                                     {t('business_enter_stage', 'Enter Stage')}
                                   </>
                                 ) : (
-                                  t('business_stage_closed', 'Stage not open')
+                                  <>
+                                    <FaCheck style={{ fontSize: '0.95rem' }} aria-hidden />
+                                    {t('joined', 'Joined')}
+                                  </>
                                 )}
                             </>
                     </button>

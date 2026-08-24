@@ -2570,7 +2570,8 @@
   "join_btn": "Demander à rejoindre",
   "join_community": "Rejoindre la communauté",
   "business_enter_stage": "Entrer sur la scène",
-  "business_stage_closed": "Scène non ouverte",
+  "business_stage_closed": "Scène non ouverte",
+  "business_member_no_stage": "Vous êtes membre. La scène s’ouvrira ici quand l’entreprise en lancera une.",
   "stage_ended_title": "Cette scène est terminée",
   "stage_ended_hint": "L'hôte a fermé cette scène. Elle n'est plus disponible.",
   "joining": "Adhésion…",

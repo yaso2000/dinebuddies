@@ -2863,7 +2863,8 @@
   "join_btn": "طلب انضمام",
   "join_community": "انضم إلى مجتمعنا",
   "business_enter_stage": "الدخول للمسرح",
-  "business_stage_closed": "المسرح غير مفتوح",
+  "business_stage_closed": "المسرح غير مفتوح",
+  "business_member_no_stage": "أنت عضو في المجتمع. سيظهر زر الدخول هنا عندما يفتح البزنس مسرحًا.",
   "stage_ended_title": "انتهى هذا المسرح",
   "stage_ended_hint": "أغلق المضيف هذا المسرح ولم يعد متاحًا.",
   "joining": "جارٍ الانضمام…",

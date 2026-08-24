@@ -2846,7 +2846,8 @@
   "join_btn": "Request to Join",
   "join_community": "Join the community",
   "business_enter_stage": "Enter Stage",
-  "business_stage_closed": "Stage not open",
+  "business_stage_closed": "Stage not open",
+  "business_member_no_stage": "You are a member. The Stage will open here when the business starts one.",
   "stage_ended_title": "This Stage has ended",
   "stage_ended_hint": "The host closed this Stage. It is no longer available.",
   "joining": "Joining…",
