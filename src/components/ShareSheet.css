@@ -1,0 +1,86 @@
+.share-sheet-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 150000;
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    /* Anchor the sheet to the bottom edge — a stable, predictable spot on
+       every screen size, never dependent on where the opener sits. */
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.share-sheet {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    box-sizing: border-box;
+    max-height: min(78vh, 620px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+    border-radius: 22px 22px 0 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+    box-shadow: 0 -14px 44px rgba(0, 0, 0, 0.4);
+    animation: share-sheet-up 0.22s ease both;
+}
+
+@keyframes share-sheet-up {
+    from {
+        transform: translateY(24px);
+        opacity: 0.6;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.share-sheet__grabber {
+    display: block;
+    width: 42px;
+    height: 4px;
+    margin: 2px auto 10px;
+    border-radius: 999px;
+    background: var(--border-color);
+}
+
+.share-sheet__title {
+    margin: 0 0 14px;
+    text-align: center;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.share-sheet__body {
+    min-width: 0;
+}
+
+.share-sheet__close {
+    position: absolute;
+    top: 12px;
+    inset-inline-end: 12px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: var(--hover-overlay, rgba(255, 255, 255, 0.08));
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .share-sheet {
+        animation: none;
+    }
+}

@@ -15,6 +15,7 @@ import { deleteFilesAtFirebaseDownloadUrls } from '../utils/firebaseStorageDelet
 import { downloadStoryMedia } from '../utils/storyMediaExport';
 import { getAppOrigin } from '../utils/appOrigin';
 import ShareButtons from './ShareButtons';
+import ShareSheet from './ShareSheet';
 import { useConfirm } from '../context/ConfirmContext';
 
 /** Shown inline in the footer bar (Instagram-style). */import { AppText, AppTextInput } from "./base";
@@ -1315,19 +1316,12 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
                 </div>
       }
 
-            {showShareModal && currentStory &&
-      <div
-        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        onClick={(e) => {e.stopPropagation();closeShareModal();}}>
-
-                    <div
-          style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border-color)', maxWidth: '90%', width: '320px' }}
-          onClick={(e) => e.stopPropagation()}>
-
-                        <AppText as="h3" style={{ textAlign: 'center', marginBottom: '16px', color: 'var(--text-main)' }}>
-                            {t('share_story', 'Share Story')}
-                        </AppText>
-                        <ShareButtons
+            <ShareSheet
+        open={Boolean(showShareModal && currentStory)}
+        title={t('share_story', 'Share Story')}
+        onClose={closeShareModal}>
+                {currentStory ?
+      <ShareButtons
             url={`${getAppOrigin()}/story/${currentStory.id}`}
             title={t('story_share_title', { defaultValue: "{{name}}'s Story", name: storyOwnerName })}
             description={currentStory.text || ''}
@@ -1349,11 +1343,9 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
               authorName: storyOwnerName,
               authorAvatar: currentUserStories?.partnerLogo || '',
               url: `${getAppOrigin()}/story/${currentStory.id}`
-            }} />
-
-                    </div>
-                </div>
-      }
+            }} /> :
+      null}
+            </ShareSheet>
         </div>,
     document.body
   );

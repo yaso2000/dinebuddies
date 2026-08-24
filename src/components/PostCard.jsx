@@ -12,6 +12,7 @@ import { BiRepost } from 'react-icons/bi';
 import { IoShareSocialOutline } from 'react-icons/io5';
 import TikTokEmbed from './TikTokEmbed';
 import ShareButtons from './ShareButtons';
+import ShareSheet from './ShareSheet';
 import { getSafeAvatar, resolveFeedAuthorAvatar } from '../utils/avatarUtils';
 import { getAppOrigin } from '../utils/appOrigin';
 import UserAvatar from './UserAvatar';
@@ -1357,18 +1358,9 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         }
             </div>
 
-            {/* Share Modal */}
-            {showShare &&
-      <div
-        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        onClick={(e) => {e.stopPropagation();setShowShare(false);}}>
-
-                    <div
-          style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border-color)', maxWidth: '90%', width: '320px' }}
-          onClick={(e) => e.stopPropagation()}>
-
-                        <AppText as="h3" style={{ textAlign: 'center', marginBottom: '16px', color: 'var(--text-main)' }}>{t('share_post')}</AppText>
-                        <ShareButtons
+            {/* Share sheet — portaled to body so no transformed ancestor can move or clip it */}
+            <ShareSheet open={showShare} title={t('share_post')} onClose={() => setShowShare(false)}>
+                <ShareButtons
             url={`${getAppOrigin()}${post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`}`}
             title={`Post by ${authorName}`}
             description={
@@ -1415,15 +1407,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
               mediaType: displayPost.mediaType || 'image'
             }} />
 
-                        <button
-            onClick={(e) => {e.stopPropagation();setShowShare(false);}}
-            style={{ width: '100%', marginTop: '16px', padding: '10px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', borderRadius: '8px', cursor: 'pointer' }}>
-
-                            {t('close')}
-                        </button>
-                    </div>
-                </div>
-      }
+            </ShareSheet>
         </div>);
 
 };

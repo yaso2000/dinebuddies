@@ -14,6 +14,7 @@ const INVITATION_CARD_IMAGE_FALLBACK =
 import { buildInvitationFeedAttachment } from '../utils/invitationFeedAttachment';
 import { getAppOrigin } from '../utils/appOrigin';
 import ShareButtons from './ShareButtons';
+import ShareSheet from './ShareSheet';
 import { goToLogin } from '../utils/goToLogin';
 import { AppText } from "./base";
 import { useConfirm } from '../context/ConfirmContext';
@@ -958,18 +959,12 @@ const InvitationCard = ({ invitation }) => {
             </>
       }
 
-            {/* Share panel — WhatsApp/Native/Instagram/Socials/Send-in-Chat */}
-            {showShareModal &&
-      <div
-        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        onClick={(e) => {e.stopPropagation();setShowShareModal(false);}}>
-
-                    <div
-          style={{ width: 320, maxWidth: '90%', padding: 20, borderRadius: 16, background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
-          onClick={(e) => e.stopPropagation()}>
-
-                        <AppText as="h3" style={{ textAlign: 'center', marginBottom: 16 }}>{t('share_invitation', { defaultValue: 'Share Invitation' })}</AppText>
-                        <ShareButtons
+            {/* Share sheet — portaled to body so no transformed ancestor can move or clip it */}
+            <ShareSheet
+        open={showShareModal}
+        title={t('share_invitation', { defaultValue: 'Share Invitation' })}
+        onClose={() => setShowShareModal(false)}>
+                <ShareButtons
             title={title}
             description={description}
             url={shareUrl}
@@ -986,16 +981,7 @@ const InvitationCard = ({ invitation }) => {
               url: shareUrl
             }} />
 
-                        <button
-            type="button"
-            onClick={(e) => {e.stopPropagation();setShowShareModal(false);}}
-            style={{ width: '100%', marginTop: 16, padding: 10, background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', borderRadius: 8, cursor: 'pointer' }}>
-
-                            {t('close')}
-                        </button>
-                    </div>
-                </div>
-      }
+            </ShareSheet>
 
             {/* Report Modal */}
             {showReportModal &&

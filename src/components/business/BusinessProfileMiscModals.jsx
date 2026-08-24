@@ -4,6 +4,7 @@ import { FaTimes } from 'react-icons/fa';
 import { AppText } from '../base';
 import { getSafeAvatar, getShareableCoverImage } from '../../utils/avatarUtils';
 import ShareButtons from '../ShareButtons';
+import ShareSheet from '../ShareSheet';
 import CreateInvitationSelector from '../CreateInvitationSelector';
 import FeedbackSubmissionModal from '../FeedbackSubmissionModal';
 
@@ -150,20 +151,11 @@ export default function BusinessProfileMiscModals({ profile }) {
 
     }
 
-            {
-    showShareModal &&
-    <div
-      className="business-profile-modal-overlay"
-      style={{ background: 'rgba(0,0,0,0.8)', zIndex: 9999 }}
-      onClick={(e) => {e.stopPropagation();setShowShareModal(false);}}>
-
-                    <div
-      className="business-profile-modal-card"
-      style={{ padding: '20px', maxWidth: '320px' }}
-      onClick={(e) => e.stopPropagation()}>
-
-                        <AppText as="h3" style={{ textAlign: 'center', marginBottom: '16px', color: 'white' }}>{t('share_profile') || 'Share Profile'}</AppText>
-                        <ShareButtons
+            <ShareSheet
+      open={showShareModal}
+      title={t('share_profile') || 'Share Profile'}
+      onClose={() => setShowShareModal(false)}>
+                <ShareButtons
       url={window.location.href}
       title={business.display_name}
       description={`Check out ${business.display_name} on DineBuddies!`}
@@ -177,19 +169,7 @@ export default function BusinessProfileMiscModals({ profile }) {
         hostImage: getSafeAvatar(business),
         shareUrl: window.location.href
       }} />
-
-                        <button
-      type="button"
-      className="ui-btn ui-btn--ghost"
-      onClick={(e) => {e.stopPropagation();setShowShareModal(false);}}
-      style={{ width: '100%', marginTop: '16px', padding: '10px' }}>
-
-                            {t('close') || 'Close'}
-                        </button>
-                    </div>
-                </div>
-
-    }
+            </ShareSheet>
             {/* Invitation Type Selector Modal */}
             <CreateInvitationSelector
       isOpen={isSelectorOpen}
