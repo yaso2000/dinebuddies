@@ -122,6 +122,8 @@ const {
     isCommunityOwnerRequester,
     collectCommunityMemberIds,
 } = require('./communityOwner');
+const { registerCommunityMemberBroadcast } = require('./communityMemberBroadcast');
+registerCommunityMemberBroadcast(exports); // retired stub — keeps the old endpoint inert
 const { sendPushToUser, registerNotificationPushTrigger } = createPushMessaging({ db, admin });
 /** @param {Record<string, unknown>} inv */
 function isPrivateInvitationDocForBilling(inv) {
