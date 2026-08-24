@@ -14,6 +14,9 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
     path.startsWith('/chat/') ||
     (path.startsWith('/invitation/') && path.endsWith('/chat'));
 
+  /** Business Inbox thread (user↔business support/offers) — its own chat screen. */
+  const isBusinessThreadRoute = path.startsWith('/business-thread/');
+
   const isMessagesHub = path === '/messages' || path.startsWith('/messages/');
   const isMessagesIndex = isMessagesHub;
 
@@ -23,7 +26,7 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
   const isCommunityFullscreen = (isCommunityRoute || isStageRoute) && !isDesktopShell;
 
   /** Active conversation thread — fullscreen on mobile, hide shell chrome. */
-  const isConversationScreen = isDirectChatRoute || isCommunityRoute || isStageRoute;
+  const isConversationScreen = isDirectChatRoute || isCommunityRoute || isStageRoute || isBusinessThreadRoute;
 
   /** Left sidebar: conversation list while in a DM thread. */
   const showConversationSidebar = isDirectChatRoute;
@@ -36,6 +39,7 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
 
   return {
     isDirectChatRoute,
+    isBusinessThreadRoute,
     isMessagesHub,
     isMessagesIndex,
     isCommunityRoute,

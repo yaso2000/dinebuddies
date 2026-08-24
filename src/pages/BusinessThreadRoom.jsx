@@ -9,6 +9,7 @@ import { useToast } from '../context/ToastContext';
 import { FaArrowLeft, FaArrowRight, FaPaperPlane, FaSpinner, FaExclamationCircle, FaLightbulb } from 'react-icons/fa';
 import UserAvatar from '../components/UserAvatar';
 import { AppText } from '../components/base';
+import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
 
 const STATUS_COLOR = { open: '#f59e0b', in_progress: '#3b82f6', resolved: '#22c55e', archived: '#94a3b8' };
 const statusOf = (tk) => (tk?.status && STATUS_COLOR[tk.status] ? tk.status : (tk?.isResolved ? 'resolved' : 'open'));
@@ -26,7 +27,17 @@ export default function BusinessThreadRoom() {
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const endRef = useRef(null);
+  const containerRef = useRef(null);
   const isRtl = i18n.dir() === 'rtl';
+
+  // Keep the input above the on-screen keyboard (same visual-viewport lock the
+  // normal chat uses) instead of the keyboard covering the reply box.
+  useEffect(() => {
+    const { detach } = attachChatShellToVisualViewport(() => containerRef.current, {
+      onViewportChange: () => endRef.current?.scrollIntoView({ block: 'end' }),
+    });
+    return detach;
+  }, []);
 
   const functions = useMemo(() => getFunctions(app, 'us-central1'), []);
 
@@ -84,7 +95,7 @@ export default function BusinessThreadRoom() {
   const isSuggestion = ticket?.type === 'suggestion';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-main)' }} dir={i18n.dir()}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden', background: 'var(--bg-main)' }} dir={i18n.dir()}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
         <button onClick={() => navigate(-1)} aria-label={t('back', 'Back')} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', fontSize: '1.1rem', cursor: 'pointer', padding: 4 }}>
