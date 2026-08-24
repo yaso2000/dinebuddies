@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, animate, motion, useMotionValue } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { FaComments, FaGift, FaHeart, FaMapMarkerAlt, FaUserCheck, FaUserPlus } from 'react-icons/fa';
+import { FaComments, FaGift, FaHeart, FaMapMarkerAlt, FaRegHeart, FaUserCheck, FaUserPlus } from 'react-icons/fa';
 import { LuX } from 'react-icons/lu';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -238,6 +238,9 @@ export default function DiscoveryCard({
 
       triggerBurst(setLikeBurst);
       const result = await likeDiscoveryProfile(viewerUid, targetUser, userProfile || currentUser);
+      // Liking something already liked is a no-op, not a failure — every other
+      // like surface treats it that way.
+      if (result?.reason === 'already_liked') return;
       if (result?.reason === 'cooldown') {
         showLikeCooldownWarning(showPersistentWarning, i18n, result.cancelledAtMs, result.retryAtMs);
         return;
@@ -490,7 +493,9 @@ export default function DiscoveryCard({
               onPointerDown={(e) => e.stopPropagation()}
               onClick={handleToggleLike}
             >
-              <FaHeart size={22} />
+              {/* Solid only when liked — a filled heart on every card read as
+                  "already liked" at a glance. */}
+              {liked ? <FaHeart size={22} /> : <FaRegHeart size={22} />}
             </button>
           ) : (
             <button

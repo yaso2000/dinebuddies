@@ -84,9 +84,17 @@ export function showLikeCooldownWarning(showPersistentWarning, i18n, cancelledAt
 }
 
 async function readCooldownField(viewerId, targetId, field) {
-  const snap = await getDoc(getConnectionCooldownRef(viewerId, targetId));
-  if (!snap.exists()) return null;
-  return timestampToMs(snap.data()?.[field]);
+  try {
+    const snap = await getDoc(getConnectionCooldownRef(viewerId, targetId));
+    if (!snap.exists()) return null;
+    return timestampToMs(snap.data()?.[field]);
+  } catch (error) {
+    // A cooldown doc only exists after an unfollow/unlike, so "cannot read it"
+    // is the normal case, not a reason to block the action. This read throwing
+    // used to abort every like and follow before it began.
+    console.warn('[connectionActionCooldown] read failed, assuming no cooldown:', error?.code || error);
+    return null;
+  }
 }
 
 export async function checkFollowRefollowAllowed(viewerId, targetId) {

@@ -1322,8 +1322,13 @@ service cloud.firestore {
 
     // Follow / like refollow cooldown — 24h after unfollow or unlike
     match /connection_action_cooldowns/{docId} {
-      allow get: if isSignedIn() &&
-        resource.data.viewerId == request.auth.uid;
+      // A cooldown doc exists only after an unfollow/unlike, so the common read
+      // is of a missing doc — resource is null there, and checking a field on it
+      // denies the read. That denial aborted every like and follow.
+      allow get: if isSignedIn() && (
+        resource == null ||
+        resource.data.viewerId == request.auth.uid
+      );
       allow list: if false;
       allow create: if isSignedIn() &&
         request.resource.data.viewerId == request.auth.uid &&

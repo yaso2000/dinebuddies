@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
-import { FaComments, FaGift, FaHeart, FaMapMarkerAlt, FaUserCheck, FaUserPlus } from 'react-icons/fa';
+import { FaComments, FaGift, FaHeart, FaMapMarkerAlt, FaRegHeart, FaUserCheck, FaUserPlus } from 'react-icons/fa';
 import { db } from '../../firebase/config';
 import { getSafeAvatar, mergeAvatarStyleWithGenderRing } from '../../utils/avatarUtils';
 import { getPrivateInviteeDisplayName } from '../../utils/privateInviteAvailability';
@@ -420,7 +420,11 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
                 aria-label={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
                 aria-pressed={liked}
               >
-                <FaHeart className="user-directory-card__action-icon" aria-hidden />
+                {liked ? (
+                  <FaHeart className="user-directory-card__action-icon" aria-hidden />
+                ) : (
+                  <FaRegHeart className="user-directory-card__action-icon" aria-hidden />
+                )}
               </button>
             ) : (
               <button
