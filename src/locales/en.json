@@ -2353,7 +2353,11 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "messages_tab_business": "Business",
+  "business_inbox_empty_title": "No business messages",
+  "business_inbox_empty_hint": "Feedback you send to a business, and their replies, appear here.",
+  "feedback_thread_gone": "This conversation is no longer available.",
   "feedback_status_open": "Open",
   "feedback_status_in_progress": "In progress",
   "feedback_status_resolved": "Resolved",

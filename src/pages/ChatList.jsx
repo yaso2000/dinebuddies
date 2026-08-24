@@ -2,6 +2,8 @@ import { useTranslation } from 'react-i18next';
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
+import { useBusinessInbox } from '../hooks/useBusinessInbox';
+import BusinessInboxPanel from '../components/Messages/BusinessInboxPanel';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import UserAvatar from '../components/UserAvatar';
@@ -22,6 +24,7 @@ const PANEL_MESSAGES = 'messages';
 const PANEL_NOTIFICATIONS = 'notifications';
 const TAB_CHATS = 'chats';
 const TAB_STAGES = 'stages';
+const TAB_BUSINESS = 'business';
 
 function readPanel(searchParams) {
   return searchParams.get('panel') === PANEL_NOTIFICATIONS ? PANEL_NOTIFICATIONS : PANEL_MESSAGES;
@@ -30,6 +33,7 @@ function readPanel(searchParams) {
 function readTab(searchParams) {
   const tab = searchParams.get('tab');
   if (tab === TAB_STAGES) return TAB_STAGES;
+  if (tab === TAB_BUSINESS) return TAB_BUSINESS;
   return TAB_CHATS;
 }
 
@@ -109,6 +113,7 @@ const ChatList = () => {
     leaveStage,
   } = useJoinedStages();
   const { userProfile, isBusiness } = useAuth();
+  const { threads: businessThreads, loading: businessLoading, unreadCount: businessUnread } = useBusinessInbox();
   const [searchQuery, setSearchQuery] = useState('');
 
   // A business owns a community, it never joins one — so neither joined
@@ -116,6 +121,7 @@ const ChatList = () => {
   const messagesBadge =
     chatUnreadCount +
     (isBusiness ? 0 : stageUnread) +
+    (isBusiness ? 0 : businessUnread) +
     unreadMessageCount;
   const notificationsBadge = unreadBellCount;
 
@@ -159,6 +165,11 @@ const ChatList = () => {
     if (tab === TAB_STAGES) {
       if (isBusiness) return;
       navigate('/stages');
+      return;
+    }
+    if (tab === TAB_BUSINESS) {
+      setSearchParams({ tab: TAB_BUSINESS }, { replace: true });
+      setSearchQuery('');
       return;
     }
     setSearchParams({}, { replace: true });
@@ -231,6 +242,14 @@ const ChatList = () => {
           ))}
         </div>
       );
+  } else if (!isBusiness && activeTab === TAB_BUSINESS) {
+    messagesBody = (
+      <BusinessInboxPanel
+        threads={businessThreads}
+        loading={businessLoading}
+        searchQuery={searchQuery}
+      />
+    );
   } else if (!isBusiness && activeTab === TAB_STAGES) {
     messagesBody = (
       <StagesChatPanel
@@ -315,6 +334,21 @@ const ChatList = () => {
               onClick={() => setActiveTab(TAB_CHATS)}>
               {t('messages_tab_chats', 'Chats')}
             </button>
+            {!isBusiness ? (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === TAB_BUSINESS}
+                className={`messages-page__tab${activeTab === TAB_BUSINESS ? ' active' : ''}`}
+                onClick={() => setActiveTab(TAB_BUSINESS)}>
+                {t('messages_tab_business', 'Business')}
+                {businessUnread > 0 ? (
+                  <AppText as="span" className="messages-page__tab-badge">
+                    {businessUnread > 99 ? '99+' : businessUnread}
+                  </AppText>
+                ) : null}
+              </button>
+            ) : null}
             {!isBusiness ? (
               <button
                 type="button"

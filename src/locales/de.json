@@ -2323,7 +2323,11 @@
   "feedback_resolved_error": "Ein Fehler ist aufgetreten, bitte versuche es später erneut.",
   "feedback_resolved_success": "Nachricht als gelöst markiert ✅",
   "feedback_success": "Deine Nachricht wurde erfolgreich gesendet. Wir melden uns bald bei dir.",
-  "feedback_title": "Feedback & Beschwerden",
+  "feedback_title": "Feedback & Beschwerden",
+  "messages_tab_business": "Unternehmen",
+  "business_inbox_empty_title": "Keine Unternehmensnachrichten",
+  "business_inbox_empty_hint": "Feedback, das du an ein Unternehmen sendest, und deren Antworten erscheinen hier.",
+  "feedback_thread_gone": "Diese Unterhaltung ist nicht mehr verfügbar.",
   "feedback_status_open": "Offen",
   "feedback_status_in_progress": "In Bearbeitung",
   "feedback_status_resolved": "Gelöst",

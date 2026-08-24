@@ -2150,7 +2150,11 @@
   "feedback_resolved_error": "एक त्रुटि घटित हुई है, कृपया बाद में पुन: प्रयास करें।",
   "feedback_resolved_success": "संदेश को समाधान के रूप में चिह्नित किया गया ✅",
   "feedback_success": "आपका संदेश सफलतापूर्वक प्रेषित किया गया। ",
-  "feedback_title": "प्रतिक्रिया एवं शिकायतें",
+  "feedback_title": "प्रतिक्रिया एवं शिकायतें",
+  "messages_tab_business": "व्यवसाय",
+  "business_inbox_empty_title": "कोई व्यवसाय संदेश नहीं",
+  "business_inbox_empty_hint": "किसी व्यवसाय को भेजी गई प्रतिक्रिया और उनके उत्तर यहाँ दिखते हैं।",
+  "feedback_thread_gone": "यह बातचीत अब उपलब्ध नहीं है।",
   "feedback_status_open": "खुला",
   "feedback_status_in_progress": "प्रगति पर",
   "feedback_status_resolved": "हल हो गया",

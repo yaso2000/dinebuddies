@@ -2525,7 +2525,11 @@
   "feedback_resolved_error": "Si è verificato un errore, riprova più tardi.",
   "feedback_resolved_success": "Messaggio segnato come risolto ✅",
   "feedback_success": "Il tuo messaggio è stato inviato con successo. Ti contatteremo a breve.",
-  "feedback_title": "Feedback e reclami",
+  "feedback_title": "Feedback e reclami",
+  "messages_tab_business": "Attività",
+  "business_inbox_empty_title": "Nessun messaggio dalle attività",
+  "business_inbox_empty_hint": "I feedback che invii a un’attività e le loro risposte appaiono qui.",
+  "feedback_thread_gone": "Questa conversazione non è più disponibile.",
   "feedback_status_open": "Aperto",
   "feedback_status_in_progress": "In corso",
   "feedback_status_resolved": "Risolto",

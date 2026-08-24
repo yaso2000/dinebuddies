@@ -2323,7 +2323,11 @@
   "feedback_resolved_error": "ایک خرابی پیش آگئی، براہ کرم بعد میں دوبارہ کوشش کریں۔",
   "feedback_resolved_success": "پیغام کو حل شدہ کے بطور نشان زد کیا گیا ✅",
   "feedback_success": "آپ کا پیغام کامیابی سے بھیج دیا گیا ہے۔ ہم جلد ہی آپ سے رابطہ کریں گے۔",
-  "feedback_title": "تاثرات اور شکایات",
+  "feedback_title": "تاثرات اور شکایات",
+  "messages_tab_business": "کاروبار",
+  "business_inbox_empty_title": "کوئی کاروباری پیغام نہیں",
+  "business_inbox_empty_hint": "آپ کسی کاروبار کو جو رائے بھیجتے ہیں اور ان کے جوابات یہاں ظاہر ہوتے ہیں۔",
+  "feedback_thread_gone": "یہ گفتگو اب دستیاب نہیں۔",
   "feedback_status_open": "کھلا",
   "feedback_status_in_progress": "زیرِ عمل",
   "feedback_status_resolved": "حل شدہ",

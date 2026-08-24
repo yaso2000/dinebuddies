@@ -51,7 +51,12 @@ function registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit 
                 (u && (u.displayName || u.display_name)) ||
                 (r && (r.name || r.display_name)) ||
                 '';
-            return { ok: true, name: String(name || '') };
+            const avatar =
+                (p && (p.avatarUrl || p.photoURL || p.photo_url)) ||
+                (u && (u.photoURL || u.photo_url || u.avatarUrl)) ||
+                (r && (r.image || r.coverImage || (r.businessInfo && r.businessInfo.coverImage))) ||
+                null;
+            return { ok: true, name: String(name || ''), avatar: avatar || null };
         }
         return { ok: false };
     }
@@ -112,6 +117,8 @@ function registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit 
 
         const ticket = {
             businessId,
+            businessName: target.name || null,
+            businessAvatar: target.avatar || null,
             userId: uid,
             userName,
             userAvatar,
@@ -237,7 +244,7 @@ function registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit 
                 type: 'business_feedback_reply',
                 title: businessName,
                 message: text.slice(0, 120),
-                actionUrl: `/business/${ticket.businessId}`,
+                actionUrl: `/business-thread/${ticketId}`,
                 fromUserId: ticket.businessId,
                 fromUserName: businessName,
                 fromUserAvatar: null,
@@ -310,7 +317,7 @@ function registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit 
                 type: 'business_feedback_status',
                 title: businessName,
                 message: 'Your feedback was marked resolved.',
-                actionUrl: `/business/${ticket.businessId}`,
+                actionUrl: `/business-thread/${ticketId}`,
                 fromUserId: ticket.businessId,
                 fromUserName: businessName,
                 senderId: ticket.businessId,

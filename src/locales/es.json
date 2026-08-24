@@ -2323,7 +2323,11 @@
   "feedback_resolved_error": "Ocurrió un error. Inténtalo de nuevo más tarde.",
   "feedback_resolved_success": "Mensaje marcado como resuelto ✅",
   "feedback_success": "Tu mensaje se envió correctamente. Nos pondremos en contacto contigo pronto.",
-  "feedback_title": "Comentarios y quejas",
+  "feedback_title": "Comentarios y quejas",
+  "messages_tab_business": "Negocios",
+  "business_inbox_empty_title": "Sin mensajes de negocios",
+  "business_inbox_empty_hint": "Los comentarios que envías a un negocio y sus respuestas aparecen aquí.",
+  "feedback_thread_gone": "Esta conversación ya no está disponible.",
   "feedback_status_open": "Abierto",
   "feedback_status_in_progress": "En curso",
   "feedback_status_resolved": "Resuelto",
