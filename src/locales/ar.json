@@ -2370,7 +2370,32 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "ai_analyze_all": "حلّل كل الملاحظات",
+  "ai_analyze_ticket": "حلّل بالذكاء الاصطناعي",
+  "ai_credits_n": "{{n}} كريدت",
+  "ai_insights_title": "رؤى الذكاء الاصطناعي",
+  "ai_top_issues": "أبرز المشاكل",
+  "ai_insights_none": "لا توجد ملاحظات مفتوحة للتحليل بعد.",
+  "ai_insufficient_credits": "رصيد Dine Credits غير كافٍ. اشترِ المزيد من الإعدادات.",
+  "ai_error": "فشل التحليل. حاول مجددًا.",
+  "ai_label": "ذكاء",
+  "ai_reanalyze": "إعادة التحليل",
+  "ai_suggested_reply": "ردّ مقترح",
+  "ai_use_reply": "استخدم هذا الرد",
+  "sentiment_negative": "سلبي",
+  "sentiment_neutral": "محايد",
+  "sentiment_positive": "إيجابي",
+  "feedback_cat_service": "الخدمة",
+  "feedback_cat_food_quality": "جودة الطعام",
+  "feedback_cat_cleanliness": "النظافة",
+  "feedback_cat_pricing": "الأسعار",
+  "feedback_cat_wait_time": "وقت الانتظار",
+  "feedback_cat_staff": "الموظفون",
+  "feedback_cat_ambiance": "الأجواء",
+  "feedback_cat_delivery": "التوصيل",
+  "feedback_cat_booking": "الحجز",
+  "feedback_cat_other": "أخرى",
   "broadcast_field_image": "صورة",
   "broadcast_add_image": "إضافة صورة",
   "broadcast_image_uploading": "جارٍ الرفع…",

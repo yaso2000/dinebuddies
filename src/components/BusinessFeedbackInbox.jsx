@@ -7,10 +7,19 @@ import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
 import {
   FaPhoneAlt, FaExclamationCircle, FaLightbulb, FaSpinner, FaTimes,
-  FaStar, FaPaperPlane, FaInbox, FaCheckCircle, FaHourglassHalf, FaArchive, FaCircle
+  FaStar, FaPaperPlane, FaInbox, FaCheckCircle, FaHourglassHalf, FaArchive, FaCircle,
+  FaMagic, FaChartPie
 } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
 import UserAvatar from './UserAvatar';
 import { AppText } from './base';
+
+const SENTIMENT = {
+  negative: { color: '#ef4444', label: 'sentiment_negative', def: 'Negative' },
+  neutral: { color: '#94a3b8', label: 'sentiment_neutral', def: 'Neutral' },
+  positive: { color: '#22c55e', label: 'sentiment_positive', def: 'Positive' },
+};
+const SEVERITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#94a3b8' };
 
 const STATUSES = {
   open: { color: '#f59e0b', icon: FaInbox, labelKey: 'feedback_status_open', labelDefault: 'Open' },
@@ -36,6 +45,7 @@ export default function BusinessFeedbackInbox() {
   const { t, i18n } = useTranslation();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,8 +53,36 @@ export default function BusinessFeedbackInbox() {
   const [filterType, setFilterType] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
+  const [insights, setInsights] = useState(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
 
   const functions = useMemo(() => getFunctions(app, 'us-central1'), []);
+
+  const runInsights = async () => {
+    if (insightsLoading) return;
+    setInsightsLoading(true);
+    try {
+      const res = await httpsCallable(functions, 'generateFeedbackInsights')();
+      const data = res?.data || {};
+      if (!data.insights) {
+        showToast(t('ai_insights_none', 'No open feedback to analyze yet.'), 'info');
+      } else {
+        setInsights(data.insights);
+      }
+    } catch (err) {
+      console.error('insights', err);
+      const code = String(err?.code || '');
+      const msg = String(err?.message || '');
+      if (code === 'functions/failed-precondition' && /INSUFFICIENT_CREDITS/.test(msg)) {
+        showToast(t('ai_insufficient_credits', 'Not enough Dine Credits. Buy more in Settings.'), 'info');
+        navigate('/settings/credits');
+      } else {
+        showToast(t('ai_error', 'AI analysis failed. Try again.'), 'error');
+      }
+    } finally {
+      setInsightsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!currentUser?.uid) return;
@@ -135,6 +173,49 @@ export default function BusinessFeedbackInbox() {
         <span><FaExclamationCircle style={{ color: '#ef4444' }} /> {stats.complaints} {t('complaints', 'Complaints')}</span>
         <span><FaLightbulb style={{ color: '#22c55e' }} /> {stats.suggestions} {t('suggestions', 'Suggestions')}</span>
       </div>
+
+      {/* AI aggregate insights */}
+      <button type="button" onClick={runInsights} disabled={insightsLoading} style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 14px', borderRadius: 12,
+        border: '1px solid var(--brand-primary)', background: 'transparent', color: 'var(--brand-primary)',
+        fontWeight: 700, fontSize: '0.9rem', cursor: insightsLoading ? 'wait' : 'pointer'
+      }}>
+        {insightsLoading ? <FaSpinner className="spin" /> : <FaChartPie />}
+        {t('ai_analyze_all', 'Analyze all feedback')} · {t('ai_credits_n', '{{n}} credits', { n: 15 })}
+      </button>
+
+      {insights && (
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <AppText as="h4" style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <FaMagic style={{ color: 'var(--brand-primary)' }} /> {t('ai_insights_title', 'AI insights')}
+            </AppText>
+            <button type="button" onClick={() => setInsights(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><FaTimes /></button>
+          </div>
+          {insights.summary && <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{insights.summary}</div>}
+          {Array.isArray(insights.topIssues) && insights.topIssues.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <AppText as="span" style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>{t('ai_top_issues', 'Top issues')}</AppText>
+              {insights.topIssues.map((it, i) => (
+                <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: 10, borderRadius: 10, background: 'var(--bg-elevated)' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: SEVERITY_COLOR[it.severity] || '#94a3b8', marginTop: 6, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)' }}>{it.title}{Number.isFinite(it.count) ? ` · ${it.count}` : ''}</div>
+                    {it.suggestion && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 2 }}>{it.suggestion}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {Array.isArray(insights.positives) && insights.positives.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {insights.positives.map((p, i) => (
+                <span key={i} style={{ fontSize: '0.76rem', color: '#22c55e', background: 'rgba(34,197,94,0.1)', borderRadius: 8, padding: '3px 8px' }}>👍 {p}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -245,6 +326,37 @@ function FeedbackDetailModal({ ticket, functions, onClose, showToast, t, i18n, c
   const [statusBusy, setStatusBusy] = useState(false);
   const [status, setStatus] = useState(normalizeStatus(ticket));
   const threadEndRef = useRef(null);
+  const navigate = useNavigate();
+  const [ai, setAi] = useState({
+    aiProcessed: !!ticket.aiProcessed,
+    category: ticket.category || null,
+    sentiment: ticket.sentiment || null,
+    aiSummary: ticket.aiSummary || null,
+    aiSuggestedReply: ticket.aiSuggestedReply || null,
+  });
+  const [analyzing, setAnalyzing] = useState(false);
+
+  const analyze = async () => {
+    if (analyzing) return;
+    setAnalyzing(true);
+    try {
+      const res = await httpsCallable(functions, 'analyzeFeedbackTicket')({ ticketId: ticket.id });
+      const d = res?.data || {};
+      setAi({ aiProcessed: true, category: d.category, sentiment: d.sentiment, aiSummary: d.aiSummary, aiSuggestedReply: d.aiSuggestedReply });
+    } catch (err) {
+      console.error('analyze', err);
+      const code = String(err?.code || '');
+      const msg = String(err?.message || '');
+      if (code === 'functions/failed-precondition' && /INSUFFICIENT_CREDITS/.test(msg)) {
+        showToast(t('ai_insufficient_credits', 'Not enough Dine Credits. Buy more in Settings.'), 'info');
+        navigate('/settings/credits');
+      } else {
+        showToast(t('ai_error', 'AI analysis failed. Try again.'), 'error');
+      }
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   // Clear the business unread flag on open.
   useEffect(() => {
@@ -344,6 +456,51 @@ function FeedbackDetailModal({ ticket, functions, onClose, showToast, t, i18n, c
               </button>
             );
           })}
+        </div>
+
+        {/* AI analysis */}
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)' }}>
+          {ai.aiProcessed ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--brand-primary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <FaMagic style={{ fontSize: 10 }} /> {t('ai_label', 'AI')}
+                </span>
+                {ai.category && (
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-elevated)', borderRadius: 8, padding: '2px 8px' }}>
+                    {t(`feedback_cat_${ai.category}`, ai.category)}
+                  </span>
+                )}
+                {ai.sentiment && SENTIMENT[ai.sentiment] && (
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#fff', background: SENTIMENT[ai.sentiment].color, borderRadius: 8, padding: '2px 8px' }}>
+                    {t(SENTIMENT[ai.sentiment].label, SENTIMENT[ai.sentiment].def)}
+                  </span>
+                )}
+                <button type="button" onClick={analyze} disabled={analyzing} style={{ marginInlineStart: 'auto', background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.72rem', cursor: 'pointer' }}>
+                  {analyzing ? <FaSpinner className="spin" /> : t('ai_reanalyze', 'Re-analyze')}
+                </button>
+              </div>
+              {ai.aiSummary && <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{ai.aiSummary}</div>}
+              {ai.aiSuggestedReply && (
+                <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: 10 }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>{t('ai_suggested_reply', 'Suggested reply')}</div>
+                  <div style={{ fontSize: '0.86rem', color: 'var(--text-main)', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{ai.aiSuggestedReply}</div>
+                  <button type="button" onClick={() => setReply(ai.aiSuggestedReply)} style={{ marginTop: 8, background: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}>
+                    {t('ai_use_reply', 'Use this reply')}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button type="button" onClick={analyze} disabled={analyzing} style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 14px', borderRadius: 12,
+              border: '1px solid var(--brand-primary)', background: 'transparent', color: 'var(--brand-primary)', fontWeight: 700, fontSize: '0.86rem',
+              cursor: analyzing ? 'wait' : 'pointer'
+            }}>
+              {analyzing ? <FaSpinner className="spin" /> : <FaMagic />}
+              {t('ai_analyze_ticket', 'Analyze with AI')} · {t('ai_credits_n', '{{n}} credits', { n: 3 })}
+            </button>
+          )}
         </div>
 
         {/* Thread */}

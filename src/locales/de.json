@@ -2323,7 +2323,22 @@
   "feedback_resolved_error": "Ein Fehler ist aufgetreten, bitte versuche es später erneut.",
   "feedback_resolved_success": "Nachricht als gelöst markiert ✅",
   "feedback_success": "Deine Nachricht wurde erfolgreich gesendet. Wir melden uns bald bei dir.",
-  "feedback_title": "Feedback & Beschwerden",
+  "feedback_title": "Feedback & Beschwerden",
+  "ai_analyze_all": "Alle Rückmeldungen analysieren",
+  "ai_analyze_ticket": "Mit KI analysieren",
+  "ai_credits_n": "{{n}} Credits",
+  "ai_insights_title": "KI-Einblicke",
+  "ai_top_issues": "Hauptprobleme",
+  "ai_insights_none": "Noch keine offenen Rückmeldungen zum Analysieren.",
+  "ai_insufficient_credits": "Nicht genug Dine Credits. Kaufe mehr in den Einstellungen.",
+  "ai_error": "KI-Analyse fehlgeschlagen. Erneut versuchen.",
+  "ai_label": "KI",
+  "ai_reanalyze": "Neu analysieren",
+  "ai_suggested_reply": "Vorgeschlagene Antwort",
+  "ai_use_reply": "Diese Antwort verwenden",
+  "sentiment_negative": "Negativ",
+  "sentiment_neutral": "Neutral",
+  "sentiment_positive": "Positiv",
   "broadcast_field_image": "Bild",
   "broadcast_add_image": "Bild hinzufügen",
   "broadcast_image_uploading": "Wird hochgeladen…",

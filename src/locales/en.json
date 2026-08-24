@@ -2353,7 +2353,32 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "ai_analyze_all": "Analyze all feedback",
+  "ai_analyze_ticket": "Analyze with AI",
+  "ai_credits_n": "{{n}} credits",
+  "ai_insights_title": "AI insights",
+  "ai_top_issues": "Top issues",
+  "ai_insights_none": "No open feedback to analyze yet.",
+  "ai_insufficient_credits": "Not enough Dine Credits. Buy more in Settings.",
+  "ai_error": "AI analysis failed. Try again.",
+  "ai_label": "AI",
+  "ai_reanalyze": "Re-analyze",
+  "ai_suggested_reply": "Suggested reply",
+  "ai_use_reply": "Use this reply",
+  "sentiment_negative": "Negative",
+  "sentiment_neutral": "Neutral",
+  "sentiment_positive": "Positive",
+  "feedback_cat_service": "Service",
+  "feedback_cat_food_quality": "Food quality",
+  "feedback_cat_cleanliness": "Cleanliness",
+  "feedback_cat_pricing": "Pricing",
+  "feedback_cat_wait_time": "Wait time",
+  "feedback_cat_staff": "Staff",
+  "feedback_cat_ambiance": "Ambiance",
+  "feedback_cat_delivery": "Delivery",
+  "feedback_cat_booking": "Booking",
+  "feedback_cat_other": "Other",
   "broadcast_field_image": "Image",
   "broadcast_add_image": "Add an image",
   "broadcast_image_uploading": "Uploading…",

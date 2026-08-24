@@ -2323,7 +2323,22 @@
   "feedback_resolved_error": "Ocurrió un error. Inténtalo de nuevo más tarde.",
   "feedback_resolved_success": "Mensaje marcado como resuelto ✅",
   "feedback_success": "Tu mensaje se envió correctamente. Nos pondremos en contacto contigo pronto.",
-  "feedback_title": "Comentarios y quejas",
+  "feedback_title": "Comentarios y quejas",
+  "ai_analyze_all": "Analizar todos los comentarios",
+  "ai_analyze_ticket": "Analizar con IA",
+  "ai_credits_n": "{{n}} créditos",
+  "ai_insights_title": "Análisis con IA",
+  "ai_top_issues": "Problemas principales",
+  "ai_insights_none": "Aún no hay comentarios abiertos para analizar.",
+  "ai_insufficient_credits": "Créditos Dine insuficientes. Compra más en Ajustes.",
+  "ai_error": "El análisis de IA falló. Inténtalo de nuevo.",
+  "ai_label": "IA",
+  "ai_reanalyze": "Reanalizar",
+  "ai_suggested_reply": "Respuesta sugerida",
+  "ai_use_reply": "Usar esta respuesta",
+  "sentiment_negative": "Negativo",
+  "sentiment_neutral": "Neutral",
+  "sentiment_positive": "Positivo",
   "broadcast_field_image": "Imagen",
   "broadcast_add_image": "Añadir una imagen",
   "broadcast_image_uploading": "Subiendo…",

@@ -2150,7 +2150,22 @@
   "feedback_resolved_error": "एक त्रुटि घटित हुई है, कृपया बाद में पुन: प्रयास करें।",
   "feedback_resolved_success": "संदेश को समाधान के रूप में चिह्नित किया गया ✅",
   "feedback_success": "आपका संदेश सफलतापूर्वक प्रेषित किया गया। ",
-  "feedback_title": "प्रतिक्रिया एवं शिकायतें",
+  "feedback_title": "प्रतिक्रिया एवं शिकायतें",
+  "ai_analyze_all": "सभी प्रतिक्रिया का विश्लेषण करें",
+  "ai_analyze_ticket": "एआई से विश्लेषण करें",
+  "ai_credits_n": "{{n}} क्रेडिट",
+  "ai_insights_title": "एआई अंतर्दृष्टि",
+  "ai_top_issues": "मुख्य समस्याएँ",
+  "ai_insights_none": "विश्लेषण के लिए अभी कोई खुली प्रतिक्रिया नहीं।",
+  "ai_insufficient_credits": "पर्याप्त Dine क्रेडिट नहीं। सेटिंग्स से और खरीदें।",
+  "ai_error": "एआई विश्लेषण विफल। पुनः प्रयास करें।",
+  "ai_label": "एआई",
+  "ai_reanalyze": "पुनः विश्लेषण",
+  "ai_suggested_reply": "सुझाया गया उत्तर",
+  "ai_use_reply": "यह उत्तर उपयोग करें",
+  "sentiment_negative": "नकारात्मक",
+  "sentiment_neutral": "तटस्थ",
+  "sentiment_positive": "सकारात्मक",
   "broadcast_field_image": "छवि",
   "broadcast_add_image": "छवि जोड़ें",
   "broadcast_image_uploading": "अपलोड हो रहा है…",

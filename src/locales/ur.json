@@ -2323,7 +2323,22 @@
   "feedback_resolved_error": "ایک خرابی پیش آگئی، براہ کرم بعد میں دوبارہ کوشش کریں۔",
   "feedback_resolved_success": "پیغام کو حل شدہ کے بطور نشان زد کیا گیا ✅",
   "feedback_success": "آپ کا پیغام کامیابی سے بھیج دیا گیا ہے۔ ہم جلد ہی آپ سے رابطہ کریں گے۔",
-  "feedback_title": "تاثرات اور شکایات",
+  "feedback_title": "تاثرات اور شکایات",
+  "ai_analyze_all": "تمام آراء کا تجزیہ کریں",
+  "ai_analyze_ticket": "اے آئی سے تجزیہ کریں",
+  "ai_credits_n": "{{n}} کریڈٹ",
+  "ai_insights_title": "اے آئی بصیرت",
+  "ai_top_issues": "اہم مسائل",
+  "ai_insights_none": "تجزیے کے لیے ابھی کوئی کھلی رائے نہیں۔",
+  "ai_insufficient_credits": "ناکافی Dine کریڈٹ۔ ترتیبات سے مزید خریدیں۔",
+  "ai_error": "اے آئی تجزیہ ناکام۔ دوبارہ کوشش کریں۔",
+  "ai_label": "اے آئی",
+  "ai_reanalyze": "دوبارہ تجزیہ",
+  "ai_suggested_reply": "تجویز کردہ جواب",
+  "ai_use_reply": "یہ جواب استعمال کریں",
+  "sentiment_negative": "منفی",
+  "sentiment_neutral": "غیر جانبدار",
+  "sentiment_positive": "مثبت",
   "broadcast_field_image": "تصویر",
   "broadcast_add_image": "تصویر شامل کریں",
   "broadcast_image_uploading": "اپ لوڈ ہو رہا ہے…",

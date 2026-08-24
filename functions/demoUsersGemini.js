@@ -44,7 +44,7 @@ function resolveProjectId() {
     return 'dinebuddies';
 }
 
-async function callVertexGemini(prompt, model) {
+async function callVertexGemini(prompt, model, temperature = 0.9) {
     const projectId = resolveProjectId();
     const location = process.env.GEMINI_VERTEX_LOCATION?.trim() || 'us-central1';
     const { GoogleAuth } = require('google-auth-library');
@@ -59,7 +59,7 @@ async function callVertexGemini(prompt, model) {
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             generationConfig: {
                 responseMimeType: 'application/json',
-                temperature: 0.9,
+                temperature,
             },
         },
     });
@@ -270,9 +270,41 @@ async function callGeminiForDemoBio(opts) {
     }
 }
 
+/**
+ * Generic Gemini JSON generation — API key when set, else Vertex. Returns the
+ * parsed object (tolerant of code-fence / prose wrapping around the JSON).
+ * @param {string} prompt
+ * @param {{ temperature?: number }} [opts]
+ * @returns {Promise<any>}
+ */
+async function generateGeminiJson(prompt, { temperature = 0.3 } = {}) {
+    const genAI = getGenAiClient();
+    let responseText;
+    if (genAI) {
+        const model = genAI.getGenerativeModel({
+            model: DEFAULT_MODEL,
+            generationConfig: { responseMimeType: 'application/json', temperature },
+        });
+        const result = await model.generateContent(prompt);
+        responseText = result.response.text();
+    } else {
+        responseText = await callVertexGemini(prompt, DEFAULT_MODEL, temperature);
+    }
+    const raw = String(responseText || '').trim();
+    try {
+        return JSON.parse(raw);
+    } catch {
+        const start = raw.indexOf('{');
+        const end = raw.lastIndexOf('}');
+        if (start < 0 || end <= start) throw new Error('Gemini response is not JSON');
+        return JSON.parse(raw.slice(start, end + 1));
+    }
+}
+
 module.exports = {
     callGeminiForDemographics,
     callGeminiForDemoBio,
     buildDemographicsPrompt,
     buildBioPrompt,
+    generateGeminiJson,
 };

@@ -1,5 +1,16 @@
 const functions = require('firebase-functions');
-const { normalizeBusinessSubscriptionTier } = require('./creditsCore');
+const { normalizeBusinessSubscriptionTier, spendCreditsInTransaction } = require('./creditsCore');
+const { generateGeminiJson } = require('./demoUsersGemini');
+
+// On-demand AI (Dine Credits). Real Gemini-2.5-flash cost is a fraction of a
+// cent; these are retail prices (100 credits = $1).
+const AI_TICKET_CREDITS = 3;
+const AI_INSIGHTS_CREDITS = 15;
+
+const FEEDBACK_CATEGORIES = [
+    'service', 'food_quality', 'cleanliness', 'pricing', 'wait_time',
+    'staff', 'ambiance', 'delivery', 'booking', 'other',
+];
 
 /**
  * Business complaints & suggestions — ticket system (server side).
@@ -457,6 +468,181 @@ function registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit 
         }
 
         return { ok: true, sent };
+    });
+
+    // ── AI: analyze one ticket on demand (categorize + sentiment + summary +
+    // suggested reply). Business-only, charged in Dine Credits. ───────────────
+    exports.analyzeFeedbackTicket = functions.https.onCall(async (data, context) => {
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Please sign in.');
+        const uid = context.auth.uid;
+        const ticketId = asTrimmed(data?.ticketId);
+        if (!ticketId) throw new functions.https.HttpsError('invalid-argument', 'ticketId is required.');
+
+        const ticketRef = db.collection('business_feedback').doc(ticketId);
+        const snap = await ticketRef.get();
+        if (!snap.exists) throw new functions.https.HttpsError('not-found', 'Feedback not found.');
+        const ticket = snap.data() || {};
+        if (uid !== ticket.businessId) {
+            throw new functions.https.HttpsError('permission-denied', 'Only the business can analyze this feedback.');
+        }
+
+        await enforceCallableRateLimit(uid, 'feedback_ai_ticket', { cooldownMs: 2000, perMinute: 20, perDay: 500 });
+
+        // Pre-check credits so we don't pay for a Gemini call the user can't afford.
+        const userRef = db.collection('users').doc(uid);
+        const userSnap0 = await userRef.get();
+        const user0 = userSnap0.exists ? userSnap0.data() || {} : {};
+        const available = Number(user0.paidCredits || 0) + Number(user0.savedCredits || 0);
+        if (available < AI_TICKET_CREDITS) {
+            throw new functions.https.HttpsError('failed-precondition', 'INSUFFICIENT_CREDITS');
+        }
+
+        const prompt = [
+            'You are analyzing a customer message sent to a business.',
+            `Message type: ${ticket.type === 'suggestion' ? 'suggestion' : 'complaint'}.`,
+            `Message: """${String(ticket.content || '').slice(0, 1800)}"""`,
+            'Respond with JSON only, no prose:',
+            `{"category": one of ${JSON.stringify(FEEDBACK_CATEGORIES)},`,
+            '"sentiment": "negative"|"neutral"|"positive",',
+            '"sentimentScore": number between 0 and 1 (1 = very positive),',
+            '"summary": one concise sentence (max 120 chars, SAME language as the message),',
+            '"suggestedReply": a short polite reply the business could send (max 300 chars, SAME language as the message)}',
+        ].join('\n');
+
+        let ai;
+        try {
+            ai = await generateGeminiJson(prompt, { temperature: 0.3 });
+        } catch (err) {
+            console.error('analyzeFeedbackTicket gemini', err?.message || err);
+            throw new functions.https.HttpsError('internal', 'AI analysis failed. Please try again.');
+        }
+
+        const category = FEEDBACK_CATEGORIES.includes(String(ai?.category)) ? ai.category : 'other';
+        const sentiment = ['negative', 'neutral', 'positive'].includes(String(ai?.sentiment)) ? ai.sentiment : 'neutral';
+        let sentimentScore = Number(ai?.sentimentScore);
+        if (!Number.isFinite(sentimentScore)) sentimentScore = sentiment === 'positive' ? 0.8 : sentiment === 'negative' ? 0.2 : 0.5;
+        sentimentScore = Math.max(0, Math.min(1, sentimentScore));
+        const aiSummary = asTrimmed(ai?.summary).slice(0, 240) || null;
+        const aiSuggestedReply = asTrimmed(ai?.suggestedReply).slice(0, 600) || null;
+
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        try {
+            await db.runTransaction(async (tx) => {
+                const uSnap = await tx.get(userRef);
+                const u = uSnap.exists ? uSnap.data() || {} : {};
+                spendCreditsInTransaction(tx, userRef, u, {
+                    uid,
+                    accountRole: 'business',
+                    amount: AI_TICKET_CREDITS,
+                    type: 'feedback_ai_ticket',
+                    reason: 'feedback_ai_ticket',
+                    relatedId: ticketId,
+                    allowSavedCredits: true,
+                });
+                tx.update(ticketRef, {
+                    category, sentiment, sentimentScore, aiSummary, aiSuggestedReply,
+                    aiProcessed: true, aiAnalyzedAt: now, updatedAt: now,
+                });
+            });
+        } catch (spendErr) {
+            if (spendErr && spendErr.code === 'INSUFFICIENT_CREDITS') {
+                throw new functions.https.HttpsError('failed-precondition', 'INSUFFICIENT_CREDITS');
+            }
+            throw spendErr;
+        }
+
+        return { ok: true, category, sentiment, sentimentScore, aiSummary, aiSuggestedReply, creditsCharged: AI_TICKET_CREDITS };
+    });
+
+    // ── AI: aggregate insights across a business's open feedback. ─────────────
+    exports.generateFeedbackInsights = functions.https.onCall(async (data, context) => {
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Please sign in.');
+        const uid = context.auth.uid;
+
+        const snap = await db.collection('business_feedback').where('businessId', '==', uid).limit(200).get();
+        const items = snap.docs
+            .map((d) => d.data() || {})
+            .filter((f) => (f.kind || 'support') === 'support')
+            .filter((f) => {
+                const st = f.status || (f.isResolved ? 'resolved' : 'open');
+                return st === 'open' || st === 'in_progress';
+            });
+        if (!items.length) {
+            return { ok: true, count: 0, insights: null };
+        }
+
+        await enforceCallableRateLimit(uid, 'feedback_ai_insights', { cooldownMs: 15000, perHour: 20, perDay: 100 });
+
+        const userRef = db.collection('users').doc(uid);
+        const userSnap0 = await userRef.get();
+        const user0 = userSnap0.exists ? userSnap0.data() || {} : {};
+        const available = Number(user0.paidCredits || 0) + Number(user0.savedCredits || 0);
+        if (available < AI_INSIGHTS_CREDITS) {
+            throw new functions.https.HttpsError('failed-precondition', 'INSUFFICIENT_CREDITS');
+        }
+
+        const lines = items.slice(0, 150).map((f, i) =>
+            `${i + 1}. [${f.type === 'suggestion' ? 'suggestion' : 'complaint'}] ${String(f.content || '').slice(0, 300)}`
+        );
+        const prompt = [
+            'You are analyzing customer feedback for a business. Recent messages:',
+            lines.join('\n'),
+            '',
+            'Respond with JSON only, no prose. Use the SAME language as the majority of the messages:',
+            '{"summary": "1-2 sentence overview",',
+            '"topIssues": [{"title":"short issue name","count":number,"severity":"high"|"medium"|"low","suggestion":"one short fix"}],',
+            '"positives": ["short things customers liked"]}',
+            'Limit topIssues to the 5 most important, most frequent first. Limit positives to 3.',
+        ].join('\n');
+
+        let ai;
+        try {
+            ai = await generateGeminiJson(prompt, { temperature: 0.3 });
+        } catch (err) {
+            console.error('generateFeedbackInsights gemini', err?.message || err);
+            throw new functions.https.HttpsError('internal', 'AI analysis failed. Please try again.');
+        }
+
+        const insights = {
+            summary: asTrimmed(ai?.summary).slice(0, 600) || '',
+            topIssues: Array.isArray(ai?.topIssues) ? ai.topIssues.slice(0, 5).map((it) => ({
+                title: asTrimmed(it?.title).slice(0, 120),
+                count: Number.isFinite(Number(it?.count)) ? Number(it.count) : null,
+                severity: ['high', 'medium', 'low'].includes(String(it?.severity)) ? it.severity : 'medium',
+                suggestion: asTrimmed(it?.suggestion).slice(0, 240),
+            })).filter((it) => it.title) : [],
+            positives: Array.isArray(ai?.positives) ? ai.positives.slice(0, 3).map((p) => asTrimmed(p).slice(0, 120)).filter(Boolean) : [],
+            analyzedCount: items.length,
+        };
+
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        try {
+            await db.runTransaction(async (tx) => {
+                const uSnap = await tx.get(userRef);
+                const u = uSnap.exists ? uSnap.data() || {} : {};
+                spendCreditsInTransaction(tx, userRef, u, {
+                    uid,
+                    accountRole: 'business',
+                    amount: AI_INSIGHTS_CREDITS,
+                    type: 'feedback_ai_insights',
+                    reason: 'feedback_ai_insights',
+                    relatedId: uid,
+                    allowSavedCredits: true,
+                });
+                tx.set(
+                    db.collection('business_feedback_stats').doc(uid),
+                    { businessId: uid, aiInsights: insights, aiInsightsAt: now },
+                    { merge: true }
+                );
+            });
+        } catch (spendErr) {
+            if (spendErr && spendErr.code === 'INSUFFICIENT_CREDITS') {
+                throw new functions.https.HttpsError('failed-precondition', 'INSUFFICIENT_CREDITS');
+            }
+            throw spendErr;
+        }
+
+        return { ok: true, count: items.length, insights, creditsCharged: AI_INSIGHTS_CREDITS };
     });
 }
 

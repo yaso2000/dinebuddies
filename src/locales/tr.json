@@ -2150,7 +2150,22 @@
   "feedback_resolved_error": "Bir hata oluştu, lütfen daha sonra tekrar dene.",
   "feedback_resolved_success": "Mesaj çözüldü olarak işaretlendi ✅",
   "feedback_success": "Mesajın başarıyla gönderildi. Kısa süre içinde seninle iletişime geçeceğiz.",
-  "feedback_title": "Geri Bildirim ve Şikayetler",
+  "feedback_title": "Geri Bildirim ve Şikayetler",
+  "ai_analyze_all": "Tüm geri bildirimleri analiz et",
+  "ai_analyze_ticket": "Yapay zeka ile analiz et",
+  "ai_credits_n": "{{n}} kredi",
+  "ai_insights_title": "Yapay zeka içgörüleri",
+  "ai_top_issues": "Öne çıkan sorunlar",
+  "ai_insights_none": "Analiz edilecek açık geri bildirim yok.",
+  "ai_insufficient_credits": "Yetersiz Dine Kredisi. Ayarlardan satın alın.",
+  "ai_error": "Yapay zeka analizi başarısız. Tekrar deneyin.",
+  "ai_label": "YZ",
+  "ai_reanalyze": "Yeniden analiz et",
+  "ai_suggested_reply": "Önerilen yanıt",
+  "ai_use_reply": "Bu yanıtı kullan",
+  "sentiment_negative": "Olumsuz",
+  "sentiment_neutral": "Nötr",
+  "sentiment_positive": "Olumlu",
   "broadcast_field_image": "Görsel",
   "broadcast_add_image": "Görsel ekle",
   "broadcast_image_uploading": "Yükleniyor…",
