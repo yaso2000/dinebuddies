@@ -170,6 +170,160 @@ function registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit 
 
         return { ok: true, ticketId: ticketRef.id };
     });
+
+    // ── Two-way reply: business or the submitting user posts to the thread ────
+    exports.replyToFeedback = functions.https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Please sign in.');
+        }
+        const uid = context.auth.uid;
+        const ticketId = asTrimmed(data?.ticketId);
+        const text = asTrimmed(data?.text);
+        if (!ticketId) throw new functions.https.HttpsError('invalid-argument', 'ticketId is required.');
+        if (!text) throw new functions.https.HttpsError('invalid-argument', 'Reply text is required.');
+        if (text.length > MAX_CONTENT) throw new functions.https.HttpsError('invalid-argument', 'Reply is too long.');
+
+        const ticketRef = db.collection('business_feedback').doc(ticketId);
+        const snap = await ticketRef.get();
+        if (!snap.exists) throw new functions.https.HttpsError('not-found', 'Feedback not found.');
+        const ticket = snap.data() || {};
+        const isBusiness = uid === ticket.businessId;
+        const isUser = uid === ticket.userId;
+        if (!isBusiness && !isUser) {
+            throw new functions.https.HttpsError('permission-denied', 'You cannot reply to this feedback.');
+        }
+
+        await enforceCallableRateLimit(uid, 'business_feedback_reply', {
+            cooldownMs: 3 * 1000,
+            perMinute: 20,
+            perDay: 300,
+        });
+
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const senderRole = isBusiness ? 'business' : 'user';
+
+        // Resolve the business display name up front (needed for the user's notification).
+        let businessName = 'Business';
+        if (isBusiness) {
+            const target = await resolveBusinessTarget(ticket.businessId);
+            businessName = target.name || 'Business';
+        }
+
+        const batch = db.batch();
+        const msgRef = ticketRef.collection('messages').doc();
+        batch.set(msgRef, { senderId: uid, senderRole, text, createdAt: now, readAt: null });
+
+        const updates = {
+            lastMessageAt: now,
+            lastMessageRole: senderRole,
+            messageCount: admin.firestore.FieldValue.increment(1),
+            updatedAt: now,
+        };
+        if (isBusiness) {
+            updates.unreadForUser = true;
+            updates.unreadForBusiness = false;
+            if (ticket.status === 'open') updates.status = 'in_progress';
+        } else {
+            updates.unreadForBusiness = true;
+            updates.unreadForUser = false;
+        }
+        batch.update(ticketRef, updates);
+
+        if (isBusiness) {
+            // Notify the user (in-app inbox + FCM via onNotificationCreated).
+            const notifRef = db.collection('notifications').doc();
+            batch.set(notifRef, {
+                userId: ticket.userId,
+                type: 'business_feedback_reply',
+                title: businessName,
+                message: text.slice(0, 120),
+                actionUrl: `/business/${ticket.businessId}`,
+                fromUserId: ticket.businessId,
+                fromUserName: businessName,
+                fromUserAvatar: null,
+                senderId: ticket.businessId,
+                senderName: businessName,
+                metadata: { source: 'business_feedback', feedbackId: ticketId },
+                createdAt: now,
+                read: false,
+            });
+        } else {
+            // Notify the business via the partner_notifications pipeline.
+            const notifRef = db.collection('partner_notifications').doc();
+            batch.set(notifRef, {
+                restaurantId: ticket.businessId,
+                type: 'business_feedback',
+                title: 'New reply 💬',
+                message: text.slice(0, 120),
+                actionUrl: '/business-dashboard#business-feedback-inbox',
+                read: false,
+                createdAt: now,
+                senderId: uid,
+                fromUserName: ticket.userName || 'Member',
+                fromUserAvatar: ticket.userAvatar || null,
+                metadata: { feedbackId: ticketId },
+            });
+        }
+
+        await batch.commit();
+        return { ok: true };
+    });
+
+    // ── Business changes ticket status (open / in_progress / resolved / archived)
+    exports.setFeedbackStatus = functions.https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Please sign in.');
+        }
+        const uid = context.auth.uid;
+        const ticketId = asTrimmed(data?.ticketId);
+        const status = asTrimmed(data?.status).toLowerCase();
+        const ALLOWED = ['open', 'in_progress', 'resolved', 'archived'];
+        if (!ticketId) throw new functions.https.HttpsError('invalid-argument', 'ticketId is required.');
+        if (!ALLOWED.includes(status)) throw new functions.https.HttpsError('invalid-argument', 'Invalid status.');
+
+        const ticketRef = db.collection('business_feedback').doc(ticketId);
+        const snap = await ticketRef.get();
+        if (!snap.exists) throw new functions.https.HttpsError('not-found', 'Feedback not found.');
+        const ticket = snap.data() || {};
+        if (uid !== ticket.businessId) {
+            throw new functions.https.HttpsError('permission-denied', 'Only the business can change status.');
+        }
+
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const updates = {
+            status,
+            updatedAt: now,
+            isResolved: status === 'resolved' || status === 'archived',
+            resolvedAt: status === 'resolved' ? now : (status === 'archived' ? ticket.resolvedAt || now : null),
+        };
+
+        const batch = db.batch();
+        batch.update(ticketRef, updates);
+
+        if (status === 'resolved') {
+            // Let the user know their ticket was resolved.
+            const target = await resolveBusinessTarget(ticket.businessId);
+            const businessName = target.name || 'Business';
+            const notifRef = db.collection('notifications').doc();
+            batch.set(notifRef, {
+                userId: ticket.userId,
+                type: 'business_feedback_status',
+                title: businessName,
+                message: 'Your feedback was marked resolved.',
+                actionUrl: `/business/${ticket.businessId}`,
+                fromUserId: ticket.businessId,
+                fromUserName: businessName,
+                senderId: ticket.businessId,
+                senderName: businessName,
+                metadata: { source: 'business_feedback', feedbackId: ticketId, status },
+                createdAt: now,
+                read: false,
+            });
+        }
+
+        await batch.commit();
+        return { ok: true, status };
+    });
 }
 
 module.exports = { registerFeedbackTickets };
