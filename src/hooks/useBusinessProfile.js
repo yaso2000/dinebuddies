@@ -261,8 +261,17 @@ export function useBusinessProfile(profileId) {
     businessId: profileId,
     isVirtual: isVirtualGoogleImportProfile(business),
   });
+  // Favorite ⟺ community member: a favorited business counts as joined even if
+  // the joinedCommunities array hasn't caught up (or was favorited long ago).
+  const favoritePlaces = inviteCurrentUser?.favoritePlaces || userProfile?.favoritePlaces || [];
+  const isFavoritePlaceMember =
+    Array.isArray(favoritePlaces) &&
+    favoritePlaces.some((p) => {
+      const id = p?.businessId || p?.id;
+      return id && (id === profileCommunityId || id === profileId);
+    });
   const effectiveIsMember =
-    isJoinedToBusinessCommunity(joinedCommunities, profileCommunityId) || isMember;
+    isJoinedToBusinessCommunity(joinedCommunities, profileCommunityId) || isMember || isFavoritePlaceMember;
 
   // The business advertises its currently-open Stage on its profile; a member's
   // button enters that Stage and is disabled when none is open.
@@ -853,7 +862,12 @@ export function useBusinessProfile(profileId) {
 
     joiningRef.current = true;
     setJoiningCommunity(true);
-    void joinCommunity(cid)
+    void joinCommunity(cid, {
+      name: business?.display_name || '',
+      image: getSafeAvatar(business),
+      address: business?.businessInfo?.address || '',
+      city: business?.businessInfo?.city || '',
+    })
       .catch((error) => {
         console.error('Error joining community:', error);
       })

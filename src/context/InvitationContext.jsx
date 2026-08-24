@@ -48,7 +48,7 @@ import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
 import { DEFAULT_BUSINESS_COVER } from '../utils/businessCoverImage';
 import { fetchIpLocation, detectUserLocationContext, detectLiveUserGps } from '../utils/locationUtils';
 import { deleteInvitationAndStorage } from '../utils/storageCleanup';
-import { maybeAwardBusinessHostingPoints } from '../services/businessLikeService';
+import { maybeAwardBusinessHostingPoints, setFavoritePlaceEntry } from '../services/businessLikeService';
 import { filterInviteesWhoAcceptAuthor, asUidArray } from '../utils/userSocialLists';
 import { filterInviteesFollowedBySender } from '../utils/privateInviteAvailability';
 import {
@@ -1855,17 +1855,24 @@ export const InvitationProvider = ({ children }) => {
 
     const markAllAsRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
 
-    const joinCommunity = async (partnerId) => {
+    const joinCommunity = async (partnerId, businessInfoForFavorite) => {
         if (!partnerId || !currentUser) return false;
         const userId = currentUser.uid || currentUser.id;
         if (!userId) return false;
-        if (effectiveJoinedCommunities.includes(partnerId)) return true;
+        if (effectiveJoinedCommunities.includes(partnerId)) {
+            // Already a member — make sure the favorite-place side is present too
+            // (favorite ⟺ member), then no-op.
+            void setFavoritePlaceEntry(userId, partnerId, businessInfoForFavorite, true);
+            return true;
+        }
 
         // Do NOT optimistic-patch before the callable: community chat listeners would
         // start while Firestore rules still deny reads (permission-denied, no messages).
         try {
             await setCommunityMembershipCallable({ partnerId, action: 'join' });
             patchJoinedCommunitiesOptimistic(partnerId, true);
+            // Joining a business community also adds it to the user's favorite places.
+            void setFavoritePlaceEntry(userId, partnerId, businessInfoForFavorite, true);
             void addUserNotification({
                 userId: partnerId,
                 type: 'new_community_member',
@@ -1906,6 +1913,8 @@ export const InvitationProvider = ({ children }) => {
         patchJoinedCommunitiesOptimistic(partnerId, false);
         try {
             await setCommunityMembershipCallable({ partnerId, action: 'leave' });
+            // Leaving the community also removes it from favorite places (symmetry).
+            void setFavoritePlaceEntry(userId, partnerId, null, false);
             addNotification('👋 Left', 'You have left the community.', 'info');
             return true;
         } catch (error) {

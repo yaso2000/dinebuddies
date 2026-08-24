@@ -7,9 +7,62 @@
  * - user.favoritePlaces (derived storage, updated in same action)
  */
 import { doc, getDoc, increment, runTransaction, serverTimestamp, onSnapshot, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app, { db } from '../firebase/config';
 
 const BUSINESS_LIKES_COLLECTION = 'businessLikes';
+
+/**
+ * Add or remove a business entry in users/{userId}.favoritePlaces.
+ * Shared by the heart toggle and by community join/leave so "favorite place"
+ * and "community member" stay one and the same relationship. Best-effort.
+ * @param {string} userId
+ * @param {string} businessId
+ * @param {{name?:string,image?:string,address?:string,city?:string}|null|undefined} businessInfoForFavorite
+ * @param {boolean} add
+ */
+export async function setFavoritePlaceEntry(userId, businessId, businessInfoForFavorite, add) {
+    if (!userId || !businessId) return;
+    try {
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        const currentPlaces = userSnap.exists() ? (userSnap.data().favoritePlaces || []).slice() : [];
+        if (add) {
+            if (currentPlaces.some((p) => (p.businessId || p.id) === businessId)) return;
+            const info = businessInfoForFavorite || {};
+            const entry = {
+                businessId,
+                name: info.name || '',
+                image: info.image ?? null,
+                address: info.address || '',
+                city: info.city || '',
+                source: 'business',
+                addedAt: new Date().toISOString()
+            };
+            await updateDoc(userRef, { favoritePlaces: [...currentPlaces, entry] });
+        } else {
+            const next = currentPlaces.filter((p) => (p.businessId || p.id) !== businessId);
+            if (next.length !== currentPlaces.length) await updateDoc(userRef, { favoritePlaces: next });
+        }
+    } catch (err) {
+        console.warn('[favorite] setFavoritePlaceEntry failed', { businessId, add, err });
+    }
+}
+
+/**
+ * Favorite ⟺ community membership are the same relationship. A heart toggle
+ * therefore also joins/leaves the business community (server-side, so the user's
+ * joinedCommunities — and thus Stage-entry rights — stay in sync). Best-effort.
+ */
+async function syncCommunityMembershipForLike(businessId, currentlyLiked) {
+    try {
+        const functions = getFunctions(app, 'us-central1');
+        const setCommunityMembership = httpsCallable(functions, 'setCommunityMembership');
+        await setCommunityMembership({ partnerId: String(businessId), action: currentlyLiked ? 'leave' : 'join' });
+    } catch (err) {
+        console.warn('[like] community membership sync failed (like still succeeded)', err?.code || err?.message || err);
+    }
+}
 
 export function getBusinessLikeDocId(businessId, userId) {
     return `${businessId}_${userId}`;
@@ -169,4 +222,7 @@ export async function toggleBusinessLike(businessId, userId, currentlyLiked, bus
             console.warn('[like] favoritePlaces sync failed (like still succeeded)', err);
         }
     })();
+
+    // Favorite ⟺ community member: keep membership (joinedCommunities) in lockstep.
+    void syncCommunityMembershipForLike(businessId, currentlyLiked);
 }

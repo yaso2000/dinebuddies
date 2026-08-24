@@ -92,8 +92,11 @@ export default function StageChatRoom() {
     const joined = Array.isArray(userProfile?.joinedCommunities)
       ? userProfile.joinedCommunities.map(String)
       : [];
-    return joined.includes(String(hostId));
-  }, [hostId, userProfile?.joinedCommunities]);
+    if (joined.includes(String(hostId))) return true;
+    // Favorite ⟺ community member: a favorited business grants Stage entry too.
+    const favorites = Array.isArray(userProfile?.favoritePlaces) ? userProfile.favoritePlaces : [];
+    return favorites.some((p) => String(p?.businessId || p?.id || '') === String(hostId));
+  }, [hostId, userProfile?.joinedCommunities, userProfile?.favoritePlaces]);
   const wasInvited = useMemo(() => {
     const invited = Array.isArray(room.partner?.invitedIds) ? room.partner.invitedIds : [];
     const uid = currentUser?.uid || userProfile?.id || userProfile?.uid;

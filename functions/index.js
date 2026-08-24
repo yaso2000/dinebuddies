@@ -1858,12 +1858,17 @@ exports.setCommunityMembership = functions.https.onCall(async (data, context) =>
     const userRef = db.collection('users').doc(targetUserId);
     const userPartnerRef = db.collection('users').doc(partnerId);
     const restaurantPartnerRef = db.collection('restaurants').doc(partnerId);
+    // Admin Google imports can live only as a public_profiles projection (no
+    // users/ or restaurants/ doc). Membership is user-side, so such an "orphan"
+    // business must still accept joins — we confirm it is a business here.
+    const publicProfilePartnerRef = db.collection('public_profiles').doc(partnerId);
 
     const membership = await db.runTransaction(async (tx) => {
-        const [userSnap, userPartnerSnap, restaurantPartnerSnap] = await Promise.all([
+        const [userSnap, userPartnerSnap, restaurantPartnerSnap, publicProfilePartnerSnap] = await Promise.all([
             tx.get(userRef),
             tx.get(userPartnerRef),
             tx.get(restaurantPartnerRef),
+            tx.get(publicProfilePartnerRef),
         ]);
 
         // Prefer a real business owner doc (users business OR restaurants listing).
@@ -1906,19 +1911,37 @@ exports.setCommunityMembership = functions.https.onCall(async (data, context) =>
                 'Business accounts own a community and cannot join another one.'
             );
         }
+        // A business exists if a users/ or restaurants/ owner doc says so, OR if
+        // only its public_profiles projection remains (orphaned admin import).
+        const publicProfile = publicProfilePartnerSnap.exists ? (publicProfilePartnerSnap.data() || {}) : null;
+        const publicIsBusiness =
+            !!publicProfile &&
+            (String(publicProfile.profileType || '').toLowerCase() === 'business' ||
+                String(publicProfile.accountRole || '').toLowerCase() === 'business');
+
         if (!partnerSnap || !partnerRef) {
-            throw new functions.https.HttpsError('not-found', 'Community owner not found.');
+            // No owner doc at all — accept only when the public projection is a
+            // business, and never for owner-only moderation (there is no owner doc
+            // to hold blocked/muted state for an orphan).
+            if (!publicIsBusiness) {
+                throw new functions.https.HttpsError('not-found', 'Community owner not found.');
+            }
+            if (ownerOnlyActions.includes(action)) {
+                throw new functions.https.HttpsError('failed-precondition', 'This community cannot be managed yet.');
+            }
+        } else {
+            const owner = {
+                source: partnerRef.path.includes('/restaurants/') ? 'restaurants' : 'users',
+                data: partnerSnap.data() || {},
+            };
+            // Owner doc exists but is not flagged as a business: still accept if the
+            // public projection confirms a business listing.
+            if (!isCommunityOwnerBusiness(owner) && !publicIsBusiness) {
+                throw new functions.https.HttpsError('failed-precondition', 'Target user is not a community owner.');
+            }
         }
 
-        const owner = {
-            source: partnerRef.path.includes('/restaurants/') ? 'restaurants' : 'users',
-            data: partnerSnap.data() || {},
-        };
-        if (!isCommunityOwnerBusiness(owner)) {
-            throw new functions.https.HttpsError('failed-precondition', 'Target user is not a community owner.');
-        }
-
-        const partner = partnerSnap.data() || {};
+        const partner = partnerSnap ? (partnerSnap.data() || {}) : {};
         if (ownerOnlyActions.includes(action) && uid !== partnerId && uid !== String(partner.ownerId || '')) {
             throw new functions.https.HttpsError('permission-denied', 'Only the community owner can manage members.');
         }
@@ -1973,7 +1996,11 @@ exports.setCommunityMembership = functions.https.onCall(async (data, context) =>
         if (action !== 'unblockMember' && action !== 'muteMember' && action !== 'unmuteMember') {
             tx.update(userRef, { joinedCommunities: joined });
         }
-        tx.update(partnerRef, partnerUpdates);
+        // Orphan businesses have no owner doc; the member cache lives only on the
+        // user side (joinedCommunities) and is read back via array-contains.
+        if (partnerRef) {
+            tx.update(partnerRef, partnerUpdates);
+        }
 
         return {
             isMember: joined.includes(partnerId),
