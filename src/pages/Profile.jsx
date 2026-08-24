@@ -52,6 +52,10 @@ import {
   normalizeOpenToDating,
   syncLookingForWithOpenToDating,
 } from '../utils/openToDating';
+import {
+  getDatingToggleLock,
+  datingToggleLockMessage,
+} from '../utils/datingToggleLock';
 import { buildDefaultProfileMediaPatch } from '../constants/defaultProfileMedia';
 import { getPurchaseCredits, getSavedCredits } from '../utils/walletCredits';
 import LookingForChips from '../components/profile/LookingForChips';
@@ -150,7 +154,9 @@ const Profile = () => {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const { currentUser, updateProfile, invitations, privateInvitations, restaurants, updateRestaurant, toggleFollow, deleteInvitation } = useInvitations();
-  const { signOut, userProfile, loading } = useAuth();
+  // The Firebase Auth user (not the context copy) is the only place account
+  // creation time is reliably recorded.
+  const { signOut, userProfile, loading, currentUser: authUser } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   /** UI authority for cover + gallery — not overwritten by Firestore cache races. */
@@ -527,6 +533,11 @@ const Profile = () => {
     }
   };
 
+  const datingToggleLock = useMemo(
+    () => getDatingToggleLock({ authUser, profile: realtimeUser || userProfile }),
+    [authUser, realtimeUser, userProfile]
+  );
+
   /* A generated initials/placeholder avatar is not a photo — nothing to remove. */
   const savedAvatarUrl = getAvatarUrlOrNull(realtimeUser || userProfile) || '';
   const canRemoveAvatar = Boolean(savedAvatarUrl) && !isGeneratedAvatarUrl(savedAvatarUrl);
@@ -632,6 +643,23 @@ const Profile = () => {
         openToDating: normalizeOpenToDating(formData.openToDating),
         invitePreference: normalizeInvitePreference(formData.invitePreference),
       };
+
+      // The dating switch decides who sees a heart and which relationship a pair
+      // can form, so it is not a toggle to flip back and forth: free for the
+      // first day, then once a week.
+      const nextOpenToDating = payload.openToDating;
+      const datingChanged = nextOpenToDating !== isUserOpenToDating(userProfile || currentUser);
+      if (datingChanged) {
+        if (datingToggleLock.locked) {
+          showToast(datingToggleLockMessage(t, datingToggleLock, i18n.language), 'error');
+          setIsSaving(false);
+          return;
+        }
+        // Only start the weekly clock once the opening day is over.
+        if (!datingToggleLock.inGrace) {
+          payload.openToDatingChangedAt = new Date().toISOString();
+        }
+      }
       if (photoIsReal) {
         Object.assign(payload, buildAvatarPersistFields(finalAvatar) || { avatar: finalAvatar });
       }
@@ -914,6 +942,10 @@ const Profile = () => {
                   joinReasons={formData.joinReasons}
                   lookingFor={formData.lookingFor}
                   openToDating={formData.openToDating}
+                  datingToggleLock={datingToggleLock}
+                  datingToggleLockMessage={
+                  datingToggleLock.locked ? datingToggleLockMessage(t, datingToggleLock, i18n.language) : ''
+                  }
                   showInvitePreference
                   requireInviteFields
                   onChange={({

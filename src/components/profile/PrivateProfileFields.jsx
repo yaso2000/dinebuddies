@@ -39,6 +39,8 @@ export default function PrivateProfileFields({
   joinReasons = [],
   lookingFor = [],
   openToDating = false,
+  datingToggleLock = null,
+  datingToggleLockMessage = '',
   availableForPrivateInvite = true,
   showAvailableForPrivateInviteToggle = false,
   showInvitePreference = true,
@@ -179,13 +181,20 @@ export default function PrivateProfileFields({
               'When on, others see a heart on your card (dating). When off, they can follow you as friends.'
             )}
                     </AppText>
+                    {datingToggleLock?.locked && datingToggleLockMessage ?
+        <AppText as="p" className="private-profile-fields__dating-locked">
+                        🔒 {datingToggleLockMessage}
+                    </AppText> :
+        null}
                 </div>
                 <button
           id="profile-open-to-dating"
           type="button"
           role="switch"
           aria-checked={openToDating === true}
-          className={`private-profile-fields__switch${openToDating ? ' private-profile-fields__switch--on' : ''}`}
+          className={`private-profile-fields__switch${openToDating ? ' private-profile-fields__switch--on' : ''}${datingToggleLock?.locked ? ' private-profile-fields__switch--locked' : ''}`}
+          disabled={datingToggleLock?.locked === true}
+          aria-disabled={datingToggleLock?.locked === true}
           onClick={() => setOpenToDating(!openToDating)}>
           
                     {openToDating ?

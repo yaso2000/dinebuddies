@@ -616,3 +616,16 @@
 [dir='rtl'] .private-profile-fields__switch--on .private-profile-fields__switch-knob {
     transform: translateX(-22px);
 }
+
+/* Dating switch locked to one change a week — explain, and stop the tap. */
+.private-profile-fields__dating-locked {
+    margin: 6px 0 0;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--secondary, #f59e0b);
+}
+
+.private-profile-fields__switch--locked {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
