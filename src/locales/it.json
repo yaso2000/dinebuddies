@@ -2525,7 +2525,11 @@
   "feedback_resolved_error": "Si è verificato un errore, riprova più tardi.",
   "feedback_resolved_success": "Messaggio segnato come risolto ✅",
   "feedback_success": "Il tuo messaggio è stato inviato con successo. Ti contatteremo a breve.",
-  "feedback_title": "Feedback e reclami",
+  "feedback_title": "Feedback e reclami",
+  "broadcast_field_image": "Immagine",
+  "broadcast_add_image": "Aggiungi un’immagine",
+  "broadcast_image_uploading": "Caricamento…",
+  "broadcast_image_error": "Impossibile caricare l’immagine.",
   "broadcast_cta": "Invia offerta",
   "broadcast_title": "Invia alla tua community",
   "broadcast_intro": "Raggiunge ogni membro della tua community nella sua casella Attività — separata dalla chat personale.",

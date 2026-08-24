@@ -2323,7 +2323,11 @@
   "feedback_resolved_error": "ایک خرابی پیش آگئی، براہ کرم بعد میں دوبارہ کوشش کریں۔",
   "feedback_resolved_success": "پیغام کو حل شدہ کے بطور نشان زد کیا گیا ✅",
   "feedback_success": "آپ کا پیغام کامیابی سے بھیج دیا گیا ہے۔ ہم جلد ہی آپ سے رابطہ کریں گے۔",
-  "feedback_title": "تاثرات اور شکایات",
+  "feedback_title": "تاثرات اور شکایات",
+  "broadcast_field_image": "تصویر",
+  "broadcast_add_image": "تصویر شامل کریں",
+  "broadcast_image_uploading": "اپ لوڈ ہو رہا ہے…",
+  "broadcast_image_error": "تصویر اپ لوڈ نہ ہو سکی۔",
   "broadcast_cta": "آفر بھیجیں",
   "broadcast_title": "اپنی کمیونٹی کو بھیجیں",
   "broadcast_intro": "آپ کی کمیونٹی کے ہر رکن تک کاروبار کے ان باکس میں پہنچتا ہے — ذاتی چیٹ سے الگ۔",

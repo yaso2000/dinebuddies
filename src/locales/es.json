@@ -2323,7 +2323,11 @@
   "feedback_resolved_error": "Ocurrió un error. Inténtalo de nuevo más tarde.",
   "feedback_resolved_success": "Mensaje marcado como resuelto ✅",
   "feedback_success": "Tu mensaje se envió correctamente. Nos pondremos en contacto contigo pronto.",
-  "feedback_title": "Comentarios y quejas",
+  "feedback_title": "Comentarios y quejas",
+  "broadcast_field_image": "Imagen",
+  "broadcast_add_image": "Añadir una imagen",
+  "broadcast_image_uploading": "Subiendo…",
+  "broadcast_image_error": "No se pudo subir la imagen.",
   "broadcast_cta": "Enviar oferta",
   "broadcast_title": "Enviar a tu comunidad",
   "broadcast_intro": "Llega a cada miembro de tu comunidad en su bandeja de Negocios, separada del chat personal.",

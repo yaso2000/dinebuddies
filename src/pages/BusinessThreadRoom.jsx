@@ -123,6 +123,9 @@ export default function BusinessThreadRoom() {
       <div className="chat-body-column">
         {/* Thread */}
         <div className="messages-area" style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {ticket?.image && !notFound && (
+            <img src={ticket.image} alt="" style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 14, marginBottom: 4 }} />
+          )}
           {notFound ? (
             <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>{t('feedback_thread_gone', 'This conversation is no longer available.')}</div>
           ) : (

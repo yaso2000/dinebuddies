@@ -2150,7 +2150,11 @@
   "feedback_resolved_error": "एक त्रुटि घटित हुई है, कृपया बाद में पुन: प्रयास करें।",
   "feedback_resolved_success": "संदेश को समाधान के रूप में चिह्नित किया गया ✅",
   "feedback_success": "आपका संदेश सफलतापूर्वक प्रेषित किया गया। ",
-  "feedback_title": "प्रतिक्रिया एवं शिकायतें",
+  "feedback_title": "प्रतिक्रिया एवं शिकायतें",
+  "broadcast_field_image": "छवि",
+  "broadcast_add_image": "छवि जोड़ें",
+  "broadcast_image_uploading": "अपलोड हो रहा है…",
+  "broadcast_image_error": "छवि अपलोड नहीं हो सकी।",
   "broadcast_cta": "ऑफ़र भेजें",
   "broadcast_title": "अपने समुदाय को भेजें",
   "broadcast_intro": "आपके समुदाय के हर सदस्य तक व्यवसाय इनबॉक्स में पहुँचता है — व्यक्तिगत चैट से अलग।",

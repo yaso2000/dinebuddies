@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../firebase/config';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../context/ToastContext';
-import { FaTimes, FaSpinner, FaBullhorn, FaTag, FaPaperPlane } from 'react-icons/fa';
+import { useAuth } from '../../context/AuthContext';
+import { uploadImage } from '../../utils/mediaUtils';
+import { FaTimes, FaSpinner, FaBullhorn, FaTag, FaPaperPlane, FaImage } from 'react-icons/fa';
 import { AppText, AppTextInput } from '../base';
 
 /**
@@ -15,15 +17,35 @@ export default function BusinessBroadcastComposer({ isOpen, onClose }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { currentUser } = useAuth();
 
   const [kind, setKind] = useState('offer');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [discountLabel, setDiscountLabel] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
+  const [image, setImage] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [sending, setSending] = useState(false);
+  const fileRef = useRef(null);
 
   if (!isOpen) return null;
+
+  const onPickImage = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser?.uid) return;
+    setUploadingImage(true);
+    try {
+      const url = await uploadImage(file, currentUser.uid);
+      setImage(url);
+    } catch (err) {
+      console.error('broadcast image', err);
+      showToast(t('broadcast_image_error', 'Could not upload the image.'), 'error');
+    } finally {
+      setUploadingImage(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
 
   const handleSend = async () => {
     if (!title.trim() && !body.trim()) {
@@ -39,6 +61,7 @@ export default function BusinessBroadcastComposer({ isOpen, onClose }) {
         body: body.trim(),
         discountLabel: kind === 'offer' ? discountLabel.trim() : '',
         expiresAt: expiresAt || '',
+        image: image || '',
       });
       const sent = Number(res?.data?.sent) || 0;
       showToast(
@@ -47,7 +70,7 @@ export default function BusinessBroadcastComposer({ isOpen, onClose }) {
           : t('broadcast_no_members', 'No community members to send to yet.'),
         sent > 0 ? 'success' : 'info'
       );
-      setTitle(''); setBody(''); setDiscountLabel(''); setExpiresAt('');
+      setTitle(''); setBody(''); setDiscountLabel(''); setExpiresAt(''); setImage('');
       onClose();
     } catch (err) {
       console.error('broadcast', err);
@@ -106,6 +129,31 @@ export default function BusinessBroadcastComposer({ isOpen, onClose }) {
             <label style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)' }}>{t('broadcast_field_body', 'Message')}</label>
             <AppTextInput as="textarea" value={body} onChange={(e) => setBody(e.target.value)} placeholder={t('broadcast_body_ph', 'Write the details…')}
               style={{ width: '100%', height: 110, padding: 14, borderRadius: 14, border: '1px solid var(--border-color)', background: 'var(--bg-elevated)', color: 'var(--text-main)', fontSize: '0.95rem', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+          </div>
+
+          {/* Optional image */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)' }}>
+              {t('broadcast_field_image', 'Image')} <AppText as="span" style={{ color: 'var(--text-muted)', fontWeight: 500 }}>({t('optional', 'optional')})</AppText>
+            </label>
+            <input ref={fileRef} type="file" accept="image/*" onChange={onPickImage} style={{ display: 'none' }} />
+            {image ? (
+              <div style={{ position: 'relative', width: '100%', borderRadius: 14, overflow: 'hidden' }}>
+                <img src={image} alt="" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', display: 'block' }} />
+                <button type="button" onClick={() => setImage('')} aria-label={t('remove', 'Remove')} style={{ position: 'absolute', top: 8, insetInlineEnd: 8, width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', cursor: 'pointer' }}>
+                  <FaTimes />
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => fileRef.current?.click()} disabled={uploadingImage} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderRadius: 14,
+                border: '1px dashed var(--border-color)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)',
+                fontWeight: 700, fontSize: '0.9rem', cursor: uploadingImage ? 'wait' : 'pointer'
+              }}>
+                {uploadingImage ? <FaSpinner className="spin" /> : <FaImage />}
+                {uploadingImage ? t('broadcast_image_uploading', 'Uploading…') : t('broadcast_add_image', 'Add an image')}
+              </button>
+            )}
           </div>
 
           {kind === 'offer' && (

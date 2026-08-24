@@ -88,6 +88,7 @@ export default function BusinessInboxPanel({ threads = [], loading, searchQuery 
                 )}
               </div>
             </div>
+            {th.image && <img src={th.image} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />}
             {th.unreadForUser && <FaCircle style={{ fontSize: 9, color: 'var(--brand-primary)', flexShrink: 0 }} />}
           </button>
         );

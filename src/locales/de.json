@@ -2323,7 +2323,11 @@
   "feedback_resolved_error": "Ein Fehler ist aufgetreten, bitte versuche es später erneut.",
   "feedback_resolved_success": "Nachricht als gelöst markiert ✅",
   "feedback_success": "Deine Nachricht wurde erfolgreich gesendet. Wir melden uns bald bei dir.",
-  "feedback_title": "Feedback & Beschwerden",
+  "feedback_title": "Feedback & Beschwerden",
+  "broadcast_field_image": "Bild",
+  "broadcast_add_image": "Bild hinzufügen",
+  "broadcast_image_uploading": "Wird hochgeladen…",
+  "broadcast_image_error": "Bild konnte nicht hochgeladen werden.",
   "broadcast_cta": "Angebot senden",
   "broadcast_title": "An deine Community senden",
   "broadcast_intro": "Erreicht jedes Mitglied deiner Community in seinem Unternehmens-Posteingang — getrennt vom persönlichen Chat.",

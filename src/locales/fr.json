@@ -2150,7 +2150,11 @@
   "feedback_resolved_error": "Une erreur s'est produite, veuillez réessayer plus tard.",
   "feedback_resolved_success": "Message marqué comme résolu ✅",
   "feedback_success": "Votre message a bien été envoyé. Nous vous contacterons prochainement.",
-  "feedback_title": "Commentaires et réclamations",
+  "feedback_title": "Commentaires et réclamations",
+  "broadcast_field_image": "Image",
+  "broadcast_add_image": "Ajouter une image",
+  "broadcast_image_uploading": "Téléchargement…",
+  "broadcast_image_error": "Impossible de téléverser l’image.",
   "broadcast_cta": "Envoyer une offre",
   "broadcast_title": "Envoyer à votre communauté",
   "broadcast_intro": "Atteint chaque membre de votre communauté dans sa boîte Entreprises — séparée du chat personnel.",

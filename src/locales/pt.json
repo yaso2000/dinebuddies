@@ -2323,7 +2323,11 @@
   "feedback_resolved_error": "Ocorreu um erro. Tente novamente mais tarde.",
   "feedback_resolved_success": "Mensagem marcada como resolvida ✅",
   "feedback_success": "Sua mensagem foi enviada com sucesso. Entraremos em contato em breve.",
-  "feedback_title": "Feedback e reclamações",
+  "feedback_title": "Feedback e reclamações",
+  "broadcast_field_image": "Imagem",
+  "broadcast_add_image": "Adicionar imagem",
+  "broadcast_image_uploading": "Enviando…",
+  "broadcast_image_error": "Não foi possível enviar a imagem.",
   "broadcast_cta": "Enviar oferta",
   "broadcast_title": "Enviar para sua comunidade",
   "broadcast_intro": "Chega a todos os membros da sua comunidade na caixa de Negócios — separada do chat pessoal.",

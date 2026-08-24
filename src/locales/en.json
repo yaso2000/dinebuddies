@@ -2353,7 +2353,11 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "broadcast_field_image": "Image",
+  "broadcast_add_image": "Add an image",
+  "broadcast_image_uploading": "Uploading…",
+  "broadcast_image_error": "Could not upload the image.",
   "broadcast_cta": "Send offer",
   "broadcast_title": "Send to your community",
   "broadcast_intro": "Reaches every member of your community in their Business inbox — separate from personal chat.",
