@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { uploadImage } from '../../utils/mediaUtils';
-import { FaTimes, FaSpinner, FaBullhorn, FaTag, FaPaperPlane, FaImage } from 'react-icons/fa';
+import { FaTimes, FaSpinner, FaBullhorn, FaTag, FaPaperPlane, FaImage, FaRegCommentDots } from 'react-icons/fa';
 import { AppText, AppTextInput } from '../base';
 
 /**
@@ -114,9 +114,10 @@ export default function BusinessBroadcastComposer({ isOpen, onClose }) {
             {t('broadcast_intro', 'Reaches every member of your community in their Business inbox — separate from personal chat.')}
           </div>
 
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             {kindBtn('offer', <FaTag />, t('broadcast_kind_offer', 'Offer'), '#f59e0b')}
             {kindBtn('announcement', <FaBullhorn />, t('broadcast_kind_announcement', 'Announcement'), '#3b82f6')}
+            {kindBtn('message', <FaRegCommentDots />, t('broadcast_kind_message', 'Message'), '#8b5cf6')}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

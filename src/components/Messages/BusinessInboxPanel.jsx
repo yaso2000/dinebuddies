@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaExclamationCircle, FaLightbulb, FaCircle, FaStore, FaTag, FaBullhorn } from 'react-icons/fa';
+import { FaExclamationCircle, FaLightbulb, FaCircle, FaStore, FaTag, FaBullhorn, FaRegCommentDots } from 'react-icons/fa';
 import UserAvatar from '../UserAvatar';
 import { AppText } from '../base';
 
@@ -51,7 +51,9 @@ export default function BusinessInboxPanel({ threads = [], loading, searchQuery 
           ? { Icon: FaTag, color: '#f59e0b', label: t('broadcast_kind_offer', 'Offer') }
           : kind === 'announcement'
             ? { Icon: FaBullhorn, color: '#3b82f6', label: t('broadcast_kind_announcement', 'Announcement') }
-            : { Icon: isSuggestion ? FaLightbulb : FaExclamationCircle, color: isSuggestion ? '#22c55e' : '#ef4444', label: null };
+            : kind === 'message'
+              ? { Icon: FaRegCommentDots, color: '#8b5cf6', label: t('broadcast_kind_message', 'Message') }
+              : { Icon: isSuggestion ? FaLightbulb : FaExclamationCircle, color: isSuggestion ? '#22c55e' : '#ef4444', label: null };
         const snippet = (th.content || '').length > 60 ? th.content.slice(0, 60) + '…' : (th.content || '');
         return (
           <button

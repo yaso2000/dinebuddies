@@ -360,8 +360,8 @@ function registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit 
         const discountLabel = asTrimmed(data?.discountLabel) || null;
         const expiresAt = asTrimmed(data?.expiresAt) || null;
 
-        if (kind !== 'offer' && kind !== 'announcement') {
-            throw new functions.https.HttpsError('invalid-argument', 'kind must be offer or announcement.');
+        if (kind !== 'offer' && kind !== 'announcement' && kind !== 'message') {
+            throw new functions.https.HttpsError('invalid-argument', 'kind must be offer, announcement, or message.');
         }
         if (!title && !body) {
             throw new functions.https.HttpsError('invalid-argument', 'A title or message is required.');

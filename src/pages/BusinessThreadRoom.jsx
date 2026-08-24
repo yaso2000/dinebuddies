@@ -6,7 +6,7 @@ import app, { db } from '../firebase/config';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { FaArrowLeft, FaArrowRight, FaPaperPlane, FaSpinner, FaExclamationCircle, FaLightbulb, FaTag, FaBullhorn } from 'react-icons/fa';
+import { FaArrowLeft, FaArrowRight, FaPaperPlane, FaSpinner, FaExclamationCircle, FaLightbulb, FaTag, FaBullhorn, FaRegCommentDots } from 'react-icons/fa';
 import UserAvatar from '../components/UserAvatar';
 import { attachChatShellToVisualViewport, preventComposerControlBlur } from '../utils/chatVisualViewportLock';
 
@@ -97,7 +97,9 @@ export default function BusinessThreadRoom() {
     ? { Icon: FaTag, color: '#f59e0b', label: t('broadcast_kind_offer', 'Offer') }
     : kind === 'announcement'
       ? { Icon: FaBullhorn, color: '#3b82f6', label: t('broadcast_kind_announcement', 'Announcement') }
-      : { Icon: isSuggestion ? FaLightbulb : FaExclamationCircle, color: isSuggestion ? '#22c55e' : '#ef4444', label: isSuggestion ? t('suggestion', 'Suggestion') : t('complaint', 'Complaint') };
+      : kind === 'message'
+        ? { Icon: FaRegCommentDots, color: '#8b5cf6', label: t('broadcast_kind_message', 'Message') }
+        : { Icon: isSuggestion ? FaLightbulb : FaExclamationCircle, color: isSuggestion ? '#22c55e' : '#ef4444', label: isSuggestion ? t('suggestion', 'Suggestion') : t('complaint', 'Complaint') };
   const isSupport = kind === 'support';
 
   return (

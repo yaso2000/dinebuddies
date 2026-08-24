@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -242,19 +242,21 @@ const BusinessDashboard = () => {
   };
 
   // Initial loading state and redirection
+  const statsFetchedForUidRef = useRef(null);
+  const profileReady = !!userProfile;
   useEffect(() => {
-    if (authLoading) return;
+    // Wait for a fully settled auth+profile state so a token-refresh re-render
+    // (currentUser/userProfile identity churn) never transiently bounces a real
+    // business account to the feed.
+    if (authLoading || !profileServerSynced) return;
     if (!currentUser) {
       navigate('/posts-feed', { replace: true });
       return;
     }
-    // Never redirect while Firestore profile is still loading — null userProfile caused navigate('/') and felt like "profile → home".
-    if (!userProfile && !hasBusinessSessionHint(currentUser.uid)) return;
 
-    const businessOk =
-      isBusiness || (currentUser?.uid && hasBusinessSessionHint(currentUser.uid));
+    const businessOk = isBusiness || hasBusinessSessionHint(currentUser.uid);
     if (!businessOk) {
-      navigate('/posts-feed', { replace: true });
+      if (profileReady) navigate('/posts-feed', { replace: true });
       return;
     }
 
@@ -263,11 +265,15 @@ const BusinessDashboard = () => {
       return;
     }
 
-    if (userProfile) {
+    // Fetch stats ONCE per uid — not on every userProfile re-emission, which
+    // previously re-ran fetchCoreStats() and made the dashboard keep refreshing.
+    if (profileReady && statsFetchedForUidRef.current !== currentUser.uid) {
+      statsFetchedForUidRef.current = currentUser.uid;
       fetchCoreStats();
       fetchMemberCount();
     }
-  }, [currentUser, userProfile, authLoading, navigate, isBusiness]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.uid, isBusiness, authLoading, profileServerSynced, profileReady, navigate]);
 
   if (authLoading || !profileServerSynced || (loading && hasBusinessAccess)) {
     return (
