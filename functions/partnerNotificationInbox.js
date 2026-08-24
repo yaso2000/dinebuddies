@@ -23,7 +23,7 @@ function registerPartnerNotificationInbox(exports, { db, admin, sendPushToUser }
             if (data.invitationId && data.type === 'new_booking') {
                 actionUrl = `/invitation/${data.invitationId}`;
             } else if (data.type === 'business_feedback') {
-                actionUrl = '/business-dashboard#business-notifications';
+                actionUrl = '/business-dashboard#business-feedback-inbox';
             }
 
             const title =

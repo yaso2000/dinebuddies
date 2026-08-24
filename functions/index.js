@@ -3507,6 +3507,9 @@ exports.deleteExpiredStories = functions.pubsub.schedule('every 1 hours').onRun(
 const { registerPartnerNotificationInbox } = require('./partnerNotificationInbox');
 registerPartnerNotificationInbox(exports, { db, admin, sendPushToUser });
 
+const { registerFeedbackTickets } = require('./feedbackTickets');
+registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit });
+
 const { registerPushDevice } = require('./pushDevice');
 registerPushDevice(exports, { db, admin, sendPushToUser });
 

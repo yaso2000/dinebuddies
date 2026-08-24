@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import { FaTimes, FaSpinner, FaPaperPlane } from 'react-icons/fa';
+import { FaTimes, FaSpinner, FaPaperPlane, FaStar } from 'react-icons/fa';
+import { goToLogin } from '../utils/goToLogin';
 import { AppText, AppTextInput } from "./base";
 
 export default function FeedbackSubmissionModal({ isOpen, onClose, businessId }) {
   const { t } = useTranslation();
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser, userProfile, isGuest } = useAuth();
   const { showToast } = useToast();
 
   const [type, setType] = useState('complaint');
+  const [rating, setRating] = useState(0); // optional 1–5, 0 = not rated
   const [phoneNumber, setPhoneNumber] = useState(userProfile?.phoneNumber || '');
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -22,7 +24,16 @@ export default function FeedbackSubmissionModal({ isOpen, onClose, businessId })
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (currentUser?.uid && businessId && currentUser.uid === businessId) {
+    // Submission is for registered users only (anti-spam + a real identity to reply to).
+    const uid = currentUser?.uid;
+    if (!uid || isGuest) {
+      showToast(t('feedback_login_required', 'Please sign in to send feedback.'), 'info');
+      goToLogin({ returnPath: typeof window !== 'undefined' ? window.location.pathname : undefined });
+      onClose();
+      return;
+    }
+
+    if (businessId && uid === businessId) {
       showToast(t('feedback_owner_blocked', 'Business owners cannot send feedback to their own profile.'), 'error');
       return;
     }
@@ -32,50 +43,34 @@ export default function FeedbackSubmissionModal({ isOpen, onClose, businessId })
       return;
     }
 
-    if (!phoneNumber.trim()) {
-      showToast(t('feedback_req_phone', 'Please enter a phone number to contact you'), 'error');
-      return;
-    }
-
     try {
       setIsSubmitting(true);
-
-      await addDoc(collection(db, 'business_feedback'), {
+      const functions = getFunctions(app, 'us-central1');
+      const submitBusinessFeedback = httpsCallable(functions, 'submitBusinessFeedback');
+      await submitBusinessFeedback({
         businessId,
-        userId: currentUser?.uid || null,
-        userName: userProfile?.displayName || userProfile?.firstName || 'Guest',
-        userAvatar: userProfile?.photoURL || null,
         type,
         content: content.trim(),
-        phoneNumber: phoneNumber.trim(),
-        isResolved: false,
-        createdAt: serverTimestamp()
+        rating: rating || null,
+        phoneNumber: phoneNumber.trim() || null,
       });
-      // Dispatch notification to the business safely
-      try {
-        await addDoc(collection(db, 'partner_notifications'), {
-          restaurantId: businessId,
-          type: 'business_feedback',
-          title: type === 'complaint' ? 'New Complaint 😠' : 'New Suggestion 💡',
-          message: `From: ${phoneNumber.trim()}`,
-          actionUrl: '/business-dashboard?tab=feedback_inbox',
-          read: false,
-          createdAt: serverTimestamp(),
-          senderId: currentUser?.uid || 'guest',
-          fromUserName: userProfile?.displayName || userProfile?.firstName || 'Guest',
-          fromUserAvatar: userProfile?.photoURL || null
-        });
-      } catch (notifError) {
-        console.warn('Failed to dispatch partner notification (likely rules propagation delay):', notifError);
-      }
 
       showToast(t('feedback_success', 'Your message has been sent successfully. We will contact you soon.'), 'success');
       setContent('');
+      setRating(0);
       onClose();
-
     } catch (error) {
       console.error('Error submitting feedback:', error);
-      showToast(t('feedback_error', 'An error occurred while sending, please try again later.'), 'error');
+      const code = String(error?.code || '');
+      if (code === 'functions/resource-exhausted') {
+        showToast(t('feedback_rate_limited', 'You are sending feedback too fast. Please wait a moment.'), 'error');
+      } else if (code === 'functions/unauthenticated') {
+        showToast(t('feedback_login_required', 'Please sign in to send feedback.'), 'info');
+        goToLogin({ returnPath: typeof window !== 'undefined' ? window.location.pathname : undefined });
+        onClose();
+      } else {
+        showToast(t('feedback_error', 'An error occurred while sending, please try again later.'), 'error');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -100,7 +95,7 @@ export default function FeedbackSubmissionModal({ isOpen, onClose, businessId })
 
                 {/* Body Form */}
                 <form onSubmit={handleSubmit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    
+
                     {/* Intro text */}
                     <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                         {t('feedback_intro', 'Your opinion matters! If you faced an issue, share it with us so we can resolve it. This message is private and goes directly to management.')}
@@ -131,6 +126,30 @@ export default function FeedbackSubmissionModal({ isOpen, onClose, businessId })
                         </div>
                     </div>
 
+                    {/* Optional star rating */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <label style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-main)' }}>
+                            {t('feedback_rating', 'Rate your experience')} <AppText as="span" style={{ color: 'var(--text-muted)', fontWeight: 500 }}>({t('optional', 'optional')})</AppText>
+                        </label>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                    key={star}
+                                    type="button"
+                                    onClick={() => setRating(rating === star ? 0 : star)}
+                                    aria-label={t('feedback_rating_star', '{{count}} stars', { count: star })}
+                                    style={{
+                                        background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px',
+                                        fontSize: '1.5rem', lineHeight: 1,
+                                        color: star <= rating ? 'var(--luxury-gold, #f5c518)' : 'var(--border-color)',
+                                        transition: 'color 0.15s'
+                                    }}>
+                                    <FaStar />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* Message Area */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <label style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-main)' }}>{t('feedback_content', 'Message Details')} <AppText as="span" style={{ color: '#ef4444' }}>*</AppText></label>
@@ -143,12 +162,14 @@ export default function FeedbackSubmissionModal({ isOpen, onClose, businessId })
               background: 'var(--bg-elevated)', color: 'var(--text-main)', fontSize: '0.95rem', resize: 'none',
               boxSizing: 'border-box', fontFamily: 'inherit'
             }} />
-            
+
                     </div>
 
-                    {/* Phone Number (Required) */}
+                    {/* Phone Number (optional) */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <label style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-main)' }}>{t('feedback_phone', 'Contact Phone Number')} <AppText as="span" style={{ color: '#ef4444' }}>*</AppText></label>
+                        <label style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-main)' }}>
+                            {t('feedback_phone', 'Contact Phone Number')} <AppText as="span" style={{ color: 'var(--text-muted)', fontWeight: 500 }}>({t('optional', 'optional')})</AppText>
+                        </label>
                         <input
               type="tel"
               value={phoneNumber}
@@ -159,7 +180,7 @@ export default function FeedbackSubmissionModal({ isOpen, onClose, businessId })
                 background: 'var(--bg-elevated)', color: 'var(--text-main)', fontSize: '0.95rem',
                 boxSizing: 'border-box'
               }} />
-            
+
                         <AppText as="span" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('feedback_phone_hint', 'Management will contact you soon.')}</AppText>
                     </div>
 
@@ -172,7 +193,7 @@ export default function FeedbackSubmissionModal({ isOpen, onClose, businessId })
               color: 'white', fontWeight: '800', fontSize: '1.05rem', border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '10px'
             }}>
-            
+
                         {isSubmitting ? <FaSpinner className="spin" /> : <FaPaperPlane />}
                         {isSubmitting ? t('sending', 'Sending...') : t('send_feedback', 'Send')}
                     </button>

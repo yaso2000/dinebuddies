@@ -858,11 +858,11 @@ service cloud.firestore {
 
     match /partner_notifications/{notifId} {
       allow read: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
-      // Client-side create is self-only; cross-user partner notifications must use trusted backend callable, unless it's a feedback alert.
-      allow create: if (isSignedIn() &&
+      // Client-side create is self-only; cross-user partner notifications (incl.
+      // business_feedback) are written by trusted backend callables only.
+      allow create: if isSignedIn() &&
                       request.resource.data.senderId == request.auth.uid &&
-                      request.resource.data.restaurantId == request.auth.uid) ||
-                      (request.resource.data.type == 'business_feedback');
+                      request.resource.data.restaurantId == request.auth.uid;
       allow update, delete: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
     }
     
@@ -1150,16 +1150,36 @@ service cloud.firestore {
     // BUSINESS FEEDBACK & COMPLAINTS
     // ============================================
     match /business_feedback/{feedbackId} {
-      // Only the assigned business owner (or Admin) can read their inbox
-      allow read: if isSignedIn() && (resource.data.businessId == request.auth.uid || isAdmin());
-      
-      // Anyone (even public visitors) can submit feedback/complaints
-      allow create: if true;
-      
-      // Only the business owner (to mark as resolved) or Admin can update
-      allow update: if isSignedIn() && (resource.data.businessId == request.auth.uid || isAdmin());
-      
-      allow delete: if isAdmin();
+      // The business owner and the submitting user (their own ticket) can read; Admin too.
+      allow read: if isSignedIn() && (
+        resource.data.businessId == request.auth.uid ||
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Submission is server-only via the submitBusinessFeedback callable
+      // (registered-only + rate-limited). No direct client create.
+      allow create: if false;
+
+      // Owner (status/flags) or the submitting user (read flags) may update; Admin too.
+      allow update: if isSignedIn() && (
+        resource.data.businessId == request.auth.uid ||
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow delete: if isSignedIn() && (resource.data.businessId == request.auth.uid || isAdmin());
+
+      // Two-way reply thread. Messages are written server-side (submit / reply
+      // callables); participants may read.
+      match /messages/{msgId} {
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/business_feedback/$(feedbackId)).data.businessId == request.auth.uid ||
+          get(/databases/$(database)/documents/business_feedback/$(feedbackId)).data.userId == request.auth.uid ||
+          isAdmin()
+        );
+        allow create, update, delete: if false;
+      }
     }
 
     // ============================================
