@@ -47,7 +47,7 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
   const { currentUser, userProfile } = useAuth();
   const { sendMessage, getOrCreateConversation } = useChat();
   const { showToast } = useToast();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const confirm = useConfirm();
 
   const { allUserStories, initialUserIndex } = viewingData;
@@ -942,17 +942,24 @@ const StoryViewer = ({ partnerStories: viewingData, onClose }) => {
           null)
         }}>
         
-                {/* Sliding Container that holds ALL users */}
-                <div style={{
+                {/* Sliding Container that holds ALL users.
+                    dir=ltr: the translateX math is physical (slide left = next),
+                    but in the Arabic UI this flex row inherited rtl — children
+                    stacked right-to-left and the strip overflowed leftward, so
+                    advancing revealed empty black space instead of user #2. */}
+                <div dir="ltr" style={{
           display: 'flex',
           height: '100%',
+          position: 'absolute',
+          top: 0,
+          left: 0,
           width: `${allUserStories.length * 100}%`,
           transform: `translateX(calc(-${currentUserGroupIndex * (100 / allUserStories.length)}% + ${dragOffset / allUserStories.length}px))`,
           transition: isTransitioning ? 'transform 0.3s cubic-bezier(0.23, 1, 0.32, 1)' : 'none',
           willChange: 'transform'
         }}>
                     {allUserStories.map((userGroup, groupIndex) =>
-          <div key={userGroup.userId} style={{
+          <div key={userGroup.userId} dir={i18n.dir()} style={{
             width: `${100 / allUserStories.length}%`,
             height: '100%',
             position: 'relative',
