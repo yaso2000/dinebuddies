@@ -436,34 +436,40 @@ const InvitationPreview = () => {
                 </div>
             </div>
 
-            {/* ACTION ROW — story toggle + edit + publish, all in one compact line */}
-            <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.6rem',
-        marginBottom: '2rem'
-      }}>
+            {/* ACTION AREA — story toggle and edit each get a full row; icon-only
+                controls were too small to hit, and their template-driven icon
+                colors could go white-on-white on light templates. Fixed theme
+                tokens only here. */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '2rem' }}>
                 <label
-          title={t('also_publish_as_story', { defaultValue: 'Also publish as a Story' })}
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
-            flexShrink: 0,
-            fontSize: '0.7rem',
-            fontWeight: 700,
+            gap: '0.65rem',
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: '0.8rem 1rem',
+            borderRadius: '12px',
+            background: 'var(--bg-card)',
+            border: alsoPublishStory ? '1px solid var(--primary)' : '1px solid var(--border-color)',
             color: 'var(--text-main)',
+            fontSize: '0.9rem',
+            fontWeight: 700,
             cursor: isPublishing ? 'not-allowed' : 'pointer',
-            opacity: isPublishing ? 0.5 : 1
+            opacity: isPublishing ? 0.5 : 1,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
           }}>
                     <input
             type="checkbox"
             checked={alsoPublishStory}
             disabled={isPublishing}
             onChange={(e) => setAlsoPublishStory(e.target.checked)}
-            style={{ width: '16px', height: '16px', cursor: 'inherit' }} />
+            style={{ width: '20px', height: '20px', accentColor: 'var(--primary)', cursor: 'inherit', flexShrink: 0 }} />
 
-                    <FaCamera style={{ fontSize: '0.9rem' }} />
+                    <FaCamera style={{ fontSize: '1.05rem', color: 'var(--primary)', flexShrink: 0 }} />
+                    <AppText as="span" style={{ flex: 1, minWidth: 0 }}>
+                        {t('also_publish_as_story', { defaultValue: 'Also publish as a Story' })}
+                    </AppText>
                 </label>
 
                 <button
@@ -471,20 +477,23 @@ const InvitationPreview = () => {
           onClick={handleEdit}
           disabled={isPublishing}
           className="ui-btn ui-btn--secondary"
-          title={t('edit_details') || 'Edit Details'}
-          aria-label={t('edit_details') || 'Edit Details'}
           style={{
-            flexShrink: 0,
-            padding: '0.7rem',
+            width: '100%',
+            padding: '0.8rem 1rem',
             borderRadius: '12px',
-            fontSize: '1rem',
+            fontSize: '0.9rem',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
             opacity: isPublishing ? 0.5 : 1,
             boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
           }}>
-                    <FaEdit style={{ color: templateStyles?.badge?.color || 'var(--primary)' }} />
+                    <FaEdit style={{ color: 'var(--primary)' }} />
+                    {t('edit_details') || 'Edit Details'}
                 </button>
 
-                {/* Publish Button */}
                 <button
           type="button"
           onClick={handlePublish}
@@ -492,10 +501,9 @@ const InvitationPreview = () => {
           className="ui-btn ui-btn--primary"
           style={{
             ...(templateStyles?.button || {}),
-            flex: 1,
-            minWidth: 0,
-            padding: '0.7rem 0.9rem',
-            fontSize: '0.9rem',
+            width: '100%',
+            padding: '0.85rem 0.9rem',
+            fontSize: '0.95rem',
             fontWeight: '800',
             cursor: isPublishing ? 'not-allowed' : 'pointer',
             display: 'flex',
