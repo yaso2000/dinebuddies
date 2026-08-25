@@ -4114,30 +4114,55 @@ button.notification-bell {
   color: color-mix(in srgb, var(--brand-primary) 85%, var(--text-muted));
 }
 
-/* Games button — distinctive accent so it stands out in the header. */
-.header-actions .header-games-btn {
-  color: #fff;
-  background: linear-gradient(135deg, var(--brand-primary, #e86e2e), #f0a24b);
-  box-shadow: 0 3px 10px rgba(232, 110, 46, 0.35);
+/* Colored header chips — same shape/size as the AI-studio buttons so the whole
+   header row reads as one consistent set of rounded, colored icons. */
+.header-actions .header-inbox-btn,
+.header-actions .header-games-btn,
+.header-actions .header-settings-btn {
+  color: #fff !important;
+  border-radius: 11px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  padding: 0 !important;
+  margin-inline: 2px;
+  flex-shrink: 0;
+  transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
-.header-actions .header-games-btn:hover {
-  filter: brightness(1.05);
+.header-actions .header-inbox-btn { background: linear-gradient(135deg, #7c3aed, #a855f7) !important; box-shadow: 0 2px 12px rgba(124, 58, 237, 0.42); }
+.header-actions .header-games-btn { background: linear-gradient(135deg, var(--brand-primary, #e86e2e), #f0a24b) !important; box-shadow: 0 2px 12px rgba(232, 110, 46, 0.42); }
+.header-actions .header-settings-btn { background: linear-gradient(135deg, #475569, #64748b) !important; box-shadow: 0 2px 10px rgba(71, 85, 105, 0.4); }
+
+.header-actions .header-inbox-btn svg,
+.header-actions .header-games-btn svg,
+.header-actions .header-settings-btn svg {
+  font-size: 1.05rem;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
 }
-.header-actions .header-games-btn.active {
-  color: #fff;
+.header-actions .header-inbox-btn:hover,
+.header-actions .header-games-btn:hover,
+.header-actions .header-settings-btn:hover {
+  color: #fff !important;
+  filter: brightness(1.07);
+  transform: translateY(-1px);
 }
-/* Pulse while games are live. */
+/* Pulse the games chip while games are live. */
 .header-actions .header-games-btn.has-live {
   animation: dbGamesPulse 1.8s ease-in-out infinite;
 }
 @keyframes dbGamesPulse {
-  0%, 100% { box-shadow: 0 3px 10px rgba(232, 110, 46, 0.35); }
-  50% { box-shadow: 0 3px 16px rgba(232, 110, 46, 0.7); }
+  0%, 100% { box-shadow: 0 2px 12px rgba(232, 110, 46, 0.42); }
+  50% { box-shadow: 0 2px 18px rgba(232, 110, 46, 0.8); }
+}
+/* Badges sit crisply on the colored chips. */
+.header-actions .header-inbox-btn .badge,
+.header-actions .header-games-btn .badge {
+  border: 2px solid var(--bg-card, #fff);
 }
 .header-actions .header-games-btn .badge--live {
   background: #16a34a;
   color: #fff;
-  border: 2px solid var(--bg-card, #fff);
 }
 
 .header-actions .header-stages-btn:hover,

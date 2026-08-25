@@ -532,7 +532,7 @@ const Layout = ({ children }) => {
                             </Link>
                             <Link
               to="/messages"
-              className={`notification-bell${isMessagesHub || isNotificationsRoute ? ' active' : ''}`}
+              className={`notification-bell header-inbox-btn${isMessagesHub || isNotificationsRoute ? ' active' : ''}`}
               aria-label={t('inbox_hub_title', 'Inbox')}
               title={t('inbox_hub_title', 'Inbox')}>
                                 <FaComments />
@@ -559,7 +559,7 @@ const Layout = ({ children }) => {
                             ) : null}
                             <Link
               to="/settings"
-              className={`notification-bell${isActive('/settings') || location.pathname.startsWith('/settings/') ? ' active' : ''}`}
+              className={`notification-bell header-settings-btn${isActive('/settings') || location.pathname.startsWith('/settings/') ? ' active' : ''}`}
               title={t('settings', 'Settings')}
               aria-label={t('settings', 'Settings')}>
                                 <FaCog />
