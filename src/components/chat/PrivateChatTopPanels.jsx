@@ -55,6 +55,7 @@ export default function PrivateChatTopPanels({
             borderRadius: 16, padding: '6px 12px', display: 'flex', flexDirection: 'column',
             alignItems: 'center', gap: 1, minWidth: 64,
             boxShadow: '0 2px 12px rgba(236,72,153,0.55)',
+            pointerEvents: 'auto', // the shared __link class sets pointer-events:none
           }}
         >
           <FaHeart style={{ color: '#ec4899', fontSize: 18, filter: compatPhase === 'completed' ? 'drop-shadow(0 0 5px rgba(236,72,153,0.8))' : 'none' }} />
