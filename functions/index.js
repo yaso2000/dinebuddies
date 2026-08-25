@@ -3512,6 +3512,9 @@ registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit });
 const { registerCompatJourney } = require('./compatJourney');
 registerCompatJourney(exports, { db, admin, enforceCallableRateLimit });
 
+const { registerReportTriage } = require('./reportTriage');
+registerReportTriage(exports, { db, admin });
+
 const { registerPushDevice } = require('./pushDevice');
 registerPushDevice(exports, { db, admin, sendPushToUser });
 
