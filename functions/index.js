@@ -3514,6 +3514,8 @@ registerCompatJourney(exports, { db, admin, enforceCallableRateLimit });
 
 const { registerReportTriage } = require('./reportTriage');
 registerReportTriage(exports, { db, admin });
+const { registerSupportAgent } = require('./supportAgent');
+registerSupportAgent(exports, { db, admin, enforceCallableRateLimit });
 
 const { registerPushDevice } = require('./pushDevice');
 registerPushDevice(exports, { db, admin, sendPushToUser });

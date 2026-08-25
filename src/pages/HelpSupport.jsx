@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { FaChevronLeft, FaChevronDown, FaChevronUp, FaQuestionCircle } from 'react-icons/fa';
 import { AppText } from "../components/base";
+import SupportAgentChat from '../components/support/SupportAgentChat';
 
 const HelpSupport = ({ isDashboard = false }) => {
   const { t } = useTranslation();
@@ -52,6 +53,8 @@ const HelpSupport = ({ isDashboard = false }) => {
                         {t('faq.subtitle', { defaultValue: 'Find answers to your questions and learn how to get the most out of DineBuddies.' })}
                     </AppText>
                 </div>
+
+                <SupportAgentChat />
 
                 {Array.isArray(faqData) && faqData.length > 0 ?
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

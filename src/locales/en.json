@@ -2353,7 +2353,35 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "support_ai_title": "Ask DineBuddies Assistant",
+  "support_ai_subtitle": "Instant answers · free · in your language",
+  "support_ai_placeholder": "Ask me anything about DineBuddies — invitations, the feed, communities, credits, your account…",
+  "support_ai_input": "Type your question…",
+  "support_ai_thinking": "Thinking…",
+  "support_ai_empty": "Sorry, please try again.",
+  "support_ai_error": "I could not answer right now. You can tap \"Talk to a human\" below.",
+  "support_human": "Talk to a human",
+  "support_human_sending": "Sending…",
+  "support_human_sent": "Sent to our team",
+  "support_escalated": "Your request was sent to our team. We'll reply here and by notification.",
+  "support_escalated_toast": "Sent to our support team.",
+  "support_escalate_error": "Could not send. Please try again.",
+  "support_ask_first": "Type your question first, then talk to a human.",
+  "admin_nav_support": "Support",
+  "admin_support_lead": "User questions escalated from the AI assistant.",
+  "admin_support_open": "Open",
+  "admin_support_answered": "Answered",
+  "admin_support_resolved": "Resolved",
+  "admin_support_empty": "No tickets here.",
+  "admin_support_user": "User",
+  "admin_support_question": "Question",
+  "admin_support_transcript": "Conversation",
+  "admin_support_reply": "Reply to user",
+  "admin_support_send": "Send reply",
+  "admin_support_resolve": "Mark resolved",
+  "admin_support_reply_sent": "Reply sent to the user.",
+  "admin_support_last_reply": "Last reply",
   "admin_report_ai": "AI triage",
   "admin_report_details": "Details",
   "admin_report_content": "Reported content",

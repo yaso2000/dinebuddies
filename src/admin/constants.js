@@ -12,6 +12,7 @@ const ADMIN_NAV_BASE = [
     { path: '/admin/cashouts', labelKey: 'admin_nav_cashouts' },
     { path: '/admin/messaging', labelKey: 'admin_nav_messaging' },
     { path: '/admin/reports', labelKey: 'admin_nav_reports' },
+    { path: '/admin/support', labelKey: 'admin_nav_support' },
 ];
 
 export const ADMIN_NAV = isCashoutFeatureEnabled()

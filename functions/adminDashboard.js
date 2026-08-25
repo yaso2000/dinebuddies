@@ -1245,6 +1245,98 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
             );
         }
     });
+
+    // ---- Support tickets (AI customer-service escalations) --------------------
+    exportsObj.adminListSupportTickets = functions.https.onCall(async (data, context) => {
+        await assertAdminContext(context);
+        const status = asTrimmedString(data?.status) || 'open';
+        const allowed = new Set(['open', 'answered', 'resolved', 'all']);
+        if (!allowed.has(status)) {
+            throw new functions.https.HttpsError('invalid-argument', 'Invalid status filter.');
+        }
+        const pageSize = Math.min(Math.max(Number(data?.pageSize) || 50, 1), 100);
+
+        let q = db.collection('support_tickets');
+        if (status !== 'all') q = q.where('status', '==', status);
+        let snap;
+        try {
+            snap = await q.orderBy('createdAt', 'desc').limit(pageSize).get();
+        } catch (e) {
+            snap = await q.limit(pageSize).get();
+        }
+        const items = snap.docs.map((docSnap) => {
+            const r = docSnap.data() || {};
+            return {
+                id: docSnap.id,
+                userId: r.userId || '',
+                userName: r.userName || '',
+                userEmail: r.userEmail || '',
+                userAvatar: r.userAvatar || '',
+                locale: r.locale || '',
+                message: (r.message || '').slice(0, 2000),
+                transcript: Array.isArray(r.transcript) ? r.transcript.slice(-20) : [],
+                status: r.status || 'open',
+                adminReply: r.adminReply || null,
+                createdAt: r.createdAt?.toDate?.()?.toISOString?.() || null,
+                updatedAt: r.updatedAt?.toDate?.()?.toISOString?.() || null,
+            };
+        });
+        return { items };
+    });
+
+    exportsObj.adminReplySupportTicket = functions.https.onCall(async (data, context) => {
+        const { requesterUid } = await assertAdminContext(context);
+        const ticketId = asTrimmedString(data?.ticketId);
+        const message = asTrimmedString(data?.message).slice(0, 2000);
+        if (!ticketId) throw new functions.https.HttpsError('invalid-argument', 'ticketId is required.');
+        if (!message) throw new functions.https.HttpsError('invalid-argument', 'message is required.');
+
+        const ref = db.collection('support_tickets').doc(ticketId);
+        const s = await ref.get();
+        if (!s.exists) throw new functions.https.HttpsError('not-found', 'Ticket not found.');
+        const ticket = s.data() || {};
+        const now = admin.firestore.FieldValue.serverTimestamp();
+
+        if (ticket.userId) {
+            await db.collection('notifications').add({
+                userId: ticket.userId,
+                type: 'support_reply',
+                title: 'DineBuddies Support replied',
+                message: message.slice(0, 500),
+                actionUrl: '/support',
+                fromUserId: requesterUid,
+                senderId: requesterUid,
+                senderName: 'DineBuddies Support',
+                metadata: { source: 'support_ticket', ticketId },
+                createdAt: now,
+                read: false,
+            });
+        }
+        await ref.update({
+            adminReply: message,
+            status: 'answered',
+            repliedBy: requesterUid,
+            repliedAt: now,
+            updatedAt: now,
+            unreadForAdmin: false,
+        });
+        return { ok: true };
+    });
+
+    exportsObj.adminSetSupportTicketStatus = functions.https.onCall(async (data, context) => {
+        await assertAdminContext(context);
+        const ticketId = asTrimmedString(data?.ticketId);
+        const status = asTrimmedString(data?.status);
+        const allowed = new Set(['open', 'answered', 'resolved']);
+        if (!ticketId) throw new functions.https.HttpsError('invalid-argument', 'ticketId is required.');
+        if (!allowed.has(status)) throw new functions.https.HttpsError('invalid-argument', 'Invalid status.');
+        await db.collection('support_tickets').doc(ticketId).update({
+            status,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            unreadForAdmin: false,
+        });
+        return { ok: true };
+    });
 }
 
 module.exports = { registerAdminDashboard };

@@ -2370,7 +2370,35 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "support_ai_title": "اسأل مساعد داين بادّيز",
+  "support_ai_subtitle": "إجابات فورية · مجانًا · بلغتك",
+  "support_ai_placeholder": "اسألني أي شيء عن داين بادّيز — الدعوات، الموجز، المجتمعات، الكريدت، حسابك…",
+  "support_ai_input": "اكتب سؤالك…",
+  "support_ai_thinking": "أفكّر…",
+  "support_ai_empty": "عذرًا، حاول مرة أخرى.",
+  "support_ai_error": "تعذّر الرد الآن. يمكنك الضغط على «التحدث مع شخص» بالأسفل.",
+  "support_human": "التحدث مع شخص",
+  "support_human_sending": "جارٍ الإرسال…",
+  "support_human_sent": "أُرسل إلى فريقنا",
+  "support_escalated": "تم إرسال طلبك إلى فريقنا. سنرد هنا وعبر الإشعارات.",
+  "support_escalated_toast": "أُرسل إلى فريق الدعم.",
+  "support_escalate_error": "تعذّر الإرسال. حاول مرة أخرى.",
+  "support_ask_first": "اكتب سؤالك أولًا، ثم تحدّث مع شخص.",
+  "admin_nav_support": "الدعم",
+  "admin_support_lead": "أسئلة المستخدمين المُصعّدة من المساعد الذكي.",
+  "admin_support_open": "مفتوحة",
+  "admin_support_answered": "تمت الإجابة",
+  "admin_support_resolved": "محلولة",
+  "admin_support_empty": "لا تذاكر هنا.",
+  "admin_support_user": "المستخدم",
+  "admin_support_question": "السؤال",
+  "admin_support_transcript": "المحادثة",
+  "admin_support_reply": "الرد على المستخدم",
+  "admin_support_send": "إرسال الرد",
+  "admin_support_resolve": "وضع كمحلولة",
+  "admin_support_reply_sent": "أُرسل الرد للمستخدم.",
+  "admin_support_last_reply": "آخر رد",
   "admin_report_ai": "فرز الذكاء",
   "admin_report_details": "تفاصيل",
   "admin_report_content": "المحتوى المُبلَّغ",
