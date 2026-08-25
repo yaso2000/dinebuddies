@@ -245,10 +245,14 @@ export default function CompatJourneyRoom() {
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(34,197,94,0.12)', color: '#22c55e', borderRadius: 20, padding: '6px 14px', fontWeight: 800, marginTop: 6 }}>
           <FaCheck /> {t('compat_badge_deep_match', 'Deep Match')}
         </div>
-        <div style={{ marginTop: 14, fontSize: '0.82rem', color: 'var(--text-muted)' }}>{t('compat_invite_soon', 'Meeting invitation — coming next.')}</div>
-        <button onClick={handleReset} style={{ marginTop: 18, padding: '11px 22px', borderRadius: 14, background: 'var(--bg-elevated)', color: 'var(--text-main)', border: '1px solid var(--border-color)', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          <FaRedo /> {t('compat_play_again', 'Play again')}
+        <button onClick={() => navigate('/create-private')} style={{ marginTop: 18, padding: '13px 24px', borderRadius: 14, background: 'var(--brand-primary)', color: '#fff', border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <FaHeart /> {t('compat_invite_to_meet', 'Invite them to meet')}
         </button>
+        <div>
+          <button onClick={handleReset} style={{ marginTop: 12, padding: '10px 20px', borderRadius: 14, background: 'var(--bg-elevated)', color: 'var(--text-main)', border: '1px solid var(--border-color)', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <FaRedo /> {t('compat_play_again', 'Play again')}
+          </button>
+        </div>
       </div>
     );
   }
