@@ -14,6 +14,24 @@ const LIKELIHOOD_RANK = {
     VERY_LIKELY: 5,
 };
 
+// NSFW block thresholds — tunable via env (redeploy to change). An image is
+// REJECTED when a category's likelihood is at least the threshold below.
+// Defaults tightened: block clearly adult/nude content (LIKELY+) and overtly
+// sexual "racy" content (VERY_LIKELY), while still allowing ordinary photos
+// (dining, beach, light clothing register as POSSIBLE/LIKELY racy). Set a
+// threshold to 'OFF' to ignore that category.
+const NSFW_THRESHOLDS = {
+    adult: (process.env.NSFW_ADULT_THRESHOLD || 'LIKELY').toUpperCase(),
+    racy: (process.env.NSFW_RACY_THRESHOLD || 'VERY_LIKELY').toUpperCase(),
+    violence: (process.env.NSFW_VIOLENCE_THRESHOLD || 'LIKELY').toUpperCase(),
+    medical: (process.env.NSFW_MEDICAL_THRESHOLD || 'OFF').toUpperCase(),
+};
+
+function thresholdBlocks(value, threshold) {
+    if (!threshold || threshold === 'OFF') return false;
+    return likelihoodAtLeast(value, threshold);
+}
+
 /** @param {string} purpose @param {string} uid @param {string} ext */
 function resolveModeratedDestPath(purpose, uid, ext) {
     const ts = Date.now();
@@ -80,6 +98,7 @@ const ALLOWED_PURPOSES = new Set([
 // is omitted — only moderateImage (Admin SDK) writes those after Vision approval.
 const STORAGE_GUARD_PREFIXES = [
     'chat_images/',
+    'chat_files/', // guard images dropped here (non-image attachments like PDFs are untouched)
     'invitations/',
     'community-posts/',
     'stories/',
@@ -111,9 +130,13 @@ function likelihoodAtLeast(value, threshold) {
 
 function isSafeSearchAllowed(safe) {
     if (!safe || typeof safe !== 'object') return false;
-    // Allow suggestive / light clothing (racy). Block only clear sexual/nude content.
-    if (likelihoodAtLeast(safe.adult, 'VERY_LIKELY')) return false;
-    if (likelihoodAtLeast(safe.violence, 'LIKELY')) return false;
+    // Tightened porn filter: reject clearly adult/nude (LIKELY+) and overtly
+    // sexual racy content (VERY_LIKELY); violence LIKELY+. Thresholds tunable via
+    // NSFW_* env vars (see NSFW_THRESHOLDS).
+    if (thresholdBlocks(safe.adult, NSFW_THRESHOLDS.adult)) return false;
+    if (thresholdBlocks(safe.racy, NSFW_THRESHOLDS.racy)) return false;
+    if (thresholdBlocks(safe.violence, NSFW_THRESHOLDS.violence)) return false;
+    if (thresholdBlocks(safe.medical, NSFW_THRESHOLDS.medical)) return false;
     return true;
 }
 
