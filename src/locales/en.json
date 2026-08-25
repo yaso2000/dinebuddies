@@ -2353,7 +2353,33 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "compat_title": "Compatibility Journey",
+  "compat_level_1": "Icebreakers",
+  "compat_level_2": "Lifestyle",
+  "compat_level_3": "Values",
+  "compat_level_4": "Feelings",
+  "compat_level_5": "Depth & future",
+  "compat_lvl_of": "Lvl {{n}}/5",
+  "compat_start_error": "Could not start. Try again.",
+  "compat_answer_all": "Answer all questions first.",
+  "compat_submit_error": "Could not submit. Try again.",
+  "compat_intro_title": "How compatible are you?",
+  "compat_intro_body": "5 levels of questions, each deeper than the last. Answer together, reveal your answers, and unlock the next level as your compatibility grows.",
+  "compat_start": "Start the journey",
+  "compat_done_title": "You reached the top together!",
+  "compat_done_body": "Overall compatibility: {{n}}%. That is a strong signal — maybe it is time to meet.",
+  "compat_badge_deep_match": "Deep Match",
+  "compat_invite_soon": "Meeting invitation — coming next.",
+  "compat_passed": "Compatible enough — level unlocked! ({{n}}%)",
+  "compat_not_passed": "You matched {{n}}% this round.",
+  "compat_try_again": "Try this level again",
+  "compat_continue": "Continue to level {{n}}",
+  "compat_waiting_title": "Answers locked in!",
+  "compat_waiting_body": "Waiting for {{name}} to finish this level. You will both see the results together.",
+  "compat_level_n": "Level {{n}}",
+  "compat_pick_hint": "Pick your answer for each",
+  "compat_lock_in": "Lock in my answers",
   "inbox_and_complaints": "Inbox & complaints",
   "ai_analyze_all": "Analyze all feedback",
   "ai_analyze_ticket": "Analyze with AI",

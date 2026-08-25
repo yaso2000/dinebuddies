@@ -920,6 +920,19 @@ const Chat = () => {
                         </div>
                     </>
         }
+                <button
+          type="button"
+          onClick={() => navigate(`/compat/${userId}`)}
+          title={t('compat_title', 'Compatibility Journey')}
+          aria-label={t('compat_title', 'Compatibility Journey')}
+          style={{
+            background: isDark ? 'rgba(255,255,255,0.05)' : '#ffffff',
+            borderRadius: '50%', width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.08)', color: '#ec4899', border: '1px solid var(--border-color)',
+            marginInlineEnd: '8px', flexShrink: 0, cursor: 'pointer'
+          }}>
+                    <FaHeart size={16} />
+                </button>
                 <ChatThemePicker value={chatThemeId} onChange={setChatThemeId} />
             </div>
             )}

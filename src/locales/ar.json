@@ -2370,7 +2370,33 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "compat_title": "رحلة التوافق",
+  "compat_level_1": "كاسر الجليد",
+  "compat_level_2": "نمط الحياة",
+  "compat_level_3": "القيم",
+  "compat_level_4": "المشاعر",
+  "compat_level_5": "العمق والمستقبل",
+  "compat_lvl_of": "مستوى {{n}}/5",
+  "compat_start_error": "تعذّر البدء. حاول مجددًا.",
+  "compat_answer_all": "أجب على كل الأسئلة أولًا.",
+  "compat_submit_error": "تعذّر الإرسال. حاول مجددًا.",
+  "compat_intro_title": "ما مدى توافقكما؟",
+  "compat_intro_body": "٥ مستويات من الأسئلة، كل واحد أعمق من سابقه. أجيبا معًا، اكشفا إجاباتكما، وافتحا المستوى التالي كلما ارتفع توافقكما.",
+  "compat_start": "ابدأ الرحلة",
+  "compat_done_title": "وصلتما إلى القمة معًا!",
+  "compat_done_body": "التوافق الإجمالي: {{n}}%. إشارة قوية — ربما حان وقت اللقاء.",
+  "compat_badge_deep_match": "توافق عميق",
+  "compat_invite_soon": "دعوة اللقاء — قريبًا.",
+  "compat_passed": "توافق كافٍ — فُتح المستوى! ({{n}}%)",
+  "compat_not_passed": "تطابقتما بنسبة {{n}}% هذه الجولة.",
+  "compat_try_again": "أعد هذا المستوى",
+  "compat_continue": "تابع إلى المستوى {{n}}",
+  "compat_waiting_title": "تم تثبيت إجاباتك!",
+  "compat_waiting_body": "بانتظار {{name}} لإنهاء هذا المستوى. سترَيان النتيجة معًا.",
+  "compat_level_n": "المستوى {{n}}",
+  "compat_pick_hint": "اختر إجابتك لكلٍّ منها",
+  "compat_lock_in": "ثبّت إجاباتي",
   "inbox_and_complaints": "المراسلات والشكاوى",
   "ai_analyze_all": "حلّل كل الملاحظات",
   "ai_analyze_ticket": "حلّل بالذكاء الاصطناعي",

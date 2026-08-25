@@ -1199,6 +1199,28 @@ service cloud.firestore {
     }
 
     // ============================================
+    // COMPATIBILITY JOURNEY (two-player question game)
+    // ============================================
+    match /compat_questions/{qid} {
+      allow read: if isSignedIn();
+      allow write: if false; // seeded / managed server-side only
+    }
+    match /compat_journeys/{journeyId} {
+      // Only the two participants can read the journey (holds the revealed answers).
+      allow read: if isSignedIn() && request.auth.uid in resource.data.participants;
+      // All writes go through the startCompatJourney / submitCompatAnswers callables.
+      allow create, update, delete: if false;
+
+      // Raw per-user answers are OWNER-ONLY (peek-proof): the id is `{level}_{uid}`
+      // and only that uid may read them. The revealed comparison is written into
+      // the journey doc by the server after both submit.
+      match /answers/{ansId} {
+        allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+        allow create, update, delete: if false;
+      }
+    }
+
+    // ============================================
     // ADMIN EMAIL CAMPAIGN LOG (server-only via Cloud Functions)
     // ============================================
     match /admin_email_campaigns/{id} {

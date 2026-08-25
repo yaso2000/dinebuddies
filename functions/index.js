@@ -3509,6 +3509,9 @@ registerPartnerNotificationInbox(exports, { db, admin, sendPushToUser });
 const { registerFeedbackTickets } = require('./feedbackTickets');
 registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit });
 
+const { registerCompatJourney } = require('./compatJourney');
+registerCompatJourney(exports, { db, admin, enforceCallableRateLimit });
+
 const { registerPushDevice } = require('./pushDevice');
 registerPushDevice(exports, { db, admin, sendPushToUser });
 

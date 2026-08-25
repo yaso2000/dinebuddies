@@ -17,6 +17,9 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
   /** Business Inbox thread (user↔business support/offers) — its own chat screen. */
   const isBusinessThreadRoute = path.startsWith('/business-thread/');
 
+  /** Compatibility Journey game — its own focused fullscreen screen. */
+  const isCompatRoute = path.startsWith('/compat/');
+
   const isMessagesHub = path === '/messages' || path.startsWith('/messages/');
   const isMessagesIndex = isMessagesHub;
 
@@ -26,7 +29,7 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
   const isCommunityFullscreen = (isCommunityRoute || isStageRoute) && !isDesktopShell;
 
   /** Active conversation thread — fullscreen on mobile, hide shell chrome. */
-  const isConversationScreen = isDirectChatRoute || isCommunityRoute || isStageRoute || isBusinessThreadRoute;
+  const isConversationScreen = isDirectChatRoute || isCommunityRoute || isStageRoute || isBusinessThreadRoute || isCompatRoute;
 
   /** Left sidebar: conversation list while in a DM thread. */
   const showConversationSidebar = isDirectChatRoute;

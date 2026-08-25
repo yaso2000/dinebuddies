@@ -64,6 +64,7 @@ const Chat = lazy(() => import('./pages/Chat'));
 const CommunityChatCastPage = lazy(() => import('./pages/CommunityChatCastPage'));
 const StageChatRoom = lazy(() => import('./pages/StageChatRoom'));
 const BusinessThreadRoom = lazy(() => import('./pages/BusinessThreadRoom'));
+const CompatJourneyRoom = lazy(() => import('./pages/CompatJourneyRoom'));
 const CreateStage = lazy(() => import('./pages/CreateStage'));
 const StagesHub = lazy(() => import('./pages/StagesHub'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
@@ -367,6 +368,7 @@ function App() {
                                                     <Route path="/community/:partnerId" element={<RedirectCommunityToBusiness />} />
                                                     <Route path="/stage/:stageId" element={<GuestBlockedRoute><StageChatRoom /></GuestBlockedRoute>} />
                                                     <Route path="/business-thread/:ticketId" element={<GuestBlockedRoute><BusinessThreadRoom /></GuestBlockedRoute>} />
+                                                    <Route path="/compat/:otherUserId" element={<GuestBlockedRoute><CompatJourneyRoom /></GuestBlockedRoute>} />
                                                     <Route path="/posts-feed" element={<PostsFeed />} />
                                                     <Route path="/invitations" element={<InvitationsSwipePage />} />
                                                     <Route path="/invitations/list" element={<HomeInvitations />} />
