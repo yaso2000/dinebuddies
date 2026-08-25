@@ -85,6 +85,19 @@ function registerCompatJourney(exports, { db, admin, enforceCallableRateLimit })
             createdAt: now,
             updatedAt: now,
         });
+
+        // Break the silence: invite the other player (in-app + FCM push).
+        const starterName =
+            asTrimmed(meSnap.data()?.displayName) ||
+            asTrimmed(meSnap.data()?.display_name) ||
+            asTrimmed(meSnap.data()?.firstName) ||
+            'Someone';
+        await notifyUser(
+            otherUserId, uid, journeyId, 'compat_invite',
+            'Play with me 💗',
+            `${starterName} wants to play the Compatibility Journey with you.`
+        );
+
         return { ok: true, journeyId };
     });
 
