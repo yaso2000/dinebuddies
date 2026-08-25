@@ -1,6 +1,6 @@
 import React from 'react';
 import { AiFillHeart, AiOutlineHeart } from 'react-icons/ai';
-import { FaReply } from 'react-icons/fa';
+import { FaReply, FaRegTrashAlt } from 'react-icons/fa';
 import UserAvatar from '../UserAvatar';
 import { formatCommentTime } from '../../utils/commentTime';
 import { AppText } from "../base";
@@ -11,6 +11,7 @@ export default function PostCommentRow({
   currentUserId,
   onLike,
   onReply,
+  onDelete,
   onAuthorClick,
   nested = false,
   replyCount = 0,
@@ -19,6 +20,7 @@ export default function PostCommentRow({
   const likes = Array.isArray(comment.likes) ? comment.likes : [];
   const likeCount = likes.length;
   const hasLiked = currentUserId && likes.includes(currentUserId);
+  const isOwnComment = comment.userId && currentUserId && comment.userId === currentUserId;
   const isAuthor = comment.userId && postAuthorId && comment.userId === postAuthorId;
 
   const userShape = {
@@ -99,6 +101,20 @@ export default function PostCommentRow({
             <AppText as="span" className="fb-comment-actions__count">{replyCount}</AppText> :
             null}
                     </button>
+                    {isOwnComment && onDelete ?
+          <button
+            type="button"
+            className="fb-comment-actions__btn fb-comment-actions__btn--icon fb-comment-actions__btn--delete"
+            aria-label={t('delete', 'Delete')}
+            title={t('delete', 'Delete')}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(comment);
+            }}>
+
+                        <FaRegTrashAlt size={13} aria-hidden />
+                    </button> :
+          null}
                     <AppText as="span" className="fb-comment-actions__time">{formatCommentTime(comment.createdAt, t)}</AppText>
                 </div>
             </div>

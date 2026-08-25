@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp, getDoc, addDoc, collection } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp, getDoc, addDoc, collection, onSnapshot, query, where, increment, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -108,11 +108,14 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
   const postMenuRef = useRef(null);
   const [postMenuAlignStart, setPostMenuAlignStart] = useState(false);
 
+  // Comments now live in a top-level `comments` collection (one doc each) instead
+  // of an array on the post — fixes lost-update races, id collisions and the 1MB cap.
+  const [comments, setComments] = useState([]);
+
   const sortedComments = useMemo(() => {
-    const raw = post.comments || [];
-    if (!raw.length) return [];
-    return [...raw].sort((a, b) => getCommentTimeMs(a) - getCommentTimeMs(b));
-  }, [post.comments]);
+    if (!comments.length) return [];
+    return [...comments].sort((a, b) => getCommentTimeMs(a) - getCommentTimeMs(b));
+  }, [comments]);
 
   const { topLevelComments, repliesByParentId } = useMemo(
     () => buildPostCommentThreads(sortedComments),
@@ -291,6 +294,19 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
   const collectionName = featuredDocId ? 'featured_posts' : 'communityPosts';
   const postDocId = featuredDocId || post.id;
 
+  // Subscribe to this post's comments only while they're on screen (expanded feed
+  // card or the standalone post view) — avoids a live listener per feed card.
+  useEffect(() => {
+    if (!postDocId || !(showComments || showInChat)) return undefined;
+    const q = query(collection(db, 'comments'), where('postId', '==', postDocId));
+    const unsub = onSnapshot(
+      q,
+      (snap) => setComments(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => console.error('comments load', err)
+    );
+    return () => unsub();
+  }, [postDocId, showComments, showInChat]);
+
   const handleHide = async (e) => {
     e.stopPropagation();
     if (!(await confirm({ message: "Are you sure you want to hide this post? It will be moved to your drafts.", tone: 'default' }))) return;
@@ -416,23 +432,25 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     const replyTarget = replyingTo;
     try {
       const postRef = doc(db, collectionName, postDocId);
-      const comment = {
-        id: Date.now().toString(),
+      const commentData = {
+        postId: postDocId,
+        postCollection: collectionName,
         userId: currentUser.uid,
         userName: currentUser.displayName || 'User',
         userPhoto: getSafeAvatar(userProfile || currentUser),
         userGender: userProfile?.gender || currentUser?.gender || '',
         text: newComment.trim(),
-        createdAt: new Date().toISOString(),
+        createdAt: serverTimestamp(),
         likes: [],
         ...(replyTarget?.id ?
         { parentId: resolveReplyParentId(replyTarget, sortedComments) } :
         {})
       };
 
-      await updateDoc(postRef, {
-        comments: arrayUnion(comment)
-      });
+      const commentRef = await addDoc(collection(db, 'comments'), commentData);
+      const comment = { id: commentRef.id, ...commentData, createdAt: new Date().toISOString() };
+      // Best-effort running counter on the post (used for the collapsed count).
+      void updateDoc(postRef, { commentCount: increment(1) }).catch(() => {});
 
       setNewComment('');
       if (replyTarget?.id) {
@@ -462,19 +480,13 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
 
   const handleCommentLike = async (comment) => {
     if (!currentUser || !comment?.id) return;
-    const cid = comment.id;
     const wasLiked = Array.isArray(comment.likes) && comment.likes.includes(currentUser.uid);
-    const nextComments = sortedComments.map((c) => {
-      if (c.id !== cid) return c;
-      const likes = Array.isArray(c.likes) ? [...c.likes] : [];
-      const idx = likes.indexOf(currentUser.uid);
-      if (idx >= 0) likes.splice(idx, 1);else
-      likes.push(currentUser.uid);
-      return { ...c, likes };
-    });
     try {
-      const postRef = doc(db, collectionName, postDocId);
-      await updateDoc(postRef, { comments: nextComments });
+      // Atomic per-comment toggle — no whole-array rewrite, so concurrent
+      // comments/likes are never dropped.
+      await updateDoc(doc(db, 'comments', comment.id), {
+        likes: wasLiked ? arrayRemove(currentUser.uid) : arrayUnion(currentUser.uid),
+      });
       if (!wasLiked) {
         const likerName =
         userProfile?.displayName || userProfile?.display_name || currentUser.displayName || 'Someone';
@@ -499,6 +511,27 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
     }
   };
 
+  const handleDeleteComment = async (comment) => {
+    if (!currentUser || !comment?.id || comment.userId !== currentUser.uid) return;
+    if (!(await confirm({ message: t('comment_delete_confirm', 'Delete this comment?'), tone: 'danger' }))) return;
+    try {
+      let removed = 1;
+      // Deleting a top-level comment removes its replies too.
+      if (!comment.parentId) {
+        const repliesSnap = await getDocs(
+          query(collection(db, 'comments'), where('postId', '==', postDocId), where('parentId', '==', comment.id))
+        );
+        removed += repliesSnap.size;
+        await Promise.all(repliesSnap.docs.map((d) => deleteDoc(d.ref)));
+      }
+      await deleteDoc(doc(db, 'comments', comment.id));
+      void updateDoc(doc(db, collectionName, postDocId), { commentCount: increment(-removed) }).catch(() => {});
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      showToast(t('comment_delete_failed', 'Could not delete the comment.'), 'error');
+    }
+  };
+
   const handleCommentAuthorClick = (uid) => {
     if (!uid) return;
     navigate(`/profile/${uid}`);
@@ -517,7 +550,9 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
   t('comment_reply_to', 'Reply to {{name}}', { name: replyingTo.userName }) :
   t('comment_as', 'Comment as {{name}}', { name: commenterDisplayName });
 
-  const commentsRaw = post.comments || [];
+  const commentCount = comments.length > 0
+    ? comments.length
+    : (Number.isFinite(post.commentCount) ? post.commentCount : (Array.isArray(post.comments) ? post.comments.length : 0));
 
   const formatDate = (timestamp) => {
     if (!timestamp) return '';
@@ -1146,11 +1181,11 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
         }
 
                 {/* Engagement row — post layer: post likes only | comment count only */}
-                {(localLikes.length > 0 || commentsRaw.length > 0) &&
+                {(localLikes.length > 0 || commentCount > 0) &&
         <div
           className="post-engagement-row"
           onClick={(e) => {
-            if (commentsRaw.length > 0) {
+            if (commentCount > 0) {
               e.stopPropagation();
               setShowComments(true);
             }
@@ -1165,7 +1200,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
             null}
                         </div>
                         <div className="post-engagement-row__right">
-                            {commentsRaw.length > 0 ?
+                            {commentCount > 0 ?
             <AppText as="span"
             className="post-engagement-row__stat post-engagement-row__stat--link"
             role="button"
@@ -1177,7 +1212,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
               }
             }}>
 
-                                    {commentsRaw.length} {t('comments', 'Comments')}
+                                    {commentCount} {t('comments', 'Comments')}
                                 </AppText> :
             null}
                         </div>
@@ -1208,8 +1243,8 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
 
                         <FaRegCommentDots size={19} />
                         <AppText as="span">{t('comment', 'Comment')}</AppText>
-                        {commentsRaw.length > 0 ?
-            <AppText as="span" className="action-count">{commentsRaw.length}</AppText> :
+                        {commentCount > 0 ?
+            <AppText as="span" className="action-count">{commentCount}</AppText> :
             null}
                     </button>
 
@@ -1244,9 +1279,9 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
             }
           }}>
 
-                        {commentsRaw.length > 1 ?
+                        {commentCount > 1 ?
           <div className="post-comments-preview-fb__count">
-                                {t('comment_view_all', 'View all {{count}} comments', { count: commentsRaw.length })}
+                                {t('comment_view_all', 'View all {{count}} comments', { count: commentCount })}
                             </div> :
           null}
                         <PostCommentRow
@@ -1255,6 +1290,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
             currentUserId={currentUser?.uid}
             onLike={handleCommentLike}
             onReply={handleReplyToComment}
+            onDelete={handleDeleteComment}
             onAuthorClick={handleCommentAuthorClick}
             replyCount={
             lastCommentPreview?.id && !lastCommentPreview.parentId ?
@@ -1274,9 +1310,9 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
           isVideoPost ? showInChat ? ' comments-section--video-detail' : ' comments-section--video-feed' : ''}`}
           onClick={(e) => e.stopPropagation()}>
 
-                        {commentsRaw.length > 0 ?
+                        {commentCount > 0 ?
           <div className="fb-comments-panel__header-count" aria-live="polite">
-                                {commentsRaw.length} {t('comments', 'Comments')}
+                                {commentCount} {t('comments', 'Comments')}
                             </div> :
           null}
                         <button type="button" className="fb-comments-sort" onClick={(e) => e.stopPropagation()}>
@@ -1326,6 +1362,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
               currentUserId={currentUser?.uid}
               onLike={handleCommentLike}
               onReply={handleReplyToComment}
+              onDelete={handleDeleteComment}
               onAuthorClick={handleCommentAuthorClick}
               replyingTo={replyingTo}
               replyComposerProps={{

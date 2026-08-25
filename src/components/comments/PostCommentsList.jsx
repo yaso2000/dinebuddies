@@ -34,6 +34,7 @@ export default function PostCommentsList({
     currentUserId,
     onLike,
     onReply,
+    onDelete,
     onAuthorClick,
     replyingTo,
     replyComposerProps,
@@ -54,6 +55,7 @@ export default function PostCommentsList({
                             currentUserId={currentUserId}
                             onLike={onLike}
                             onReply={onReply}
+                            onDelete={onDelete}
                             onAuthorClick={onAuthorClick}
                             replyCount={replies.length}
                             t={t}
@@ -87,6 +89,7 @@ export default function PostCommentsList({
                                               currentUserId={currentUserId}
                                               onLike={onLike}
                                               onReply={onReply}
+                            onDelete={onDelete}
                                               onAuthorClick={onAuthorClick}
                                               nested
                                               t={t}

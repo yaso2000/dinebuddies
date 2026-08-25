@@ -206,7 +206,8 @@ const BusinessDashboard = () => {
 
       const engagement = engagementSnapshot.docs.reduce((sum, docSnap) => {
         const post = docSnap.data();
-        return sum + (post.likes?.length || 0) + (post.comments?.length || 0);
+        const commentN = Number.isFinite(post.commentCount) ? post.commentCount : (post.comments?.length || 0);
+        return sum + (post.likes?.length || 0) + commentN;
       }, 0);
 
       setStats((prev) => ({

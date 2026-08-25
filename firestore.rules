@@ -910,7 +910,7 @@ service cloud.firestore {
       // Any signed-in user can like, repost, or comment (social interactions only)
       allow update: if isSignedIn() &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['likes', 'reposts', 'comments']);
+          .hasOnly(['likes', 'reposts', 'comments', 'commentCount']);
     }
 
     match /stories/{storyId} {
@@ -962,7 +962,14 @@ service cloud.firestore {
     match /comments/{commentId} {
       allow read: if true;
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      // Owner (edit) or Admin may change anything; anyone signed-in may only
+      // toggle the `likes` array (no whole-array rewrites — each comment is a doc).
+      allow update: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin() ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+      );
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     match /notifications/{notifId} {
@@ -1159,7 +1166,7 @@ service cloud.firestore {
       // Any signed-in user can like, comment, or repost (social interactions only)
       allow update: if isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['likes', 'reposts', 'comments']);
+                         .hasOnly(['likes', 'reposts', 'comments', 'commentCount']);
     }
 
     // ============================================
