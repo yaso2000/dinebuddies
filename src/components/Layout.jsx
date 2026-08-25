@@ -544,7 +544,7 @@ const Layout = ({ children }) => {
                             </Link>
                             {!isBusinessAccount ? (
                               <Link
-                                to="/create-group-game"
+                                to={userProfile?.hostActiveGameId ? `/group-game/${userProfile.hostActiveGameId}` : '/create-group-game'}
                                 className={`notification-bell header-games-btn${location.pathname === '/create-group-game' || location.pathname.startsWith('/group-game/') ? ' active' : ''}${liveGamesCount > 0 ? ' has-live' : ''}`}
                                 aria-label={t('group_game_create_title', 'Group game')}
                                 title={t('group_game_taste_desc', 'Play a live group game — open to everyone.')}

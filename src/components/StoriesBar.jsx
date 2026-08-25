@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import StoryCircle from './StoryCircle';
 import LiveStageCircle from './LiveStageCircle';
+import LiveGameCircle from './LiveGameCircle';
+import { useLiveGamesDiscover } from '../hooks/useLiveGamesDiscover';
 import BusinessCommunityCircle from './BusinessCommunityCircle';
 import UserAvatar from './UserAvatar';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -46,6 +48,8 @@ const StoriesBar = ({ onStoryClick }) => {
     search: '',
     enabled: !isBusiness,
   });
+  // Live group games are open to everyone (consumers only browse the rail).
+  const { games: liveGames } = useLiveGamesDiscover({ enabled: !isBusiness });
 
   const { activeLiveStages, businessRooms } = useMemo(() => {
     if (isBusiness) {
@@ -81,8 +85,8 @@ const StoriesBar = ({ onStoryClick }) => {
     stories.length,
   ]);
 
-  // Keep the rail visible when rooms exist even if stories are still loading.
-  if (loading && activeLiveStages.length === 0 && businessRooms.length === 0 && stories.length === 0) return null;
+  // Keep the rail visible when rooms/games exist even if stories are still loading.
+  if (loading && activeLiveStages.length === 0 && businessRooms.length === 0 && liveGames.length === 0 && stories.length === 0) return null;
 
   return (
     <div style={{
@@ -203,6 +207,17 @@ const StoriesBar = ({ onStoryClick }) => {
                         </AppText>
                     </div>)
         }
+
+                {/* Live group games (joinable lobbies) — open to everyone */}
+                {liveGames.map((game) => (
+                  <div key={`game-${game.id}`} role="listitem" style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
+                    <LiveGameCircle
+                      game={game}
+                      isHost={game.hostId === currentUser?.uid}
+                      onClick={() => navigate(`/group-game/${game.id}`)}
+                    />
+                  </div>
+                ))}
 
                 {/* Live consumer Stages (active only) */}
                 {activeLiveStages.map((stage) => (

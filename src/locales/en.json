@@ -2353,7 +2353,8 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "group_game_your_game": "Your game",
   "group_game_vis_public": "Everyone",
   "group_game_vis_public_hint": "Anyone can join",
   "group_game_vis_private": "Private",
