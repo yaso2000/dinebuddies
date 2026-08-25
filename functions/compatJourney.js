@@ -196,6 +196,32 @@ function registerCompatJourney(exports, { db, admin, enforceCallableRateLimit })
         return { ok: true, bothSubmitted: true, compatPct, passed, completed: passed && level >= LEVELS };
     });
 
+    // Restart: wipe the journey and its answers so the pair can play fresh.
+    exports.resetCompatJourney = functions.https.onCall(async (data, context) => {
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Please sign in.');
+        const uid = context.auth.uid;
+        const otherUserId = asTrimmed(data?.otherUserId);
+        if (!otherUserId) throw new functions.https.HttpsError('invalid-argument', 'otherUserId is required.');
+
+        const journeyId = journeyIdFor(uid, otherUserId);
+        const ref = db.collection('compat_journeys').doc(journeyId);
+        const snap = await ref.get();
+        if (!snap.exists) return { ok: true };
+        const participants = Array.isArray(snap.data()?.participants) ? snap.data().participants : [];
+        if (!participants.includes(uid)) throw new functions.https.HttpsError('permission-denied', 'Not a participant.');
+
+        await enforceCallableRateLimit(uid, 'compat_reset', { cooldownMs: 3000, perHour: 30, perDay: 100 });
+
+        const ansSnap = await ref.collection('answers').get();
+        const batch = db.batch();
+        ansSnap.forEach((d) => batch.delete(d.ref));
+        batch.delete(ref);
+        await batch.commit();
+
+        await notifyUser(otherUserId, uid, journeyId, 'compat_reset', 'Journey restarted 🔄', 'Your partner restarted the compatibility journey.');
+        return { ok: true };
+    });
+
     async function notifyUser(recipientId, fromUid, journeyId, type, title, message) {
         try {
             const now = admin.firestore.FieldValue.serverTimestamp();

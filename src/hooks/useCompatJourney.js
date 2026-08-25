@@ -48,11 +48,12 @@ export function useCompatJourney(otherUserId) {
   const start = async () => (await httpsCallable(functions, 'startCompatJourney')({ otherUserId }))?.data;
   const submit = async (level, answers) =>
     (await httpsCallable(functions, 'submitCompatAnswers')({ journeyId, level, answers }))?.data;
+  const reset = async () => (await httpsCallable(functions, 'resetCompatJourney')({ otherUserId }))?.data;
   const fetchMyAnswers = async (level) => {
     if (!journeyId || !uid) return null;
     const s = await getDoc(doc(db, 'compat_journeys', journeyId, 'answers', `${level}_${uid}`));
     return s.exists() ? (s.data().answers || {}) : null;
   };
 
-  return { uid, journeyId, journey, journeyLoading, questionsById, start, submit, fetchMyAnswers };
+  return { uid, journeyId, journey, journeyLoading, questionsById, start, submit, reset, fetchMyAnswers };
 }

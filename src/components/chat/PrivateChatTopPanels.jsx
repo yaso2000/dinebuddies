@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaCamera, FaTimes } from 'react-icons/fa';
+import { FaCamera, FaTimes, FaHeart } from 'react-icons/fa';
 import './PrivateChatTopPanels.css';
 
 /**
@@ -22,8 +22,17 @@ export default function PrivateChatTopPanels({
   onResetMyPanel,
   connectionKind,
   relationshipBadge,
+  compat,
+  onOpenCompat,
 }) {
   const { t } = useTranslation();
+
+  const compatPhase = compat?.phase || 'none';
+  const compatLabel =
+    compatPhase === 'completed' ? `${compat?.compatPct ?? 0}%`
+      : compatPhase === 'failed' ? t('compat_center_retry', 'Replay')
+        : compatPhase === 'active' ? t('compat_lvl_of', 'Lvl {{n}}/5', { n: compat?.level || 1 })
+          : t('compat_center_start', 'Play');
 
   return (
     <div className="private-chat-top-panels" dir="ltr">
@@ -34,7 +43,24 @@ export default function PrivateChatTopPanels({
           <div className="private-chat-top-panels__img private-chat-top-panels__img--fallback" />
         )}
       </div>
-      {relationshipBadge ? (
+      {onOpenCompat ? (
+        <button
+          type="button"
+          onClick={onOpenCompat}
+          className="private-chat-top-panels__link"
+          title={t('compat_title', 'Compatibility Journey')}
+          aria-label={t('compat_title', 'Compatibility Journey')}
+          style={{
+            border: 'none', cursor: 'pointer', background: 'rgba(0,0,0,0.6)',
+            borderRadius: 16, padding: '6px 12px', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', gap: 1, minWidth: 64,
+            boxShadow: '0 2px 12px rgba(236,72,153,0.55)',
+          }}
+        >
+          <FaHeart style={{ color: '#ec4899', fontSize: 18, filter: compatPhase === 'completed' ? 'drop-shadow(0 0 5px rgba(236,72,153,0.8))' : 'none' }} />
+          <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#fff', whiteSpace: 'nowrap' }}>{compatLabel}</span>
+        </button>
+      ) : relationshipBadge ? (
         <div
           className={`private-chat-top-panels__link private-chat-top-panels__link--${connectionKind}`}
           title={t(relationshipBadge.labelKey, relationshipBadge.label)}

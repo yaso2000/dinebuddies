@@ -5,6 +5,7 @@ import { db } from '../firebase/config';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { useCompatJourney } from '../hooks/useCompatJourney';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
@@ -25,7 +26,8 @@ export default function CompatJourneyRoom() {
   const { t, i18n } = useTranslation();
   const { userProfile } = useAuth();
   const { showToast } = useToast();
-  const { uid, journey, journeyLoading, questionsById, start, submit } = useCompatJourney(otherUserId);
+  const confirm = useConfirm();
+  const { uid, journey, journeyLoading, questionsById, start, submit, reset } = useCompatJourney(otherUserId);
 
   const [other, setOther] = useState(null);
   const [starting, setStarting] = useState(false);
@@ -70,6 +72,12 @@ export default function CompatJourneyRoom() {
     finally { setStarting(false); }
   };
 
+  const handleReset = async () => {
+    if (!(await confirm({ message: t('compat_reset_confirm', 'Restart from level 1? You both start over.'), tone: 'danger' }))) return;
+    try { await reset(); setSeenReveals(new Set()); setPicks({}); setRetrying(false); }
+    catch (e) { console.error(e); showToast(t('compat_submit_error', 'Could not submit. Try again.'), 'error'); }
+  };
+
   const handleSubmit = async () => {
     if (submitting) return;
     const answered = levelQuestions.filter((q) => Number.isInteger(picks[q.id]));
@@ -86,7 +94,12 @@ export default function CompatJourneyRoom() {
       <button onClick={() => navigate(-1)} aria-label={t('back', 'Back')} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', fontSize: '1.1rem', cursor: 'pointer', padding: 4 }}>
         <BackIcon />
       </button>
-      <AppText as="h2" style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)' }}>{t('compat_title', 'Compatibility Journey')}</AppText>
+      <AppText as="h2" style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)', flex: 1 }}>{t('compat_title', 'Compatibility Journey')}</AppText>
+      {journey ? (
+        <button onClick={handleReset} aria-label={t('compat_restart', 'Restart')} title={t('compat_restart', 'Restart')} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', padding: 4 }}>
+          <FaRedo />
+        </button>
+      ) : null}
     </div>
   );
 
@@ -176,6 +189,9 @@ export default function CompatJourneyRoom() {
           <FaCheck /> {t('compat_badge_deep_match', 'Deep Match')}
         </div>
         <div style={{ marginTop: 14, fontSize: '0.82rem', color: 'var(--text-muted)' }}>{t('compat_invite_soon', 'Meeting invitation — coming next.')}</div>
+        <button onClick={handleReset} style={{ marginTop: 18, padding: '11px 22px', borderRadius: 14, background: 'var(--bg-elevated)', color: 'var(--text-main)', border: '1px solid var(--border-color)', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <FaRedo /> {t('compat_play_again', 'Play again')}
+        </button>
       </div>
     );
   }

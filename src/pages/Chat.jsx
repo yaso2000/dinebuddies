@@ -172,6 +172,21 @@ const Chat = () => {
       : null;
   const relationshipBadge = connectionKind ? RELATIONSHIP_BADGE[connectionKind] : null;
 
+  // Compatibility Journey summary for the center of the top panel.
+  const [compatSummary, setCompatSummary] = useState({ phase: 'none' });
+  useEffect(() => {
+    const myUid = currentUser?.uid;
+    if (!myUid || !userId) return undefined;
+    const jid = [myUid, userId].sort().join('_');
+    const unsub = onSnapshot(doc(db, 'compat_journeys', jid), (s) => {
+      if (!s.exists()) { setCompatSummary({ phase: 'none' }); return; }
+      const j = s.data() || {};
+      const phase = j.status === 'completed' ? 'completed' : j.status === 'level_failed' ? 'failed' : 'active';
+      setCompatSummary({ phase, level: j.currentLevel || 1, compatPct: j.overallCompat });
+    }, () => setCompatSummary({ phase: 'none' }));
+    return () => unsub();
+  }, [currentUser?.uid, userId]);
+
   useEffect(() => {
     if (connectionCheckLoading) return;
     if (messagingRestricted || isSupportPeer) {
@@ -920,19 +935,6 @@ const Chat = () => {
                         </div>
                     </>
         }
-                <button
-          type="button"
-          onClick={() => navigate(`/compat/${userId}`)}
-          title={t('compat_title', 'Compatibility Journey')}
-          aria-label={t('compat_title', 'Compatibility Journey')}
-          style={{
-            background: isDark ? 'rgba(255,255,255,0.05)' : '#ffffff',
-            borderRadius: '50%', width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.08)', color: '#ec4899', border: '1px solid var(--border-color)',
-            marginInlineEnd: '8px', flexShrink: 0, cursor: 'pointer'
-          }}>
-                    <FaHeart size={16} />
-                </button>
                 <ChatThemePicker value={chatThemeId} onChange={setChatThemeId} />
             </div>
             )}
@@ -949,6 +951,8 @@ const Chat = () => {
                 onResetMyPanel={handleResetMyPanelImage}
                 connectionKind={connectionKind}
                 relationshipBadge={relationshipBadge}
+                compat={compatSummary}
+                onOpenCompat={() => navigate(`/compat/${userId}`)}
               />
             ) : null}
 
