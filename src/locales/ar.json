@@ -2370,7 +2370,8 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "compat_card_subtitle": "اضغط للّعب والإجابة على السؤال التالي معًا",
   "comment_delete_confirm": "حذف هذا التعليق؟",
   "comment_delete_failed": "تعذّر حذف التعليق.",
   "compat_invite_to_meet": "ادعُه للقاء",
