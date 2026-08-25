@@ -60,11 +60,11 @@
   --text-muted: var(--text-secondary);
   --text-white: #ffffff;
 
-  /* Typography — Cairo (Arabic + Latin); loaded in index.html */
-  --font-arabic: 'Cairo', sans-serif;
-  --font-heading: 'Cairo', sans-serif;
-  --font-body: 'Cairo', sans-serif;
-  --font-family: 'Cairo', sans-serif;
+  /* Typography — Readex Pro (Arabic + Latin), Cairo fallback; loaded in index.html */
+  --font-arabic: 'Readex Pro', 'Cairo', sans-serif;
+  --font-heading: 'Readex Pro', 'Cairo', sans-serif;
+  --font-body: 'Readex Pro', 'Cairo', sans-serif;
+  --font-family: 'Readex Pro', 'Cairo', sans-serif;
 
   /* Additional pairing presets (editors / motion templates may override) */
   --font-montserrat: 'Montserrat', sans-serif;
@@ -73,7 +73,7 @@
   --font-poppins: 'Poppins', sans-serif;
   --font-playfair: 'Playfair Display', serif;
   --font-inter: 'Inter', sans-serif;
-  --font-roboto: 'Cairo', sans-serif;
+  --font-roboto: 'Readex Pro', 'Cairo', sans-serif;
 
   /* Pairing Presets */
   --pair-tech-h: var(--font-montserrat);
