@@ -2370,7 +2370,9 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "mute": "كتم",
+  "unmute": "إلغاء الكتم",
   "compat_center_start": "العب",
   "compat_center_retry": "أعد",
   "compat_restart": "إعادة",

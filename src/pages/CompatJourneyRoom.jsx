@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -8,9 +8,13 @@ import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { useCompatJourney } from '../hooks/useCompatJourney';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { playGiftPingSound, playWavePingSound } from '../utils/socialPingSound';
+import { playMatchCelebrationSound } from '../utils/matchCelebrationSound';
 import UserAvatar from '../components/UserAvatar';
 import { AppText } from '../components/base';
-import { FaArrowLeft, FaArrowRight, FaHeart, FaSpinner, FaLock, FaCheck, FaRedo } from 'react-icons/fa';
+import { FaArrowLeft, FaArrowRight, FaHeart, FaSpinner, FaLock, FaCheck, FaRedo, FaVolumeUp, FaVolumeMute } from 'react-icons/fa';
+
+const MUTE_KEY = 'db_compat_muted';
 
 const LEVEL_TITLES = [
   ['compat_level_1', 'Icebreakers'],
@@ -35,6 +39,12 @@ export default function CompatJourneyRoom() {
   const [picks, setPicks] = useState({}); // qid -> option index (draft for current level)
   const [seenReveals, setSeenReveals] = useState(() => new Set());
   const [retrying, setRetrying] = useState(false);
+  const [muted, setMuted] = useState(() => { try { return localStorage.getItem(MUTE_KEY) === '1'; } catch { return false; } });
+  const [burst, setBurst] = useState(null); // 'pass' | 'fail' | 'done'
+  const soundedRef = useRef(new Set());
+  const burstTimerRef = useRef(null);
+
+  const toggleMute = () => setMuted((m) => { const next = !m; try { localStorage.setItem(MUTE_KEY, next ? '1' : '0'); } catch { /* ignore */ } return next; });
 
   const lang = (i18n.language || 'ar').split('-')[0];
   const isRtl = i18n.dir() === 'rtl';
@@ -56,6 +66,33 @@ export default function CompatJourneyRoom() {
 
   // Reset the answer draft whenever the level changes.
   useEffect(() => { setPicks({}); setRetrying(false); }, [currentLevel]);
+
+  // Juice: play a sound + emoji burst once per newly-revealed level (both players).
+  useEffect(() => {
+    if (!journey) return undefined;
+    const pl = journey.perLevel || {};
+    const revealed = Object.keys(pl).filter((l) => pl[l]?.reveal).map(Number);
+    if (!revealed.length) return undefined;
+    const newest = Math.max(...revealed);
+    if (soundedRef.current.has(newest)) return undefined;
+    soundedRef.current.add(newest);
+    const completed = journey.status === 'completed';
+    const passed = pl[newest]?.passed;
+    if (!muted) {
+      try {
+        if (completed) playMatchCelebrationSound();
+        else if (passed) playGiftPingSound();
+        else playWavePingSound();
+      } catch { /* ignore */ }
+    }
+    setBurst(completed ? 'done' : passed ? 'pass' : 'fail');
+    if (burstTimerRef.current) clearTimeout(burstTimerRef.current);
+    burstTimerRef.current = setTimeout(() => setBurst(null), 1700);
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journey]);
+
+  useEffect(() => () => { if (burstTimerRef.current) clearTimeout(burstTimerRef.current); }, []);
 
   const levelQuestions = useMemo(() => {
     const ids = journey?.questionsByLevel?.[currentLevel] || [];
@@ -95,6 +132,9 @@ export default function CompatJourneyRoom() {
         <BackIcon />
       </button>
       <AppText as="h2" style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)', flex: 1 }}>{t('compat_title', 'Compatibility Journey')}</AppText>
+      <button onClick={toggleMute} aria-label={muted ? t('unmute', 'Unmute') : t('mute', 'Mute')} title={muted ? t('unmute', 'Unmute') : t('mute', 'Mute')} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', padding: 4 }}>
+        {muted ? <FaVolumeMute /> : <FaVolumeUp />}
+      </button>
       {journey ? (
         <button onClick={handleReset} aria-label={t('compat_restart', 'Restart')} title={t('compat_restart', 'Restart')} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', padding: 4 }}>
           <FaRedo />
@@ -102,6 +142,21 @@ export default function CompatJourneyRoom() {
       ) : null}
     </div>
   );
+
+  const BurstOverlay = () => {
+    if (!burst) return null;
+    const emojis = burst === 'done' ? ['🎉', '💗', '✨', '🎊', '💗', '⭐'] : burst === 'pass' ? ['💗', '✨', '🔥', '💗', '✨', '💗'] : ['🙂', '💬', '✨', '🙂', '💬', '✨'];
+    return (
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 50 }} aria-hidden>
+        {emojis.map((e, i) => (
+          <span key={i} style={{
+            position: 'absolute', left: `${10 + i * 15}%`, bottom: '30%', fontSize: '1.8rem',
+            animation: `compatFloatUp 1.6s ease-out ${i * 0.08}s forwards`, opacity: 0,
+          }}>{e}</span>
+        ))}
+      </div>
+    );
+  };
 
   const Panel = ({ compat }) => (
     <div dir="ltr" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 12px 2px', flexShrink: 0 }}>
@@ -152,9 +207,11 @@ export default function CompatJourneyRoom() {
   }
 
   const shell = (body) => (
-    <div style={{ height: '100%', minHeight: 0, background: 'var(--bg-main)', display: 'flex', flexDirection: 'column' }} dir={i18n.dir()}>
+    <div style={{ height: '100%', minHeight: 0, background: 'var(--bg-main)', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }} dir={i18n.dir()}>
+      <style>{'@keyframes compatFloatUp{0%{opacity:0;transform:translateY(0) scale(.7)}15%{opacity:1}100%{opacity:0;transform:translateY(-160px) scale(1.15)}}'}</style>
       <Header />
       {body}
+      <BurstOverlay />
     </div>
   );
 
