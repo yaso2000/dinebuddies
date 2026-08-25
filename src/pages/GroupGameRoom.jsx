@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaCrown, FaHeart, FaShareAlt, FaSignOutAlt, FaTimes, FaVolumeUp, FaVolumeMute, FaCopy } from 'react-icons/fa';
+import { FaCrown, FaHeart, FaShareAlt, FaSignOutAlt, FaTimes, FaVolumeUp, FaVolumeMute, FaCopy, FaLock } from 'react-icons/fa';
 import { useGroupGame, groupGameApi } from '../hooks/useGroupGame';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -138,12 +138,21 @@ export default function GroupGameRoom() {
     );
   }
 
+  const isPrivate = game.visibility === 'invite_only';
   const headerBar = (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
-      <AppText as="div" style={{ fontWeight: 900, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <FaHeart color="var(--primary)" /> {t('group_game_taste_title', 'Group Compatibility')}
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '12px 16px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <AppText as="div" style={{ fontWeight: 900, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        <FaHeart color="var(--primary)" style={{ flexShrink: 0 }} />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('group_game_taste_title', 'Group Compatibility')}</span>
       </AppText>
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        {/* Join code — always visible at the top so it can be shared/read any time. */}
+        <button type="button" onClick={copyCode} title={t('group_game_code', 'Join code')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-elevated)', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 800, letterSpacing: 2 }}>
+          {isPrivate ? <FaLock size={11} color="var(--text-muted)" /> : null}
+          {game.joinCode}
+          <FaCopy size={12} color="var(--text-muted)" />
+        </button>
         <button type="button" onClick={toggleMute} aria-label="mute" style={iconBtn}>{muted ? <FaVolumeMute /> : <FaVolumeUp />}</button>
         <button type="button" onClick={wrap('leave', async () => { await leave(); navigate('/posts-feed'); })} aria-label="leave" style={iconBtn}><FaSignOutAlt /></button>
       </div>

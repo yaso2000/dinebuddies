@@ -18,7 +18,8 @@ export function useLiveGamesCount({ enabled = true } = {}) {
     );
     const unsub = onSnapshot(
       q,
-      (snap) => setCount(snap.size),
+      // Only public games surface in the header count (private/invite-only excluded).
+      (snap) => setCount(snap.docs.filter((d) => d.data()?.open !== false).length),
       () => setCount(0)
     );
     return unsub;

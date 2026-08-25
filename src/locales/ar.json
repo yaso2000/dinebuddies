@@ -2370,7 +2370,15 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "group_game_vis_public": "الجميع",
+  "group_game_vis_public_hint": "يمكن لأي أحد الانضمام",
+  "group_game_vis_private": "خاصة",
+  "group_game_vis_private_hint": "ادعُ أشخاصًا بعينهم",
+  "group_game_invite_people": "ادعُ أشخاصًا",
+  "group_game_no_mutuals": "لا متابعات متبادلة بعد — تابِع أشخاصًا بالتبادل لدعوتهم، أو اجعل اللعبة عامة.",
+  "group_game_need_invitee": "ادعُ شخصًا واحدًا على الأقل للّعبة الخاصة.",
+  "group_game_already_active": "لديك لعبة نشطة بالفعل — نفتحها لك.",
   "invite_create_group_game_title": "لعبة جماعية",
   "invite_create_group_game_desc": "العب لعبة توافق مباشرة مع الأصدقاء — متاحة للجميع.",
   "group_game_taste_title": "التوافق الجماعي",

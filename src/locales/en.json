@@ -2353,7 +2353,15 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "group_game_vis_public": "Everyone",
+  "group_game_vis_public_hint": "Anyone can join",
+  "group_game_vis_private": "Private",
+  "group_game_vis_private_hint": "Invite specific people",
+  "group_game_invite_people": "Invite people",
+  "group_game_no_mutuals": "No mutual follows yet — follow people back to invite them, or make the game public.",
+  "group_game_need_invitee": "Invite at least one person for a private game.",
+  "group_game_already_active": "You already have an active game — opening it.",
   "invite_create_group_game_title": "Group game",
   "invite_create_group_game_desc": "Play a live compatibility game with friends — open to everyone.",
   "group_game_taste_title": "Group Compatibility",

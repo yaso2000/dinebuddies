@@ -18,6 +18,7 @@ const MAX_PLAYERS = 24;
 const DEFAULT_ROUNDS = 6;
 const MIN_ROUNDS = 4;
 const MAX_ROUNDS = 12;
+const MAX_INVITEES = 30;
 
 function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
     const FieldValue = admin.firestore.FieldValue;
@@ -65,6 +66,39 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         return { ref, game: s.data() || {} };
     }
 
+    const isMutualFollow = (aFollowing, bFollowing, aId, bId) =>
+        Array.isArray(aFollowing) && Array.isArray(bFollowing) &&
+        aFollowing.includes(bId) && bFollowing.includes(aId);
+
+    async function notifyGameInvite(recipientId, hostId, hostName, gameId) {
+        try {
+            await db.collection('notifications').add({
+                userId: recipientId,
+                type: 'group_game_invite',
+                title: 'Game invite 🎮',
+                message: `${hostName} invited you to a group game.`,
+                actionUrl: `/group-game/${gameId}`,
+                fromUserId: hostId,
+                senderId: hostId,
+                senderName: hostName,
+                metadata: { source: 'group_game', gameId },
+                createdAt: FieldValue.serverTimestamp(),
+                read: false,
+            });
+        } catch (err) { console.warn('[groupGames] invite notify failed', err?.message || err); }
+    }
+
+    /** Clear the host's "active game" pointer (one game per host at a time). */
+    async function clearHostPointer(hostId, gameId) {
+        try {
+            const uref = db.collection('users').doc(hostId);
+            const snap = await uref.get();
+            if (snap.exists && snap.data()?.hostActiveGameId === gameId) {
+                await uref.update({ hostActiveGameId: FieldValue.delete() });
+            }
+        } catch (err) { console.warn('[groupGames] clear pointer failed', err?.message || err); }
+    }
+
     // ---- Create ---------------------------------------------------------------
     exports.createGroupGame = functions.https.onCall(async (data, context) => {
         if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
@@ -75,6 +109,38 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         if (type !== 'taste_match') throw new functions.https.HttpsError('invalid-argument', 'Unsupported game type.');
         let rounds = Number(data?.roundCount) || DEFAULT_ROUNDS;
         rounds = Math.min(Math.max(Math.round(rounds), MIN_ROUNDS), MAX_ROUNDS);
+        const visibility = asTrimmed(data?.visibility).toLowerCase() === 'invite_only' ? 'invite_only' : 'public';
+
+        // One live game per host at a time. If they already host an unfinished
+        // game, hand it back instead of creating a second.
+        const hostSnap = await db.collection('users').doc(uid).get();
+        const hostData = hostSnap.data() || {};
+        const existingId = asTrimmed(hostData.hostActiveGameId);
+        if (existingId) {
+            const ex = await db.collection('group_games').doc(existingId).get();
+            if (ex.exists && ex.data()?.status !== 'finished') {
+                return { gameId: existingId, joinCode: ex.data().joinCode, existing: true };
+            }
+        }
+
+        // Validate invitees (mutual follows only), like Stages.
+        const rawInvitees = Array.isArray(data?.inviteeIds) ? data.inviteeIds : [];
+        const candidates = [...new Set(rawInvitees.map((id) => asTrimmed(id)).filter((id) => id && id !== uid))].slice(0, MAX_INVITEES);
+        const hostFollowing = Array.isArray(hostData.following) ? hostData.following : [];
+        const validInvitees = [];
+        for (const inviteeId of candidates) {
+            const s = await db.collection('users').doc(inviteeId).get();
+            if (!s.exists) continue;
+            const u = s.data() || {};
+            if (String(u.role || '').toLowerCase() === 'guest' || u.isGuest === true) continue;
+            const blocked = Array.isArray(u.blockedUserIds) ? u.blockedUserIds : [];
+            if (blocked.includes(uid)) continue;
+            if (!isMutualFollow(hostFollowing, u.following, uid, inviteeId)) continue;
+            validInvitees.push(inviteeId);
+        }
+        if (visibility === 'invite_only' && validInvitees.length === 0) {
+            throw new functions.https.HttpsError('failed-precondition', 'Invite at least one person for a private game.');
+        }
 
         const questions = await pickQuestions(rounds);
         if (questions.length < MIN_ROUNDS) {
@@ -86,7 +152,9 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         await ref.set({
             type,
             status: 'lobby', // lobby | active | finished
-            open: true,
+            visibility, // public | invite_only
+            open: visibility === 'public', // public games surface in discovery
+            invitedIds: validInvitees,
             hostId: uid,
             hostName: host.name,
             hostAvatar: host.avatar,
@@ -103,6 +171,8 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             createdAt: now,
             updatedAt: now,
         });
+        await db.collection('users').doc(uid).set({ hostActiveGameId: ref.id }, { merge: true });
+        for (const inviteeId of validInvitees) await notifyGameInvite(inviteeId, uid, host.name, ref.id);
         return { gameId: ref.id, joinCode: (await ref.get()).data().joinCode };
     });
 
@@ -124,6 +194,10 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         const { ref, game } = await requireGame(gameId);
         if (game.status === 'finished') throw new functions.https.HttpsError('failed-precondition', 'This game has ended.');
         if ((game.playerIds || []).includes(uid)) return { gameId };
+        // Private games: only the host or explicitly invited people may join.
+        if (game.visibility === 'invite_only' && game.hostId !== uid && !((game.invitedIds || []).includes(uid))) {
+            throw new functions.https.HttpsError('permission-denied', 'This is a private game — you need an invite.');
+        }
         if (game.status !== 'lobby') throw new functions.https.HttpsError('failed-precondition', 'This game already started.');
         if ((game.playerIds || []).length >= MAX_PLAYERS) throw new functions.https.HttpsError('resource-exhausted', 'This game is full.');
 
@@ -238,6 +312,7 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         // Last round done -> compute final result from all answers.
         const result = await computeResult(ref, game);
         await ref.update({ status: 'finished', roundStatus: 'revealed', result, updatedAt: now });
+        await clearHostPointer(game.hostId, ref.id);
         return { ok: true, phase: 'finished' };
     });
 
@@ -331,6 +406,7 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         if (game.hostId === uid && game.status !== 'finished') {
             // Host leaving an unfinished game ends it for everyone.
             await ref.update({ status: 'finished', updatedAt: FieldValue.serverTimestamp() });
+            await clearHostPointer(uid, ref.id);
             return { ok: true, ended: true };
         }
         await ref.update({
