@@ -4114,6 +4114,32 @@ button.notification-bell {
   color: color-mix(in srgb, var(--brand-primary) 85%, var(--text-muted));
 }
 
+/* Games button — distinctive accent so it stands out in the header. */
+.header-actions .header-games-btn {
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand-primary, #e86e2e), #f0a24b);
+  box-shadow: 0 3px 10px rgba(232, 110, 46, 0.35);
+}
+.header-actions .header-games-btn:hover {
+  filter: brightness(1.05);
+}
+.header-actions .header-games-btn.active {
+  color: #fff;
+}
+/* Pulse while games are live. */
+.header-actions .header-games-btn.has-live {
+  animation: dbGamesPulse 1.8s ease-in-out infinite;
+}
+@keyframes dbGamesPulse {
+  0%, 100% { box-shadow: 0 3px 10px rgba(232, 110, 46, 0.35); }
+  50% { box-shadow: 0 3px 16px rgba(232, 110, 46, 0.7); }
+}
+.header-actions .header-games-btn .badge--live {
+  background: #16a34a;
+  color: #fff;
+  border: 2px solid var(--bg-card, #fff);
+}
+
 .header-actions .header-stages-btn:hover,
 .header-actions .header-stages-btn.active {
   color: var(--brand-primary);
