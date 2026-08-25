@@ -1231,6 +1231,24 @@ service cloud.firestore {
       }
     }
 
+    match /group_games/{gameId} {
+      // Group games are open to everyone; the doc holds no private data (raw
+      // picks live in the owner-only `answers` subcollection). Any signed-in user
+      // may read (to join by link / discover). `resource == null` keeps onSnapshot
+      // from throwing on a missing/deleted game.
+      allow read: if isSignedIn();
+      // All writes go through the group-game callables (create/join/start/…).
+      allow create, update, delete: if false;
+
+      // Peek-proof: a player's pick (id `{round}_{uid}`) is readable only by that
+      // player. The server writes the revealed tally into the game doc after the
+      // host closes each round.
+      match /answers/{ansId} {
+        allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid);
+        allow create, update, delete: if false;
+      }
+    }
+
     // ============================================
     // ADMIN EMAIL CAMPAIGN LOG (server-only via Cloud Functions)
     // ============================================

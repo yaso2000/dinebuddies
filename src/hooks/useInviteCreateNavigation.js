@@ -70,6 +70,13 @@ export function useInviteCreateNavigation({
     async (kind) => {
       if (!kind) return;
 
+      // Group games are open to everyone — no invitation gating.
+      if (kind === 'group_game') {
+        navigate('/create-group-game');
+        onAfterNavigate?.();
+        return;
+      }
+
       // Business accounts may open/enter a Stage; invitation types stay blocked.
       if (kind === 'stage') {
         if (hasLiveStage && liveStageId) {

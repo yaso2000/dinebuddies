@@ -2353,7 +2353,47 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "invite_create_group_game_title": "Group game",
+  "invite_create_group_game_desc": "Play a live compatibility game with friends — open to everyone.",
+  "group_game_taste_title": "Group Compatibility",
+  "group_game_taste_desc": "Everyone answers fun this-or-that questions. See who is most in sync — and the couple of the night. Open to everyone.",
+  "group_game_create_title": "Group game",
+  "group_game_create_cta": "Create game",
+  "group_game_creating": "Creating…",
+  "group_game_create_error": "Could not create the game.",
+  "group_game_rounds": "Number of questions",
+  "group_game_or_join": "or join with a code",
+  "group_game_code_ph": "ABCDE",
+  "group_game_join": "Join",
+  "group_game_joining": "Joining…",
+  "group_game_join_error": "Could not join.",
+  "group_game_code": "Join code",
+  "group_game_code_copied": "Code copied.",
+  "group_game_share": "Share invite",
+  "group_game_share_text": "Join my group game on DineBuddies!",
+  "group_game_link_copied": "Link copied.",
+  "group_game_players": "Players",
+  "group_game_host": "Host",
+  "group_game_start": "Start game",
+  "group_game_need_players": "Waiting for players…",
+  "group_game_wait_host": "Waiting for the host to start…",
+  "group_game_round": "Round",
+  "group_game_answered": "answered",
+  "group_game_reveal": "Reveal answers",
+  "group_game_next": "Next question",
+  "group_game_finish": "See results",
+  "group_game_pick": "Pick your answer.",
+  "group_game_locked": "Answer locked — you can change it until reveal.",
+  "group_game_leaderboard": "Standings",
+  "group_game_winner_sub": "Most in sync with the group",
+  "group_game_top_pair": "Couple of the night",
+  "group_game_group_pct": "Group harmony",
+  "group_game_contrarian": "The free spirit",
+  "group_game_restart": "Play again",
+  "group_game_exit": "Exit",
+  "group_game_not_found": "This game is not available.",
+  "group_game_answer_error": "Could not submit.",
   "support_ai_title": "Ask DineBuddies Assistant",
   "support_ai_subtitle": "Instant answers · free · in your language",
   "support_ai_placeholder": "Ask me anything about DineBuddies — invitations, the feed, communities, credits, your account…",

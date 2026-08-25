@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaChevronRight, FaGlobe, FaHeart, FaLock, FaMicrophone } from 'react-icons/fa';
+import { FaChevronRight, FaGlobe, FaHeart, FaLock, FaMicrophone, FaUsers } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { AppText } from './base';
 import { useInviteCreateNavigation } from '../hooks/useInviteCreateNavigation';
@@ -64,6 +64,14 @@ export default function InviteCreateTypePicker({
       icon: FaHeart,
       title: t('invite_create_private_title'),
       desc: t('invite_create_private_desc'),
+    },
+    {
+      kind: 'group_game',
+      className: 'social',
+      sheetIconClass: 'business-create-option__icon--stage',
+      icon: FaUsers,
+      title: t('invite_create_group_game_title', 'Group game'),
+      desc: t('invite_create_group_game_desc', 'Play a live compatibility game with friends — open to everyone.'),
     },
     ...(includeStage
       ? [

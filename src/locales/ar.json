@@ -2370,7 +2370,47 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "invite_create_group_game_title": "لعبة جماعية",
+  "invite_create_group_game_desc": "العب لعبة توافق مباشرة مع الأصدقاء — متاحة للجميع.",
+  "group_game_taste_title": "التوافق الجماعي",
+  "group_game_taste_desc": "يجيب الجميع عن أسئلة «هذا أم ذاك» الممتعة. اكتشفوا الأكثر توافقًا — وثنائي الليلة. مفتوحة للجميع.",
+  "group_game_create_title": "لعبة جماعية",
+  "group_game_create_cta": "أنشئ اللعبة",
+  "group_game_creating": "جارٍ الإنشاء…",
+  "group_game_create_error": "تعذّر إنشاء اللعبة.",
+  "group_game_rounds": "عدد الأسئلة",
+  "group_game_or_join": "أو انضمّ برمز",
+  "group_game_code_ph": "ABCDE",
+  "group_game_join": "انضمام",
+  "group_game_joining": "جارٍ الانضمام…",
+  "group_game_join_error": "تعذّر الانضمام.",
+  "group_game_code": "رمز الانضمام",
+  "group_game_code_copied": "نُسخ الرمز.",
+  "group_game_share": "مشاركة الدعوة",
+  "group_game_share_text": "انضمّ إلى لعبتي الجماعية على داين بادّيز!",
+  "group_game_link_copied": "نُسخ الرابط.",
+  "group_game_players": "اللاعبون",
+  "group_game_host": "المُضيف",
+  "group_game_start": "ابدأ اللعبة",
+  "group_game_need_players": "بانتظار اللاعبين…",
+  "group_game_wait_host": "بانتظار أن يبدأ المُضيف…",
+  "group_game_round": "جولة",
+  "group_game_answered": "أجابوا",
+  "group_game_reveal": "اكشف الإجابات",
+  "group_game_next": "السؤال التالي",
+  "group_game_finish": "اعرض النتائج",
+  "group_game_pick": "اختر إجابتك.",
+  "group_game_locked": "تم تثبيت إجابتك — يمكنك تغييرها حتى الكشف.",
+  "group_game_leaderboard": "الترتيب",
+  "group_game_winner_sub": "الأكثر توافقًا مع المجموعة",
+  "group_game_top_pair": "ثنائي الليلة",
+  "group_game_group_pct": "انسجام المجموعة",
+  "group_game_contrarian": "الروح الحرّة",
+  "group_game_restart": "العب مجددًا",
+  "group_game_exit": "خروج",
+  "group_game_not_found": "هذه اللعبة غير متاحة.",
+  "group_game_answer_error": "تعذّر إرسال الإجابة.",
   "support_ai_title": "اسأل مساعد داين بادّيز",
   "support_ai_subtitle": "إجابات فورية · مجانًا · بلغتك",
   "support_ai_placeholder": "اسألني أي شيء عن داين بادّيز — الدعوات، الموجز، المجتمعات، الكريدت، حسابك…",
