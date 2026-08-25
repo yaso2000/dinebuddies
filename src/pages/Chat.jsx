@@ -329,6 +329,13 @@ const Chat = () => {
 
   const initInFlightRef = useRef(false);
   const initKeyRef = useRef(null);
+  // Call the latest getOrCreateConversation without depending on its identity —
+  // it is recreated whenever userProfile re-emits, which would otherwise re-run
+  // (and cancel) this init on every churn and leave the chat stuck on "Loading".
+  const getOrCreateConversationRef = useRef(getOrCreateConversation);
+  getOrCreateConversationRef.current = getOrCreateConversation;
+  const blockedKey = (userProfile?.blockedUserIds || []).join(',');
+  const mutedKey = (userProfile?.mutedUserIds || []).join(',');
 
   useEffect(() => {
     let cancelled = false;
@@ -399,7 +406,7 @@ const Chat = () => {
           return;
         }
 
-        const convId = await getOrCreateConversation(userId);
+        const convId = await getOrCreateConversationRef.current(userId);
         if (cancelled) return;
 
         initKeyRef.current = initKey;
@@ -428,13 +435,13 @@ const Chat = () => {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     userId,
     currentUser?.uid,
-    getOrCreateConversation,
     retryTrigger,
-    userProfile?.blockedUserIds,
-    userProfile?.mutedUserIds,
+    blockedKey,
+    mutedKey,
     connectionAllowed,
     connectionCheckLoading,
   ]);

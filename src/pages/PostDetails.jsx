@@ -117,7 +117,7 @@ const PostDetails = () => {
                 <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>😕</div>
                 <AppText as="h2" style={{ color: 'var(--text-main)', marginBottom: '0.5rem' }}>{t('post_not_found', 'Post not found')}</AppText>
                 <AppText as="p" style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>{t('post_deleted', 'This post may have been deleted.')}</AppText>
-                <button onClick={() => navigate(-1)} className="ui-btn ui-btn--primary">{t('btn_go_back', 'Go Back')}</button>
+                <button onClick={() => navigate('/posts-feed')} className="ui-btn ui-btn--primary">{t('btn_go_back', 'Go Back')}</button>
             </div>);
 
   }
@@ -139,7 +139,7 @@ const PostDetails = () => {
         position: 'sticky', top: 0, background: 'var(--bg-main)', zIndex: 10
       }}>
                 <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/posts-feed')}
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
             color: 'var(--text-main)', padding: '6px',
