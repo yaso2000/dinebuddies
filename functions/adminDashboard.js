@@ -963,6 +963,17 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
                 reporterId: r.reporterId || '',
                 reporterName: r.reporterName || '',
                 createdAt: ts,
+                // AI triage
+                aiProcessed: r.aiProcessed === true,
+                aiCategory: r.aiCategory || null,
+                aiSeverity: r.aiSeverity || null,
+                aiRecommendation: r.aiRecommendation || null,
+                aiSummary: r.aiSummary || null,
+                aiSuggestedResponse: r.aiSuggestedResponse || null,
+                aiContentText: r.aiContentText || null,
+                aiContentImage: r.aiContentImage || null,
+                escalated: r.escalated === true,
+                adminResponse: r.adminResponse || null,
             };
         });
 

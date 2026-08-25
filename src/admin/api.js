@@ -39,6 +39,8 @@ export const adminApi = {
     listAnnouncements: (opts = {}) => call('adminListAnnouncements', opts),
     listReports: (opts = {}) => call('adminListReports', opts),
     setReportStatus: (reportId, status) => call('adminSetReportStatus', { reportId, status }),
+    triageReport: (reportId) => call('triageReport', { reportId }),
+    respondToReport: (reportId, message) => call('respondToReport', { reportId, message }),
     listDemoUsers: () => call('adminListDemoUsers', {}),
     listDemoUserProfiles: (payload = {}) => call('adminListDemoUserProfiles', payload),
     createDemoUser: (payload) => call('adminCreateDemoUser', payload),

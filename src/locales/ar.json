@@ -2370,7 +2370,30 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "admin_report_ai": "فرز الذكاء",
+  "admin_report_details": "تفاصيل",
+  "admin_report_content": "المحتوى المُبلَّغ",
+  "admin_report_no_text": "(لا نص)",
+  "admin_report_reply": "الرد على المُبلِّغ",
+  "admin_report_send_reply": "إرسال الرد",
+  "admin_report_retriage": "إعادة الفرز",
+  "admin_report_response_sent": "أُرسل الرد للمُبلِّغ.",
+  "admin_report_csam_warn": "⚠ محتوى مشتبه يخصّ سلامة الأطفال. لا تتصرّف هنا — صعّده للأنبوب المختص والجهات المعنية.",
+  "report_cat_spam": "بريد مزعج",
+  "report_cat_harassment_threat": "تحرّش/تهديد",
+  "report_cat_hate_racism": "كراهية/عنصرية",
+  "report_cat_nudity_sexual": "عُري/جنسي",
+  "report_cat_violence": "عنف",
+  "report_cat_misinformation": "تضليل",
+  "report_cat_self_harm": "إيذاء النفس",
+  "report_cat_csam_suspected": "مشتبه CSAM",
+  "report_cat_other": "أخرى",
+  "report_rec_dismiss": "تجاهل",
+  "report_rec_warn_user": "تحذير",
+  "report_rec_hide_content": "إخفاء المحتوى",
+  "report_rec_ban_user": "حظر",
+  "report_rec_escalate": "تصعيد",
   "compat_card_subtitle": "اضغط للّعب والإجابة على السؤال التالي معًا",
   "comment_delete_confirm": "حذف هذا التعليق؟",
   "comment_delete_failed": "تعذّر حذف التعليق.",

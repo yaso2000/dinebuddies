@@ -159,12 +159,16 @@ function registerReportTriage(exports, { db, admin }) {
             aiSummary: summary,
             aiSuggestedResponse: suggestedResponse,
             aiHasImage: !!imagePart,
+            // Content snapshot so the admin panel can preview without re-resolving.
+            aiContentText: (content.text || '').slice(0, 800) || null,
+            aiContentImage: content.imageUrl || null,
         };
 
-        // Suspected CSAM: never auto-act; flag for the specialized pipeline + authorities.
+        // Suspected CSAM: never auto-act; flag for the specialized pipeline +
+        // authorities. Keep it in the pending queue (don't change status) so it
+        // stays visible and top-priority for a human.
         if (category === 'csam_suspected') {
             updates.aiRecommendation = 'escalate';
-            updates.status = 'escalated_csam';
             updates.escalated = true;
         }
 
@@ -200,6 +204,46 @@ function registerReportTriage(exports, { db, admin }) {
         const s = await ref.get();
         if (!s.exists) throw new functions.https.HttpsError('not-found', 'Report not found.');
         await triage(ref, s.data() || {});
+        return { ok: true };
+    });
+
+    // Reply to the reporter (admin) — notifies them and marks the report responded.
+    exports.respondToReport = functions.https.onCall(async (data, context) => {
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in.');
+        const uid = context.auth.uid;
+        const meSnap = await db.collection('users').doc(uid).get();
+        const role = String(meSnap.data()?.role || '').toLowerCase();
+        const isAdmin = context.auth.token?.admin === true || context.auth.token?.role === 'admin' || role === 'admin';
+        if (!isAdmin) throw new functions.https.HttpsError('permission-denied', 'Admins only.');
+
+        const reportId = asTrimmed(data?.reportId);
+        const message = asTrimmed(data?.message);
+        if (!reportId) throw new functions.https.HttpsError('invalid-argument', 'reportId is required.');
+        if (!message) throw new functions.https.HttpsError('invalid-argument', 'message is required.');
+
+        const ref = db.collection('reports').doc(reportId);
+        const s = await ref.get();
+        if (!s.exists) throw new functions.https.HttpsError('not-found', 'Report not found.');
+        const report = s.data() || {};
+        const reporterId = asTrimmed(report.reporterId);
+
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        if (reporterId) {
+            await db.collection('notifications').add({
+                userId: reporterId,
+                type: 'report_update',
+                title: 'Update on your report',
+                message: message.slice(0, 500),
+                actionUrl: '/notifications',
+                fromUserId: uid,
+                senderId: uid,
+                senderName: 'DineBuddies Safety',
+                metadata: { source: 'report_response', reportId },
+                createdAt: now,
+                read: false,
+            });
+        }
+        await ref.update({ adminResponse: message.slice(0, 2000), respondedAt: now, respondedBy: uid });
         return { ok: true };
     });
 }

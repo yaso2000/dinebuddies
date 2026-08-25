@@ -2353,7 +2353,30 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "admin_report_ai": "AI triage",
+  "admin_report_details": "Details",
+  "admin_report_content": "Reported content",
+  "admin_report_no_text": "(no text content)",
+  "admin_report_reply": "Reply to reporter",
+  "admin_report_send_reply": "Send reply",
+  "admin_report_retriage": "Re-run AI",
+  "admin_report_response_sent": "Reply sent to the reporter.",
+  "admin_report_csam_warn": "⚠ Suspected child-safety content. Do NOT action here — escalate to the specialized pipeline and authorities.",
+  "report_cat_spam": "Spam",
+  "report_cat_harassment_threat": "Harassment/threat",
+  "report_cat_hate_racism": "Hate/racism",
+  "report_cat_nudity_sexual": "Nudity/sexual",
+  "report_cat_violence": "Violence",
+  "report_cat_misinformation": "Misinformation",
+  "report_cat_self_harm": "Self-harm",
+  "report_cat_csam_suspected": "Suspected CSAM",
+  "report_cat_other": "Other",
+  "report_rec_dismiss": "Dismiss",
+  "report_rec_warn_user": "Warn",
+  "report_rec_hide_content": "Hide content",
+  "report_rec_ban_user": "Ban",
+  "report_rec_escalate": "Escalate",
   "compat_card_subtitle": "Tap to play the next question together",
   "comment_delete_confirm": "Delete this comment?",
   "comment_delete_failed": "Could not delete the comment.",
