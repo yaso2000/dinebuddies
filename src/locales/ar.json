@@ -2370,7 +2370,8 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "group_game_need_players_3": "يلزم 3 لاعبين على الأقل…",
   "group_game_delete": "حذف اللعبة",
   "group_game_delete_confirm": "حذف هذه اللعبة للجميع؟ لا يمكن التراجع.",
   "group_game_your_game": "لعبتك",

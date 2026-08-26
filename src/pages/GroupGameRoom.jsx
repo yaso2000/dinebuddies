@@ -207,8 +207,8 @@ export default function GroupGameRoom() {
               </button>
             ) : isHost ? (
               <>
-                <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'start' || players.length < 2} onClick={wrap('start', start)}>
-                  {players.length < 2 ? `⏳ ${t('group_game_need_players', 'Waiting for players…')}` : `🚀 ${t('group_game_start', 'Start game')}`}
+                <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'start' || players.length < 3} onClick={wrap('start', start)}>
+                  {players.length < 3 ? `⏳ ${t('group_game_need_players_3', 'Need at least 3 players…')}` : `🚀 ${t('group_game_start', 'Start game')}`}
                 </button>
                 <button type="button" onClick={doDelete} disabled={busy === 'delete'} className="gg-textbtn gg-textbtn--danger"><FaTrashAlt /> {t('group_game_delete', 'Delete game')}</button>
               </>

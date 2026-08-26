@@ -221,7 +221,9 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         const { ref, game } = await requireGame(asTrimmed(data?.gameId));
         assertHost(game, uid);
         if (game.status !== 'lobby') throw new functions.https.HttpsError('failed-precondition', 'Already started.');
-        if ((game.playerIds || []).length < 2) throw new functions.https.HttpsError('failed-precondition', 'Need at least 2 players.');
+        // Minimum 3: with 2 players "most in sync with the group" is meaningless
+        // (their agreement is symmetric). Two-player compatibility is the 1:1 journey.
+        if ((game.playerIds || []).length < 3) throw new functions.https.HttpsError('failed-precondition', 'Need at least 3 players.');
 
         const clearedAnswered = {};
         for (const pid of game.playerIds) clearedAnswered[`players.${pid}.answered`] = false;
