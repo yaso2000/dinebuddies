@@ -297,7 +297,7 @@ export default function GroupGameRoom() {
                 )}
               </div>
             ) : (
-              <RoundReveal game={game} round={round} qOpts={qOpts(question)} />
+              <RoundReveal game={game} round={round} qOpts={qOpts(question)} t={t} />
             )}
 
             {roundStatus === 'revealed' && isHost ? (
@@ -319,7 +319,18 @@ export default function GroupGameRoom() {
   );
 }
 
-function RoundReveal({ game, round, qOpts }) {
+function PlayerTile({ avatar, name, color, size = 44 }) {
+  const inner = size - 12;
+  return (
+    <div title={name} style={{ width: size, height: size, borderRadius: 12, background: color, display: 'grid', placeItems: 'center', boxShadow: '0 2px 7px rgba(0,0,0,0.15)' }}>
+      {avatar
+        ? <img src={avatar} alt="" style={{ width: inner, height: inner, borderRadius: '50%', objectFit: 'cover', border: '2px solid #fff' }} />
+        : <span style={{ width: inner, height: inner, borderRadius: '50%', background: '#fff', color, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: inner * 0.42 }}>{(name || '?').charAt(0).toUpperCase()}</span>}
+    </div>
+  );
+}
+
+function RoundReveal({ game, round, qOpts, t }) {
   const reveal = game.reveal?.[round];
   if (!reveal) return null;
   const nameOf = (uid) => game.players?.[uid]?.name || 'Player';
@@ -327,6 +338,7 @@ function RoundReveal({ game, round, qOpts }) {
   const total = (reveal.counts?.[0] || 0) + (reveal.counts?.[1] || 0) || 1;
   const byOption = [[], []];
   Object.entries(reveal.picks || {}).forEach(([uid, opt]) => { if (byOption[opt]) byOption[opt].push(uid); });
+  const noAnswer = (game.playerIds || []).filter((u) => reveal.picks?.[u] === undefined);
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       {qOpts.map((opt, idx) => {
@@ -339,20 +351,23 @@ function RoundReveal({ game, round, qOpts }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 800, marginBottom: 8 }}>
               <span>{isMaj ? '👑 ' : ''}{opt}</span><span style={{ color: p.solid }}>{count}</span>
             </div>
-            <div style={{ height: 8, borderRadius: 6, background: 'var(--border-color)', overflow: 'hidden', marginBottom: byOption[idx].length ? 8 : 0 }}>
+            <div style={{ height: 8, borderRadius: 6, background: 'var(--border-color)', overflow: 'hidden', marginBottom: byOption[idx].length ? 10 : 0 }}>
               <div style={{ width: `${pct}%`, height: '100%', background: p.grad, transition: 'width .6s ease' }} />
             </div>
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              {byOption[idx].map((u) => (
-                <div key={u} title={nameOf(u)}>{avatarOf(u)
-                  ? <img src={avatarOf(u)} alt="" style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover' }} />
-                  : <span style={{ width: 26, height: 26, borderRadius: '50%', background: p.solid, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>{nameOf(u).charAt(0)}</span>}
-                </div>
-              ))}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {byOption[idx].map((u) => <PlayerTile key={u} avatar={avatarOf(u)} name={nameOf(u)} color={p.solid} />)}
             </div>
           </div>
         );
       })}
+      {noAnswer.length ? (
+        <div className="gg-card" style={{ padding: 12 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8, color: 'var(--text-muted)' }}>⏱️ {t('group_game_no_answer', 'No answer')} · {noAnswer.length}</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {noAnswer.map((u) => <PlayerTile key={u} avatar={avatarOf(u)} name={nameOf(u)} color="#94a3b8" />)}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

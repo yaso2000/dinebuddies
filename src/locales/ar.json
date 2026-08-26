@@ -2370,7 +2370,8 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "group_game_no_answer": "لم يجب",
   "invite_enter_group_game_title": "دخول لعبتك",
   "invite_enter_group_game_desc": "لديك لعبة نشطة. اضغط للدخول.",
   "group_game_time_up": "انتهى الوقت!",
