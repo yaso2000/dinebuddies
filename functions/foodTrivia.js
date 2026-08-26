@@ -239,8 +239,9 @@ function registerFoodTrivia(exports, { db, admin, enforceCallableRateLimit }) {
             return { ok: true, phase: 'next', round: nextRound };
         }
         const result = buildResult(game);
+        // Keep the stage pointer so the results screen stays visible until the
+        // host closes it (clearing it here would make the game vanish instantly).
         await ref.update({ status: 'finished', roundStatus: 'revealed', result, updatedAt: now });
-        await clearStagePointer(game.stageId, ref.id);
         return { ok: true, phase: 'finished' };
     });
 
@@ -350,7 +351,21 @@ function registerFoodTrivia(exports, { db, admin, enforceCallableRateLimit }) {
         assertHost(game, uid);
         if (game.status === 'finished') return { ok: true };
         const result = buildResult(game);
+        // Finish + show results; the pointer is cleared later by closeTriviaGame.
         await ref.update({ status: 'finished', roundStatus: 'revealed', result, updatedAt: FieldValue.serverTimestamp() });
+        return { ok: true };
+    });
+
+    // ---- Close the results (host) — dismiss the panel, restore the banner ----
+    exports.closeTriviaGame = functions.https.onCall(async (data, context) => {
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
+        const uid = context.auth.uid;
+        const { ref, game } = await requireGame(asTrimmed(data?.gameId));
+        assertHost(game, uid);
+        if (game.status !== 'finished') {
+            const result = buildResult(game);
+            await ref.update({ status: 'finished', roundStatus: 'revealed', result, updatedAt: FieldValue.serverTimestamp() });
+        }
         await clearStagePointer(game.stageId, ref.id);
         return { ok: true };
     });

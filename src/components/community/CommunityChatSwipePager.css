@@ -560,8 +560,21 @@
     color: #ff3b30;
 }
 
-.community-banner-host-tools__btn--trivia {
-    color: #e86e2e;
+/* Food-Trivia launcher — deliberately bigger & bolder than the other tools, and
+   sits at the leading edge (not the middle) so it reads as "play a game". */
+.community-banner-host-tools__game {
+    color: #fff !important;
+    background: linear-gradient(135deg, #7c3aed, #e86e2e) !important;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.5);
+    transform: scale(1.28);
+    transform-origin: center;
+    margin-inline-end: 10px;
+    animation: dbGamePulse 2s ease-in-out infinite;
+}
+.community-banner-host-tools__game:hover { filter: brightness(1.08); }
+@keyframes dbGamePulse {
+    0%, 100% { box-shadow: 0 4px 14px rgba(124, 58, 237, 0.5); }
+    50% { box-shadow: 0 4px 20px rgba(232, 110, 46, 0.75); }
 }
 
 /*

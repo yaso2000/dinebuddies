@@ -15,7 +15,7 @@ export default function StageTriviaPanel({ stageId, isHost, onGameActiveChange, 
   const lang = (i18n.language || 'ar').split('-')[0];
   const { userProfile, isBusiness } = useAuth();
   const { showToast } = useToast();
-  const { game, start, submit, advance, end, generate } = useStageTrivia(stageId);
+  const { game, start, submit, advance, end, close, generate } = useStageTrivia(stageId);
 
   // Tell the Stage layout when a game is running so it can replace the banner.
   useEffect(() => { onGameActiveChange?.(!!game); }, [game, onGameActiveChange]);
@@ -155,9 +155,10 @@ export default function StageTriviaPanel({ stageId, isHost, onGameActiveChange, 
             ))}
           </div>
           {canHost ? (
-            <button type="button" className="stage-trivia__start" disabled={busy === 'start'} onClick={wrap('start', () => start(8))}>
-              {t('trivia_play_again', 'New game')}
-            </button>
+            <div className="stage-trivia__host">
+              <button type="button" className="stage-trivia__hostbtn" disabled={busy === 'start'} onClick={wrap('start', () => start(8))}>{t('trivia_play_again', 'New game')}</button>
+              <button type="button" className="stage-trivia__hostbtn stage-trivia__hostbtn--ghost" disabled={busy === 'close'} onClick={wrap('close', close)}>{t('trivia_close', 'Close')}</button>
+            </div>
           ) : null}
         </div>
       ) : question ? (

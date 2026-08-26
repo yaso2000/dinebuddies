@@ -38,9 +38,10 @@ export function useStageTrivia(stageId) {
   const submit = useCallback((round, optionIndex) => call('submitTriviaAnswer')({ gameId, round, optionIndex }), [gameId]);
   const advance = useCallback(() => call('advanceTriviaGame')({ gameId }), [gameId]);
   const end = useCallback(() => call('endTriviaGame')({ gameId }), [gameId]);
+  const close = useCallback(() => call('closeTriviaGame')({ gameId }), [gameId]);
   const generate = useCallback((topic, count) => call('generateTriviaQuestions')({ topic, count }).then((r) => r.data), []);
 
   // A finished game still points from the stage briefly; treat finished as active-for-display.
   const active = !!game && game.status !== 'finished' ? game : (game && game.status === 'finished' ? game : null);
-  return { game: active, gameId, start, submit, advance, end, generate };
+  return { game: active, gameId, start, submit, advance, end, close, generate };
 }

@@ -2370,7 +2370,8 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "trivia_close": "إغلاق",
   "your_stage_label": "مسرحك",
   "trivia_generate_link": "ولّد أسئلة عن قائمتك (بالذكاء)",
   "trivia_generate_ph": "مطبخك / أطباقك المميّزة، مثال: مشاوي لبنانية: شيش طاووق، كبة، تبولة…",

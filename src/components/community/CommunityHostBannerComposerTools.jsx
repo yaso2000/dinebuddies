@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   FaBold,
   FaBullhorn,
-  FaUtensils,
+  FaGamepad,
   FaFont,
   FaHeading,
   FaImage,
@@ -1295,6 +1295,17 @@ export default function CommunityHostBannerComposerTools({
       aria-label={t('community_banner_host_tools_left', 'Banner tools left')}
       data-banner-tools="side-start"
     >
+      {onOpenTrivia ? (
+        <button
+          type="button"
+          className="community-banner-host-tools__btn community-banner-host-tools__game"
+          aria-label={t('trivia_start', 'Start Food Trivia')}
+          title={t('trivia_start', 'Start Food Trivia')}
+          onClick={onOpenTrivia}
+        >
+          <FaGamepad size={22} aria-hidden />
+        </button>
+      ) : null}
       <button
         type="button"
         className={`community-banner-host-tools__btn community-banner-host-tools__btn--bg${hasBannerBackgroundTool ? ' community-banner-host-tools__btn--active' : ''}`}
@@ -1325,17 +1336,6 @@ export default function CommunityHostBannerComposerTools({
       >
         <FaHeading size={16} aria-hidden />
       </button>
-      {onOpenTrivia ? (
-        <button
-          type="button"
-          className="community-banner-host-tools__btn community-banner-host-tools__btn--trivia"
-          aria-label={t('trivia_start', 'Start Food Trivia')}
-          title={t('trivia_start', 'Start Food Trivia')}
-          onClick={onOpenTrivia}
-        >
-          <FaUtensils size={16} aria-hidden />
-        </button>
-      ) : null}
     </div>
   );
 
