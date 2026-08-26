@@ -13,11 +13,22 @@ import { AppText } from '../components/base';
 const MUTE_KEY = 'db_group_game_muted';
 const ROUND_MS = 10000; // must match the server's per-question window
 const MAX_PLAYERS = 16; // must match the server cap
-// Two vivid option palettes so the choice feels tactile and fun.
+// Vivid option palettes so the choice feels tactile and fun (up to 3 options).
 const OPT = [
   { grad: 'linear-gradient(135deg,#6366f1,#8b5cf6)', solid: '#7c3aed', ring: 'rgba(124,58,237,0.5)', letter: 'A' },
   { grad: 'linear-gradient(135deg,#f43f5e,#fb7185)', solid: '#e11d48', ring: 'rgba(225,29,72,0.5)', letter: 'B' },
+  { grad: 'linear-gradient(135deg,#0ea5e9,#22d3ee)', solid: '#0284c7', ring: 'rgba(2,132,199,0.5)', letter: 'C' },
 ];
+
+// Zodiac signs — icon + localized name (client-side; the bank stores sign keys).
+const ZODIAC = {
+  aries: { icon: '♈', ar: 'الحمل', en: 'Aries' }, taurus: { icon: '♉', ar: 'الثور', en: 'Taurus' },
+  gemini: { icon: '♊', ar: 'الجوزاء', en: 'Gemini' }, cancer: { icon: '♋', ar: 'السرطان', en: 'Cancer' },
+  leo: { icon: '♌', ar: 'الأسد', en: 'Leo' }, virgo: { icon: '♍', ar: 'العذراء', en: 'Virgo' },
+  libra: { icon: '♎', ar: 'الميزان', en: 'Libra' }, scorpio: { icon: '♏', ar: 'العقرب', en: 'Scorpio' },
+  sagittarius: { icon: '♐', ar: 'القوس', en: 'Sagittarius' }, capricorn: { icon: '♑', ar: 'الجدي', en: 'Capricorn' },
+  aquarius: { icon: '♒', ar: 'الدلو', en: 'Aquarius' }, pisces: { icon: '♓', ar: 'الحوت', en: 'Pisces' },
+};
 
 function Avatar({ src, name, size = 40, ring }) {
   const initial = (name || '?').trim().charAt(0).toUpperCase();
@@ -58,8 +69,13 @@ export default function GroupGameRoom() {
   const [burst, setBurst] = useState(false);
   const prevPhase = useRef('');
 
+  const isQuiz = game?.type === 'zodiac_guess';
+  const signLabel = (key) => (ZODIAC[key] ? (ZODIAC[key][lang] || ZODIAC[key].en) : key);
   const qText = (q) => q?.text?.[lang] || q?.text?.en || q?.text?.ar || '';
-  const qOpts = (q) => q?.options?.[lang] || q?.options?.en || q?.options?.ar || [];
+  // Returns option descriptors [{ label, icon? }] for either game type.
+  const qOpts = (q) => (isQuiz
+    ? (q?.signs || []).map((s) => ({ label: signLabel(s), icon: ZODIAC[s]?.icon || '⭐' }))
+    : (q?.options?.[lang] || q?.options?.en || q?.options?.ar || []).map((o) => ({ label: o })));
 
   const round = game?.currentRound ?? -1;
   const question = round >= 0 && game?.questions ? game.questions[round] : null;
@@ -182,8 +198,8 @@ export default function GroupGameRoom() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '12px 14px', borderBottom: '1px solid var(--border-color)', background: 'color-mix(in srgb, var(--bg-card) 88%, transparent)', backdropFilter: 'blur(6px)' }}>
         <AppText as="div" style={{ fontWeight: 900, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span style={{ fontSize: '1.15rem' }}>💞</span>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('group_game_taste_title', 'Group Compatibility')}</span>
+          <span style={{ fontSize: '1.15rem' }}>{isQuiz ? '⭐' : '💞'}</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isQuiz ? t('zodiac_game_title', 'Guess the Sign') : t('group_game_taste_title', 'Group Compatibility')}</span>
         </AppText>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <button type="button" onClick={copyCode} title={t('group_game_code', 'Join code')} className="gg-code">
@@ -276,7 +292,7 @@ export default function GroupGameRoom() {
               </div>
               {roundStatus === 'answering' && remainingMs != null ? (
                 <div style={{ height: 6, borderRadius: 4, background: 'var(--border-color)', overflow: 'hidden', marginBottom: 12 }}>
-                  <div style={{ height: '100%', width: `${(remainingMs / ROUND_MS) * 100}%`, background: remainingSec <= 3 ? '#ef4444' : 'linear-gradient(90deg,var(--primary),#f0a24b)', transition: 'width .25s linear' }} />
+                  <div style={{ height: '100%', width: `${(remainingMs / (game?.roundDurationMs || ROUND_MS)) * 100}%`, background: remainingSec <= 3 ? '#ef4444' : 'linear-gradient(90deg,var(--primary),#f0a24b)', transition: 'width .25s linear' }} />
                 </div>
               ) : null}
               <AppText as="div" style={{ fontSize: '1.35rem', fontWeight: 900, lineHeight: 1.35 }}>{qText(question)}</AppText>
@@ -291,8 +307,8 @@ export default function GroupGameRoom() {
                   return (
                     <button key={idx} type="button" onClick={() => pick(idx)} disabled={timeUp || spectator} className={`gg-option${selected ? ' is-selected' : ''}`}
                       style={{ background: p.grad, boxShadow: selected ? `0 8px 26px ${p.ring}` : '0 4px 14px rgba(0,0,0,0.12)', opacity: dim || spectator || (timeUp && !selected) ? 0.45 : 1, cursor: (timeUp || spectator) ? 'default' : 'pointer' }}>
-                      <span className="gg-option__letter">{selected ? <FaCheck /> : p.letter}</span>
-                      <span className="gg-option__text">{opt}</span>
+                      <span className="gg-option__letter" style={opt.icon ? { fontSize: '1.3rem' } : undefined}>{selected ? <FaCheck /> : (opt.icon || p.letter)}</span>
+                      <span className="gg-option__text">{opt.label}</span>
                     </button>
                   );
                 })}
@@ -343,8 +359,10 @@ function RoundReveal({ game, round, qOpts, t }) {
   if (!reveal) return null;
   const nameOf = (uid) => game.players?.[uid]?.name || 'Player';
   const avatarOf = (uid) => game.players?.[uid]?.avatar || '';
-  const total = (reveal.counts?.[0] || 0) + (reveal.counts?.[1] || 0) || 1;
-  const byOption = [[], []];
+  const isQuiz = game.type === 'zodiac_guess';
+  const correctIndex = reveal.correctIndex;
+  const total = (reveal.counts || []).reduce((s, c) => s + (c || 0), 0) || 1;
+  const byOption = qOpts.map(() => []);
   Object.entries(reveal.picks || {}).forEach(([uid, opt]) => { if (byOption[opt]) byOption[opt].push(uid); });
   const noAnswer = (game.playerIds || []).filter((u) => reveal.picks?.[u] === undefined);
   return (
@@ -353,11 +371,13 @@ function RoundReveal({ game, round, qOpts, t }) {
         const p = OPT[idx] || OPT[0];
         const count = reveal.counts?.[idx] || 0;
         const pct = Math.round((100 * count) / total);
-        const isMaj = reveal.majority === idx;
+        const isCorrect = isQuiz && idx === correctIndex;
+        const isMaj = !isQuiz && reveal.majority === idx;
+        const highlight = isCorrect || isMaj;
         return (
-          <div key={idx} className="gg-card" style={{ padding: 12, border: isMaj ? '2px solid var(--primary)' : '1px solid var(--border-color)' }}>
+          <div key={idx} className="gg-card" style={{ padding: 12, border: highlight ? `2px solid ${isCorrect ? '#16a34a' : 'var(--primary)'}` : '1px solid var(--border-color)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 800, marginBottom: 8 }}>
-              <span>{isMaj ? '👑 ' : ''}{opt}</span><span style={{ color: p.solid }}>{count}</span>
+              <span>{isCorrect ? '✅ ' : isMaj ? '👑 ' : ''}{opt.icon ? `${opt.icon} ` : ''}{opt.label}</span><span style={{ color: isCorrect ? '#16a34a' : p.solid }}>{count}</span>
             </div>
             <div style={{ height: 8, borderRadius: 6, background: 'var(--border-color)', overflow: 'hidden', marginBottom: byOption[idx].length ? 10 : 0 }}>
               <div style={{ width: `${pct}%`, height: '100%', background: p.grad, transition: 'width .6s ease' }} />
@@ -399,15 +419,19 @@ function MiniLeaderboard({ ranking, t }) {
 }
 
 function ResultScreen({ result, isHost, busy, onRestart, onExit, t }) {
+  const isQuiz = result.mode === 'quiz';
   const top = (result.ranking || []).slice(0, 3);
   const order = [1, 0, 2]; // silver, gold, bronze podium layout
   const heights = { 0: 92, 1: 68, 2: 52 };
   const medal = ['🥇', '🥈', '🥉'];
+  const podiumValue = (p) => (isQuiz ? `${p.score}` : `${p.pct}%`);
   return (
     <div style={{ textAlign: 'center', paddingTop: 4 }}>
       <div style={{ fontSize: '2.6rem', animation: 'dbPop .5s ease' }}>🏆</div>
       <AppText as="div" style={{ fontWeight: 900, fontSize: '1.5rem' }}>{result.winnerName}</AppText>
-      <AppText as="div" style={{ color: 'var(--text-muted)', marginBottom: 18 }}>{t('group_game_winner_sub', 'Most in sync with the group')}</AppText>
+      <AppText as="div" style={{ color: 'var(--text-muted)', marginBottom: 18 }}>
+        {isQuiz ? `${result.winnerScore || 0} ${t('trivia_points', 'pts')}` : t('group_game_winner_sub', 'Most in sync with the group')}
+      </AppText>
 
       {/* podium */}
       {top.length >= 2 ? (
@@ -417,13 +441,13 @@ function ResultScreen({ result, isHost, busy, onRestart, onExit, t }) {
               <div style={{ fontSize: '1.1rem' }}>{medal[i]}</div>
               <Avatar src={top[i].avatar} name={top[i].name} size={i === 0 ? 54 : 44} ring={i === 0 ? 'var(--primary)' : 'var(--border-color)'} />
               <AppText as="div" style={{ fontSize: '0.78rem', fontWeight: 700, marginTop: 4, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{top[i].name}</AppText>
-              <div style={{ width: '100%', height: heights[i], marginTop: 6, borderRadius: '10px 10px 0 0', background: i === 0 ? 'linear-gradient(180deg,var(--primary),#f0a24b)' : 'var(--bg-elevated)', border: '1px solid var(--border-color)', display: 'grid', placeItems: 'center', color: i === 0 ? '#fff' : 'var(--text-main)', fontWeight: 900 }}>{top[i].pct}%</div>
+              <div style={{ width: '100%', height: heights[i], marginTop: 6, borderRadius: '10px 10px 0 0', background: i === 0 ? 'linear-gradient(180deg,var(--primary),#f0a24b)' : 'var(--bg-elevated)', border: '1px solid var(--border-color)', display: 'grid', placeItems: 'center', color: i === 0 ? '#fff' : 'var(--text-main)', fontWeight: 900 }}>{podiumValue(top[i])}</div>
             </div>
           ))}
         </div>
       ) : null}
 
-      {result.topPair ? (
+      {!isQuiz && result.topPair ? (
         <div className="gg-card gg-pair" style={{ padding: 16, marginBottom: 16 }}>
           <div style={{ fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 800, marginBottom: 6 }}>💞 {t('group_game_top_pair', 'Couple of the night')}</div>
           <AppText as="div" style={{ fontWeight: 900, fontSize: '1.05rem' }}>{result.topPair.aName} <span style={{ color: 'var(--primary)' }}>×</span> {result.topPair.bName}</AppText>
@@ -431,11 +455,13 @@ function ResultScreen({ result, isHost, busy, onRestart, onExit, t }) {
         </div>
       ) : null}
 
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 999, padding: '8px 18px', marginBottom: 18, fontWeight: 700 }}>
-        💫 {t('group_game_group_pct', 'Group harmony')}: <b style={{ color: 'var(--primary)' }}>{result.groupPct}%</b>
-      </div>
+      {!isQuiz ? (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 999, padding: '8px 18px', marginBottom: 18, fontWeight: 700 }}>
+          💫 {t('group_game_group_pct', 'Group harmony')}: <b style={{ color: 'var(--primary)' }}>{result.groupPct}%</b>
+        </div>
+      ) : null}
 
-      {result.contrarianName && (result.ranking?.length || 0) > 2 ? (
+      {!isQuiz && result.contrarianName && (result.ranking?.length || 0) > 2 ? (
         <AppText as="div" style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 18 }}>🦄 {t('group_game_contrarian', 'The free spirit')}: <b>{result.contrarianName}</b></AppText>
       ) : null}
 

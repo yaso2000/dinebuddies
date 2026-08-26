@@ -1231,6 +1231,11 @@ service cloud.firestore {
       }
     }
 
+    // Zodiac "guess the sign" bank — server-only (never expose correctIndex).
+    match /zodiac_questions/{qid} {
+      allow read, write: if false;
+    }
+
     match /group_games/{gameId} {
       // Group games are open to everyone; the doc holds no private data (raw
       // picks live in the owner-only `answers` subcollection). Any signed-in user

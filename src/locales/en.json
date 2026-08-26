@@ -2353,7 +2353,8 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "zodiac_game_title": "Guess the Sign",
   "trivia_questions_count": "Questions",
   "group_game_spectator": "You are watching — the game started before you joined.",
   "trivia_close": "Close",

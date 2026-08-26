@@ -19,6 +19,7 @@ export default function CreateGroupGame() {
   const { showToast } = useToast();
   const uid = currentUser?.uid || null;
 
+  const [gameType, setGameType] = useState('taste_match');
   const [rounds, setRounds] = useState(6);
   const [visibility, setVisibility] = useState('public');
   const [mutuals, setMutuals] = useState([]);
@@ -65,7 +66,7 @@ export default function CreateGroupGame() {
     }
     setCreating(true);
     try {
-      const res = await groupGameApi.create({ type: 'taste_match', roundCount: rounds, visibility, inviteeIds: [...selectedIds] });
+      const res = await groupGameApi.create({ type: gameType, roundCount: rounds, visibility, inviteeIds: [...selectedIds] });
       if (res.existing) showToast(t('group_game_already_active', 'You already have an active game — opening it.'), 'info');
       navigate(`/group-game/${res.gameId}`);
     } catch (e) {
@@ -102,6 +103,22 @@ export default function CreateGroupGame() {
           <AppText as="p" style={{ color: 'var(--text-muted)', fontSize: '0.92rem', maxWidth: 420, margin: '0 auto' }}>
             {t('group_game_taste_desc', 'Everyone answers fun this-or-that questions. See who is most in sync — and the couple of the night.')}
           </AppText>
+        </div>
+
+        {/* Game type */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+          {[
+            { key: 'taste_match', emoji: '💞', title: t('group_game_taste_title', 'Group Compatibility') },
+            { key: 'zodiac_guess', emoji: '⭐', title: t('zodiac_game_title', 'Guess the Sign') },
+          ].map(({ key, emoji, title }) => (
+            <button key={key} type="button" onClick={() => setGameType(key)}
+              style={{ padding: '14px 10px', borderRadius: 14, cursor: 'pointer', textAlign: 'center',
+                border: `2px solid ${gameType === key ? 'var(--primary)' : 'var(--border-color)'}`,
+                background: gameType === key ? 'rgba(232,110,46,0.08)' : 'var(--bg-card)', color: 'var(--text-main)' }}>
+              <div style={{ fontSize: '1.5rem' }}>{emoji}</div>
+              <AppText as="div" style={{ fontWeight: 800, marginTop: 4, fontSize: '0.9rem' }}>{title}</AppText>
+            </button>
+          ))}
         </div>
 
         {/* Visibility */}

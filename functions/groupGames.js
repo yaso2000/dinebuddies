@@ -21,6 +21,12 @@ const MAX_ROUNDS = 12;
 const MAX_INVITEES = 30;
 const ROUND_MS = 10000;   // 10s per question (two options — plenty)
 const GRACE_MS = 1500;    // network latency grace before the server rejects a late answer
+// Per game-type behaviour. Lobby / visibility / invites / discovery / spectator
+// are shared; only the content source, option count, timer and scoring differ.
+const GAME_TYPES = {
+    taste_match: { options: 2, roundMs: 10000, scoring: 'agreement' },
+    zodiac_guess: { options: 3, roundMs: 15000, scoring: 'quiz' },
+};
 
 function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
     const FieldValue = admin.firestore.FieldValue;
@@ -60,6 +66,18 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         const picked = shuffle(all).slice(0, count);
         return picked.map((q) => ({ id: q.id, text: q.text, options: q.options }));
     }
+
+    // Zodiac "guess the sign": correctIndex is stripped from the client copy —
+    // the server reads it at reveal time from zodiac_questions (server-only).
+    async function pickZodiacQuestions(count) {
+        const snap = await db.collection('zodiac_questions').where('active', '==', true).get();
+        const all = snap.docs
+            .map((d) => ({ id: d.id, ...(d.data() || {}) }))
+            .filter((q) => q.text && Array.isArray(q.signs));
+        return shuffle(all).slice(0, count).map((q) => ({ id: q.id, text: q.text, signs: q.signs }));
+    }
+
+    const pickForType = (type, count) => (type === 'zodiac_guess' ? pickZodiacQuestions(count) : pickQuestions(count));
 
     async function requireGame(gameId) {
         const ref = db.collection('group_games').doc(gameId);
@@ -108,7 +126,8 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         await enforceCallableRateLimit(uid, 'group_game_create', { cooldownMs: 3000, perHour: 30, perDay: 100 });
 
         const type = asTrimmed(data?.type) || 'taste_match';
-        if (type !== 'taste_match') throw new functions.https.HttpsError('invalid-argument', 'Unsupported game type.');
+        const cfg = GAME_TYPES[type];
+        if (!cfg) throw new functions.https.HttpsError('invalid-argument', 'Unsupported game type.');
         let rounds = Number(data?.roundCount) || DEFAULT_ROUNDS;
         rounds = Math.min(Math.max(Math.round(rounds), MIN_ROUNDS), MAX_ROUNDS);
         const visibility = asTrimmed(data?.visibility).toLowerCase() === 'invite_only' ? 'invite_only' : 'public';
@@ -144,7 +163,7 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             throw new functions.https.HttpsError('failed-precondition', 'Invite at least one person for a private game.');
         }
 
-        const questions = await pickQuestions(rounds);
+        const questions = await pickForType(type, rounds);
         if (questions.length < MIN_ROUNDS) {
             throw new functions.https.HttpsError('failed-precondition', 'Question bank unavailable.');
         }
@@ -163,6 +182,8 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             joinCode: genCode(),
             questions,
             roundCount: questions.length,
+            optionCount: cfg.options,
+            roundDurationMs: cfg.roundMs,
             currentRound: -1,
             roundStatus: 'idle', // idle | answering | revealed
             roundEndsAt: null,
@@ -233,7 +254,7 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             status: 'active',
             currentRound: 0,
             roundStatus: 'answering',
-            roundEndsAt: admin.firestore.Timestamp.fromMillis(Date.now() + ROUND_MS),
+            roundEndsAt: admin.firestore.Timestamp.fromMillis(Date.now() + (Number(game.roundDurationMs) || ROUND_MS)),
             ...clearedAnswered,
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -256,11 +277,20 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         if (endsAtMs && Date.now() > endsAtMs + GRACE_MS) {
             throw new functions.https.HttpsError('deadline-exceeded', "Time's up for this question.");
         }
+        const cfg = GAME_TYPES[game.type] || GAME_TYPES.taste_match;
         const optionIndex = Number(data?.optionIndex);
-        if (![0, 1].includes(optionIndex)) throw new functions.https.HttpsError('invalid-argument', 'Invalid option.');
+        if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= cfg.options) {
+            throw new functions.https.HttpsError('invalid-argument', 'Invalid option.');
+        }
 
+        const ansRef = ref.collection('answers').doc(`${round}_${uid}`);
+        // Quiz answers are final (no changing after lock-in); agreement answers can change.
+        if (cfg.scoring === 'quiz') {
+            const ex = await ansRef.get();
+            if (ex.exists) return { ok: true };
+        }
         const now = FieldValue.serverTimestamp();
-        await ref.collection('answers').doc(`${round}_${uid}`).set({ round, uid, optionIndex, submittedAt: now });
+        await ansRef.set({ round, uid, optionIndex, submittedAtMs: Date.now(), submittedAt: now });
         await ref.update({ [`players.${uid}.answered`]: true, updatedAt: now });
         return { ok: true };
     });
@@ -278,25 +308,52 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
 
         // Step 1: close the answering phase -> compute & reveal this round's tally.
         if (game.roundStatus === 'answering') {
+            const cfg = GAME_TYPES[game.type] || GAME_TYPES.taste_match;
             const ansSnap = await ref.collection('answers').where('round', '==', round).get();
             const picks = {};
-            const counts = [0, 0];
+            const counts = new Array(cfg.options).fill(0);
+            const timeByUid = {};
             ansSnap.forEach((d) => {
                 const a = d.data() || {};
-                if ([0, 1].includes(a.optionIndex)) { picks[a.uid] = a.optionIndex; counts[a.optionIndex] += 1; }
+                const o = a.optionIndex;
+                if (Number.isInteger(o) && o >= 0 && o < cfg.options) {
+                    picks[a.uid] = o; counts[o] += 1; timeByUid[a.uid] = Number(a.submittedAtMs) || null;
+                }
             });
-            const majority = counts[0] === counts[1] ? -1 : (counts[0] > counts[1] ? 0 : 1);
 
-            // Sync score: each answerer earns +1 for every OTHER player who chose
-            // the same option this round (cumulative pairwise agreement).
             const scoreUpdates = {};
-            for (const [pid, opt] of Object.entries(picks)) {
-                const delta = counts[opt] - 1;
-                if (delta > 0) scoreUpdates[`players.${pid}.score`] = FieldValue.increment(delta);
+            let revealData;
+            if (cfg.scoring === 'quiz') {
+                // Correct + fast. Read the correct answer (server-only) at reveal.
+                const qId = game.questions?.[round]?.id;
+                let correctIndex = -1;
+                if (qId) {
+                    const qs = await db.collection('zodiac_questions').doc(qId).get();
+                    correctIndex = Number(qs.data()?.correctIndex);
+                    if (!Number.isInteger(correctIndex)) correctIndex = -1;
+                }
+                const endsAtMs = game.roundEndsAt?.toMillis?.() || Date.now();
+                const duration = Number(game.roundDurationMs) || ROUND_MS;
+                for (const [pid, opt] of Object.entries(picks)) {
+                    if (opt === correctIndex) {
+                        const timeLeft = Math.max(0, endsAtMs - (timeByUid[pid] || endsAtMs));
+                        const bonus = Math.round(500 * Math.min(1, timeLeft / duration));
+                        scoreUpdates[`players.${pid}.score`] = FieldValue.increment(500 + bonus);
+                    }
+                }
+                revealData = { counts, picks, correctIndex };
+            } else {
+                // Agreement (compatibility): +1 per other player who matched you.
+                const majority = counts[0] === counts[1] ? -1 : (counts[0] > counts[1] ? 0 : 1);
+                for (const [pid, opt] of Object.entries(picks)) {
+                    const delta = counts[opt] - 1;
+                    if (delta > 0) scoreUpdates[`players.${pid}.score`] = FieldValue.increment(delta);
+                }
+                revealData = { counts, picks, majority };
             }
             await ref.update({
                 roundStatus: 'revealed',
-                [`reveal.${round}`]: { counts, picks, majority },
+                [`reveal.${round}`]: revealData,
                 ...scoreUpdates,
                 updatedAt: now,
             });
@@ -311,7 +368,7 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             await ref.update({
                 currentRound: nextRound,
                 roundStatus: 'answering',
-                roundEndsAt: admin.firestore.Timestamp.fromMillis(Date.now() + ROUND_MS),
+                roundEndsAt: admin.firestore.Timestamp.fromMillis(Date.now() + (Number(game.roundDurationMs) || ROUND_MS)),
                 ...clearedAnswered,
                 updatedAt: now,
             });
@@ -327,6 +384,16 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
 
     /** Build the final ranking, contrarian, top pair and group compatibility %. */
     async function computeResult(ref, game) {
+        const cfg = GAME_TYPES[game.type] || GAME_TYPES.taste_match;
+        // Quiz types (e.g. zodiac): rank by accumulated points (correct + fast).
+        if (cfg.scoring === 'quiz') {
+            const players = game.playerIds || [];
+            const ranking = players
+                .map((uid) => ({ uid, name: game.players?.[uid]?.name || 'Player', avatar: game.players?.[uid]?.avatar || '', score: game.players?.[uid]?.score || 0 }))
+                .sort((a, b) => (b.score - a.score) || (a.uid < b.uid ? -1 : 1));
+            return { mode: 'quiz', ranking, winnerId: ranking[0]?.uid || null, winnerName: ranking[0]?.name || null, winnerScore: ranking[0]?.score || 0 };
+        }
+
         const ansSnap = await ref.collection('answers').get();
         // answersByRound[r][uid] = optionIndex
         const byRound = {};
@@ -473,7 +540,7 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         ansSnap.forEach((d) => batch.delete(d.ref));
         await batch.commit();
 
-        const questions = await pickQuestions(game.roundCount || DEFAULT_ROUNDS);
+        const questions = await pickForType(game.type, game.roundCount || DEFAULT_ROUNDS);
         const resetPlayers = {};
         for (const pid of game.playerIds || []) {
             const p = game.players?.[pid] || {};
