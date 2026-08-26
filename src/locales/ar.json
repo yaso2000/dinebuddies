@@ -2370,7 +2370,10 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "most_likely_title": "من الأقرب؟",
+  "most_likely_winner_sub": "الأفضل في قراءة المجموعة",
+  "most_likely_star": "نجم الليلة",
   "zodiac_game_title": "خمّن البرج",
   "trivia_questions_count": "عدد الأسئلة",
   "group_game_spectator": "أنت تشاهد — بدأت اللعبة قبل انضمامك.",

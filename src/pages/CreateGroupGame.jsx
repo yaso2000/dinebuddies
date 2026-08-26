@@ -110,6 +110,7 @@ export default function CreateGroupGame() {
           {[
             { key: 'taste_match', emoji: '💞', title: t('group_game_taste_title', 'Group Compatibility') },
             { key: 'zodiac_guess', emoji: '⭐', title: t('zodiac_game_title', 'Guess the Sign') },
+            { key: 'most_likely', emoji: '🕵️', title: t('most_likely_title', 'Most Likely To') },
           ].map(({ key, emoji, title }) => (
             <button key={key} type="button" onClick={() => setGameType(key)}
               style={{ padding: '14px 10px', borderRadius: 14, cursor: 'pointer', textAlign: 'center',

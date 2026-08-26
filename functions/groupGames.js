@@ -26,7 +26,11 @@ const GRACE_MS = 1500;    // network latency grace before the server rejects a l
 const GAME_TYPES = {
     taste_match: { options: 2, roundMs: 10000, scoring: 'agreement' },
     zodiac_guess: { options: 3, roundMs: 20000, scoring: 'quiz' },
+    // "Most likely to": options are the players themselves (set at start), you
+    // score by voting with the crowd (reading the room).
+    most_likely: { options: 'players', roundMs: 15000, scoring: 'vote' },
 };
+const fixedOptionCount = (cfg) => (typeof cfg.options === 'number' ? cfg.options : 0);
 
 function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
     const FieldValue = admin.firestore.FieldValue;
@@ -77,7 +81,17 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         return shuffle(all).slice(0, count).map((q) => ({ id: q.id, text: q.text, signs: q.signs }));
     }
 
-    const pickForType = (type, count) => (type === 'zodiac_guess' ? pickZodiacQuestions(count) : pickQuestions(count));
+    // Prompt-only bank (options are the players): "who is most likely to…".
+    async function pickPromptQuestions(collection, count) {
+        const snap = await db.collection(collection).where('active', '==', true).get();
+        const all = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) })).filter((q) => q.text);
+        return shuffle(all).slice(0, count).map((q) => ({ id: q.id, text: q.text }));
+    }
+    const pickForType = (type, count) => {
+        if (type === 'zodiac_guess') return pickZodiacQuestions(count);
+        if (type === 'most_likely') return pickPromptQuestions('most_likely_questions', count);
+        return pickQuestions(count);
+    };
 
     async function requireGame(gameId) {
         const ref = db.collection('group_games').doc(gameId);
@@ -182,7 +196,7 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             joinCode: genCode(),
             questions,
             roundCount: questions.length,
-            optionCount: cfg.options,
+            optionCount: fixedOptionCount(cfg), // 0 for player-voting types (set at start)
             roundDurationMs: cfg.roundMs,
             currentRound: -1,
             roundStatus: 'idle', // idle | answering | revealed
@@ -250,12 +264,17 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
 
         const clearedAnswered = {};
         for (const pid of game.playerIds) clearedAnswered[`players.${pid}.answered`] = false;
+        // "Most likely" votes for players — freeze the roster as the option list.
+        const voteFields = game.type === 'most_likely'
+            ? { voteTargets: game.playerIds, optionCount: (game.playerIds || []).length }
+            : {};
         await ref.update({
             status: 'active',
             currentRound: 0,
             roundStatus: 'answering',
             roundEndsAt: admin.firestore.Timestamp.fromMillis(Date.now() + (Number(game.roundDurationMs) || ROUND_MS)),
             ...clearedAnswered,
+            ...voteFields,
             updatedAt: FieldValue.serverTimestamp(),
         });
         return { ok: true };
@@ -278,8 +297,9 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             throw new functions.https.HttpsError('deadline-exceeded', "Time's up for this question.");
         }
         const cfg = GAME_TYPES[game.type] || GAME_TYPES.taste_match;
+        const nOpt = Number(game.optionCount) || fixedOptionCount(cfg);
         const optionIndex = Number(data?.optionIndex);
-        if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= cfg.options) {
+        if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= nOpt) {
             throw new functions.https.HttpsError('invalid-argument', 'Invalid option.');
         }
 
@@ -309,14 +329,15 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         // Step 1: close the answering phase -> compute & reveal this round's tally.
         if (game.roundStatus === 'answering') {
             const cfg = GAME_TYPES[game.type] || GAME_TYPES.taste_match;
+            const nOpt = Number(game.optionCount) || fixedOptionCount(cfg);
             const ansSnap = await ref.collection('answers').where('round', '==', round).get();
             const picks = {};
-            const counts = new Array(cfg.options).fill(0);
+            const counts = new Array(nOpt).fill(0);
             const timeByUid = {};
             ansSnap.forEach((d) => {
                 const a = d.data() || {};
                 const o = a.optionIndex;
-                if (Number.isInteger(o) && o >= 0 && o < cfg.options) {
+                if (Number.isInteger(o) && o >= 0 && o < nOpt) {
                     picks[a.uid] = o; counts[o] += 1; timeByUid[a.uid] = Number(a.submittedAtMs) || null;
                 }
             });
@@ -343,8 +364,12 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
                 }
                 revealData = { counts, picks, correctIndex };
             } else {
-                // Agreement (compatibility): +1 per other player who matched you.
-                const majority = counts[0] === counts[1] ? -1 : (counts[0] > counts[1] ? 0 : 1);
+                // Agreement / vote: +1 per other player who chose the same option
+                // (matched you / voted for the same person — "reading the room").
+                // Majority = the plurality option (unique max), else -1.
+                let maxC = -1; let majority = -1; let tie = false;
+                counts.forEach((c, i) => { if (c > maxC) { maxC = c; majority = i; tie = false; } else if (c === maxC) { tie = true; } });
+                if (tie || maxC <= 0) majority = -1;
                 for (const [pid, opt] of Object.entries(picks)) {
                     const delta = counts[opt] - 1;
                     if (delta > 0) scoreUpdates[`players.${pid}.score`] = FieldValue.increment(delta);
@@ -392,6 +417,22 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
                 .map((uid) => ({ uid, name: game.players?.[uid]?.name || 'Player', avatar: game.players?.[uid]?.avatar || '', score: game.players?.[uid]?.score || 0 }))
                 .sort((a, b) => (b.score - a.score) || (a.uid < b.uid ? -1 : 1));
             return { mode: 'quiz', ranking, winnerId: ranking[0]?.uid || null, winnerName: ranking[0]?.name || null, winnerScore: ranking[0]?.score || 0 };
+        }
+        // "Most likely" (vote): rank by reading-the-room points + the "star of the
+        // night" (the player who received the most votes across the game).
+        if (cfg.scoring === 'vote') {
+            const players = game.playerIds || [];
+            const targets = Array.isArray(game.voteTargets) ? game.voteTargets : players;
+            const votesReceived = {};
+            const vs = await ref.collection('answers').get();
+            vs.forEach((d) => { const a = d.data() || {}; const tgt = targets[a.optionIndex]; if (tgt) votesReceived[tgt] = (votesReceived[tgt] || 0) + 1; });
+            const ranking = players
+                .map((uid) => ({ uid, name: game.players?.[uid]?.name || 'Player', avatar: game.players?.[uid]?.avatar || '', score: game.players?.[uid]?.score || 0 }))
+                .sort((a, b) => (b.score - a.score) || (a.uid < b.uid ? -1 : 1));
+            let starId = null; let starVotes = -1;
+            for (const [u, c] of Object.entries(votesReceived)) { if (c > starVotes) { starVotes = c; starId = u; } }
+            const star = starId ? { uid: starId, name: game.players?.[starId]?.name || 'Player', avatar: game.players?.[starId]?.avatar || '', votes: starVotes } : null;
+            return { mode: 'vote', ranking, winnerId: ranking[0]?.uid || null, winnerName: ranking[0]?.name || null, star };
         }
 
         const ansSnap = await ref.collection('answers').get();
