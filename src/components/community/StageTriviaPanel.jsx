@@ -10,12 +10,15 @@ import './StageTriviaPanel.css';
 const OPT_COLORS = ['#6366f1', '#e11d48', '#0ea5e9', '#f59e0b'];
 
 /** Business Food Trivia on the Stage top panel. Chat stays live below. */
-export default function StageTriviaPanel({ stageId, isHost }) {
+export default function StageTriviaPanel({ stageId, isHost, onGameActiveChange }) {
   const { t, i18n } = useTranslation();
   const lang = (i18n.language || 'ar').split('-')[0];
-  const { currentUser, userProfile, isBusiness } = useAuth();
+  const { userProfile, isBusiness } = useAuth();
   const { showToast } = useToast();
   const { game, start, submit, advance, end, generate } = useStageTrivia(stageId);
+
+  // Tell the Stage layout when a game is running so it can replace the banner.
+  useEffect(() => { onGameActiveChange?.(!!game); }, [game, onGameActiveChange]);
 
   const [busy, setBusy] = useState('');
   const [myPick, setMyPick] = useState(null);

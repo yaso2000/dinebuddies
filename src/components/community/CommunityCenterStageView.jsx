@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import CommunityTopMediaPanel from './CommunityTopMediaPanel';
 import CommunityPinnedHostBar from './CommunityPinnedHostBar';
 import CommunityGuestChatBody from './CommunityGuestChatBody';
@@ -17,12 +17,17 @@ export default function CommunityCenterStageView({ room, bannerMediaActive = tru
   const hostMessageOwnerId = room.hostId || room.partnerId;
   // Only true Stages carry `hostId`; use it as the trivia stage id.
   const triviaStageId = room.hostId ? room.partnerId : null;
+  // While a trivia game is running it takes over the top panel — independent of
+  // the banner's show/hide toggle, and the media banner is hidden behind it.
+  const [triviaActive, setTriviaActive] = useState(false);
 
   return (
     <div className="community-chat-layout community-center-stage">
-      {showTop ? (
+      {triviaStageId ? (
+        <StageTriviaPanel stageId={triviaStageId} isHost={isHost} onGameActiveChange={setTriviaActive} />
+      ) : null}
+      {showTop && !triviaActive ? (
         <section className="community-chat-layout__top community-chat-layout__top--stage" aria-label="Top panel">
-          {triviaStageId ? <StageTriviaPanel stageId={triviaStageId} isHost={isHost} /> : null}
           <CommunityTopMediaPanel
             room={room}
             bannerExpanded
