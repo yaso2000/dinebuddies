@@ -2353,7 +2353,8 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "group_game_spectator": "You are watching — the game started before you joined.",
   "trivia_close": "Close",
   "your_stage_label": "Your Stage",
   "trivia_generate_link": "Generate questions about your menu (AI)",

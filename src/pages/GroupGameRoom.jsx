@@ -126,8 +126,9 @@ export default function GroupGameRoom() {
     finally { setBusy(''); }
   };
 
+  const spectator = status === 'active' && !isPlayer;
   const pick = async (idx) => {
-    if (timeUp) return;
+    if (timeUp || spectator) return;
     setMyPick(idx);
     try { await answer(round, idx); }
     catch (e) { showToast(e?.message || t('group_game_answer_error', 'Could not submit.'), 'error'); setMyPick(null); }
@@ -258,6 +259,12 @@ export default function GroupGameRoom() {
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginInlineStart: 6, fontWeight: 700 }}>{answeredCount}/{players.length}</span>
             </div>
 
+            {spectator ? (
+              <div className="gg-card" style={{ padding: '10px 12px', marginBottom: 12, textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)', border: '1px dashed var(--border-color)' }}>
+                👀 {t('group_game_spectator', 'You are watching — the game started before you joined.')}
+              </div>
+            ) : null}
+
             <div className="gg-card gg-qcard" style={{ marginBottom: 18 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div style={{ fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 800 }}>{t('group_game_round', 'Round')} {round + 1} / {game.roundCount}</div>
@@ -282,8 +289,8 @@ export default function GroupGameRoom() {
                   const selected = myPick === idx;
                   const dim = myPick !== null && !selected;
                   return (
-                    <button key={idx} type="button" onClick={() => pick(idx)} disabled={timeUp} className={`gg-option${selected ? ' is-selected' : ''}`}
-                      style={{ background: p.grad, boxShadow: selected ? `0 8px 26px ${p.ring}` : '0 4px 14px rgba(0,0,0,0.12)', opacity: dim || (timeUp && !selected) ? 0.45 : 1, cursor: timeUp ? 'default' : 'pointer' }}>
+                    <button key={idx} type="button" onClick={() => pick(idx)} disabled={timeUp || spectator} className={`gg-option${selected ? ' is-selected' : ''}`}
+                      style={{ background: p.grad, boxShadow: selected ? `0 8px 26px ${p.ring}` : '0 4px 14px rgba(0,0,0,0.12)', opacity: dim || spectator || (timeUp && !selected) ? 0.45 : 1, cursor: (timeUp || spectator) ? 'default' : 'pointer' }}>
                       <span className="gg-option__letter">{selected ? <FaCheck /> : p.letter}</span>
                       <span className="gg-option__text">{opt}</span>
                     </button>
@@ -291,7 +298,7 @@ export default function GroupGameRoom() {
                 })}
                 {isHost ? (
                   <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'advance'} onClick={wrap('advance', advance)}>👁️ {t('group_game_reveal', 'Reveal answers')}</button>
-                ) : (
+                ) : spectator ? null : (
                   <AppText as="p" style={{ textAlign: 'center', color: timeUp ? '#ef4444' : 'var(--text-muted)', marginTop: 2, fontSize: '0.9rem', fontWeight: timeUp ? 700 : 400 }}>
                     {timeUp ? `⏱️ ${t('group_game_time_up', "Time's up!")}` : myPick !== null ? `✅ ${t('group_game_locked', 'Answer locked — you can change it until reveal.')}` : t('group_game_pick', 'Pick your answer.')}
                   </AppText>
