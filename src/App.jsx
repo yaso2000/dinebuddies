@@ -69,6 +69,8 @@ const CompatJourneyRoom = lazy(() => import('./pages/CompatJourneyRoom'));
 const CreateStage = lazy(() => import('./pages/CreateStage'));
 const CreateGroupGame = lazy(() => import('./pages/CreateGroupGame'));
 const GroupGameRoom = lazy(() => import('./pages/GroupGameRoom'));
+const CreateMatchShow = lazy(() => import('./pages/CreateMatchShow'));
+const MatchShowRoom = lazy(() => import('./pages/MatchShowRoom'));
 const StagesHub = lazy(() => import('./pages/StagesHub'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const HomeInvitations = lazy(() => import('./pages/Home'));
@@ -327,6 +329,8 @@ function App() {
                                                     <Route path="/create-stage" element={<GuestBlockedRoute><CreateStage /></GuestBlockedRoute>} />
                                                     <Route path="/create-group-game" element={<GuestBlockedRoute><CreateGroupGame /></GuestBlockedRoute>} />
                                                     <Route path="/group-game/:gameId" element={<GuestBlockedRoute><GroupGameRoom /></GuestBlockedRoute>} />
+                                                    <Route path="/create-match-show" element={<GuestBlockedRoute><CreateMatchShow /></GuestBlockedRoute>} />
+                                                    <Route path="/match-show/:showId" element={<GuestBlockedRoute><MatchShowRoom /></GuestBlockedRoute>} />
                                                     <Route path="/stages" element={<GuestBlockedRoute><StagesHub /></GuestBlockedRoute>} />
                                                     <Route path="/create-post" element={<GuestBlockedRoute><BusinessCreatePostGate /></GuestBlockedRoute>} />
                                                     <Route path="/create-featured-post" element={<GuestBlockedRoute><CreateFeaturedPost /></GuestBlockedRoute>} />

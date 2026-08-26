@@ -2353,7 +2353,53 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "match_title": "Match or Not?",
+  "match_create_title": "Match or Not?",
+  "match_create_desc": "Host a live show. People apply to appear, you bring two on stage, and the room votes: match or not!",
+  "match_create_cta": "Go live",
+  "match_create_error": "Could not create the show.",
+  "match_slots": "The two slots",
+  "match_slot_a": "Slot 1",
+  "match_slot_b": "Slot 2",
+  "match_male": "Male",
+  "match_female": "Female",
+  "match_any": "Any",
+  "match_not_found": "This show is not available.",
+  "match_ended": "The show has ended.",
+  "match_host_pick_hint": "Pick two applicants below to bring them on stage.",
+  "match_wait_hint": "Waiting for the host to bring up a pair…",
+  "match_yes": "It's a match!",
+  "match_no": "Not a match",
+  "match_vote_yes": "Match",
+  "match_vote_no": "Not",
+  "match_you_on_stage": "You're on stage — the room is voting!",
+  "match_reveal": "Reveal result",
+  "match_next": "Next pair",
+  "match_end": "End",
+  "match_apply": "Apply to appear",
+  "match_apply_hint": "Introduce yourself — a voice clip (under a minute) or a short note.",
+  "match_in_queue": "You're in the queue.",
+  "match_withdraw": "Withdraw",
+  "match_queue": "Applicants",
+  "match_queue_empty": "No applicants yet — share the show.",
+  "match_pick_second": "Now pick the second person.",
+  "match_voice": "Voice",
+  "match_text": "Text",
+  "match_record": "Record intro",
+  "match_stop": "Stop",
+  "match_rerecord": "Re-record",
+  "match_record_first": "Record your intro first.",
+  "match_write_first": "Write a short intro.",
+  "match_too_long": "Keep it under {{n}} words.",
+  "match_words": "words",
+  "match_text_ph": "A few words about you…",
+  "match_submit": "Join the queue",
+  "match_applied": "You're in the queue!",
+  "match_mic_denied": "Microphone access is needed.",
+  "invite_create_match_show_desc": "Host a live matchmaking show — people apply, the room votes.",
+  "invite_enter_match_show_title": "Enter your show",
+  "invite_enter_match_show_desc": "You already have a live show. Tap to enter.",
   "two_truths_title": "Two Truths & a Lie",
   "two_truths_write": "Two truths and a lie",
   "two_truths_hint": "Write 3 statements about yourself — mark the ONE lie in red.",

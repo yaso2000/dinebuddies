@@ -29,7 +29,7 @@ export default function InviteCreateTypePicker({
   includeStage = false,
 }) {
   const { t } = useTranslation();
-  const { goCreate, publicGateChecking, activeHostedStage, activeGameId } = useInviteCreateNavigation({
+  const { goCreate, publicGateChecking, activeHostedStage, activeGameId, activeShowId } = useInviteCreateNavigation({
     navigationState,
     businessId,
     onAfterNavigate,
@@ -37,6 +37,7 @@ export default function InviteCreateTypePicker({
 
   const hasLiveStage = Boolean(activeHostedStage?.id);
   const hasActiveGame = Boolean(activeGameId);
+  const hasActiveShow = Boolean(activeShowId);
 
   const options = [
     {
@@ -77,6 +78,16 @@ export default function InviteCreateTypePicker({
       desc: hasActiveGame
         ? t('invite_enter_group_game_desc', 'You already have a live game. Tap to enter.')
         : t('invite_create_group_game_desc', 'Play a live compatibility game with friends — open to everyone.'),
+    },
+    {
+      kind: 'match_show',
+      className: 'personal',
+      sheetIconClass: 'business-create-option__icon--dating',
+      icon: FaHeart,
+      title: hasActiveShow ? t('invite_enter_match_show_title', 'Enter your show') : t('match_title', 'Match or Not?'),
+      desc: hasActiveShow
+        ? t('invite_enter_match_show_desc', 'You already have a live show. Tap to enter.')
+        : t('invite_create_match_show_desc', 'Host a live matchmaking show — people apply, the room votes.'),
     },
     ...(includeStage
       ? [

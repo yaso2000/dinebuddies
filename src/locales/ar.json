@@ -2370,7 +2370,53 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "match_title": "ماتش أو لا؟",
+  "match_create_title": "ماتش أو لا؟",
+  "match_create_desc": "استضِف بثًّا حيًّا. الناس تتقدّم للظهور، تُصعِد اثنين، والجمهور يصوّت: ماتش أو لا!",
+  "match_create_cta": "ابدأ البث",
+  "match_create_error": "تعذّر إنشاء البث.",
+  "match_slots": "الخانتان",
+  "match_slot_a": "الخانة 1",
+  "match_slot_b": "الخانة 2",
+  "match_male": "ذكر",
+  "match_female": "أنثى",
+  "match_any": "أي",
+  "match_not_found": "هذا البث غير متاح.",
+  "match_ended": "انتهى البث.",
+  "match_host_pick_hint": "اختر متقدّمَين من الأسفل لإصعادهما.",
+  "match_wait_hint": "بانتظار أن يُصعِد المُضيف ثنائيًا…",
+  "match_yes": "إنه ماتش!",
+  "match_no": "ليس ماتش",
+  "match_vote_yes": "ماتش",
+  "match_vote_no": "لا",
+  "match_you_on_stage": "أنت على المسرح — الغرفة تصوّت!",
+  "match_reveal": "اكشف النتيجة",
+  "match_next": "الثنائي التالي",
+  "match_end": "إنهاء",
+  "match_apply": "تقدّم للظهور",
+  "match_apply_hint": "عرّف عن نفسك — مقطع صوتي (أقل من دقيقة) أو نبذة قصيرة.",
+  "match_in_queue": "أنت في الطابور.",
+  "match_withdraw": "انسحاب",
+  "match_queue": "المتقدّمون",
+  "match_queue_empty": "لا متقدّمين بعد — شارك البث.",
+  "match_pick_second": "الآن اختر الشخص الثاني.",
+  "match_voice": "صوت",
+  "match_text": "نص",
+  "match_record": "سجّل تعريفك",
+  "match_stop": "إيقاف",
+  "match_rerecord": "إعادة التسجيل",
+  "match_record_first": "سجّل تعريفك أولًا.",
+  "match_write_first": "اكتب نبذة قصيرة.",
+  "match_too_long": "أبقِها تحت {{n}} كلمة.",
+  "match_words": "كلمة",
+  "match_text_ph": "كلمات قليلة عنك…",
+  "match_submit": "انضمّ للطابور",
+  "match_applied": "أنت في الطابور!",
+  "match_mic_denied": "نحتاج إذن الميكروفون.",
+  "invite_create_match_show_desc": "استضِف بث تعارف حيًّا — الناس تتقدّم والجمهور يصوّت.",
+  "invite_enter_match_show_title": "ادخل بثّك",
+  "invite_enter_match_show_desc": "لديك بث حيّ. اضغط للدخول.",
   "two_truths_title": "حقيقتان وكذبة",
   "two_truths_write": "حقيقتان وكذبة",
   "two_truths_hint": "اكتب 3 عبارات عن نفسك — علّم الكذبة الواحدة بالأحمر.",

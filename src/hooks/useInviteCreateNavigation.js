@@ -27,6 +27,7 @@ export function useInviteCreateNavigation({
   const { showToast } = useToast();
   const { cannotCreateInvitations, currentUser, isBusiness, userProfile } = useAuth();
   const activeGameId = userProfile?.hostActiveGameId || null;
+  const activeShowId = userProfile?.hostActiveShowId || null;
   const { canCreateSocialInvitation, restaurants: restaurantsFromContext } = useInvitations();
   const { stageId: liveStageId, hasLiveStage, loading: liveStageLoading } = useMyLiveStage();
   const [publicGateChecking, setPublicGateChecking] = useState(false);
@@ -75,6 +76,13 @@ export function useInviteCreateNavigation({
       // otherwise open the create flow.
       if (kind === 'group_game') {
         navigate(activeGameId ? `/group-game/${activeGameId}` : '/create-group-game');
+        onAfterNavigate?.();
+        return;
+      }
+
+      // "Match or Not" live show — one per host, same enter/create pattern.
+      if (kind === 'match_show') {
+        navigate(activeShowId ? `/match-show/${activeShowId}` : '/create-match-show');
         onAfterNavigate?.();
         return;
       }
@@ -170,6 +178,7 @@ export function useInviteCreateNavigation({
     },
     [
       activeGameId,
+      activeShowId,
       businessId,
       canCreateSocialInvitation,
       cannotCreateInvitations,
@@ -196,6 +205,7 @@ export function useInviteCreateNavigation({
     cannotCreateInvitations,
     activeHostedStage,
     activeGameId,
+    activeShowId,
     liveStageLoading,
   };
 }
