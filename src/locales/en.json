@@ -2353,7 +2353,19 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "two_truths_title": "Two Truths & a Lie",
+  "two_truths_write": "Two truths and a lie",
+  "two_truths_hint": "Write 3 statements about yourself — mark the ONE lie in red.",
+  "two_truths_mark_lie": "This one is the lie",
+  "two_truths_statement": "Statement",
+  "two_truths_submit": "Submit statements",
+  "two_truths_ready": "Your statements are in — waiting for the others.",
+  "two_truths_waiting": "Waiting for players to submit…",
+  "two_truths_need_three": "Fill all three statements.",
+  "two_truths_saved": "Saved! Waiting for the others.",
+  "two_truths_your_turn": "Your round — the others are guessing your lie.",
+  "two_truths_prompt": "Which one is the lie? 🤥",
   "most_likely_title": "Most Likely To",
   "most_likely_winner_sub": "Best at reading the room",
   "most_likely_star": "Star of the night",

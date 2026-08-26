@@ -29,6 +29,9 @@ const GAME_TYPES = {
     // "Most likely to": options are the players themselves (set at start), you
     // score by voting with the crowd (reading the room).
     most_likely: { options: 'players', roundMs: 15000, scoring: 'vote' },
+    // "Two truths and a lie": each player submits 3 statements (1 lie) in the
+    // lobby; rounds cycle through players and everyone else guesses the lie.
+    two_truths: { options: 3, roundMs: 20000, scoring: 'quiz', needsSubmission: true },
 };
 const fixedOptionCount = (cfg) => (typeof cfg.options === 'number' ? cfg.options : 0);
 
@@ -177,8 +180,9 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             throw new functions.https.HttpsError('failed-precondition', 'Invite at least one person for a private game.');
         }
 
-        const questions = await pickForType(type, rounds);
-        if (questions.length < MIN_ROUNDS) {
+        // Submission games build their questions from player input at start.
+        const questions = cfg.needsSubmission ? [] : await pickForType(type, rounds);
+        if (!cfg.needsSubmission && questions.length < MIN_ROUNDS) {
             throw new functions.https.HttpsError('failed-precondition', 'Question bank unavailable.');
         }
         const host = await loadUser(uid);
@@ -251,6 +255,30 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         if (game.hostId !== uid) throw new functions.https.HttpsError('permission-denied', 'Only the host can do that.');
     };
 
+    // ---- Two truths & a lie: submit your 3 statements (lobby) -----------------
+    exports.submitTwoTruthsStatements = functions.https.onCall(async (data, context) => {
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
+        const uid = context.auth.uid;
+        const { ref, game } = await requireGame(asTrimmed(data?.gameId));
+        if (game.type !== 'two_truths') throw new functions.https.HttpsError('failed-precondition', 'Not this game type.');
+        if (game.status !== 'lobby') throw new functions.https.HttpsError('failed-precondition', 'Statements lock once the game starts.');
+        if (!(game.playerIds || []).includes(uid)) throw new functions.https.HttpsError('permission-denied', 'You are not in this game.');
+
+        const texts = (Array.isArray(data?.texts) ? data.texts : []).map((x) => asTrimmed(x).slice(0, 140));
+        if (texts.length !== 3 || texts.some((x) => !x)) throw new functions.https.HttpsError('invalid-argument', 'Enter three statements.');
+        let lieIndex = Number(data?.lieIndex);
+        if (![0, 1, 2].includes(lieIndex)) throw new functions.https.HttpsError('invalid-argument', 'Mark which one is the lie.');
+
+        // Shuffle so the lie is not always in the same slot.
+        const order = shuffle([0, 1, 2]);
+        const shuffled = order.map((i) => texts[i]);
+        lieIndex = order.indexOf(lieIndex);
+        const now = FieldValue.serverTimestamp();
+        await ref.collection('statements').doc(uid).set({ uid, texts: shuffled, lieIndex, updatedAt: now });
+        await ref.update({ [`players.${uid}.ready`]: true, updatedAt: now });
+        return { ok: true };
+    });
+
     // ---- Start (host) ---------------------------------------------------------
     exports.startGroupGame = functions.https.onCall(async (data, context) => {
         if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
@@ -264,17 +292,29 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
 
         const clearedAnswered = {};
         for (const pid of game.playerIds) clearedAnswered[`players.${pid}.answered`] = false;
-        // "Most likely" votes for players — freeze the roster as the option list.
-        const voteFields = game.type === 'most_likely'
-            ? { voteTargets: game.playerIds, optionCount: (game.playerIds || []).length }
-            : {};
+
+        // Per-type start fields.
+        let extra = {};
+        if (game.type === 'most_likely') {
+            // Votes target players — freeze the roster as the option list.
+            extra = { voteTargets: game.playerIds, optionCount: (game.playerIds || []).length };
+        } else if (game.type === 'two_truths') {
+            // Build one round per player who submitted; the lie stays server-side.
+            const stSnap = await ref.collection('statements').get();
+            const byUid = {};
+            stSnap.forEach((d) => { byUid[d.id] = d.data() || {}; });
+            const withStmts = (game.playerIds || []).filter((u) => Array.isArray(byUid[u]?.texts) && byUid[u].texts.length === 3);
+            if (withStmts.length < 3) throw new functions.https.HttpsError('failed-precondition', 'At least 3 players must submit their statements first.');
+            const qs = shuffle(withStmts).map((u) => ({ subjectId: u, texts: byUid[u].texts }));
+            extra = { questions: qs, roundCount: qs.length, optionCount: 3 };
+        }
         await ref.update({
             status: 'active',
             currentRound: 0,
             roundStatus: 'answering',
             roundEndsAt: admin.firestore.Timestamp.fromMillis(Date.now() + (Number(game.roundDurationMs) || ROUND_MS)),
             ...clearedAnswered,
-            ...voteFields,
+            ...extra,
             updatedAt: FieldValue.serverTimestamp(),
         });
         return { ok: true };
@@ -291,7 +331,11 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         }
         const round = Number(data?.round);
         if (round !== game.currentRound) throw new functions.https.HttpsError('failed-precondition', 'Round has moved on.');
-        // Enforce the 10s deadline (with a small grace for latency).
+        // Two truths: the subject of the round can't guess their own lie.
+        if (game.type === 'two_truths' && game.questions?.[round]?.subjectId === uid) {
+            throw new functions.https.HttpsError('failed-precondition', "It's your round — others are guessing.");
+        }
+        // Enforce the deadline (with a small grace for latency).
         const endsAtMs = game.roundEndsAt?.toMillis?.();
         if (endsAtMs && Date.now() > endsAtMs + GRACE_MS) {
             throw new functions.https.HttpsError('deadline-exceeded', "Time's up for this question.");
@@ -346,13 +390,21 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             let revealData;
             if (cfg.scoring === 'quiz') {
                 // Correct + fast. Read the correct answer (server-only) at reveal.
-                const qId = game.questions?.[round]?.id;
                 let correctIndex = -1;
-                if (qId) {
-                    const qs = await db.collection('zodiac_questions').doc(qId).get();
-                    correctIndex = Number(qs.data()?.correctIndex);
-                    if (!Number.isInteger(correctIndex)) correctIndex = -1;
+                if (game.type === 'two_truths') {
+                    const subjectId = game.questions?.[round]?.subjectId;
+                    if (subjectId) {
+                        const st = await ref.collection('statements').doc(subjectId).get();
+                        correctIndex = Number(st.data()?.lieIndex);
+                    }
+                } else {
+                    const qId = game.questions?.[round]?.id;
+                    if (qId) {
+                        const qs = await db.collection('zodiac_questions').doc(qId).get();
+                        correctIndex = Number(qs.data()?.correctIndex);
+                    }
                 }
+                if (!Number.isInteger(correctIndex)) correctIndex = -1;
                 const endsAtMs = game.roundEndsAt?.toMillis?.() || Date.now();
                 const duration = Number(game.roundDurationMs) || ROUND_MS;
                 for (const [pid, opt] of Object.entries(picks)) {

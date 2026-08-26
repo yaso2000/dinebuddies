@@ -60,30 +60,38 @@ export default function GroupGameRoom() {
   const { showToast } = useToast();
   const lang = (i18n.language || 'ar').split('-')[0];
 
-  const { game, players, loading, uid, isHost, isPlayer, start, answer, advance, restart, leave, kick, remove } = useGroupGame(gameId);
+  const { game, players, loading, uid, isHost, isPlayer, start, answer, advance, restart, leave, kick, remove, submitStatements } = useGroupGame(gameId);
 
   const [myPick, setMyPick] = useState(null);
   const [busy, setBusy] = useState('');
   const [joining, setJoining] = useState(false);
   const [muted, setMuted] = useState(() => { try { return localStorage.getItem(MUTE_KEY) === '1'; } catch { return false; } });
   const [burst, setBurst] = useState(false);
+  const [stTexts, setStTexts] = useState(['', '', '']);
+  const [stLie, setStLie] = useState(0);
   const prevPhase = useRef('');
 
   const isQuiz = game?.type === 'zodiac_guess';
   const isVote = game?.type === 'most_likely';
+  const isTruths = game?.type === 'two_truths';
   const signLabel = (key) => (ZODIAC[key] ? (ZODIAC[key][lang] || ZODIAC[key].en) : key);
   const qText = (q) => q?.text?.[lang] || q?.text?.en || q?.text?.ar || '';
   // For "most likely", the options are the players themselves.
   const voteOptions = (game?.voteTargets || game?.playerIds || []).map((pid) => ({ label: game?.players?.[pid]?.name || 'Player', avatar: game?.players?.[pid]?.avatar || '', uid: pid }));
   // Returns option descriptors [{ label, icon?, avatar? }] for the game type.
   const qOpts = (q) => (isVote ? voteOptions
-    : isQuiz ? (q?.signs || []).map((s) => ({ label: signLabel(s), icon: ZODIAC[s]?.icon || '⭐' }))
-      : (q?.options?.[lang] || q?.options?.en || q?.options?.ar || []).map((o) => ({ label: o })));
+    : isTruths ? (q?.texts || []).map((txt) => ({ label: txt }))
+      : isQuiz ? (q?.signs || []).map((s) => ({ label: signLabel(s), icon: ZODIAC[s]?.icon || '⭐' }))
+        : (q?.options?.[lang] || q?.options?.en || q?.options?.ar || []).map((o) => ({ label: o })));
 
   const round = game?.currentRound ?? -1;
   const question = round >= 0 && game?.questions ? game.questions[round] : null;
   const roundStatus = game?.roundStatus;
   const status = game?.status;
+
+  const subjectId = isTruths && question ? question.subjectId : null;
+  const subjectName = subjectId ? (game?.players?.[subjectId]?.name || 'Player') : '';
+  const iAmSubject = !!subjectId && subjectId === uid;
 
   useEffect(() => { setMyPick(null); }, [round]);
 
@@ -146,11 +154,24 @@ export default function GroupGameRoom() {
   };
 
   const spectator = status === 'active' && !isPlayer;
+  const cantVote = spectator || iAmSubject; // subject can't guess their own round
   const pick = async (idx) => {
-    if (timeUp || spectator) return;
+    if (timeUp || cantVote) return;
     setMyPick(idx);
     try { await answer(round, idx); }
     catch (e) { showToast(e?.message || t('group_game_answer_error', 'Could not submit.'), 'error'); setMyPick(null); }
+  };
+
+  const myReady = !!game?.players?.[uid]?.ready;
+  const readyCount = players.filter((p) => p.ready).length;
+  const canStart = players.length >= 3 && (!isTruths || readyCount >= 3);
+  const doSubmitStatements = async () => {
+    const texts = stTexts.map((s) => s.trim());
+    if (texts.some((s) => !s)) { showToast(t('two_truths_need_three', 'Fill all three statements.'), 'info'); return; }
+    setBusy('statements');
+    try { await submitStatements(texts, stLie); showToast(t('two_truths_saved', 'Saved! Waiting for the others.'), 'success'); }
+    catch (e) { showToast(e?.message || t('admin_failed', 'Something went wrong.'), 'error'); }
+    finally { setBusy(''); }
   };
 
   const shareLink = useMemo(() => (typeof window === 'undefined' || !gameId) ? '' : `${window.location.origin}/group-game/${gameId}`, [gameId]);
@@ -242,10 +263,31 @@ export default function GroupGameRoom() {
                 <div key={p.uid} className="gg-card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px' }}>
                   <Avatar src={p.avatar} name={p.name} />
                   <AppText as="span" style={{ flex: 1, fontWeight: 700 }}>{p.name}{p.uid === game.hostId ? <span style={{ color: 'var(--primary)', marginInlineStart: 6, fontSize: '0.78rem' }}>👑 {t('group_game_host', 'Host')}</span> : null}</AppText>
+                  {isTruths && p.ready ? <FaCheck size={12} color="#16a34a" /> : null}
                   {isHost && p.uid !== uid ? <button type="button" onClick={wrap('kick', () => kick(p.uid))} aria-label="kick" className="gg-icon gg-icon--danger"><FaTimes /></button> : null}
                 </div>
               ))}
             </div>
+
+            {isTruths && isPlayer ? (
+              myReady ? (
+                <div className="gg-card" style={{ padding: 12, marginBottom: 16, textAlign: 'center', color: '#16a34a', fontWeight: 800 }}>✅ {t('two_truths_ready', 'Your statements are in — waiting for the others.')}</div>
+              ) : (
+                <div className="gg-card" style={{ padding: 14, marginBottom: 16 }}>
+                  <AppText as="div" style={{ fontWeight: 800, marginBottom: 4 }}>🤥 {t('two_truths_write', 'Two truths and a lie')}</AppText>
+                  <AppText as="div" style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 10 }}>{t('two_truths_hint', 'Write 3 statements about yourself — mark the ONE lie in red.')}</AppText>
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <input type="radio" name="tt-lie" checked={stLie === i} onChange={() => setStLie(i)} title={t('two_truths_mark_lie', 'This one is the lie')} style={{ width: 18, height: 18, accentColor: '#ef4444', flexShrink: 0 }} />
+                      <input value={stTexts[i]} onChange={(e) => setStTexts((a) => { const n = [...a]; n[i] = e.target.value; return n; })} maxLength={140}
+                        placeholder={`${t('two_truths_statement', 'Statement')} ${i + 1}`}
+                        style={{ flex: 1, minWidth: 0, padding: '10px', borderRadius: 10, border: `1px solid ${stLie === i ? '#ef4444' : 'var(--border-color)'}`, background: 'var(--bg-elevated)', color: 'var(--text-main)', fontFamily: 'inherit' }} />
+                    </div>
+                  ))}
+                  <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'statements'} onClick={doSubmitStatements}>{busy === 'statements' ? '…' : t('two_truths_submit', 'Submit statements')}</button>
+                </div>
+              )
+            ) : null}
 
             {!isPlayer ? (
               <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={joining} onClick={doJoin}>
@@ -253,8 +295,10 @@ export default function GroupGameRoom() {
               </button>
             ) : isHost ? (
               <>
-                <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'start' || players.length < 3} onClick={wrap('start', start)}>
-                  {players.length < 3 ? `⏳ ${t('group_game_need_players_3', 'Need at least 3 players…')}` : `🚀 ${t('group_game_start', 'Start game')}`}
+                <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'start' || !canStart} onClick={wrap('start', start)}>
+                  {players.length < 3 ? `⏳ ${t('group_game_need_players_3', 'Need at least 3 players…')}`
+                    : (isTruths && readyCount < 3) ? `⏳ ${t('two_truths_waiting', 'Waiting for players to submit…')}`
+                      : `🚀 ${t('group_game_start', 'Start game')}`}
                 </button>
                 <button type="button" onClick={doDelete} disabled={busy === 'delete'} className="gg-textbtn gg-textbtn--danger"><FaTrashAlt /> {t('group_game_delete', 'Delete game')}</button>
               </>
@@ -282,6 +326,10 @@ export default function GroupGameRoom() {
               <div className="gg-card" style={{ padding: '10px 12px', marginBottom: 12, textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)', border: '1px dashed var(--border-color)' }}>
                 👀 {t('group_game_spectator', 'You are watching — the game started before you joined.')}
               </div>
+            ) : iAmSubject ? (
+              <div className="gg-card" style={{ padding: '10px 12px', marginBottom: 12, textAlign: 'center', fontWeight: 700, color: 'var(--primary)', border: '1px dashed var(--primary)' }}>
+                🙈 {t('two_truths_your_turn', 'Your round — the others are guessing your lie.')}
+              </div>
             ) : null}
 
             <div className="gg-card gg-qcard" style={{ marginBottom: 18 }}>
@@ -298,7 +346,17 @@ export default function GroupGameRoom() {
                   <div style={{ height: '100%', width: `${(remainingMs / (game?.roundDurationMs || ROUND_MS)) * 100}%`, background: remainingSec <= 3 ? '#ef4444' : 'linear-gradient(90deg,var(--primary),#f0a24b)', transition: 'width .25s linear' }} />
                 </div>
               ) : null}
-              <AppText as="div" style={{ fontSize: '1.35rem', fontWeight: 900, lineHeight: 1.35 }}>{qText(question)}</AppText>
+              {isTruths ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 6 }}>
+                    <Avatar src={game?.players?.[subjectId]?.avatar} name={subjectName} size={34} ring="var(--primary)" />
+                    <AppText as="span" style={{ fontWeight: 800 }}>{subjectName}</AppText>
+                  </div>
+                  <AppText as="div" style={{ fontSize: '1.1rem', fontWeight: 900 }}>{t('two_truths_prompt', 'Which one is the lie? 🤥')}</AppText>
+                </>
+              ) : (
+                <AppText as="div" style={{ fontSize: '1.35rem', fontWeight: 900, lineHeight: 1.35 }}>{qText(question)}</AppText>
+              )}
             </div>
 
             {roundStatus === 'answering' ? (
@@ -308,8 +366,8 @@ export default function GroupGameRoom() {
                   const selected = myPick === idx;
                   const dim = myPick !== null && !selected;
                   return (
-                    <button key={idx} type="button" onClick={() => pick(idx)} disabled={timeUp || spectator} className={`gg-option${selected ? ' is-selected' : ''}`}
-                      style={{ background: p.grad, boxShadow: selected ? `0 8px 26px ${p.ring}` : '0 4px 14px rgba(0,0,0,0.12)', opacity: dim || spectator || (timeUp && !selected) ? 0.45 : 1, cursor: (timeUp || spectator) ? 'default' : 'pointer' }}>
+                    <button key={idx} type="button" onClick={() => pick(idx)} disabled={timeUp || cantVote} className={`gg-option${selected ? ' is-selected' : ''}`}
+                      style={{ background: p.grad, boxShadow: selected ? `0 8px 26px ${p.ring}` : '0 4px 14px rgba(0,0,0,0.12)', opacity: dim || cantVote || (timeUp && !selected) ? 0.45 : 1, cursor: (timeUp || cantVote) ? 'default' : 'pointer' }}>
                       <span className="gg-option__letter" style={opt.icon ? { fontSize: '1.3rem' } : opt.avatar ? { padding: 0, overflow: 'hidden' } : undefined}>
                         {selected ? <FaCheck /> : opt.avatar
                           ? <img src={opt.avatar} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
@@ -321,7 +379,7 @@ export default function GroupGameRoom() {
                 })}
                 {isHost ? (
                   <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'advance'} onClick={wrap('advance', advance)}>👁️ {t('group_game_reveal', 'Reveal answers')}</button>
-                ) : spectator ? null : (
+                ) : cantVote ? null : (
                   <AppText as="p" style={{ textAlign: 'center', color: timeUp ? '#ef4444' : 'var(--text-muted)', marginTop: 2, fontSize: '0.9rem', fontWeight: timeUp ? 700 : 400 }}>
                     {timeUp ? `⏱️ ${t('group_game_time_up', "Time's up!")}` : myPick !== null ? `✅ ${t('group_game_locked', 'Answer locked — you can change it until reveal.')}` : t('group_game_pick', 'Pick your answer.')}
                   </AppText>
@@ -366,8 +424,7 @@ function RoundReveal({ game, round, qOpts, t }) {
   if (!reveal) return null;
   const nameOf = (uid) => game.players?.[uid]?.name || 'Player';
   const avatarOf = (uid) => game.players?.[uid]?.avatar || '';
-  const isQuiz = game.type === 'zodiac_guess';
-  const correctIndex = reveal.correctIndex;
+  const hasCorrect = Number.isInteger(reveal.correctIndex) && reveal.correctIndex >= 0;
   const total = (reveal.counts || []).reduce((s, c) => s + (c || 0), 0) || 1;
   const byOption = qOpts.map(() => []);
   Object.entries(reveal.picks || {}).forEach(([uid, opt]) => { if (byOption[opt]) byOption[opt].push(uid); });
@@ -378,8 +435,8 @@ function RoundReveal({ game, round, qOpts, t }) {
         const p = OPT[idx] || OPT[0];
         const count = reveal.counts?.[idx] || 0;
         const pct = Math.round((100 * count) / total);
-        const isCorrect = isQuiz && idx === correctIndex;
-        const isMaj = !isQuiz && reveal.majority === idx;
+        const isCorrect = hasCorrect && idx === reveal.correctIndex;
+        const isMaj = !hasCorrect && reveal.majority === idx;
         const highlight = isCorrect || isMaj;
         return (
           <div key={idx} className="gg-card" style={{ padding: 12, border: highlight ? `2px solid ${isCorrect ? '#16a34a' : 'var(--primary)'}` : '1px solid var(--border-color)' }}>

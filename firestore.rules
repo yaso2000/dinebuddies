@@ -1271,6 +1271,13 @@ service cloud.firestore {
         allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid);
         allow create, update, delete: if false;
       }
+      // Two-truths statements hold the hidden lie index — owner-only read; the
+      // server embeds the (public) statement texts into the game at start and
+      // writes the lie into the reveal.
+      match /statements/{stId} {
+        allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid);
+        allow create, update, delete: if false;
+      }
     }
 
     // ============================================

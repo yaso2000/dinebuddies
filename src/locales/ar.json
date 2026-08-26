@@ -2370,7 +2370,19 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "two_truths_title": "حقيقتان وكذبة",
+  "two_truths_write": "حقيقتان وكذبة",
+  "two_truths_hint": "اكتب 3 عبارات عن نفسك — علّم الكذبة الواحدة بالأحمر.",
+  "two_truths_mark_lie": "هذه هي الكذبة",
+  "two_truths_statement": "عبارة",
+  "two_truths_submit": "إرسال العبارات",
+  "two_truths_ready": "تم إدخال عباراتك — بانتظار البقية.",
+  "two_truths_waiting": "بانتظار إدخال اللاعبين…",
+  "two_truths_need_three": "املأ العبارات الثلاث.",
+  "two_truths_saved": "تم الحفظ! بانتظار البقية.",
+  "two_truths_your_turn": "دورك — الآخرون يخمّنون كذبتك.",
+  "two_truths_prompt": "أي عبارة هي الكذبة؟ 🤥",
   "most_likely_title": "من الأقرب؟",
   "most_likely_winner_sub": "الأفضل في قراءة المجموعة",
   "most_likely_star": "نجم الليلة",

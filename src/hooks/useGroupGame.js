@@ -41,13 +41,14 @@ export function useGroupGame(gameId) {
   const leave = useCallback(() => callFn('leaveGroupGame')({ gameId }), [gameId]);
   const kick = useCallback((targetId) => callFn('kickGroupPlayer')({ gameId, targetId }), [gameId]);
   const remove = useCallback(() => callFn('deleteGroupGame')({ gameId }), [gameId]);
+  const submitStatements = useCallback((texts, lieIndex) => callFn('submitTwoTruthsStatements')({ gameId, texts, lieIndex }), [gameId]);
 
   const players = useMemo(() => {
     if (!game?.players) return [];
     return (game.playerIds || []).map((pid) => ({ uid: pid, ...(game.players[pid] || {}) }));
   }, [game]);
 
-  return { game, players, loading, error, uid, isHost, isPlayer, start, answer, advance, restart, leave, kick, remove };
+  return { game, players, loading, error, uid, isHost, isPlayer, start, answer, advance, restart, leave, kick, remove, submitStatements };
 }
 
 export const groupGameApi = {
