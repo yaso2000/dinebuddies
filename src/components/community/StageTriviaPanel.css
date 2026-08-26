@@ -78,10 +78,9 @@
 
 .stage-trivia__opts {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr; /* always two per row, like iOS */
   gap: 8px;
 }
-@media (max-width: 380px) { .stage-trivia__opts { grid-template-columns: 1fr; } }
 
 .stage-trivia__opt {
   display: flex;
@@ -94,6 +93,7 @@
   text-align: start;
   transition: transform 0.1s ease, background 0.15s ease;
   min-height: 44px;
+  min-width: 0; /* let the text ellipsis/wrap instead of overflowing the column */
 }
 .stage-trivia__opt:not(:disabled):active { transform: scale(0.98); }
 .stage-trivia__opt:disabled { cursor: default; }
@@ -104,7 +104,7 @@
   display: grid; place-items: center;
   font-weight: 900; font-size: 0.85rem;
 }
-.stage-trivia__opt-text { font-weight: 700; font-size: 0.9rem; flex: 1; }
+.stage-trivia__opt-text { font-weight: 700; font-size: 0.88rem; flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.2; }
 .stage-trivia__opt-count { font-weight: 800; opacity: 0.85; }
 
 .stage-trivia__bar { height: 6px; border-radius: 4px; background: var(--border-color); overflow: hidden; }
