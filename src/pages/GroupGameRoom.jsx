@@ -357,7 +357,7 @@ function ResultScreen({ result, isHost, busy, onRestart, onExit, t }) {
               <div style={{ fontSize: '1.1rem' }}>{medal[i]}</div>
               <Avatar src={top[i].avatar} name={top[i].name} size={i === 0 ? 54 : 44} ring={i === 0 ? 'var(--primary)' : 'var(--border-color)'} />
               <AppText as="div" style={{ fontSize: '0.78rem', fontWeight: 700, marginTop: 4, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{top[i].name}</AppText>
-              <div style={{ width: '100%', height: heights[i], marginTop: 6, borderRadius: '10px 10px 0 0', background: i === 0 ? 'linear-gradient(180deg,var(--primary),#f0a24b)' : 'var(--bg-elevated)', border: '1px solid var(--border-color)', display: 'grid', placeItems: 'center', color: i === 0 ? '#fff' : 'var(--text-main)', fontWeight: 900 }}>{top[i].score}</div>
+              <div style={{ width: '100%', height: heights[i], marginTop: 6, borderRadius: '10px 10px 0 0', background: i === 0 ? 'linear-gradient(180deg,var(--primary),#f0a24b)' : 'var(--bg-elevated)', border: '1px solid var(--border-color)', display: 'grid', placeItems: 'center', color: i === 0 ? '#fff' : 'var(--text-main)', fontWeight: 900 }}>{top[i].pct}%</div>
             </div>
           ))}
         </div>

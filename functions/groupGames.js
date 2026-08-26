@@ -331,8 +331,10 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
 
         const players = game.playerIds || [];
         const nameOf = (uid) => (game.players?.[uid]?.name) || 'Player';
-        const score = {}; // total pairwise agreements
-        for (const uid of players) score[uid] = 0;
+        const avatarOf = (uid) => (game.players?.[uid]?.avatar) || '';
+        const score = {};    // total pairwise agreements (raw)
+        const possible = {}; // total potential partner-rounds (denominator for %)
+        for (const uid of players) { score[uid] = 0; possible[uid] = 0; }
         const pairAgree = {}; // "a|b" -> agreements
         const pairTotal = {}; // "a|b" -> rounds both answered
         let totalAgree = 0;
@@ -342,6 +344,13 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         for (const r of roundKeys) {
             const picks = byRound[r];
             const ids = Object.keys(picks);
+            const answeredCount = ids.length;
+            // Potential partners this round: if you answered, everyone else who
+            // answered; if you skipped, those you could have matched (missed) — so
+            // skipping lowers your %.
+            for (const p of players) {
+                possible[p] += (picks[p] !== undefined) ? Math.max(0, answeredCount - 1) : answeredCount;
+            }
             for (let i = 0; i < ids.length; i += 1) {
                 for (let j = i + 1; j < ids.length; j += 1) {
                     const a = ids[i]; const b = ids[j];
@@ -358,9 +367,11 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             }
         }
 
+        const pctOf = (uid) => (possible[uid] > 0 ? Math.round((100 * score[uid]) / possible[uid]) : 0);
         const ranking = players
-            .map((uid) => ({ uid, name: nameOf(uid), score: score[uid] || 0 }))
-            .sort((x, y) => y.score - x.score);
+            .map((uid) => ({ uid, name: nameOf(uid), avatar: avatarOf(uid), score: score[uid] || 0, pct: pctOf(uid) }))
+            // Rank by compatibility %, tie-break by raw agreements.
+            .sort((x, y) => (y.pct - x.pct) || (y.score - x.score));
 
         let topPair = null;
         for (const key of Object.keys(pairTotal)) {
