@@ -26,7 +26,6 @@ import {
   isIosLikeDevice,
   isYoutubeShortPost,
   getYoutubeThumbnailUrl,
-  shouldMuteEmbedAutoplay,
   postYoutubeEmbedCommand,
   postYoutubeEmbedListening,
   setYoutubeEmbedMuted,
@@ -202,18 +201,15 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
       const visibleEnough = entry.isIntersecting && entry.intersectionRatio >= MIN_VISIBLE_RATIO;
 
       if (visibleEnough) {
-        if (['youtube', 'tiktok', 'instagram'].includes(type)) {
-          if (type === 'youtube' && shouldMuteEmbedAutoplay()) {
-            setEmbedMuted(true);
-          } else {
-            setEmbedMuted(false);
-          }
-          setIsPlaying(true);
-        } else if (type === 'video' && videoRef.current) {
+        // Iframe embeds (YouTube/TikTok/Instagram) are NOT auto-played on scroll:
+        // a live iframe repaints while the feed is dragged, which looks like the
+        // video "shaking". They keep a stable poster until the user taps play.
+        // Native <video> composites cleanly, so it still autoplays.
+        if (type === 'video' && videoRef.current) {
           videoRef.current.play().catch(() => {});
           setIsPlaying(true);
+          globalMediaManager.play(post.id);
         }
-        globalMediaManager.play(post.id);
       } else {
         stopPostMedia();
       }

@@ -135,6 +135,11 @@
     border: 1px solid var(--border-color);
     background: var(--bg-darker, #0d0d12);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    /* Promote to its own compositing layer so an embedded player doesn't
+       repaint/"shake" while the feed is scrolled. */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    contain: paint;
 }
 
 .post-card.in-chat .post-media-container {
