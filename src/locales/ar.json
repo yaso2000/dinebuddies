@@ -2370,7 +2370,25 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "match_apply_hint2": "املأ بروفايلك المصغّر — صورة جيدة إلزامية للظهور.",
+  "match_age": "العمر",
+  "match_goal": "أبحث عن",
+  "match_goal_marriage": "زواج",
+  "match_goal_longterm": "علاقة طويلة",
+  "match_goal_shortterm": "علاقة قصيرة",
+  "match_goal_undecided": "لم أحدّد",
+  "match_interests": "اهتمامات (حتى 3)",
+  "match_interests_ph": "مثال: سفر، قهوة، كرة",
+  "match_lookingfor": "ما أريده في الشريك",
+  "match_lookingfor_ph": "سطر قصير…",
+  "match_about": "نبذة عني",
+  "match_about_ph": "كلمات قليلة عنك…",
+  "match_ai": "ساعدني بالكتابة",
+  "match_ai_wait": "يكتب…",
+  "match_ai_failed": "تعذّر التوليد — اكتب بنفسك.",
+  "match_age_invalid": "أدخل عمرًا صحيحًا (18+).",
+  "match_need_looking": "أضِف ما تبحث عنه.",
   "match_title": "ماتش أو لا؟",
   "match_create_title": "ماتش أو لا؟",
   "match_create_desc": "استضِف بثًّا حيًّا. الناس تتقدّم للظهور، تُصعِد اثنين، والجمهور يصوّت: ماتش أو لا!",

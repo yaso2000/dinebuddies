@@ -2353,7 +2353,25 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "match_apply_hint2": "Fill your mini-profile — a good photo is required to appear.",
+  "match_age": "Age",
+  "match_goal": "Looking for",
+  "match_goal_marriage": "Marriage",
+  "match_goal_longterm": "Long-term",
+  "match_goal_shortterm": "Short-term",
+  "match_goal_undecided": "Undecided",
+  "match_interests": "Interests (up to 3)",
+  "match_interests_ph": "e.g. travel, coffee, football",
+  "match_lookingfor": "What I want in a partner",
+  "match_lookingfor_ph": "A short line…",
+  "match_about": "About me",
+  "match_about_ph": "A few words about you…",
+  "match_ai": "Help me write",
+  "match_ai_wait": "Writing…",
+  "match_ai_failed": "Could not generate — write your own.",
+  "match_age_invalid": "Enter a valid age (18+).",
+  "match_need_looking": "Add what you are looking for.",
   "match_title": "Match or Not?",
   "match_create_title": "Match or Not?",
   "match_create_desc": "Host a live show. People apply to appear, you bring two on stage, and the room votes: match or not!",

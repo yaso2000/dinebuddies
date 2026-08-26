@@ -1,17 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaHeart, FaHeartBroken, FaMicrophone, FaStop, FaPlay, FaSignOutAlt, FaCopy, FaShareAlt, FaTimes } from 'react-icons/fa';
+import { FaHeart, FaHeartBroken, FaSignOutAlt, FaCopy, FaShareAlt, FaTimes, FaMagic } from 'react-icons/fa';
 import { useMatchShow } from '../hooks/useMatchShow';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { goToLogin } from '../utils/goToLogin';
-import { startRecording, uploadVoiceMessage, formatDuration } from '../utils/mediaUtils';
 import { AppText } from '../components/base';
 import '../styles/gameUI.css';
 
 const MAX_WORDS = 40;
-const MAX_SEC = 60;
+const GOALS = ['marriage', 'longterm', 'shortterm', 'undecided'];
+const labelStyle = { fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 };
+const inputStyle = { width: '100%', boxSizing: 'border-box', padding: 10, borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-elevated)', color: 'var(--text-main)', fontFamily: 'inherit', fontSize: '0.9rem' };
 
 function Photo({ src, name, size = 120 }) {
   const initial = (name || '?').charAt(0).toUpperCase();
@@ -20,39 +21,58 @@ function Photo({ src, name, size = 120 }) {
     : <div style={{ width: size, height: size, borderRadius: 18, background: 'linear-gradient(135deg,var(--primary),#f0a24b)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: size * 0.4 }}>{initial}</div>;
 }
 
-function Intro({ intro, t }) {
-  if (!intro) return null;
-  if (intro.type === 'voice' && intro.voiceUrl) {
-    return <audio src={intro.voiceUrl} controls style={{ width: '100%', height: 34, marginTop: 6 }} />;
-  }
-  if (intro.type === 'text' && intro.text) {
-    return <AppText as="p" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 6, lineHeight: 1.4 }}>“{intro.text}”</AppText>;
-  }
-  return null;
+function ProfileView({ profile, t, compact }) {
+  if (!profile) return null;
+  const goalLabel = profile.goal ? t(`match_goal_${profile.goal}`, profile.goal) : '';
+  const just = compact ? 'flex-start' : 'center';
+  return (
+    <div style={{ marginTop: 6, textAlign: compact ? 'start' : 'center' }}>
+      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: just }}>
+        {profile.age ? <span>🎂 {profile.age}</span> : null}
+        {goalLabel ? <span>💍 {goalLabel}</span> : null}
+      </div>
+      {profile.interests?.length ? (
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4, justifyContent: just }}>
+          {profile.interests.map((it, i) => <span key={i} style={{ fontSize: '0.72rem', background: 'var(--bg-elevated)', borderRadius: 8, padding: '2px 8px' }}>{it}</span>)}
+        </div>
+      ) : null}
+      {profile.lookingFor ? <AppText as="div" style={{ fontSize: '0.8rem', marginTop: 4 }}>🔎 {profile.lookingFor}</AppText> : null}
+      {profile.about ? <AppText as="p" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.4 }}>“{profile.about}”</AppText> : null}
+    </div>
+  );
 }
 
 export default function MatchShowRoom() {
   const { showId } = useParams();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
-  const { currentUser, isGuest } = useAuth();
+  const { currentUser, userProfile, isGuest } = useAuth();
   const { showToast } = useToast();
-  const { show, queue, loading, uid, isHost, myApplication, pair, onStage, apply, withdraw, selectPair, vote, reveal, nextPair, end } = useMatchShow(showId);
+  const { show, queue, loading, isHost, myApplication, pair, onStage, apply, generateIntro, withdraw, selectPair, vote, reveal, nextPair, end } = useMatchShow(showId);
 
   const [busy, setBusy] = useState('');
   const [myVote, setMyVote] = useState(null);
   const [applyOpen, setApplyOpen] = useState(false);
-  const [tab, setTab] = useState('voice');
-  const [introText, setIntroText] = useState('');
-  const [voice, setVoice] = useState(null); // { blob, seconds }
-  const [recording, setRecording] = useState(false);
-  const [recSec, setRecSec] = useState(0);
+  const [age, setAge] = useState('');
+  const [goal, setGoal] = useState('marriage');
+  const [interests, setInterests] = useState('');
+  const [lookingFor, setLookingFor] = useState('');
+  const [about, setAbout] = useState('');
   const [pickA, setPickA] = useState(null);
-  const recRef = useRef(null);
-  const recTimer = useRef(null);
 
   const pairId = pair?.pairId;
   useEffect(() => { setMyVote(null); }, [pairId]);
+
+  // Prefill from the user's profile when opening the apply form.
+  const openApply = () => {
+    if (!requireAuth()) return;
+    if (!age) setAge(String(userProfile?.age || userProfile?.dob_age || ''));
+    if (!interests) {
+      const it = userProfile?.interests || userProfile?.hobbies;
+      setInterests(Array.isArray(it) ? it.slice(0, 3).join('، ') : (typeof it === 'string' ? it : ''));
+    }
+    setApplyOpen(true);
+  };
 
   const requireAuth = () => { if (isGuest || !currentUser) { goToLogin(); return false; } return true; };
   const wrap = (key, fn) => async (...a) => {
@@ -69,43 +89,30 @@ export default function MatchShowRoom() {
     catch (e) { showToast(e?.message || t('admin_failed', 'Something went wrong.'), 'error'); setMyVote(null); }
   };
 
-  // ---- Voice recording ----
-  const startRec = async () => {
+  const interestsArr = () => interests.split(/[،,]/).map((s) => s.trim()).filter(Boolean).slice(0, 3);
+
+  const doGenerateIntro = async () => {
+    setBusy('ai');
     try {
-      const rec = await startRecording();
-      recRef.current = rec;
-      setRecording(true); setRecSec(0);
-      recTimer.current = setInterval(() => setRecSec((s) => {
-        if (s + 1 >= MAX_SEC) { stopRec(); return MAX_SEC; }
-        return s + 1;
-      }), 1000);
-    } catch { showToast(t('match_mic_denied', 'Microphone access is needed.'), 'error'); }
-  };
-  const stopRec = async () => {
-    if (recTimer.current) { clearInterval(recTimer.current); recTimer.current = null; }
-    setRecording(false);
-    try {
-      const blob = await recRef.current?.stop();
-      if (blob) setVoice({ blob, seconds: recSec || 1 });
-    } catch { /* ignore */ }
+      const res = await generateIntro({ age: Number(age) || 0, goal, interests: interestsArr(), lookingFor: lookingFor.trim(), locale: (i18n.language || 'ar').slice(0, 2) });
+      if (res?.about) setAbout(res.about);
+    } catch (e) { showToast(e?.message || t('match_ai_failed', 'Could not generate — write your own.'), 'error'); }
+    finally { setBusy(''); }
   };
 
   const submitApply = async () => {
     if (!requireAuth()) return;
+    const a = Math.round(Number(age) || 0);
+    if (a < 18) { showToast(t('match_age_invalid', 'Enter a valid age (18+).'), 'info'); return; }
+    if (!lookingFor.trim()) { showToast(t('match_need_looking', 'Add what you are looking for.'), 'info'); return; }
+    const words = about.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) { showToast(t('match_write_first', 'Write a short intro (or use AI).'), 'info'); return; }
+    if (words.length > MAX_WORDS) { showToast(t('match_too_long', { defaultValue: 'Keep it under {{n}} words.', n: MAX_WORDS }), 'info'); return; }
     setBusy('apply');
     try {
-      if (tab === 'voice') {
-        if (!voice) { showToast(t('match_record_first', 'Record your intro first.'), 'info'); setBusy(''); return; }
-        const url = await uploadVoiceMessage(voice.blob, uid);
-        await apply({ introType: 'voice', introVoiceUrl: url, introVoiceDuration: voice.seconds });
-      } else {
-        const words = introText.trim().split(/\s+/).filter(Boolean);
-        if (!words.length) { showToast(t('match_write_first', 'Write a short intro.'), 'info'); setBusy(''); return; }
-        if (words.length > MAX_WORDS) { showToast(t('match_too_long', { defaultValue: 'Keep it under {{n}} words.', n: MAX_WORDS }), 'info'); setBusy(''); return; }
-        await apply({ introType: 'text', introText: introText.trim() });
-      }
+      await apply({ age: a, goal, interests: interestsArr(), lookingFor: lookingFor.trim(), about: about.trim() });
       showToast(t('match_applied', "You're in the queue!"), 'success');
-      setApplyOpen(false); setVoice(null); setIntroText('');
+      setApplyOpen(false);
     } catch (e) { showToast(e?.message || t('admin_failed', 'Something went wrong.'), 'error'); }
     finally { setBusy(''); }
   };
@@ -155,29 +162,32 @@ export default function MatchShowRoom() {
           <div className="gg-card" style={{ padding: 20, textAlign: 'center' }}>🎬 {t('match_ended', 'The show has ended.')}</div>
         ) : (
           <>
-            {/* ---------------- STAGE ---------------- */}
+            {/* ---------------- STAGE (two cards side by side) ---------------- */}
             {pair ? (
-              <div className="gg-card" style={{ padding: 16, marginBottom: 16 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 10, alignItems: 'start' }}>
-                  {[pair.a, pair.b].map((c, i) => (
-                    <React.Fragment key={c.uid}>
-                      {i === 1 ? <div style={{ alignSelf: 'center', fontSize: '1.6rem' }}>❤️</div> : null}
-                      <div style={{ textAlign: 'center', minWidth: 0 }}>
-                        <Photo src={c.avatar} name={c.name} />
-                        <AppText as="div" style={{ fontWeight: 800, marginTop: 6 }}>{c.name}</AppText>
-                        <Intro intro={c.intro} t={t} />
+              <div style={{ position: 'relative', marginBottom: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  {[pair.a, pair.b].map((c, idx) => (
+                    <div key={c.uid} className="match-card" style={{ ['--mc-accent']: idx === 0 ? '#6366f1' : '#e11d48' }}>
+                      <div className="match-card__photo">
+                        {c.avatar
+                          ? <img src={c.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg,var(--primary),#f0a24b)', color: '#fff', fontWeight: 900, fontSize: '2rem' }}>{(c.name || '?').charAt(0).toUpperCase()}</div>}
                       </div>
-                    </React.Fragment>
+                      <AppText as="div" className="match-card__name">{c.name}</AppText>
+                      <ProfileView profile={c.profile} t={t} compact />
+                    </div>
                   ))}
                 </div>
+                {/* center heart */}
+                <div className="match-heart">{revealData ? (revealData.isMatch ? '💖' : '💔') : '❤️'}</div>
 
                 {revealData ? (
-                  <div style={{ textAlign: 'center', marginTop: 14 }}>
-                    <div style={{ fontSize: '2rem', fontWeight: 900, color: revealData.isMatch ? '#16a34a' : '#ef4444' }}>{revealData.pct}%</div>
-                    <AppText as="div" style={{ fontWeight: 800, color: revealData.isMatch ? '#16a34a' : '#ef4444' }}>
+                  <div className="gg-card" style={{ padding: 14, marginTop: 12, textAlign: 'center', border: `2px solid ${revealData.isMatch ? '#16a34a' : '#ef4444'}` }}>
+                    <div style={{ fontSize: '2.4rem', fontWeight: 900, color: revealData.isMatch ? '#16a34a' : '#ef4444', lineHeight: 1 }}>{revealData.pct}%</div>
+                    <AppText as="div" style={{ fontWeight: 900, color: revealData.isMatch ? '#16a34a' : '#ef4444', marginTop: 2 }}>
                       {revealData.isMatch ? `💚 ${t('match_yes', "It's a match!")}` : `💔 ${t('match_no', 'Not a match')}`}
                     </AppText>
-                    <AppText as="div" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>❤️ {revealData.yes} · 💔 {revealData.no}</AppText>
+                    <AppText as="div" style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 2 }}>❤️ {revealData.yes} · 💔 {revealData.no}</AppText>
                   </div>
                 ) : null}
               </div>
@@ -224,7 +234,7 @@ export default function MatchShowRoom() {
                   </div>
                 ) : null
               ) : (
-                <button type="button" className="gg-btn gg-btn--primary gg-btn--block" style={{ marginBottom: 16 }} onClick={() => (requireAuth() && setApplyOpen(true))}>
+                <button type="button" className="gg-btn gg-btn--primary gg-btn--block" style={{ marginBottom: 16 }} onClick={openApply}>
                   🙋 {t('match_apply', 'Apply to appear')}
                 </button>
               )
@@ -242,7 +252,7 @@ export default function MatchShowRoom() {
                       <Photo src={a.avatar} name={a.name} size={44} />
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <AppText as="div" style={{ fontWeight: 700 }}>{a.name} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>· {a.gender === 'male' ? '♂' : '♀'}</span></AppText>
-                        <Intro intro={a.intro} t={t} />
+                        <ProfileView profile={a.profile} t={t} compact />
                       </span>
                       {pickA === a.uid ? <span style={{ color: 'var(--primary)', fontWeight: 800 }}>1️⃣</span> : null}
                     </button>
@@ -263,36 +273,46 @@ export default function MatchShowRoom() {
               <AppText as="div" style={{ fontWeight: 900 }}>🙋 {t('match_apply', 'Apply to appear')}</AppText>
               <button type="button" className="gg-icon" onClick={() => setApplyOpen(false)}><FaTimes /></button>
             </div>
-            <AppText as="p" style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: 12 }}>{t('match_apply_hint', 'Introduce yourself — a voice clip (under a minute) or a short note.')}</AppText>
+            <AppText as="p" style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: 14 }}>{t('match_apply_hint2', 'Fill your mini-profile — a good photo is required to appear.')}</AppText>
 
+            {/* Age + relationship goal */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              <button type="button" onClick={() => setTab('voice')} className="gg-btn" style={{ flex: 1, background: tab === 'voice' ? 'var(--primary)' : 'var(--bg-elevated)', color: tab === 'voice' ? '#fff' : 'var(--text-main)' }}>🎙️ {t('match_voice', 'Voice')}</button>
-              <button type="button" onClick={() => setTab('text')} className="gg-btn" style={{ flex: 1, background: tab === 'text' ? 'var(--primary)' : 'var(--bg-elevated)', color: tab === 'text' ? '#fff' : 'var(--text-main)' }}>✍️ {t('match_text', 'Text')}</button>
-            </div>
-
-            {tab === 'voice' ? (
-              <div style={{ textAlign: 'center', marginBottom: 12 }}>
-                {voice ? (
-                  <div>
-                    <div style={{ color: '#16a34a', fontWeight: 700, marginBottom: 8 }}>✅ {formatDuration ? formatDuration(voice.seconds) : `${voice.seconds}s`}</div>
-                    <button type="button" className="gg-btn gg-btn--soft" onClick={() => setVoice(null)}>{t('match_rerecord', 'Re-record')}</button>
-                  </div>
-                ) : recording ? (
-                  <button type="button" className="gg-btn" style={{ background: '#ef4444', color: '#fff' }} onClick={stopRec}><FaStop /> {t('match_stop', 'Stop')} · {recSec}s / {MAX_SEC}s</button>
-                ) : (
-                  <button type="button" className="gg-btn gg-btn--primary" onClick={startRec}><FaMicrophone /> {t('match_record', 'Record intro')}</button>
-                )}
+              <div style={{ flex: '0 0 90px' }}>
+                <AppText as="div" style={labelStyle}>{t('match_age', 'Age')}</AppText>
+                <input type="number" inputMode="numeric" value={age} onChange={(e) => setAge(e.target.value)} min={18} max={99} style={inputStyle} />
               </div>
-            ) : (
-              <div style={{ marginBottom: 12 }}>
-                <textarea value={introText} onChange={(e) => setIntroText(e.target.value)} rows={3}
-                  placeholder={t('match_text_ph', 'A few words about you…')}
-                  style={{ width: '100%', boxSizing: 'border-box', padding: 10, borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-elevated)', color: 'var(--text-main)', fontFamily: 'inherit' }} />
-                <div style={{ fontSize: '0.75rem', color: introText.trim().split(/\s+/).filter(Boolean).length > MAX_WORDS ? '#ef4444' : 'var(--text-muted)', textAlign: 'end' }}>
-                  {introText.trim().split(/\s+/).filter(Boolean).length} / {MAX_WORDS} {t('match_words', 'words')}
+              <div style={{ flex: 1 }}>
+                <AppText as="div" style={labelStyle}>{t('match_goal', 'Looking for')}</AppText>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {GOALS.map((g) => (
+                    <button key={g} type="button" onClick={() => setGoal(g)} style={{ padding: '7px 10px', borderRadius: 10, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', border: `1.5px solid ${goal === g ? 'var(--primary)' : 'var(--border-color)'}`, background: goal === g ? 'var(--primary)' : 'var(--bg-elevated)', color: goal === g ? '#fff' : 'var(--text-main)' }}>
+                      {t(`match_goal_${g}`, g)}
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
+            </div>
+
+            {/* Interests */}
+            <AppText as="div" style={labelStyle}>{t('match_interests', 'Interests (up to 3)')}</AppText>
+            <input value={interests} onChange={(e) => setInterests(e.target.value)} placeholder={t('match_interests_ph', 'e.g. travel، coffee، football')} style={{ ...inputStyle, marginBottom: 12 }} />
+
+            {/* Looking for */}
+            <AppText as="div" style={labelStyle}>{t('match_lookingfor', 'What I want in a partner')}</AppText>
+            <input value={lookingFor} onChange={(e) => setLookingFor(e.target.value)} maxLength={160} placeholder={t('match_lookingfor_ph', 'A short line…')} style={{ ...inputStyle, marginBottom: 12 }} />
+
+            {/* About + AI */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <AppText as="div" style={labelStyle}>{t('match_about', 'About me')}</AppText>
+              <button type="button" onClick={doGenerateIntro} disabled={busy === 'ai'} style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <FaMagic /> {busy === 'ai' ? t('match_ai_wait', 'Writing…') : t('match_ai', 'Help me write')}
+              </button>
+            </div>
+            <textarea value={about} onChange={(e) => setAbout(e.target.value)} rows={3} placeholder={t('match_about_ph', 'A few words about you…')}
+              style={{ ...inputStyle, resize: 'none' }} />
+            <div style={{ fontSize: '0.72rem', color: about.trim().split(/\s+/).filter(Boolean).length > MAX_WORDS ? '#ef4444' : 'var(--text-muted)', textAlign: 'end', marginBottom: 12 }}>
+              {about.trim().split(/\s+/).filter(Boolean).length} / {MAX_WORDS} {t('match_words', 'words')}
+            </div>
 
             <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'apply'} onClick={submitApply}>
               {busy === 'apply' ? '…' : `🙋 ${t('match_submit', 'Join the queue')}`}

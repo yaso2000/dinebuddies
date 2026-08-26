@@ -1,4 +1,5 @@
 const functions = require('firebase-functions');
+const { GoogleAuth } = require('google-auth-library');
 
 /**
  * "Match or Not" — a live, consent-first matchmaking show. The host opens a
@@ -11,8 +12,8 @@ const functions = require('firebase-functions');
  * the "connect" hook (both featured users accept -> a real connection).
  */
 const GENDERS = ['male', 'female', 'any'];
+const REL_GOALS = ['marriage', 'longterm', 'shortterm', 'undecided'];
 const MAX_INTRO_WORDS = 40;   // written intro word cap
-const MAX_VOICE_SEC = 60;     // voice intro length cap (1 minute)
 
 function registerMatchShow(exports, { db, admin, enforceCallableRateLimit }) {
     const FieldValue = admin.firestore.FieldValue;
@@ -135,28 +136,26 @@ function registerMatchShow(exports, { db, admin, enforceCallableRateLimit }) {
         if (!fits) throw new functions.https.HttpsError('failed-precondition', 'This show is not open to your slot.');
         if (!me.avatar) throw new functions.https.HttpsError('failed-precondition', 'Add a profile photo to appear.');
 
-        // A self-intro is required with every application: a voice clip (<=1 min)
-        // OR a short written intro — so voters judge the person, not just the photo.
-        const introType = asTrimmed(data?.introType).toLowerCase();
-        let intro;
-        if (introType === 'voice') {
-            const url = asTrimmed(data?.introVoiceUrl);
-            const dur = Number(data?.introVoiceDuration) || 0;
-            if (!/^https?:\/\//i.test(url)) throw new functions.https.HttpsError('invalid-argument', 'Record your voice intro first.');
-            if (dur > MAX_VOICE_SEC + 2) throw new functions.https.HttpsError('invalid-argument', `Voice intro must be under ${MAX_VOICE_SEC} seconds.`);
-            intro = { type: 'voice', voiceUrl: url, voiceDuration: Math.round(dur) };
-        } else {
-            const text = asTrimmed(data?.introText).slice(0, 400);
-            if (!text) throw new functions.https.HttpsError('invalid-argument', 'Write a short intro or record a voice one.');
-            const words = text.split(/\s+/).filter(Boolean);
-            if (words.length > MAX_INTRO_WORDS) throw new functions.https.HttpsError('invalid-argument', `Keep your intro to ${MAX_INTRO_WORDS} words.`);
-            intro = { type: 'text', text };
+        // A short mini-profile is required with every application (mandatory
+        // fields) so voters judge the person, not just the photo.
+        const age = Math.round(Number(data?.age) || 0);
+        if (age < 18 || age > 99) throw new functions.https.HttpsError('invalid-argument', 'Enter a valid age (18+).');
+        const lookingFor = asTrimmed(data?.lookingFor).slice(0, 160);
+        if (!lookingFor) throw new functions.https.HttpsError('invalid-argument', 'Add what you are looking for.');
+        const about = asTrimmed(data?.about).slice(0, 400);
+        if (!about) throw new functions.https.HttpsError('invalid-argument', 'Write a short intro (or use AI to help).');
+        if (about.split(/\s+/).filter(Boolean).length > MAX_INTRO_WORDS) {
+            throw new functions.https.HttpsError('invalid-argument', `Keep the intro under ${MAX_INTRO_WORDS} words.`);
         }
+        const goal = asTrimmed(data?.goal).toLowerCase();
+        if (!REL_GOALS.includes(goal)) throw new functions.https.HttpsError('invalid-argument', 'Choose a relationship type.');
+        const interests = (Array.isArray(data?.interests) ? data.interests : []).map((x) => asTrimmed(x).slice(0, 24)).filter(Boolean).slice(0, 3);
+        const profile = { age, goal, interests, lookingFor, about };
 
         const appRef = ref.collection('applicants').doc(uid);
         const existing = await appRef.get();
         const now = FieldValue.serverTimestamp();
-        await appRef.set({ uid, name: me.name, avatar: me.avatar, gender: me.gender, intro, status: 'queued', appliedAt: now }, { merge: true });
+        await appRef.set({ uid, name: me.name, avatar: me.avatar, gender: me.gender, profile, status: 'queued', appliedAt: now }, { merge: true });
         if (!existing.exists) await ref.update({ applicantCount: FieldValue.increment(1), updatedAt: now });
         return { ok: true };
     });
@@ -172,6 +171,46 @@ function registerMatchShow(exports, { db, admin, enforceCallableRateLimit }) {
             await ref.update({ applicantCount: FieldValue.increment(-1), updatedAt: FieldValue.serverTimestamp() });
         }
         return { ok: true };
+    });
+
+    // ---- AI helps write the intro ("about") ----------------------------------
+    exports.generateMatchIntro = functions.https.onCall(async (data, context) => {
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
+        const uid = context.auth.uid;
+        await enforceCallableRateLimit(uid, 'match_intro_ai', { cooldownMs: 3000, perHour: 40 });
+        const me = await loadUser(uid);
+        const age = Math.round(Number(data?.age) || 0) || '';
+        const goal = asTrimmed(data?.goal);
+        const interests = (Array.isArray(data?.interests) ? data.interests : []).map((x) => asTrimmed(x)).filter(Boolean).slice(0, 3);
+        const lookingFor = asTrimmed(data?.lookingFor).slice(0, 160);
+        const locale = asTrimmed(data?.locale).slice(0, 5) || 'ar';
+
+        const prompt = [
+            'Write a warm, genuine first-person self-introduction for a light-hearted matchmaking game — 1 to 2 short sentences, under 35 words.',
+            `Language: ${locale}. Friendly, respectful, a little charming; no clichés, no emojis, no quotes.`,
+            me.name ? `Name: ${me.name}.` : '',
+            age ? `Age: ${age}.` : '',
+            goal ? `Looking for: ${goal} relationship.` : '',
+            interests.length ? `Interests: ${interests.join(', ')}.` : '',
+            lookingFor ? `Wants in a partner: ${lookingFor}.` : '',
+            'Return ONLY the intro text, nothing else.',
+        ].filter(Boolean).join('\n');
+
+        try {
+            const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+            const client = await auth.getClient();
+            const project = process.env.GCLOUD_PROJECT?.trim() || 'dinebuddies';
+            const loc = process.env.GEMINI_VERTEX_LOCATION?.trim() || 'us-central1';
+            const model = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+            const url = `https://${loc}-aiplatform.googleapis.com/v1/projects/${project}/locations/${loc}/publishers/google/models/${model}:generateContent`;
+            const res = await client.request({ url, method: 'POST', data: { contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.9, maxOutputTokens: 120 } } });
+            const text = String(res?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim().replace(/^["“]|["”]$/g, '');
+            if (!text) throw new Error('empty');
+            return { about: text.slice(0, 300) };
+        } catch (err) {
+            console.error('[matchShow] intro AI', err?.message || err);
+            throw new functions.https.HttpsError('internal', 'Could not generate — please write your own.');
+        }
     });
 
     // ---- Select a pair (host) -------------------------------------------------
@@ -203,8 +242,8 @@ function registerMatchShow(exports, { db, admin, enforceCallableRateLimit }) {
         await ref.update({
             currentPair: {
                 pairId,
-                a: { uid: a.uid, name: a.name, avatar: a.avatar, gender: a.gender, intro: a.intro || null },
-                b: { uid: b.uid, name: b.name, avatar: b.avatar, gender: b.gender, intro: b.intro || null },
+                a: { uid: a.uid, name: a.name, avatar: a.avatar, gender: a.gender, profile: a.profile || null },
+                b: { uid: b.uid, name: b.name, avatar: b.avatar, gender: b.gender, profile: b.profile || null },
             },
             pairStatus: 'voting',
             reveal: null,

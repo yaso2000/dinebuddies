@@ -24,3 +24,27 @@
 .gg-btn--block { width: 100%; padding: 16px; font-size: 1.05rem; }
 .gg-textbtn { width: 100%; margin-top: 10px; padding: 12px; background: none; border: none; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text-muted); }
 .gg-textbtn--danger { color: #ef4444; }
+
+/* Match-or-Not candidate cards */
+.match-card {
+  background: var(--bg-card);
+  border: 2px solid var(--mc-accent, var(--primary));
+  border-radius: 18px;
+  padding: 10px;
+  overflow: hidden;
+  min-width: 0;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.10);
+}
+.match-card__photo {
+  width: 100%; aspect-ratio: 1 / 1; border-radius: 14px; overflow: hidden;
+  background: var(--bg-elevated);
+  box-shadow: inset 0 0 0 3px var(--mc-accent, var(--primary));
+}
+.match-card__name { font-weight: 900; font-size: 1.02rem; text-align: center; margin-top: 8px; }
+.match-heart {
+  position: absolute; top: 46%; left: 50%; transform: translate(-50%,-50%);
+  font-size: 1.9rem; z-index: 2;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.25));
+  animation: mcHeart 1.6s ease-in-out infinite;
+}
+@keyframes mcHeart { 0%,100% { transform: translate(-50%,-50%) scale(1); } 50% { transform: translate(-50%,-50%) scale(1.18); } }

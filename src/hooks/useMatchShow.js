@@ -37,7 +37,8 @@ export function useMatchShow(showId) {
   const pair = show?.currentPair || null;
   const onStage = !!pair && (uid === pair.a?.uid || uid === pair.b?.uid);
 
-  const apply = useCallback((intro) => call('applyToMatchShow')({ showId, ...intro }), [showId]);
+  const apply = useCallback((profile) => call('applyToMatchShow')({ showId, ...profile }), [showId]);
+  const generateIntro = useCallback((hints) => call('generateMatchIntro')(hints).then((r) => r.data), []);
   const withdraw = useCallback(() => call('withdrawMatchApplication')({ showId }), [showId]);
   const selectPair = useCallback((uidA, uidB) => call('selectMatchPair')({ showId, uidA, uidB }), [showId]);
   const vote = useCallback((v) => call('voteMatch')({ showId, vote: v }), [showId]);
@@ -45,7 +46,7 @@ export function useMatchShow(showId) {
   const nextPair = useCallback(() => call('nextMatchPair')({ showId }), [showId]);
   const end = useCallback(() => call('endMatchShow')({ showId }), [showId]);
 
-  return { show, applicants, queue, loading, uid, isHost, myApplication, pair, onStage, apply, withdraw, selectPair, vote, reveal, nextPair, end };
+  return { show, applicants, queue, loading, uid, isHost, myApplication, pair, onStage, apply, generateIntro, withdraw, selectPair, vote, reveal, nextPair, end };
 }
 
 export const matchShowApi = {
