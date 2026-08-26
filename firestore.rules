@@ -1249,6 +1249,25 @@ service cloud.firestore {
       }
     }
 
+    // Food-trivia question bank — SERVER-ONLY: never expose correctIndex to
+    // clients (they must not read the right answer before the reveal).
+    match /trivia_questions/{qid} {
+      allow read, write: if false; // read only via the trivia callables (admin SDK)
+    }
+    match /trivia_games/{gameId} {
+      // The game doc holds no correct answers (stripped) — any signed-in Stage
+      // viewer may read it to render the game on the Stage top panel.
+      allow read: if isSignedIn();
+      allow create, update, delete: if false; // via the trivia callables only
+
+      // A player's own pick only (peek-proof); the server writes the revealed
+      // tally + correct answer into the game doc after the host closes a round.
+      match /answers/{ansId} {
+        allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid);
+        allow create, update, delete: if false;
+      }
+    }
+
     // ============================================
     // ADMIN EMAIL CAMPAIGN LOG (server-only via Cloud Functions)
     // ============================================
