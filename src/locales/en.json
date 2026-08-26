@@ -2353,7 +2353,9 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "invite_enter_group_game_title": "Enter your game",
+  "invite_enter_group_game_desc": "You already have a live game. Tap to enter.",
   "group_game_time_up": "Time's up!",
   "group_game_need_players_3": "Need at least 3 players…",
   "group_game_delete": "Delete game",

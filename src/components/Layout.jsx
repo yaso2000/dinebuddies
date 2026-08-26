@@ -20,7 +20,6 @@ import {
   FaChevronRight,
   FaThLarge,
   FaMicrophone,
-  FaGamepad,
   FaTag,
 } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
@@ -28,7 +27,6 @@ import { useChat } from '../context/ChatContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
 import { useJoinedStages } from '../hooks/useJoinedStages';
-import { useLiveGamesCount } from '../hooks/useLiveGamesCount';
 import { useTheme } from '../context/ThemeContext';
 import UnpublishedBusinessReminder from './UnpublishedBusinessReminder';
 import EmailVerificationBusinessBanner from './EmailVerificationBusinessBanner';
@@ -84,7 +82,6 @@ const Layout = ({ children }) => {
   // Total unread messages
   const totalChatUnread = chatUnreadCount + unreadMessageCount;
   const { activeCount: stageActiveCount, totalUnread: stageUnreadCount } = useJoinedStages();
-  const liveGamesCount = useLiveGamesCount({ enabled: !isBusiness && !!currentUser && !isGuest });
   const { themeMode } = useTheme();
   const isDesktopShell = useDesktopShell();
 
@@ -542,21 +539,6 @@ const Layout = ({ children }) => {
                                   </AppText>
                                 )}
                             </Link>
-                            {!isBusinessAccount ? (
-                              <Link
-                                to={userProfile?.hostActiveGameId ? `/group-game/${userProfile.hostActiveGameId}` : '/create-group-game'}
-                                className={`notification-bell header-games-btn${location.pathname === '/create-group-game' || location.pathname.startsWith('/group-game/') ? ' active' : ''}${liveGamesCount > 0 ? ' has-live' : ''}`}
-                                aria-label={t('group_game_create_title', 'Group game')}
-                                title={t('group_game_taste_desc', 'Play a live group game — open to everyone.')}
-                              >
-                                <FaGamepad />
-                                {liveGamesCount > 0 && (
-                                  <AppText as="span" className="badge badge--live">
-                                    {liveGamesCount > 99 ? '99+' : liveGamesCount}
-                                  </AppText>
-                                )}
-                              </Link>
-                            ) : null}
                             <Link
               to="/settings"
               className={`notification-bell header-settings-btn${isActive('/settings') || location.pathname.startsWith('/settings/') ? ' active' : ''}`}

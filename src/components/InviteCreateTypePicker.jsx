@@ -29,13 +29,14 @@ export default function InviteCreateTypePicker({
   includeStage = false,
 }) {
   const { t } = useTranslation();
-  const { goCreate, publicGateChecking, activeHostedStage } = useInviteCreateNavigation({
+  const { goCreate, publicGateChecking, activeHostedStage, activeGameId } = useInviteCreateNavigation({
     navigationState,
     businessId,
     onAfterNavigate,
   });
 
   const hasLiveStage = Boolean(activeHostedStage?.id);
+  const hasActiveGame = Boolean(activeGameId);
 
   const options = [
     {
@@ -70,8 +71,12 @@ export default function InviteCreateTypePicker({
       className: 'social',
       sheetIconClass: 'business-create-option__icon--stage',
       icon: FaUsers,
-      title: t('invite_create_group_game_title', 'Group game'),
-      desc: t('invite_create_group_game_desc', 'Play a live compatibility game with friends — open to everyone.'),
+      title: hasActiveGame
+        ? t('invite_enter_group_game_title', 'Enter your game')
+        : t('invite_create_group_game_title', 'Group game'),
+      desc: hasActiveGame
+        ? t('invite_enter_group_game_desc', 'You already have a live game. Tap to enter.')
+        : t('invite_create_group_game_desc', 'Play a live compatibility game with friends — open to everyone.'),
     },
     ...(includeStage
       ? [
