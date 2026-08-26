@@ -332,10 +332,15 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         const players = game.playerIds || [];
         const nameOf = (uid) => (game.players?.[uid]?.name) || 'Player';
         const avatarOf = (uid) => (game.players?.[uid]?.avatar) || '';
-        const score = {};    // total pairwise agreements (raw)
-        const possible = {}; // total potential partner-rounds (denominator for %)
-        for (const uid of players) { score[uid] = 0; possible[uid] = 0; }
-        const pairAgree = {}; // "a|b" -> agreements
+
+        // Each of the N questions is worth an equal 1/N share. On a question you
+        // answered, you earn the fraction of the OTHER answerers who chose the same
+        // option (1.0 = fully in sync). A question you did NOT answer earns 0 — so
+        // every unanswered question costs you its full 1/N share.
+        const N = Math.max(1, Number(game.roundCount) || Object.keys(byRound).length || 1);
+        const qScore = {}; // summed per-question sync fraction (0..N)
+        for (const uid of players) qScore[uid] = 0;
+        const pairAgree = {}; // "a|b" -> agreements (for the top pair)
         const pairTotal = {}; // "a|b" -> rounds both answered
         let totalAgree = 0;
         let totalPairsRounds = 0;
@@ -345,11 +350,13 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             const picks = byRound[r];
             const ids = Object.keys(picks);
             const answeredCount = ids.length;
-            // Potential partners this round: if you answered, everyone else who
-            // answered; if you skipped, those you could have matched (missed) — so
-            // skipping lowers your %.
+            const optCount = {};
+            for (const id of ids) optCount[picks[id]] = (optCount[picks[id]] || 0) + 1;
             for (const p of players) {
-                possible[p] += (picks[p] !== undefined) ? Math.max(0, answeredCount - 1) : answeredCount;
+                if (picks[p] === undefined) continue; // unanswered → 0 for this question
+                const others = answeredCount - 1;
+                const same = (optCount[picks[p]] || 0) - 1;
+                qScore[p] += others > 0 ? same / others : 0;
             }
             for (let i = 0; i < ids.length; i += 1) {
                 for (let j = i + 1; j < ids.length; j += 1) {
@@ -360,18 +367,15 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
                     if (picks[a] === picks[b]) {
                         pairAgree[key] = (pairAgree[key] || 0) + 1;
                         totalAgree += 1;
-                        score[a] += 1;
-                        score[b] += 1;
                     }
                 }
             }
         }
 
-        const pctOf = (uid) => (possible[uid] > 0 ? Math.round((100 * score[uid]) / possible[uid]) : 0);
+        const pctOf = (uid) => Math.round((100 * qScore[uid]) / N);
         const ranking = players
-            .map((uid) => ({ uid, name: nameOf(uid), avatar: avatarOf(uid), score: score[uid] || 0, pct: pctOf(uid) }))
-            // Rank by compatibility %, tie-break by raw agreements.
-            .sort((x, y) => (y.pct - x.pct) || (y.score - x.score));
+            .map((uid) => ({ uid, name: nameOf(uid), avatar: avatarOf(uid), pct: pctOf(uid) }))
+            .sort((x, y) => (y.pct - x.pct) || (y.uid < x.uid ? 1 : -1));
 
         let topPair = null;
         for (const key of Object.keys(pairTotal)) {
