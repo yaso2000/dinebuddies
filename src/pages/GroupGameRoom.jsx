@@ -11,6 +11,7 @@ import { playMatchCelebrationSound } from '../utils/matchCelebrationSound';
 import { AppText } from '../components/base';
 
 const MUTE_KEY = 'db_group_game_muted';
+const ROUND_MS = 10000; // must match the server's per-question window
 // Two vivid option palettes so the choice feels tactile and fun.
 const OPT = [
   { grad: 'linear-gradient(135deg,#6366f1,#8b5cf6)', solid: '#7c3aed', ring: 'rgba(124,58,237,0.5)', letter: 'A' },
@@ -66,6 +67,29 @@ export default function GroupGameRoom() {
 
   useEffect(() => { setMyPick(null); }, [round]);
 
+  // ---- Per-question countdown (10s), host auto-reveals at zero ----
+  const endsMs = game?.roundEndsAt?.toMillis
+    ? game.roundEndsAt.toMillis()
+    : (typeof game?.roundEndsAt?.seconds === 'number' ? game.roundEndsAt.seconds * 1000 : null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (status !== 'active' || roundStatus !== 'answering' || !endsMs) return undefined;
+    setNowMs(Date.now());
+    const id = setInterval(() => setNowMs(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [status, roundStatus, endsMs]);
+  const remainingMs = endsMs ? Math.max(0, endsMs - nowMs) : null;
+  const remainingSec = remainingMs != null ? Math.ceil(remainingMs / 1000) : null;
+  const timeUp = remainingMs != null && remainingMs <= 0;
+
+  const autoAdvancedRef = useRef(-1);
+  useEffect(() => {
+    if (isHost && status === 'active' && roundStatus === 'answering' && timeUp && autoAdvancedRef.current !== round) {
+      autoAdvancedRef.current = round;
+      advance().catch(() => {});
+    }
+  }, [isHost, status, roundStatus, timeUp, round, advance]);
+
   const toggleMute = () => setMuted((m) => { const n = !m; try { localStorage.setItem(MUTE_KEY, n ? '1' : '0'); } catch { /* ignore */ } return n; });
 
   useEffect(() => {
@@ -102,6 +126,7 @@ export default function GroupGameRoom() {
   };
 
   const pick = async (idx) => {
+    if (timeUp) return;
     setMyPick(idx);
     try { await answer(round, idx); }
     catch (e) { showToast(e?.message || t('group_game_answer_error', 'Could not submit.'), 'error'); setMyPick(null); }
@@ -233,7 +258,19 @@ export default function GroupGameRoom() {
             </div>
 
             <div className="gg-card gg-qcard" style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 800, marginBottom: 8 }}>{t('group_game_round', 'Round')} {round + 1} / {game.roundCount}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 800 }}>{t('group_game_round', 'Round')} {round + 1} / {game.roundCount}</div>
+                {roundStatus === 'answering' && remainingSec != null ? (
+                  <div style={{ fontWeight: 900, fontSize: '1.1rem', color: remainingSec <= 3 ? '#ef4444' : 'var(--primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    ⏱️ {remainingSec}
+                  </div>
+                ) : null}
+              </div>
+              {roundStatus === 'answering' && remainingMs != null ? (
+                <div style={{ height: 6, borderRadius: 4, background: 'var(--border-color)', overflow: 'hidden', marginBottom: 12 }}>
+                  <div style={{ height: '100%', width: `${(remainingMs / ROUND_MS) * 100}%`, background: remainingSec <= 3 ? '#ef4444' : 'linear-gradient(90deg,var(--primary),#f0a24b)', transition: 'width .25s linear' }} />
+                </div>
+              ) : null}
               <AppText as="div" style={{ fontSize: '1.35rem', fontWeight: 900, lineHeight: 1.35 }}>{qText(question)}</AppText>
             </div>
 
@@ -244,8 +281,8 @@ export default function GroupGameRoom() {
                   const selected = myPick === idx;
                   const dim = myPick !== null && !selected;
                   return (
-                    <button key={idx} type="button" onClick={() => pick(idx)} className={`gg-option${selected ? ' is-selected' : ''}`}
-                      style={{ background: p.grad, boxShadow: selected ? `0 8px 26px ${p.ring}` : '0 4px 14px rgba(0,0,0,0.12)', opacity: dim ? 0.55 : 1 }}>
+                    <button key={idx} type="button" onClick={() => pick(idx)} disabled={timeUp} className={`gg-option${selected ? ' is-selected' : ''}`}
+                      style={{ background: p.grad, boxShadow: selected ? `0 8px 26px ${p.ring}` : '0 4px 14px rgba(0,0,0,0.12)', opacity: dim || (timeUp && !selected) ? 0.45 : 1, cursor: timeUp ? 'default' : 'pointer' }}>
                       <span className="gg-option__letter">{selected ? <FaCheck /> : p.letter}</span>
                       <span className="gg-option__text">{opt}</span>
                     </button>
@@ -254,8 +291,8 @@ export default function GroupGameRoom() {
                 {isHost ? (
                   <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'advance'} onClick={wrap('advance', advance)}>👁️ {t('group_game_reveal', 'Reveal answers')}</button>
                 ) : (
-                  <AppText as="p" style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: 2, fontSize: '0.9rem' }}>
-                    {myPick !== null ? `✅ ${t('group_game_locked', 'Answer locked — you can change it until reveal.')}` : t('group_game_pick', 'Pick your answer.')}
+                  <AppText as="p" style={{ textAlign: 'center', color: timeUp ? '#ef4444' : 'var(--text-muted)', marginTop: 2, fontSize: '0.9rem', fontWeight: timeUp ? 700 : 400 }}>
+                    {timeUp ? `⏱️ ${t('group_game_time_up', "Time's up!")}` : myPick !== null ? `✅ ${t('group_game_locked', 'Answer locked — you can change it until reveal.')}` : t('group_game_pick', 'Pick your answer.')}
                   </AppText>
                 )}
               </div>

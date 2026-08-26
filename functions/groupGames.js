@@ -19,6 +19,8 @@ const DEFAULT_ROUNDS = 6;
 const MIN_ROUNDS = 4;
 const MAX_ROUNDS = 12;
 const MAX_INVITEES = 30;
+const ROUND_MS = 10000;   // 10s per question (two options — plenty)
+const GRACE_MS = 1500;    // network latency grace before the server rejects a late answer
 
 function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
     const FieldValue = admin.firestore.FieldValue;
@@ -231,7 +233,7 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             status: 'active',
             currentRound: 0,
             roundStatus: 'answering',
-            roundEndsAt: null,
+            roundEndsAt: admin.firestore.Timestamp.fromMillis(Date.now() + ROUND_MS),
             ...clearedAnswered,
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -249,6 +251,11 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         }
         const round = Number(data?.round);
         if (round !== game.currentRound) throw new functions.https.HttpsError('failed-precondition', 'Round has moved on.');
+        // Enforce the 10s deadline (with a small grace for latency).
+        const endsAtMs = game.roundEndsAt?.toMillis?.();
+        if (endsAtMs && Date.now() > endsAtMs + GRACE_MS) {
+            throw new functions.https.HttpsError('deadline-exceeded', "Time's up for this question.");
+        }
         const optionIndex = Number(data?.optionIndex);
         if (![0, 1].includes(optionIndex)) throw new functions.https.HttpsError('invalid-argument', 'Invalid option.');
 
@@ -304,7 +311,7 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             await ref.update({
                 currentRound: nextRound,
                 roundStatus: 'answering',
-                roundEndsAt: null,
+                roundEndsAt: admin.firestore.Timestamp.fromMillis(Date.now() + ROUND_MS),
                 ...clearedAnswered,
                 updatedAt: now,
             });
