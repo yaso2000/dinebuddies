@@ -147,6 +147,14 @@
     width: 100%;
 }
 
+/* Desktop: feed videos/media were oversized — cap to ~65% of the post width
+   (aspect-ratio is fixed, so height scales down proportionally). */
+@media (min-width: 1024px) {
+    .post-card:not(.in-chat) .post-media-container {
+        max-width: 65%;
+    }
+}
+
 .post-media-preview {
     width: 100%;
     aspect-ratio: 16 / 9;
