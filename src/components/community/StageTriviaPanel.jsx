@@ -15,11 +15,14 @@ export default function StageTriviaPanel({ stageId, isHost }) {
   const lang = (i18n.language || 'ar').split('-')[0];
   const { currentUser, userProfile, isBusiness } = useAuth();
   const { showToast } = useToast();
-  const { game, start, submit, advance, end } = useStageTrivia(stageId);
+  const { game, start, submit, advance, end, generate } = useStageTrivia(stageId);
 
   const [busy, setBusy] = useState('');
   const [myPick, setMyPick] = useState(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [genOpen, setGenOpen] = useState(false);
+  const [genTopic, setGenTopic] = useState('');
+  const [genCount, setGenCount] = useState(5);
   const autoRef = useRef(-1);
 
   const canHost = isHost && isBusiness && String(userProfile?.subscriptionTier || 'free').toLowerCase() === 'paid';
@@ -71,6 +74,16 @@ export default function StageTriviaPanel({ stageId, isHost }) {
     return Object.entries(p).map(([uid, v]) => ({ uid, ...v })).sort((a, b) => (b.score || 0) - (a.score || 0));
   }, [game]);
 
+  const doGenerate = async () => {
+    setBusy('generate');
+    try {
+      const res = await generate(genTopic.trim(), genCount);
+      showToast(t('trivia_generated', { defaultValue: 'Added {{n}} questions about your menu.', n: res?.created || 0 }), 'success');
+      setGenOpen(false); setGenTopic('');
+    } catch (e) { showToast(e?.message || t('admin_failed', 'Something went wrong.'), 'error'); }
+    finally { setBusy(''); }
+  };
+
   // --------- Idle: host launcher (only surface; non-hosts see nothing) --------
   if (!game) {
     if (!canHost) return null;
@@ -79,7 +92,26 @@ export default function StageTriviaPanel({ stageId, isHost }) {
         <button type="button" className="stage-trivia__start" disabled={busy === 'start'} onClick={wrap('start', () => start(8))}>
           <FaUtensils /> {t('trivia_start', 'Start Food Trivia')}
         </button>
-        <AppText as="span" className="stage-trivia__idle-hint">{t('trivia_idle_hint', 'A live food quiz for everyone in your Stage — included in your plan.')}</AppText>
+        <button type="button" className="stage-trivia__genlink" onClick={() => setGenOpen((v) => !v)}>
+          ✨ {t('trivia_generate_link', 'Generate questions about your menu (AI)')}
+        </button>
+        {genOpen ? (
+          <div className="stage-trivia__gen">
+            <textarea value={genTopic} onChange={(e) => setGenTopic(e.target.value)} rows={2}
+              placeholder={t('trivia_generate_ph', 'Your cuisine / signature dishes, e.g. Lebanese grill: shish tawook, kibbeh, tabbouleh…')}
+              className="stage-trivia__gen-input" />
+            <div className="stage-trivia__gen-row">
+              <select value={genCount} onChange={(e) => setGenCount(Number(e.target.value))} className="stage-trivia__gen-count">
+                {[3, 5, 8, 10].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <button type="button" className="stage-trivia__gen-btn" disabled={busy === 'generate'} onClick={doGenerate}>
+                {busy === 'generate' ? t('trivia_generating', 'Generating…') : t('trivia_generate_do', 'Generate')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <AppText as="span" className="stage-trivia__idle-hint">{t('trivia_idle_hint', 'A live food quiz for everyone in your Stage — included in your plan.')}</AppText>
+        )}
       </div>
     );
   }

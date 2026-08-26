@@ -2370,7 +2370,12 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "trivia_generate_link": "ولّد أسئلة عن قائمتك (بالذكاء)",
+  "trivia_generate_ph": "مطبخك / أطباقك المميّزة، مثال: مشاوي لبنانية: شيش طاووق، كبة، تبولة…",
+  "trivia_generate_do": "توليد",
+  "trivia_generating": "جارٍ التوليد…",
+  "trivia_generated": "أُضيف {{n}} سؤالًا عن قائمتك.",
   "trivia_start": "ابدأ سباق الطعام",
   "trivia_idle_hint": "مسابقة طعام مباشرة لكل من في مسرحك — ضمن خطتك.",
   "trivia_title": "سباق الطعام",

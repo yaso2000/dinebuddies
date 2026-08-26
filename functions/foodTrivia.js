@@ -1,4 +1,5 @@
 const functions = require('firebase-functions');
+const { GoogleAuth } = require('google-auth-library');
 
 /**
  * Business Food Trivia — a live quiz the business hosts on its Stage's top panel
@@ -48,13 +49,38 @@ function registerFoodTrivia(exports, { db, admin, enforceCallableRateLimit }) {
         return isBiz && paid;
     };
 
-    /** Public question projection (NO correctIndex — that stays server-side). */
-    async function pickQuestions(count) {
+    /** Public question projection (NO correctIndex — that stays server-side).
+     *  Includes the global bank plus the hosting business's own AI questions. */
+    async function pickQuestions(count, ownerId) {
         const snap = await db.collection('trivia_questions').where('active', '==', true).get();
         const all = snap.docs
             .map((d) => ({ id: d.id, ...(d.data() || {}) }))
-            .filter((q) => q.text && Array.isArray(q.options?.en));
-        return shuffle(all).slice(0, count).map((q) => ({ id: q.id, text: q.text, options: q.options }));
+            .filter((q) => q.text && Array.isArray(q.options?.en))
+            .filter((q) => !q.ownerBusinessId || q.ownerBusinessId === ownerId);
+        // Bias toward the business's own questions when it has them.
+        const own = all.filter((q) => q.ownerBusinessId === ownerId);
+        const global = all.filter((q) => !q.ownerBusinessId);
+        const ordered = [...shuffle(own), ...shuffle(global)];
+        return ordered.slice(0, count).map((q) => ({ id: q.id, text: q.text, options: q.options }));
+    }
+
+    const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+    const GEMINI_LOCATION = process.env.GEMINI_VERTEX_LOCATION?.trim() || 'us-central1';
+    function resolveProjectId() {
+        return process.env.GCLOUD_PROJECT?.trim() || process.env.GOOGLE_CLOUD_PROJECT?.trim()
+            || (() => { try { return JSON.parse(process.env.FIREBASE_CONFIG || '{}').projectId; } catch { return ''; } })()
+            || 'dinebuddies';
+    }
+    async function callGeminiJson(prompt) {
+        const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+        const client = await auth.getClient();
+        const url = `https://${GEMINI_LOCATION}-aiplatform.googleapis.com/v1/projects/${resolveProjectId()}/locations/${GEMINI_LOCATION}/publishers/google/models/${GEMINI_MODEL}:generateContent`;
+        const res = await client.request({
+            url, method: 'POST',
+            data: { contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.7 } },
+        });
+        const raw = String(res?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+        try { return JSON.parse(raw); } catch { const a = raw.indexOf('['); const b = raw.lastIndexOf(']'); return JSON.parse(raw.slice(a, b + 1)); }
     }
 
     async function requireGame(gameId) {
@@ -93,7 +119,7 @@ function registerFoodTrivia(exports, { db, admin, enforceCallableRateLimit }) {
 
         let rounds = Number(data?.roundCount) || DEFAULT_ROUNDS;
         rounds = Math.min(Math.max(Math.round(rounds), MIN_ROUNDS), MAX_ROUNDS);
-        const questions = await pickQuestions(rounds);
+        const questions = await pickQuestions(rounds, uid);
         if (questions.length < MIN_ROUNDS) throw new functions.https.HttpsError('failed-precondition', 'Trivia bank unavailable.');
 
         const now = FieldValue.serverTimestamp();
@@ -240,6 +266,81 @@ function registerFoodTrivia(exports, { db, admin, enforceCallableRateLimit }) {
             }
         } catch (err) { console.warn('[foodTrivia] clear pointer', err?.message || err); }
     }
+
+    // ---- AI: generate the business's own trivia questions --------------------
+    exports.generateTriviaQuestions = functions.https.onCall(async (data, context) => {
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
+        const uid = context.auth.uid;
+        await enforceCallableRateLimit(uid, 'trivia_generate', { cooldownMs: 4000, perHour: 20, perDay: 60 });
+        const me = await loadUser(uid);
+        if (!isPaidBusiness(me.data)) throw new functions.https.HttpsError('failed-precondition', 'AI question generation is included in the paid business plan.');
+
+        const topic = asTrimmed(data?.topic).slice(0, 400);
+        let count = Number(data?.count) || 5;
+        count = Math.min(Math.max(Math.round(count), 1), 10);
+        const bizName = me.data.displayName || me.data.businessName || '';
+        const cuisine = me.data.cuisineType || me.data.cuisine || '';
+
+        const prompt = [
+            `Create ${count} fun multiple-choice FOOD trivia questions for a live restaurant game.`,
+            topic ? `Focus/context (the business menu or theme): """${topic}"""` : (cuisine ? `Cuisine style: ${cuisine}.` : 'General food & cuisine knowledge.'),
+            bizName ? `Hosted by: ${bizName}.` : '',
+            'Each question: exactly 4 options, exactly ONE correct, general enough that guests can reason about it (not obscure).',
+            'Provide BOTH Arabic (ar) and English (en) for the question text and all 4 options, in the SAME option order.',
+            'Return a JSON array only, each item exactly:',
+            '{"ar":"...","en":"...","optionsAr":["","","",""],"optionsEn":["","","",""],"correctIndex":0}',
+        ].filter(Boolean).join('\n');
+
+        let arr;
+        try { arr = await callGeminiJson(prompt); }
+        catch (err) { console.error('[foodTrivia] gemini', err?.message || err); throw new functions.https.HttpsError('internal', 'Generation failed. Please try again.'); }
+        if (!Array.isArray(arr)) throw new functions.https.HttpsError('internal', 'Unexpected AI response.');
+
+        const now = FieldValue.serverTimestamp();
+        const batch = db.batch();
+        const created = [];
+        for (const q of arr.slice(0, count)) {
+            const ar = asTrimmed(q?.ar), en = asTrimmed(q?.en);
+            const oAr = Array.isArray(q?.optionsAr) ? q.optionsAr.map((x) => String(x)) : [];
+            const oEn = Array.isArray(q?.optionsEn) ? q.optionsEn.map((x) => String(x)) : [];
+            const ci = Number(q?.correctIndex);
+            if (!en || oEn.length !== 4 || oAr.length !== 4 || !Number.isInteger(ci) || ci < 0 || ci > 3) continue;
+            const ref = db.collection('trivia_questions').doc();
+            batch.set(ref, {
+                category: 'food', type: 'quiz', difficulty: 1, correctIndex: ci,
+                text: { ar: ar || en, en }, options: { ar: oAr, en: oEn },
+                active: true, ownerBusinessId: uid, source: 'ai', createdAt: now,
+            });
+            created.push({ id: ref.id, text: { ar: ar || en, en } });
+        }
+        if (!created.length) throw new functions.https.HttpsError('internal', 'No valid questions were produced. Try again.');
+        await batch.commit();
+        return { ok: true, created: created.length };
+    });
+
+    // ---- List / delete the business's own questions --------------------------
+    exports.listMyTriviaQuestions = functions.https.onCall(async (data, context) => {
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
+        const uid = context.auth.uid;
+        const snap = await db.collection('trivia_questions').where('ownerBusinessId', '==', uid).limit(200).get();
+        const items = snap.docs.map((d) => {
+            const q = d.data() || {};
+            return { id: d.id, text: q.text || {}, options: q.options || {}, correctIndex: q.correctIndex, source: q.source || 'ai' };
+        });
+        return { items };
+    });
+
+    exports.deleteMyTriviaQuestion = functions.https.onCall(async (data, context) => {
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
+        const uid = context.auth.uid;
+        const qid = asTrimmed(data?.questionId);
+        if (!qid) throw new functions.https.HttpsError('invalid-argument', 'questionId is required.');
+        const ref = db.collection('trivia_questions').doc(qid);
+        const s = await ref.get();
+        if (!s.exists || s.data()?.ownerBusinessId !== uid) throw new functions.https.HttpsError('permission-denied', 'Not your question.');
+        await ref.delete();
+        return { ok: true };
+    });
 
     // ---- End early (host) -----------------------------------------------------
     exports.endTriviaGame = functions.https.onCall(async (data, context) => {
