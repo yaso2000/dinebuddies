@@ -11,6 +11,7 @@ import UserAvatar from './UserAvatar';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { useStories } from '../hooks/useStories';
 import { useLiveStagesDiscover } from '../hooks/useLiveStagesDiscover';
+import { useMyLiveStage } from '../hooks/useMyLiveStage';
 import { FaPlus, FaCamera } from 'react-icons/fa';
 import { AppText } from "./base";
 
@@ -51,12 +52,30 @@ const StoriesBar = ({ onStoryClick }) => {
   // Live group games are open to everyone (consumers only browse the rail).
   const { games: liveGames } = useLiveGamesDiscover({ enabled: !isBusiness });
 
+  // The host's OWN live Stage — always shown (even for business accounts, which
+  // otherwise don't browse the rail) so they can jump back into their Stage.
+  const { stageId: myLiveStageId, meta: myLiveStageMeta } = useMyLiveStage();
+  const myStage = useMemo(() => (
+    myLiveStageId
+      ? {
+          id: myLiveStageId,
+          title: myLiveStageMeta?.title || t('your_stage_label', 'Your Stage'),
+          hostId: currentUser?.uid || null,
+          hostName: userProfile?.displayName || userProfile?.display_name || '',
+          hostAvatar: userPhoto,
+          hostGender: userProfile?.gender,
+          isHost: true,
+          status: 'active',
+        }
+      : null
+  ), [myLiveStageId, myLiveStageMeta?.title, currentUser?.uid, userProfile?.displayName, userProfile?.display_name, userProfile?.gender, userPhoto, t]);
+
   const { activeLiveStages, businessRooms } = useMemo(() => {
     if (isBusiness) {
       return { activeLiveStages: [], businessRooms: [] };
     }
     const live = (liveStages || []).filter(
-      (s) => String(s?.status || 'active').toLowerCase() === 'active'
+      (s) => String(s?.status || 'active').toLowerCase() === 'active' && s?.id !== myLiveStageId
     );
     const people = [];
     const business = [];
@@ -68,7 +87,7 @@ const StoriesBar = ({ onStoryClick }) => {
       activeLiveStages: sortHostFirst(people),
       businessRooms: sortHostFirst(business),
     };
-  }, [liveStages, isBusiness]);
+  }, [liveStages, isBusiness, myLiveStageId]);
 
   // RTL + scroll-snap otherwise opens on the last circle and hides create/your story.
   useEffect(() => {
@@ -85,8 +104,8 @@ const StoriesBar = ({ onStoryClick }) => {
     stories.length,
   ]);
 
-  // Keep the rail visible when rooms/games exist even if stories are still loading.
-  if (loading && activeLiveStages.length === 0 && businessRooms.length === 0 && liveGames.length === 0 && stories.length === 0) return null;
+  // Keep the rail visible when rooms/games/your-stage exist even if stories are still loading.
+  if (loading && !myStage && activeLiveStages.length === 0 && businessRooms.length === 0 && liveGames.length === 0 && stories.length === 0) return null;
 
   return (
     <div style={{
@@ -207,6 +226,13 @@ const StoriesBar = ({ onStoryClick }) => {
                         </AppText>
                     </div>)
         }
+
+                {/* The host's own live Stage — always first, even for business accounts */}
+                {myStage ? (
+                  <div key={`mystage-${myStage.id}`} role="listitem" style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
+                    <LiveStageCircle stage={myStage} onClick={() => navigate(`/stage/${myStage.id}`)} />
+                  </div>
+                ) : null}
 
                 {/* Live group games (joinable lobbies) — open to everyone */}
                 {liveGames.map((game) => (
