@@ -2,6 +2,7 @@ import React from 'react';
 import CommunityTopMediaPanel from './CommunityTopMediaPanel';
 import CommunityPinnedHostBar from './CommunityPinnedHostBar';
 import CommunityGuestChatBody from './CommunityGuestChatBody';
+import StageTriviaPanel from './StageTriviaPanel';
 
 /**
  * Default center stage — same final 3-zone shell with a slightly taller top panel.
@@ -14,11 +15,14 @@ export default function CommunityCenterStageView({ room, bannerMediaActive = tru
   // `message.senderId` against. Community Chat has no `hostId`, where
   // `partnerId` already equals the host's uid.
   const hostMessageOwnerId = room.hostId || room.partnerId;
+  // Only true Stages carry `hostId`; use it as the trivia stage id.
+  const triviaStageId = room.hostId ? room.partnerId : null;
 
   return (
     <div className="community-chat-layout community-center-stage">
       {showTop ? (
         <section className="community-chat-layout__top community-chat-layout__top--stage" aria-label="Top panel">
+          {triviaStageId ? <StageTriviaPanel stageId={triviaStageId} isHost={isHost} /> : null}
           <CommunityTopMediaPanel
             room={room}
             bannerExpanded

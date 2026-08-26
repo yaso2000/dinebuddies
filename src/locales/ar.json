@@ -2370,7 +2370,19 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "trivia_start": "ابدأ سباق الطعام",
+  "trivia_idle_hint": "مسابقة طعام مباشرة لكل من في مسرحك — ضمن خطتك.",
+  "trivia_title": "سباق الطعام",
+  "trivia_points": "نقطة",
+  "trivia_play_again": "لعبة جديدة",
+  "trivia_reveal": "اكشف",
+  "trivia_next": "التالي",
+  "trivia_finish": "النتائج",
+  "trivia_end": "إنهاء",
+  "trivia_locked": "تم تثبيت إجابتك",
+  "trivia_pick": "اضغط إجابتك!",
+  "trivia_answer_error": "تعذّر الإرسال.",
   "brand_kit_theme_color": "لون المظهر",
   "brand_kit_more": "المزيد من الأنماط",
   "biz_plan_map_view_only": "معاينة الخريطة فقط",

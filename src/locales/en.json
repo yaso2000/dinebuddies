@@ -2353,7 +2353,19 @@
   "feedback_resolved_error": "An error occurred, please try again later.",
   "feedback_resolved_success": "Message marked as resolved ✅",
   "feedback_success": "Your message has been sent successfully. We will contact you soon.",
-  "feedback_title": "Feedback & Complaints",
+  "feedback_title": "Feedback & Complaints",
+  "trivia_start": "Start Food Trivia",
+  "trivia_idle_hint": "A live food quiz for everyone in your Stage — included in your plan.",
+  "trivia_title": "Food Trivia",
+  "trivia_points": "pts",
+  "trivia_play_again": "New game",
+  "trivia_reveal": "Reveal",
+  "trivia_next": "Next",
+  "trivia_finish": "Results",
+  "trivia_end": "End",
+  "trivia_locked": "Answer locked",
+  "trivia_pick": "Tap your answer!",
+  "trivia_answer_error": "Could not submit.",
   "group_game_no_answer": "No answer",
   "invite_enter_group_game_title": "Enter your game",
   "invite_enter_group_game_desc": "You already have a live game. Tap to enter.",
