@@ -148,10 +148,11 @@
 }
 
 /* Desktop: feed videos/media were oversized — cap to ~65% of the post width
-   (aspect-ratio is fixed, so height scales down proportionally). */
+   (aspect-ratio is fixed, so height scales down proportionally) and center it. */
 @media (min-width: 1024px) {
     .post-card:not(.in-chat) .post-media-container {
         max-width: 65%;
+        margin-inline: auto;
     }
 }
 
