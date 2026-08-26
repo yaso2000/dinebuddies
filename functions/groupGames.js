@@ -25,7 +25,7 @@ const GRACE_MS = 1500;    // network latency grace before the server rejects a l
 // are shared; only the content source, option count, timer and scoring differ.
 const GAME_TYPES = {
     taste_match: { options: 2, roundMs: 10000, scoring: 'agreement' },
-    zodiac_guess: { options: 3, roundMs: 15000, scoring: 'quiz' },
+    zodiac_guess: { options: 3, roundMs: 20000, scoring: 'quiz' },
 };
 
 function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
