@@ -560,6 +560,10 @@
     color: #ff3b30;
 }
 
+.community-banner-host-tools__btn--trivia {
+    color: #e86e2e;
+}
+
 /*
  * Host voice broadcast — bottom center (7th control).
  * Side rails hold the other 6 icons (3 + 3).

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   FaBold,
   FaBullhorn,
+  FaUtensils,
   FaFont,
   FaHeading,
   FaImage,
@@ -362,6 +363,7 @@ export default function CommunityHostBannerComposerTools({
   room,
   layout = 'banner-rail',
   hostToolsVisible = true,
+  onOpenTrivia,
 }) {
   const { t } = useTranslation();
   const { showToast } = useToast();
@@ -1323,6 +1325,17 @@ export default function CommunityHostBannerComposerTools({
       >
         <FaHeading size={16} aria-hidden />
       </button>
+      {onOpenTrivia ? (
+        <button
+          type="button"
+          className="community-banner-host-tools__btn community-banner-host-tools__btn--trivia"
+          aria-label={t('trivia_start', 'Start Food Trivia')}
+          title={t('trivia_start', 'Start Food Trivia')}
+          onClick={onOpenTrivia}
+        >
+          <FaUtensils size={16} aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 

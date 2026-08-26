@@ -21,7 +21,7 @@ import {
 import { BANNER_VOICE_AUDIO_PRIORITY_EVENT } from '../../utils/bannerVoiceAudioPriority';
 
 /** Top media strip — 16:9 banner + host tools. */
-export default function CommunityTopMediaPanel({ room, bannerExpanded = false, bannerMediaActive = true, onOpenMembers }) {
+export default function CommunityTopMediaPanel({ room, bannerExpanded = false, bannerMediaActive = true, onOpenMembers, onOpenTrivia }) {
   const { t } = useTranslation();
   const {
     messages,
@@ -268,6 +268,7 @@ export default function CommunityTopMediaPanel({ room, bannerExpanded = false, b
             room={room}
             layout="above-banner"
             hostToolsVisible={hostToolsVisible}
+            onOpenTrivia={onOpenTrivia}
           />
           {showCornerDelete ? (
             <button
