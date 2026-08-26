@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaCrown, FaHeart, FaShareAlt, FaSignOutAlt, FaTimes, FaVolumeUp, FaVolumeMute, FaCopy, FaLock } from 'react-icons/fa';
+import { FaCrown, FaHeart, FaShareAlt, FaSignOutAlt, FaTimes, FaVolumeUp, FaVolumeMute, FaCopy, FaLock, FaTrashAlt } from 'react-icons/fa';
 import { useGroupGame, groupGameApi } from '../hooks/useGroupGame';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -43,7 +43,7 @@ export default function GroupGameRoom() {
   const { showToast } = useToast();
   const lang = (i18n.language || 'ar').split('-')[0];
 
-  const { game, players, loading, uid, isHost, isPlayer, start, answer, advance, restart, leave, kick } = useGroupGame(gameId);
+  const { game, players, loading, uid, isHost, isPlayer, start, answer, advance, restart, leave, kick, remove } = useGroupGame(gameId);
 
   const [myPick, setMyPick] = useState(null);
   const [busy, setBusy] = useState('');
@@ -121,6 +121,14 @@ export default function GroupGameRoom() {
     try { await navigator.clipboard.writeText(game?.joinCode || ''); showToast(t('group_game_code_copied', 'Code copied.'), 'success'); } catch { /* ignore */ }
   };
 
+  const doDelete = async () => {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(t('group_game_delete_confirm', 'Delete this game for everyone? This cannot be undone.'))) return;
+    setBusy('delete');
+    try { await remove(); navigate('/posts-feed'); }
+    catch (e) { showToast(e?.message || t('admin_failed', 'Something went wrong.'), 'error'); setBusy(''); }
+  };
+
   const answeredCount = players.filter((p) => p.answered).length;
   const ranking = useMemo(() => [...players].sort((a, b) => (b.score || 0) - (a.score || 0)), [players]);
 
@@ -154,6 +162,9 @@ export default function GroupGameRoom() {
           <FaCopy size={12} color="var(--text-muted)" />
         </button>
         <button type="button" onClick={toggleMute} aria-label="mute" style={iconBtn}>{muted ? <FaVolumeMute /> : <FaVolumeUp />}</button>
+        {isHost ? (
+          <button type="button" onClick={doDelete} disabled={busy === 'delete'} aria-label="delete" style={{ ...iconBtn, color: '#ef4444' }} title={t('group_game_delete', 'Delete game')}><FaTrashAlt /></button>
+        ) : null}
         <button type="button" onClick={wrap('leave', async () => { await leave(); navigate('/posts-feed'); })} aria-label="leave" style={iconBtn}><FaSignOutAlt /></button>
       </div>
     </div>
@@ -198,9 +209,15 @@ export default function GroupGameRoom() {
                 {joining ? t('group_game_joining', 'Joining…') : t('group_game_join', 'Join the game')}
               </button>
             ) : isHost ? (
-              <button type="button" className="db-btn db-btn--lime" style={bigBtn} disabled={busy === 'start' || players.length < 2} onClick={wrap('start', start)}>
-                {players.length < 2 ? t('group_game_need_players', 'Waiting for players…') : t('group_game_start', 'Start game')}
-              </button>
+              <>
+                <button type="button" className="db-btn db-btn--lime" style={bigBtn} disabled={busy === 'start' || players.length < 2} onClick={wrap('start', start)}>
+                  {players.length < 2 ? t('group_game_need_players', 'Waiting for players…') : t('group_game_start', 'Start game')}
+                </button>
+                <button type="button" onClick={doDelete} disabled={busy === 'delete'}
+                  style={{ width: '100%', marginTop: 10, padding: 12, background: 'transparent', border: 'none', color: '#ef4444', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <FaTrashAlt /> {t('group_game_delete', 'Delete game')}
+                </button>
+              </>
             ) : (
               <AppText as="p" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{t('group_game_wait_host', 'Waiting for the host to start…')}</AppText>
             )}

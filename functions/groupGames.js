@@ -417,6 +417,25 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         return { ok: true };
     });
 
+    // ---- Delete / cancel (host) ----------------------------------------------
+    exports.deleteGroupGame = functions.https.onCall(async (data, context) => {
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
+        const uid = context.auth.uid;
+        const { ref, game } = await requireGame(asTrimmed(data?.gameId));
+        assertHost(game, uid);
+
+        // Remove answers, then the game doc itself.
+        const ansSnap = await ref.collection('answers').get();
+        if (!ansSnap.empty) {
+            const batch = db.batch();
+            ansSnap.forEach((d) => batch.delete(d.ref));
+            await batch.commit();
+        }
+        await ref.delete();
+        await clearHostPointer(uid, ref.id);
+        return { ok: true, deleted: true };
+    });
+
     // ---- Restart (host) -------------------------------------------------------
     exports.restartGroupGame = functions.https.onCall(async (data, context) => {
         if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
