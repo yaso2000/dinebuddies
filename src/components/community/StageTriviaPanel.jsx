@@ -28,6 +28,7 @@ export default function StageTriviaPanel({ stageId, isHost, onGameActiveChange, 
   const [genOpen, setGenOpen] = useState(false);
   const [genTopic, setGenTopic] = useState('');
   const [genCount, setGenCount] = useState(5);
+  const [startRounds, setStartRounds] = useState(8);
   const autoRef = useRef(-1);
 
   const canHost = isHost && isBusiness && String(userProfile?.subscriptionTier || 'free').toLowerCase() === 'paid';
@@ -100,7 +101,13 @@ export default function StageTriviaPanel({ stageId, isHost, onGameActiveChange, 
             <span className="stage-trivia__badge"><FaUtensils /> {t('trivia_title', 'Food Trivia')}</span>
             <button type="button" className="stage-trivia-launcher__close" aria-label="close" onClick={() => onCloseLauncher?.()}><FaTimes /></button>
           </div>
-          <button type="button" className="stage-trivia__start" disabled={busy === 'start'} onClick={wrap('start', () => start(8))}>
+          <div className="stage-trivia__gen-row" style={{ justifyContent: 'center', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{t('trivia_questions_count', 'Questions')}</span>
+            <select value={startRounds} onChange={(e) => setStartRounds(Number(e.target.value))} className="stage-trivia__gen-count">
+              {[5, 8, 12, 16].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <button type="button" className="stage-trivia__start" disabled={busy === 'start'} onClick={wrap('start', () => start(startRounds))}>
             <FaUtensils /> {t('trivia_start', 'Start Food Trivia')}
           </button>
           <button type="button" className="stage-trivia__genlink" onClick={() => setGenOpen((v) => !v)}>
@@ -156,7 +163,7 @@ export default function StageTriviaPanel({ stageId, isHost, onGameActiveChange, 
           </div>
           {canHost ? (
             <div className="stage-trivia__host">
-              <button type="button" className="stage-trivia__hostbtn" disabled={busy === 'start'} onClick={wrap('start', () => start(8))}>{t('trivia_play_again', 'New game')}</button>
+              <button type="button" className="stage-trivia__hostbtn" disabled={busy === 'start'} onClick={wrap('start', () => start(startRounds))}>{t('trivia_play_again', 'New game')}</button>
               <button type="button" className="stage-trivia__hostbtn stage-trivia__hostbtn--ghost" disabled={busy === 'close'} onClick={wrap('close', close)}>{t('trivia_close', 'Close')}</button>
             </div>
           ) : null}

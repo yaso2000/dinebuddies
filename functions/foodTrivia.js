@@ -16,7 +16,7 @@ const ROUND_MS = 15000;   // 15s per question (up to 4 options)
 const GRACE_MS = 1500;
 const DEFAULT_ROUNDS = 8;
 const MIN_ROUNDS = 4;
-const MAX_ROUNDS = 15;
+const MAX_ROUNDS = 16;
 const BASE_POINTS = 500;    // for a correct answer
 const SPEED_POINTS = 500;   // additional, scaled by how fast
 

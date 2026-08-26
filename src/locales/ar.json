@@ -2370,7 +2370,8 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "trivia_questions_count": "عدد الأسئلة",
   "group_game_spectator": "أنت تشاهد — بدأت اللعبة قبل انضمامك.",
   "trivia_close": "إغلاق",
   "your_stage_label": "مسرحك",
