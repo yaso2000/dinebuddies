@@ -3518,6 +3518,8 @@ const { registerSupportAgent } = require('./supportAgent');
 registerSupportAgent(exports, { db, admin, enforceCallableRateLimit });
 const { registerGroupGames } = require('./groupGames');
 registerGroupGames(exports, { db, admin, enforceCallableRateLimit });
+const { registerMatchShow } = require('./matchShow');
+registerMatchShow(exports, { db, admin, enforceCallableRateLimit });
 const { registerFoodTrivia } = require('./foodTrivia');
 registerFoodTrivia(exports, { db, admin, enforceCallableRateLimit });
 

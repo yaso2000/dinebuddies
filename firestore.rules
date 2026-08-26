@@ -1236,6 +1236,20 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // "Match or Not" live matchmaking show.
+    match /match_shows/{showId} {
+      allow read: if isSignedIn();               // public show (votes are separate)
+      allow create, update, delete: if false;    // via the matchShow callables
+      match /applicants/{appId} {
+        allow read: if isSignedIn();             // opt-in volunteers — queue is visible
+        allow create, update, delete: if false;
+      }
+      match /votes/{voteId} {
+        allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid);
+        allow create, update, delete: if false;
+      }
+    }
+
     match /group_games/{gameId} {
       // Group games are open to everyone; the doc holds no private data (raw
       // picks live in the owner-only `answers` subcollection). Any signed-in user
