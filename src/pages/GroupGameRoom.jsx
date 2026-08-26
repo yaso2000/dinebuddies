@@ -12,6 +12,7 @@ import { AppText } from '../components/base';
 
 const MUTE_KEY = 'db_group_game_muted';
 const ROUND_MS = 10000; // must match the server's per-question window
+const MAX_PLAYERS = 16; // must match the server cap
 // Two vivid option palettes so the choice feels tactile and fun.
 const OPT = [
   { grad: 'linear-gradient(135deg,#6366f1,#8b5cf6)', solid: '#7c3aed', ring: 'rgba(124,58,237,0.5)', letter: 'A' },
@@ -215,7 +216,7 @@ export default function GroupGameRoom() {
               </div>
             </div>
 
-            <AppText as="div" style={{ fontWeight: 800, marginBottom: 10 }}>{t('group_game_players', 'Players')} · {players.length}</AppText>
+            <AppText as="div" style={{ fontWeight: 800, marginBottom: 10 }}>{t('group_game_players', 'Players')} · {players.length} / {MAX_PLAYERS}</AppText>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
               {players.map((p) => (
                 <div key={p.uid} className="gg-card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px' }}>

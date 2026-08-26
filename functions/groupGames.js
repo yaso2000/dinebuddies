@@ -14,7 +14,7 @@ const functions = require('firebase-functions');
  * host who created the game controls it (start / advance / restart / kick),
  * but never sees others' picks early and never computes scores — the server does.
  */
-const MAX_PLAYERS = 24;
+const MAX_PLAYERS = 16; // keeps the whole group visible at once on mobile
 const DEFAULT_ROUNDS = 6;
 const MIN_ROUNDS = 4;
 const MAX_ROUNDS = 12;
