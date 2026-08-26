@@ -6,6 +6,8 @@ import StoryCircle from './StoryCircle';
 import LiveStageCircle from './LiveStageCircle';
 import LiveGameCircle from './LiveGameCircle';
 import { useLiveGamesDiscover } from '../hooks/useLiveGamesDiscover';
+import MatchShowCircle from './MatchShowCircle';
+import { useLiveMatchShows } from '../hooks/useLiveMatchShows';
 import BusinessCommunityCircle from './BusinessCommunityCircle';
 import UserAvatar from './UserAvatar';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -51,6 +53,8 @@ const StoriesBar = ({ onStoryClick }) => {
   });
   // Live group games are open to everyone (consumers only browse the rail).
   const { games: liveGames } = useLiveGamesDiscover({ enabled: !isBusiness });
+  // Live "Match or Not" shows — prominent at the front of the rail.
+  const { shows: liveMatchShows } = useLiveMatchShows({ enabled: !isBusiness });
 
   // The host's OWN live Stage — always shown (even for business accounts, which
   // otherwise don't browse the rail) so they can jump back into their Stage.
@@ -105,7 +109,7 @@ const StoriesBar = ({ onStoryClick }) => {
   ]);
 
   // Keep the rail visible when rooms/games/your-stage exist even if stories are still loading.
-  if (loading && !myStage && activeLiveStages.length === 0 && businessRooms.length === 0 && liveGames.length === 0 && stories.length === 0) return null;
+  if (loading && !myStage && liveMatchShows.length === 0 && activeLiveStages.length === 0 && businessRooms.length === 0 && liveGames.length === 0 && stories.length === 0) return null;
 
   return (
     <div style={{
@@ -226,6 +230,13 @@ const StoriesBar = ({ onStoryClick }) => {
                         </AppText>
                     </div>)
         }
+
+                {/* Live "Match or Not" shows — prominent, at the very front */}
+                {liveMatchShows.map((s) => (
+                  <div key={`match-${s.id}`} role="listitem" style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
+                    <MatchShowCircle show={s} onClick={() => navigate(`/match-show/${s.id}`)} />
+                  </div>
+                ))}
 
                 {/* The host's own live Stage — always first, even for business accounts */}
                 {myStage ? (
