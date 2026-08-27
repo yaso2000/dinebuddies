@@ -125,13 +125,16 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         } catch (err) { console.warn('[groupGames] invite notify failed', err?.message || err); }
     }
 
-    /** Clear the host's "active game" pointer (one game per host at a time). */
+    /** Clear the host's "active game" pointer (one game per host at a time).
+     *  Set to null (not delete) so the client's users/{uid} snapshot overwrites
+     *  the stale value — a deleted field is absent and the client merge keeps the
+     *  old id, leaving the create menu stuck on "enter game" until app restart. */
     async function clearHostPointer(hostId, gameId) {
         try {
             const uref = db.collection('users').doc(hostId);
             const snap = await uref.get();
             if (snap.exists && snap.data()?.hostActiveGameId === gameId) {
-                await uref.update({ hostActiveGameId: FieldValue.delete() });
+                await uref.update({ hostActiveGameId: null });
             }
         } catch (err) { console.warn('[groupGames] clear pointer failed', err?.message || err); }
     }

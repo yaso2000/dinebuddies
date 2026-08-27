@@ -66,7 +66,7 @@ function registerMatchShow(exports, { db, admin, enforceCallableRateLimit }) {
         try {
             const uref = db.collection('users').doc(hostId);
             const s = await uref.get();
-            if (s.exists && s.data()?.hostActiveShowId === showId) await uref.update({ hostActiveShowId: FieldValue.delete() });
+            if (s.exists && s.data()?.hostActiveShowId === showId) await uref.update({ hostActiveShowId: null });
         } catch (err) { console.warn('[matchShow] clear pointer', err?.message || err); }
     }
 
