@@ -48,7 +48,7 @@ export default function MatchShowRoom() {
   const { t, i18n } = useTranslation();
   const { currentUser, userProfile, isGuest } = useAuth();
   const { showToast } = useToast();
-  const { show, queue, loading, isHost, myApplication, pair, onStage, apply, generateIntro, withdraw, selectPair, vote, reveal, nextPair, end } = useMatchShow(showId);
+  const { show, queue, loading, isHost, myApplication, current, amCurrent, onStage, apply, generateIntro, withdraw, bringUp, vote, reveal, nextApplicant, end } = useMatchShow(showId);
 
   const [busy, setBusy] = useState('');
   const [myVote, setMyVote] = useState(null);
@@ -58,9 +58,8 @@ export default function MatchShowRoom() {
   const [interests, setInterests] = useState('');
   const [lookingFor, setLookingFor] = useState('');
   const [about, setAbout] = useState('');
-  const [pickA, setPickA] = useState(null);
 
-  const pairId = pair?.pairId;
+  const pairId = current?.pairId;
   useEffect(() => { setMyVote(null); }, [pairId]);
 
   // Prefill from the user's profile when opening the apply form.
@@ -123,12 +122,6 @@ export default function MatchShowRoom() {
     try { if (navigator.share) { await navigator.share({ title: 'DineBuddies', url }); return; } await navigator.clipboard.writeText(url); showToast(t('group_game_link_copied', 'Link copied.'), 'success'); } catch { /* ignore */ }
   };
 
-  const pickForSelect = (aUid) => {
-    if (pickA === aUid) { setPickA(null); return; }
-    if (!pickA) { setPickA(aUid); return; }
-    wrap('select', () => selectPair(pickA, aUid))();
-    setPickA(null);
-  };
 
   if (loading) return <div style={{ display: 'grid', placeItems: 'center', height: '100vh', background: 'var(--bg-main)' }}><div className="db-spin" /></div>;
   if (!show) {
@@ -144,6 +137,7 @@ export default function MatchShowRoom() {
 
   const ended = show.status === 'ended';
   const revealData = show.pairStatus === 'revealed' ? show.reveal : null;
+  const hostCard = { uid: show.hostId, name: show.hostName, avatar: show.hostAvatar, profile: show.hostProfile };
 
   return (
     <div style={{ minHeight: '100vh', background: 'radial-gradient(1000px 500px at 50% -10%, rgba(232,110,46,0.16), transparent 60%), var(--bg-main)', paddingBottom: 24 }} dir={i18n.dir()}>
@@ -162,43 +156,40 @@ export default function MatchShowRoom() {
           <div className="gg-card" style={{ padding: 20, textAlign: 'center' }}>🎬 {t('match_ended', 'The show has ended.')}</div>
         ) : (
           <>
-            {/* ---------------- STAGE (two cards side by side) ---------------- */}
-            {pair ? (
-              <div style={{ position: 'relative', marginBottom: 16 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  {[pair.a, pair.b].map((c, idx) => (
-                    <div key={c.uid} className="match-card" style={{ ['--mc-accent']: idx === 0 ? '#6366f1' : '#e11d48' }}>
-                      <div className="match-card__photo">
-                        {c.avatar
-                          ? <img src={c.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          : <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg,var(--primary),#f0a24b)', color: '#fff', fontWeight: 900, fontSize: '2rem' }}>{(c.name || '?').charAt(0).toUpperCase()}</div>}
-                      </div>
-                      <AppText as="div" className="match-card__name">{c.name}</AppText>
-                      <ProfileView profile={c.profile} t={t} compact />
+            {/* ---------------- STAGE: host (fixed) + current applicant ---------------- */}
+            <div style={{ position: 'relative', marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {[{ ...hostCard, host: true }, current].map((c, idx) => (
+                  <div key={idx} className="match-card" style={{ ['--mc-accent']: idx === 0 ? '#6366f1' : '#e11d48', opacity: c ? 1 : 0.6 }}>
+                    <div className="match-card__photo">
+                      {c && c.avatar
+                        ? <img src={c.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', background: c ? 'linear-gradient(135deg,var(--primary),#f0a24b)' : 'var(--bg-elevated)', color: '#fff', fontWeight: 900, fontSize: '2rem' }}>{c ? (c.name || '?').charAt(0).toUpperCase() : '❔'}</div>}
                     </div>
-                  ))}
-                </div>
-                {/* center heart */}
-                <div className="match-heart">{revealData ? (revealData.isMatch ? '💖' : '💔') : '❤️'}</div>
-
-                {revealData ? (
-                  <div className="gg-card" style={{ padding: 14, marginTop: 12, textAlign: 'center', border: `2px solid ${revealData.isMatch ? '#16a34a' : '#ef4444'}` }}>
-                    <div style={{ fontSize: '2.4rem', fontWeight: 900, color: revealData.isMatch ? '#16a34a' : '#ef4444', lineHeight: 1 }}>{revealData.pct}%</div>
-                    <AppText as="div" style={{ fontWeight: 900, color: revealData.isMatch ? '#16a34a' : '#ef4444', marginTop: 2 }}>
-                      {revealData.isMatch ? `💚 ${t('match_yes', "It's a match!")}` : `💔 ${t('match_no', 'Not a match')}`}
-                    </AppText>
-                    <AppText as="div" style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 2 }}>❤️ {revealData.yes} · 💔 {revealData.no}</AppText>
+                    <AppText as="div" className="match-card__name">{c ? c.name : t('match_empty_slot', 'Waiting…')}{c && c.host ? <span style={{ color: 'var(--primary)', fontSize: '0.7rem' }}> · {t('match_host_tag', 'Host')}</span> : null}</AppText>
+                    {c ? <ProfileView profile={c.profile} t={t} compact /> : null}
                   </div>
-                ) : null}
+                ))}
               </div>
-            ) : (
-              <div className="gg-card" style={{ padding: 18, textAlign: 'center', marginBottom: 16, color: 'var(--text-muted)' }}>
-                🎤 {isHost ? t('match_host_pick_hint', 'Pick two applicants below to bring them on stage.') : t('match_wait_hint', 'Waiting for the host to bring up a pair…')}
-              </div>
-            )}
+              <div className="match-heart">{revealData ? (revealData.isMatch ? '💖' : '💔') : '❤️'}</div>
+
+              {revealData ? (
+                <div className="gg-card" style={{ padding: 14, marginTop: 12, textAlign: 'center', border: `2px solid ${revealData.isMatch ? '#16a34a' : '#ef4444'}` }}>
+                  <div style={{ fontSize: '2.4rem', fontWeight: 900, color: revealData.isMatch ? '#16a34a' : '#ef4444', lineHeight: 1 }}>{revealData.pct}%</div>
+                  <AppText as="div" style={{ fontWeight: 900, color: revealData.isMatch ? '#16a34a' : '#ef4444', marginTop: 2 }}>
+                    {revealData.isMatch ? `💚 ${t('match_yes', "It's a match!")}` : `💔 ${t('match_no', 'Not a match')}`}
+                  </AppText>
+                  <AppText as="div" style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 2 }}>❤️ {revealData.yes} · 💔 {revealData.no}</AppText>
+                </div>
+              ) : !current ? (
+                <AppText as="div" style={{ textAlign: 'center', marginTop: 10, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                  🎤 {isHost ? t('match_host_pick_hint2', 'Bring an applicant up beside you from the queue below.') : t('match_wait_hint2', 'Waiting for the host to bring someone up…')}
+                </AppText>
+              ) : null}
+            </div>
 
             {/* ---------------- VOTING (viewers) ---------------- */}
-            {pair && show.pairStatus === 'voting' && !onStage ? (
+            {current && show.pairStatus === 'voting' && !onStage ? (
               <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
                 <button type="button" onClick={() => doVote('match')} className="gg-btn gg-btn--block" style={{ background: myVote === 'match' ? '#16a34a' : 'var(--bg-elevated)', color: myVote === 'match' ? '#fff' : 'var(--text-main)', border: '2px solid #16a34a' }}>
                   <FaHeart /> {t('match_vote_yes', 'Match')}
@@ -218,7 +209,7 @@ export default function MatchShowRoom() {
                 {show.pairStatus === 'voting' ? (
                   <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'reveal'} onClick={wrap('reveal', reveal)}>👁️ {t('match_reveal', 'Reveal result')}</button>
                 ) : show.pairStatus === 'revealed' ? (
-                  <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'next'} onClick={wrap('next', nextPair)}>➡️ {t('match_next', 'Next pair')}</button>
+                  <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'next'} onClick={wrap('next', nextApplicant)}>➡️ {t('match_next2', 'Next applicant')}</button>
                 ) : null}
                 <button type="button" className="gg-btn gg-btn--soft" disabled={busy === 'end'} onClick={wrap('end', end)}>{t('match_end', 'End')}</button>
               </div>
@@ -240,25 +231,23 @@ export default function MatchShowRoom() {
               )
             ) : null}
 
-            {/* ---------------- QUEUE (host picks) ---------------- */}
-            {isHost && !pair ? (
+            {/* ---------------- QUEUE (host brings one up) ---------------- */}
+            {isHost && !current ? (
               <>
                 <AppText as="div" style={{ fontWeight: 800, marginBottom: 8 }}>{t('match_queue', 'Applicants')} · {queue.length}</AppText>
                 {queue.length === 0 ? <AppText as="p" style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{t('match_queue_empty', 'No applicants yet — share the show.')}</AppText> : null}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {queue.map((a) => (
-                    <button key={a.uid} type="button" onClick={() => pickForSelect(a.uid)} disabled={busy === 'select'}
-                      className="gg-card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', cursor: 'pointer', textAlign: 'start', border: pickA === a.uid ? '2px solid var(--primary)' : '1px solid var(--border-color)' }}>
+                    <div key={a.uid} className="gg-card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px' }}>
                       <Photo src={a.avatar} name={a.name} size={44} />
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <AppText as="div" style={{ fontWeight: 700 }}>{a.name} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>· {a.gender === 'male' ? '♂' : '♀'}</span></AppText>
                         <ProfileView profile={a.profile} t={t} compact />
                       </span>
-                      {pickA === a.uid ? <span style={{ color: 'var(--primary)', fontWeight: 800 }}>1️⃣</span> : null}
-                    </button>
+                      <button type="button" className="gg-btn gg-btn--primary" style={{ padding: '8px 14px', flexShrink: 0 }} disabled={busy === 'bring'} onClick={wrap('bring', () => bringUp(a.uid))}>⬆️ {t('match_bring_up', 'Bring up')}</button>
+                    </div>
                   ))}
                 </div>
-                {pickA ? <AppText as="p" style={{ color: 'var(--primary)', fontSize: '0.82rem', marginTop: 8 }}>{t('match_pick_second', 'Now pick the second person.')}</AppText> : null}
               </>
             ) : null}
           </>

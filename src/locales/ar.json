@@ -2370,7 +2370,16 @@
   "feedback_resolved_error": "حدث خطأ، يرجى المحاولة مرة أخرى لاحقاً.",
   "feedback_resolved_success": "تحديد الرسالة كمحلولة ✅",
   "feedback_success": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً.",
-  "feedback_title": "الشكاوي والاقتراحات",
+  "feedback_title": "الشكاوي والاقتراحات",
+  "match_create_desc2": "أنت على المسرح. املأ بروفايلك — سيتقدّم الناس ليكونوا طرفك، والجمهور يصوّت.",
+  "match_your_profile": "بروفايلك المصغّر",
+  "match_want_gender": "من يمكنه التقدّم",
+  "match_empty_slot": "بانتظار…",
+  "match_host_tag": "المُضيف",
+  "match_host_pick_hint2": "أصعِد متقدّمًا بجانبك من القائمة بالأسفل.",
+  "match_wait_hint2": "بانتظار أن يُصعِد المُضيف أحدهم…",
+  "match_next2": "المتقدّم التالي",
+  "match_bring_up": "أصعِد",
   "match_apply_hint2": "املأ بروفايلك المصغّر — صورة جيدة إلزامية للظهور.",
   "match_age": "العمر",
   "match_goal": "أبحث عن",

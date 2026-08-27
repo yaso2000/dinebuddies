@@ -34,21 +34,23 @@ export function useMatchShow(showId) {
   const isHost = !!show && show.hostId === uid;
   const myApplication = useMemo(() => applicants.find((a) => a.uid === uid) || null, [applicants, uid]);
   const queue = useMemo(() => applicants.filter((a) => a.status === 'queued'), [applicants]);
-  const pair = show?.currentPair || null;
-  const onStage = !!pair && (uid === pair.a?.uid || uid === pair.b?.uid);
+  const current = show?.currentApplicant || null;
+  const amCurrent = !!current && uid === current.uid;
+  const onStage = amCurrent || isHost;
 
   const apply = useCallback((profile) => call('applyToMatchShow')({ showId, ...profile }), [showId]);
   const generateIntro = useCallback((hints) => call('generateMatchIntro')(hints).then((r) => r.data), []);
   const withdraw = useCallback(() => call('withdrawMatchApplication')({ showId }), [showId]);
-  const selectPair = useCallback((uidA, uidB) => call('selectMatchPair')({ showId, uidA, uidB }), [showId]);
+  const bringUp = useCallback((applicantUid) => call('bringUpApplicant')({ showId, applicantUid }), [showId]);
   const vote = useCallback((v) => call('voteMatch')({ showId, vote: v }), [showId]);
   const reveal = useCallback(() => call('revealMatch')({ showId }), [showId]);
-  const nextPair = useCallback(() => call('nextMatchPair')({ showId }), [showId]);
+  const nextApplicant = useCallback(() => call('nextApplicant')({ showId }), [showId]);
   const end = useCallback(() => call('endMatchShow')({ showId }), [showId]);
 
-  return { show, applicants, queue, loading, uid, isHost, myApplication, pair, onStage, apply, generateIntro, withdraw, selectPair, vote, reveal, nextPair, end };
+  return { show, applicants, queue, loading, uid, isHost, myApplication, current, amCurrent, onStage, apply, generateIntro, withdraw, bringUp, vote, reveal, nextApplicant, end };
 }
 
 export const matchShowApi = {
   create: (opts = {}) => call('createMatchShow')(opts).then((r) => r.data),
+  generateIntro: (hints = {}) => call('generateMatchIntro')(hints).then((r) => r.data),
 };
