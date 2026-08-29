@@ -1,0 +1,33 @@
+---
+description: Invitation app (DineBuddies) — stack, layout, and conventions for agents
+alwaysApply: true
+---
+
+# Project context
+
+- **Frontend:** React 18, Vite 7, React Router 6, JSX in `src/`.
+- **Backend / infra:** Firebase (Firestore, Storage, Auth, Hosting from `dist`), Cloud Functions in `functions/` (own `package.json` and Node scripts).
+- **Vercel:** Serverless routes under `api/` (Node). `vercel.json` at repo root.
+- **i18n:** `i18next` / `react-i18next`; keep user-facing strings consistent with existing locale files and patterns.
+- **Payments / email:** Stripe and Resend appear in `functions/`; treat keys and webhooks as secrets (never commit real credentials).
+
+# Where to change things
+
+- **UI and app logic:** `src/` (components, pages, hooks, utils).
+- **Firebase callable / HTTP functions:** `functions/` — deploy and test separately from the Vite app.
+- **Vercel API routes:** `api/` — keep SSRF / auth patterns aligned with existing handlers.
+- **Static assets and PWA bits:** `public/` (including `firebase-messaging-sw.js` copied in postbuild).
+- **Firebase rules:** `firestore.rules`, `storage.rules`, `firestore.indexes.json`.
+
+# Commands (from repo root)
+
+- **Dev (Vite HMR):** `npm run dev:src`
+- **Production build:** `npm run build` (runs `prebuild` template sync)
+- **Lint:** `npm run lint` (ESLint on `js` / `jsx`)
+
+# Conventions for edits
+
+- Prefer **focused diffs**; match existing naming, imports, and component style in the touched folder.
+- Do **not** bulk-edit `backups/`, `_backups/`, or `tmp/` unless the task explicitly requires it.
+- After changing Firestore queries or filters, check whether **`firestore.indexes.json`** needs a new composite index.
+- **Env:** local secrets live in ignored `.env` files; use existing `scripts/` patterns for build-time keys when applicable.

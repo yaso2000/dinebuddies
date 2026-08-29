@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "firebase.vscode-firebase-explorer"
+  ],
+  "unwantedRecommendations": []
+}

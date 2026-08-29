@@ -1,0 +1,6 @@
+# Large or historical trees — keeps Cursor indexing and @-mentions faster
+backups/
+_backups/
+node_modules/
+dist/
+functions/node_modules/
