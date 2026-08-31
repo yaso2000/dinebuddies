@@ -22,7 +22,7 @@ import {
 '../../utils/businessSubscription';
 import { useToast } from '../../context/ToastContext';
 import StripeTestModeBanner from '../../components/StripeTestModeBanner';
-import { isAppleStoreCommerce } from '../../utils/commercePlatform';
+import { isAppleStoreCommerce, isGooglePlayCommerce } from '../../utils/commercePlatform';
 import {
   purchaseBusinessSubscriptionViaAppleStore,
   restoreBusinessSubscriptionViaAppleStore,
@@ -30,6 +30,10 @@ import {
 import { AppText } from "../../components/base";
 
 const IS_APPLE_STORE = isAppleStoreCommerce();
+// On native Android, digital subscriptions must go through Google Play billing
+// (not Stripe/PayPal) — that flow isn't built yet, so hide external payment here
+// to stay Play-policy compliant. Business accounts subscribe via iOS or web meanwhile.
+const IS_GOOGLE_PLAY = isGooglePlayCommerce();
 
 const ProSubscription = () => {
   const { t } = useTranslation();
@@ -227,6 +231,10 @@ const ProSubscription = () => {
               }}>
               {loading === 'paid' ? t('loading', 'Loading...') : `${t('biz_plan_upgrade_cta', 'Upgrade to Paid')} →`}
             </button>
+          ) : IS_GOOGLE_PLAY ? (
+            <div style={{ padding: '12px 14px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--hover-overlay)', color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center', lineHeight: 1.5 }}>
+              {t('biz_plan_android_unavailable', 'The paid plan isn’t available to purchase in the Android app yet.')}
+            </div>
           ) : (
           <>
           {upgradePaymentMethods.length > 1 ?

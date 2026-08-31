@@ -34,6 +34,24 @@ export function useGroupGame(gameId) {
   const isHost = !!game && game.hostId === uid;
   const isPlayer = !!game && Array.isArray(game.playerIds) && game.playerIds.includes(uid);
 
+  // My own "Who said it?" answer + which round is MINE (owner-only readable) — lets
+  // the UI hide the guessing grid on my own round by IDENTITY (roundIndex), not by
+  // matching answer text (which collides when two players write the same thing).
+  const [myWhoSaidAnswer, setMyWhoSaidAnswer] = useState('');
+  const [myAuthoredRound, setMyAuthoredRound] = useState(null);
+  useEffect(() => {
+    if (!gameId || !uid || game?.type !== 'who_said_it') { setMyWhoSaidAnswer(''); setMyAuthoredRound(null); return undefined; }
+    return onSnapshot(
+      doc(db, 'group_games', gameId, 'whosaid_answers', uid),
+      (snap) => {
+        const d = snap.exists() ? snap.data() || {} : {};
+        setMyWhoSaidAnswer(String(d.answer || ''));
+        setMyAuthoredRound(Number.isInteger(d.roundIndex) ? d.roundIndex : null);
+      },
+      () => { setMyWhoSaidAnswer(''); setMyAuthoredRound(null); }
+    );
+  }, [gameId, uid, game?.type]);
+
   const start = useCallback(() => callFn('startGroupGame')({ gameId }), [gameId]);
   const answer = useCallback((round, optionIndex) => callFn('submitGroupAnswer')({ gameId, round, optionIndex }), [gameId]);
   const advance = useCallback(() => callFn('advanceGroupGame')({ gameId }), [gameId]);
@@ -42,13 +60,14 @@ export function useGroupGame(gameId) {
   const kick = useCallback((targetId) => callFn('kickGroupPlayer')({ gameId, targetId }), [gameId]);
   const remove = useCallback(() => callFn('deleteGroupGame')({ gameId }), [gameId]);
   const submitStatements = useCallback((texts, lieIndex) => callFn('submitTwoTruthsStatements')({ gameId, texts, lieIndex }), [gameId]);
+  const submitWhoSaidAnswer = useCallback((answer) => callFn('submitWhoSaidItAnswer')({ gameId, answer }), [gameId]);
 
   const players = useMemo(() => {
     if (!game?.players) return [];
     return (game.playerIds || []).map((pid) => ({ uid: pid, ...(game.players[pid] || {}) }));
   }, [game]);
 
-  return { game, players, loading, error, uid, isHost, isPlayer, start, answer, advance, restart, leave, kick, remove, submitStatements };
+  return { game, players, loading, error, uid, isHost, isPlayer, start, answer, advance, restart, leave, kick, remove, submitStatements, submitWhoSaidAnswer, myWhoSaidAnswer, myAuthoredRound };
 }
 
 export const groupGameApi = {

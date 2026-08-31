@@ -10,6 +10,10 @@ import { pickAiOutputLanguage } from '../../src/utils/aiOutputLanguage.js';
 
 const INVITATION_SUB_TYPES = new Set(['public', 'private', 'date']);
 const TEXT_POST_TYPES = new Set(['regular_post', 'featured_post', 'animated_post', 'invitation', 'design_studio', 'text_assistant']);
+// Standalone image post types that must KEEP their postType (not be coerced to
+// 'invitation') — they upload server-side and return { url, path } to the client,
+// and each has its own Storage folder (see resolveAiStorageFolder).
+const STANDALONE_IMAGE_POST_TYPES = new Set(['real_or_ai']);
 const GENERATION_PACKAGES = new Set(['text', 'image', 'invitation_bundle']);
 const ASPECT_RATIOS = new Set(['1:1', '4:5', '9:16', '16:9']);
 const DESIGN_STUDIO_CATEGORIES = new Set([
@@ -54,7 +58,15 @@ export function parseAiGenerateBody(body) {
         cardStructure,
         designCategory,
         outputLanguage,
+        inputImagePath,
+        inputImageBucket,
     } = record;
+
+    // img2img EDIT: a Storage path to the user's chosen image (server downloads + edits it).
+    const editInputPath =
+        typeof inputImagePath === 'string' && inputImagePath.trim() && inputImagePath.length < 512
+            ? inputImagePath.trim()
+            : '';
 
     const resolvedOutputLanguage = pickAiOutputLanguage(outputLanguage);
 
@@ -114,7 +126,8 @@ export function parseAiGenerateBody(body) {
         const postTypeForImage =
             normalizedPostType === 'magic_cover' || !normalizedPostType
                 ? 'invitation'
-                : TEXT_POST_TYPES.has(normalizedPostType)
+                : TEXT_POST_TYPES.has(normalizedPostType) ||
+                    STANDALONE_IMAGE_POST_TYPES.has(normalizedPostType)
                   ? normalizedPostType
                   : 'invitation';
 
@@ -144,8 +157,12 @@ export function parseAiGenerateBody(body) {
             outputLanguage: resolvedOutputLanguage,
             generationPackage: 'image',
             postType: postTypeForImage,
-            userPrompt: normalizeUserPrompt(manualPrompt, postTypeForImage, optionalSubType),
+            // For an EDIT, the prompt IS the raw instruction — don't rewrite it.
+            userPrompt: editInputPath ? manualPrompt : normalizeUserPrompt(manualPrompt, postTypeForImage, optionalSubType),
             aspectRatio: ratio,
+            ...(editInputPath
+                ? { inputImagePath: editInputPath, inputImageBucket: pickOptionalString(inputImageBucket) }
+                : {}),
             ...(postTypeForImage === 'invitation'
                 ? {
                       venueType: pickOptionalString(venueType),

@@ -1,8 +1,14 @@
 /**
  * Shared account deletion cascade: owned invites, posts, stages, chats, storage, Auth.
- * Safe to re-run (idempotent) — used by deleteMyAccount, adminDeleteUser, and auth.onDelete.
+ * Safe to re-run (idempotent) — used by deleteMyAccount, adminDeleteUser, auth.onDelete,
+ * AND the personal→business conversion in the Vercel API layer. It therefore must NOT
+ * depend on firebase-functions (uses console for logging) so it stays portable.
  */
-const functions = require('firebase-functions');
+const log = {
+    warn: (msg, obj) => console.warn(`[accountDeletion] ${msg}`, obj || ''),
+    info: (msg, obj) => console.info(`[accountDeletion] ${msg}`, obj || ''),
+    error: (msg, obj) => console.error(`[accountDeletion] ${msg}`, obj || ''),
+};
 
 async function deleteQueryInBatches(db, queryRef, batchSize = 200) {
     let deleted = 0;
@@ -25,7 +31,7 @@ async function deleteStoragePrefix(admin, prefix) {
         await bucket.deleteFiles({ prefix, force: true });
         return 1;
     } catch (err) {
-        functions.logger.warn('accountDeletion storage prefix', { prefix, message: err.message });
+        log.warn('accountDeletion storage prefix', { prefix, message: err.message });
         return 0;
     }
 }
@@ -57,7 +63,7 @@ async function deleteByFieldQueries(db, collectionName, fieldValues, { withMessa
         try {
             snap = await db.collection(collectionName).where(field, '==', value).get();
         } catch (err) {
-            functions.logger.warn('accountDeletion query failed', {
+            log.warn('accountDeletion query failed', {
                 collectionName,
                 field,
                 message: err.message,
@@ -79,7 +85,14 @@ async function deleteByFieldQueries(db, collectionName, fieldValues, { withMessa
 }
 
 async function purgeOwnedStages(db, admin, uid) {
-    const { purgeStageRoom } = require('./stageRooms');
+    // stageRooms is a functions/-only module; in the API bundle it may be absent,
+    // so load it defensively and fall back to a plain recursive delete of the stage.
+    let purgeStageRoom = null;
+    try {
+        ({ purgeStageRoom } = require('./stageRooms'));
+    } catch {
+        purgeStageRoom = null;
+    }
     let deleted = 0;
     const hostFields = ['hostId', 'ownerId', 'authorId'];
     const seen = new Set();
@@ -88,7 +101,7 @@ async function purgeOwnedStages(db, admin, uid) {
         try {
             snap = await db.collection('stages').where(field, '==', uid).get();
         } catch (err) {
-            functions.logger.warn('accountDeletion stages query', { field, message: err.message });
+            log.warn('accountDeletion stages query', { field, message: err.message });
             continue;
         }
         for (const stageDoc of snap.docs) {
@@ -98,7 +111,7 @@ async function purgeOwnedStages(db, admin, uid) {
                 await purgeStageRoom(db, admin, stageDoc.id, stageDoc.data() || {});
                 deleted += 1;
             } catch (err) {
-                functions.logger.warn('accountDeletion purgeStageRoom', {
+                log.warn('accountDeletion purgeStageRoom', {
                     stageId: stageDoc.id,
                     message: err.message,
                 });
@@ -116,12 +129,80 @@ async function purgeConversationsForUser(db, uid) {
     try {
         snap = await db.collection('conversations').where('participants', 'array-contains', uid).get();
     } catch (err) {
-        functions.logger.warn('accountDeletion conversations', { message: err.message });
+        log.warn('accountDeletion conversations', { message: err.message });
         return 0;
     }
     for (const convDoc of snap.docs) {
         await tryRecursiveDelete(db, convDoc.ref);
         deleted += 1;
+    }
+    return deleted;
+}
+
+/**
+ * Remove this uid from every OTHER user's `following` / `followers` arrays, so no
+ * phantom follow edge points at the deleted account. Uses arrayRemove in batches.
+ */
+async function purgeFollowEdgesForUser(db, admin, uid) {
+    const FieldValue = admin.firestore.FieldValue;
+    let cleaned = 0;
+    for (const field of ['following', 'followers']) {
+        let snap;
+        try {
+            snap = await db.collection('users').where(field, 'array-contains', uid).get();
+        } catch (err) {
+            log.warn('accountDeletion follow edges', { field, message: err.message });
+            continue;
+        }
+        for (let i = 0; i < snap.docs.length; i += 400) {
+            const batch = db.batch();
+            for (const d of snap.docs.slice(i, i + 400)) {
+                batch.update(d.ref, { [field]: FieldValue.arrayRemove(uid) });
+            }
+            await batch.commit();
+            cleaned += Math.min(400, snap.docs.length - i);
+        }
+    }
+    return cleaned;
+}
+
+/** Delete docs where an ARRAY field contains the uid (e.g. legacy chats participants). */
+async function deleteByArrayContains(db, collectionName, field, uid, { withMessages = false } = {}) {
+    let deleted = 0;
+    let snap;
+    try {
+        snap = await db.collection(collectionName).where(field, 'array-contains', uid).get();
+    } catch (err) {
+        log.warn('accountDeletion array-contains', { collectionName, field, message: err.message });
+        return 0;
+    }
+    for (const d of snap.docs) {
+        if (withMessages) await tryRecursiveDelete(db, d.ref);
+        else await d.ref.delete();
+        deleted += 1;
+    }
+    return deleted;
+}
+
+/**
+ * Delete docs across ALL subcollections of a given name where field == uid
+ * (e.g. a user's votes/answers left inside OTHER people's posts/games).
+ * Needs a collection-group index; failure is logged and skipped, never fatal.
+ */
+async function deleteCollectionGroupByField(db, groupName, field, uid) {
+    let deleted = 0;
+    let snap;
+    try {
+        snap = await db.collectionGroup(groupName).where(field, '==', uid).get();
+    } catch (err) {
+        log.warn('accountDeletion collectionGroup', { groupName, field, message: err.message });
+        return 0;
+    }
+    for (let i = 0; i < snap.docs.length; i += 200) {
+        const batch = db.batch();
+        for (const d of snap.docs.slice(i, i + 200)) batch.delete(d.ref);
+        await batch.commit();
+        deleted += Math.min(200, snap.docs.length - i);
     }
     return deleted;
 }
@@ -141,6 +222,19 @@ async function purgeUserAccountData(admin, uid, { deleteAuthUser = true } = {}) 
         stages: 0,
         restaurants: 0,
         conversations: 0,
+        followEdges: 0,
+        discoveryLikes: 0,
+        discoveryGreetings: 0,
+        comments: 0,
+        likes: 0,
+        businessLikes: 0,
+        reviews: 0,
+        suitabilityPosts: 0,
+        suitabilityVotes: 0,
+        groupGames: 0,
+        gameAnswers: 0,
+        legacyChats: 0,
+        welcomeGifts: 0,
         legacyArchives: 0,
         userDoc: 0,
         publicProfile: 0,
@@ -249,6 +343,80 @@ async function purgeUserAccountData(admin, uid, { deleteAuthUser = true } = {}) 
 
     stats.conversations = await purgeConversationsForUser(db, uid);
 
+    // Follow edges: remove this uid from everyone else's following/followers arrays.
+    stats.followEdges = await purgeFollowEdgesForUser(db, admin, uid);
+
+    // Discovery (dating) likes + greetings — both directions.
+    stats.discoveryLikes += await deleteByFieldQueries(db, 'discovery_likes', [
+        ['targetUserId', uid],
+        ['likerId', uid],
+    ]);
+    stats.discoveryGreetings += await deleteByFieldQueries(db, 'discovery_greetings', [
+        ['targetUserId', uid],
+        ['senderId', uid],
+    ]);
+
+    // Comments authored by the user.
+    stats.comments += await deleteByFieldQueries(db, 'comments', [
+        ['userId', uid],
+        ['authorId', uid],
+    ]);
+
+    // Post likes authored by the user (defensive across possible field names).
+    stats.likes += await deleteByFieldQueries(db, 'likes', [
+        ['userId', uid],
+        ['likerId', uid],
+        ['uid', uid],
+    ]);
+
+    // Business likes + reviews by the user.
+    stats.businessLikes += await deleteByFieldQueries(db, 'businessLikes', [
+        ['userId', uid],
+        ['likerId', uid],
+        ['uid', uid],
+    ]);
+    stats.reviews += await deleteByFieldQueries(db, 'reviews', [
+        ['userId', uid],
+        ['authorId', uid],
+        ['uid', uid],
+    ]);
+
+    // "Who suits you?" posts owned by the user (+ their votes subcollection).
+    stats.suitabilityPosts += await deleteByFieldQueries(
+        db,
+        'suitability_posts',
+        [['ownerId', uid]],
+        { withMessages: true }
+    );
+    // Votes this user cast on OTHER people's suitability posts.
+    stats.suitabilityVotes = await deleteCollectionGroupByField(db, 'votes', 'uid', uid);
+
+    // Group games hosted by the user (+ answers subcollection).
+    stats.groupGames += await deleteByFieldQueries(
+        db,
+        'group_games',
+        [['hostId', uid]],
+        { withMessages: true }
+    );
+    // Answers this user submitted in OTHER people's games.
+    stats.gameAnswers = await deleteCollectionGroupByField(db, 'answers', 'uid', uid);
+
+    // Legacy 1:1 chats keyed by participants array.
+    stats.legacyChats = await deleteByArrayContains(db, 'chats', 'participants', uid, { withMessages: true });
+
+    // Welcome-gift claim record (doc id = uid, plus defensive field query).
+    try {
+        const wgRef = db.collection('welcome_gifts_claimed').doc(uid);
+        const wgSnap = await wgRef.get();
+        if (wgSnap.exists) { await wgRef.delete(); stats.welcomeGifts += 1; }
+    } catch (err) {
+        log.warn('accountDeletion welcome gift', { message: err.message });
+    }
+    stats.welcomeGifts += await deleteByFieldQueries(db, 'welcome_gifts_claimed', [
+        ['userId', uid],
+        ['uid', uid],
+    ]);
+
     // Storage owned by this user
     const prefixes = [
         `users/${uid}/`,
@@ -291,12 +459,12 @@ async function purgeUserAccountData(admin, uid, { deleteAuthUser = true } = {}) 
             stats.authUser = 1;
         } catch (err) {
             if (err?.code !== 'auth/user-not-found') {
-                functions.logger.warn('accountDeletion auth delete', { uid, message: err.message });
+                log.warn('accountDeletion auth delete', { uid, message: err.message });
             }
         }
     }
 
-    functions.logger.info('accountDeletion purge complete', { uid, stats });
+    log.info('accountDeletion purge complete', { uid, stats });
     return stats;
 }
 

@@ -593,3 +593,77 @@ export async function generateAIDesignStudioImage({ userPrompt, designCategory, 
 
     return parseAiApiResponse(response);
 }
+
+/**
+ * "Real or AI?" game — generate an AI image (25 credits, stored under `realornai/`).
+ * @param {{ userPrompt: string, aspectRatio?: string }} params
+ */
+export async function generateRealOrAiImage({ userPrompt, aspectRatio = '1:1' }) {
+    const trimmedPrompt =
+        String(userPrompt || '').trim().slice(0, AI_USER_PROMPT_MAX_CHARS) ||
+        getAiUserPromptDefaultEn('design_studio');
+    if (!auth.currentUser) {
+        return { success: false, error: 'Sign in required', code: 'UNAUTHORIZED', status: 401 };
+    }
+    let token = await getAuthBearerToken(false);
+    if (!token) {
+        return { success: false, error: 'Could not obtain auth token', code: 'UNAUTHORIZED', status: 401 };
+    }
+    const body = attachOutputLanguage({
+        userPrompt: trimmedPrompt,
+        postType: 'real_or_ai',
+        generationPackage: 'image',
+        aspectRatio,
+    });
+    let response;
+    try {
+        response = await postAiJson(AI_MULTI_GENERATE_PATH, body, token, { timeoutMs: 180000 });
+        if (response.status === 401) {
+            token = await getAuthBearerToken(true);
+            if (token) response = await postAiJson(AI_MULTI_GENERATE_PATH, body, token, { timeoutMs: 180000 });
+        }
+    } catch (err) {
+        if (err instanceof Error && err.message === 'AI_REQUEST_TIMEOUT') {
+            return { success: false, error: 'request_timeout', code: 'AI_REQUEST_TIMEOUT', message: i18n.t('ai_request_timeout'), status: 408 };
+        }
+        return { success: false, error: 'Network error while contacting AI service', code: 'GEMINI_API_ERROR' };
+    }
+    return parseAiApiResponse(response);
+}
+
+/**
+ * img2img AI EDIT — edit an already-uploaded image (Storage path) with a text
+ * instruction (25 credits). Returns parseAiApiResponse (data.image = { url, path }).
+ * @param {{ inputImagePath: string, inputImageBucket?: string, userPrompt: string, postType?: string, aspectRatio?: string }} params
+ */
+export async function generateAIImageEdit({ inputImagePath, inputImageBucket, userPrompt, postType = 'design_studio', aspectRatio = '1:1' }) {
+    const instruction = String(userPrompt || '').trim().slice(0, AI_USER_PROMPT_MAX_CHARS);
+    if (!inputImagePath) return { success: false, error: 'No image to edit', code: 'VALIDATION_ERROR' };
+    if (!instruction) return { success: false, error: 'Describe the edit', code: 'VALIDATION_ERROR' };
+    if (!auth.currentUser) return { success: false, error: 'Sign in required', code: 'UNAUTHORIZED', status: 401 };
+    let token = await getAuthBearerToken(false);
+    if (!token) return { success: false, error: 'Could not obtain auth token', code: 'UNAUTHORIZED', status: 401 };
+
+    const body = attachOutputLanguage({
+        userPrompt: instruction,
+        postType,
+        generationPackage: 'image',
+        aspectRatio,
+        inputImagePath,
+        ...(inputImageBucket ? { inputImageBucket } : {}),
+    });
+    let response;
+    try {
+        response = await postAiJson(AI_MULTI_GENERATE_PATH, body, token, { timeoutMs: 180000 });
+        if (response.status === 401) {
+            token = await getAuthBearerToken(true);
+            if (token) response = await postAiJson(AI_MULTI_GENERATE_PATH, body, token, { timeoutMs: 180000 });
+        }
+    } catch (err) {
+        if (err instanceof Error && err.message === 'AI_REQUEST_TIMEOUT') {
+            return { success: false, error: 'request_timeout', code: 'AI_REQUEST_TIMEOUT', message: i18n.t('ai_request_timeout'), status: 408 };
+        }
+        return { success: false, error: 'Network error while contacting AI service', code: 'GEMINI_API_ERROR' };
+    }
+    return parseAiApiResponse(response);
+}

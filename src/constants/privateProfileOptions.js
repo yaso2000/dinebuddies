@@ -47,12 +47,6 @@ export const JOIN_REASON_OPTIONS = [
         labelKey: 'join_reason_fun_hangouts',
         fallback: 'Fun hangouts & great conversation ☕',
     },
-    {
-        id: 'open_to_dating',
-        labelKey: 'join_reason_open_to_dating',
-        fallback: "I'm open to dating 💕",
-        privateOnly: true,
-    },
 ];
 
 const JOIN_REASON_IDS = new Set(JOIN_REASON_OPTIONS.map((o) => o.id));

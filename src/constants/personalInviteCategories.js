@@ -1,10 +1,16 @@
-/** Personal (1-on-1) invite intent — stored on `social_invitations.personalInviteCategory` and `users.lookingFor`. */
+/**
+ * Unified relationship categories — the single source of truth for BOTH the profile
+ * "Looking for" (أبحث عن) chips (`users.lookingFor`) and the social-invitation
+ * category (`social_invitations.personalInviteCategory`). Six warm intents; dating was
+ * removed entirely — "serious" (علاقة جدية) is a committed relationship, NOT dating, and
+ * "acquaintance" (تعارف) is a light getting-to-know. No hearts.
+ */
 export const PERSONAL_INVITE_CATEGORIES = [
     {
-        id: 'dating',
-        icon: '❤️',
-        labelKey: 'personal_invite_cat_dating',
-        defaultLabel: 'Dating',
+        id: 'social',
+        icon: '✨',
+        labelKey: 'personal_invite_cat_social',
+        defaultLabel: 'Social',
     },
     {
         id: 'friendship',
@@ -13,20 +19,40 @@ export const PERSONAL_INVITE_CATEGORIES = [
         defaultLabel: 'Friendship',
     },
     {
-        id: 'social',
-        icon: '✨',
-        labelKey: 'personal_invite_cat_social',
-        defaultLabel: 'Social',
+        id: 'family',
+        icon: '👨‍👩‍👧',
+        labelKey: 'personal_invite_cat_family',
+        defaultLabel: 'Family',
+    },
+    {
+        id: 'work',
+        icon: '💼',
+        labelKey: 'personal_invite_cat_work',
+        defaultLabel: 'Work',
+    },
+    {
+        id: 'serious',
+        icon: '💫',
+        labelKey: 'personal_invite_cat_serious',
+        defaultLabel: 'Serious relationship',
+    },
+    {
+        id: 'acquaintance',
+        icon: '👋',
+        labelKey: 'personal_invite_cat_acquaintance',
+        defaultLabel: 'Getting acquainted',
     },
 ];
 
-export const DEFAULT_PERSONAL_INVITE_CATEGORY = 'friendship';
+export const DEFAULT_PERSONAL_INVITE_CATEGORY = 'social';
 
 const VALID = new Set(PERSONAL_INVITE_CATEGORIES.map((c) => c.id));
 
 /** @param {unknown} value */
 export function normalizePersonalInviteCategory(value) {
     const id = String(value || '').trim().toLowerCase();
+    // Legacy remaps: dating → serious; icebreaker → social; private → default.
+    if (id === 'dating') return 'serious';
     if (id === 'icebreaker') return 'social';
     if (VALID.has(id)) return id;
     if (id === 'private') return DEFAULT_PERSONAL_INVITE_CATEGORY;
@@ -36,7 +62,7 @@ export function normalizePersonalInviteCategory(value) {
 /** @param {string} categoryId */
 export function getPersonalInviteCategoryMeta(categoryId) {
     const id = normalizePersonalInviteCategory(categoryId);
-    return PERSONAL_INVITE_CATEGORIES.find((c) => c.id === id) || PERSONAL_INVITE_CATEGORIES[1];
+    return PERSONAL_INVITE_CATEGORIES.find((c) => c.id === id) || PERSONAL_INVITE_CATEGORIES[0];
 }
 
 /** @param {string} categoryId @param {(key: string, fallback?: string) => string} t */
@@ -49,24 +75,22 @@ export function getPersonalInviteCategoryLabel(categoryId, t) {
 /** Relationship intentions on member profiles (`users.lookingFor`). */
 export const LOOKING_FOR_MAX = PERSONAL_INVITE_CATEGORIES.length;
 
-/** @param {unknown} raw @param {{ includeDating?: boolean }} [opts] */
-export function normalizeLookingFor(raw, { includeDating = true } = {}) {
+/** @param {unknown} raw */
+export function normalizeLookingFor(raw) {
     if (!Array.isArray(raw)) return [];
     const out = [];
     for (const item of raw) {
         const id = normalizePersonalInviteCategory(item);
         if (!VALID.has(id) || out.includes(id)) continue;
-        if (id === 'dating' && !includeDating) continue;
         out.push(id);
         if (out.length >= LOOKING_FOR_MAX) break;
     }
     return out;
 }
 
-/** @param {{ includeDating?: boolean }} [opts] */
-export function getLookingForOptions({ includeDating = true } = {}) {
-    if (includeDating) return PERSONAL_INVITE_CATEGORIES;
-    return PERSONAL_INVITE_CATEGORIES.filter((c) => c.id !== 'dating');
+/** All six relationship categories (kept the opts arg for call-site compatibility). */
+export function getLookingForOptions() {
+    return PERSONAL_INVITE_CATEGORIES;
 }
 
 /** @param {string} id @param {(key: string, fallback?: string) => string} t */

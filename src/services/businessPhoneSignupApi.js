@@ -1,17 +1,7 @@
 import { resolveApiUrl } from '../utils/resolveApiUrl';
 
-/**
- * @param {string} standardizedPhone E.164
- */
-export async function lookupBusinessPhone(standardizedPhone) {
-    const res = await fetch(resolveApiUrl('/api/business-phone-lookup'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ standardizedPhone }),
-    });
-    const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, status: res.status, data };
-}
+// Business signup / claim now uses Google Place + Google Business Profile only.
+// The SMS/phone lookup was removed.
 
 /**
  * @param {string} placeId Google Place ID

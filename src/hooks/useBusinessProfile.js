@@ -52,7 +52,7 @@ import { googlePlaceTypesToCategoryBadges } from '../utils/googlePlacesBusiness'
 import { useConfirm } from '../context/ConfirmContext';
 
 export const BUSINESS_TYPES = [
-'Restaurant', 'Cafe', 'Bar', 'Night Club', 'Food Truck', 'Fast Food'];
+'Restaurant', 'Cafe', 'Bar', 'Night Club', 'Hotel', 'Food Truck', 'Fast Food'];
 
 
 /** When Firestore denies users/{id} (guest / unauthenticated listener), load read-only projection (rules: public_profiles get allowed for all). */
@@ -171,6 +171,7 @@ function getSchemaType(type) {
     case 'Cafe':return 'CafeOrCoffeeShop';
     case 'Bar':return 'BarOrPub';
     case 'Night Club':return 'NightClub';
+    case 'Hotel':return 'Hotel';
     case 'Food Truck':return 'FoodEstablishment';
     case 'Fast Food':return 'FastFoodRestaurant';
     case 'Restaurant':return 'Restaurant';

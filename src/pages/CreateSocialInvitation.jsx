@@ -5,8 +5,8 @@ import {
   FaClock, FaLock, FaChevronLeft,
   FaMoneyBillWave, FaUsers, FaBriefcase,
   FaBirthdayCake, FaMoon, FaUtensils, FaCoffee, FaGamepad,
-  FaStar, FaHome, FaFilm, FaFutbol, FaMicrophone,
-  FaUpload, FaMagic } from
+  FaStar, FaHome, FaFilm, FaFutbol, FaMicrophone, FaHandshake,
+  FaUpload, FaMagic, FaImages } from
 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
@@ -59,6 +59,7 @@ import {
   DEFAULT_CARD_COPY_FONT_SCALE } from
 '../components/Invitations/socialCard/socialCardCopyLayout';
 import { resolveOccasionCategoryId } from '../components/Invitations/socialCard/socialCardOccasionMap';
+import { SOCIAL_INVITE_TYPES } from '../constants/socialInviteTypes';
 import {
   getCardBackgroundOptions,
   parsePrivateInvitationCardBackgroundFromUrl,
@@ -158,7 +159,7 @@ const CreateSocialInvitation = () => {
     editInvitation.cardGradientId ||
     null
   );
-  const [privateCoverTab, setPrivateCoverTab] = useState('upload');
+  const [privateCoverTab, setPrivateCoverTab] = useState('template');
   const [aiCoverSheetOpen, setAiCoverSheetOpen] = useState(false);
   const [aiCoverCommittingId, setAiCoverCommittingId] = useState(null);
   const [socialCardShowHostAndMessage, setPrivateCardShowHostAndMessage] = useState(true);
@@ -623,6 +624,10 @@ const CreateSocialInvitation = () => {
     } else {
       handlePrivateCoverTab('upload');
     }
+  };
+
+  const handlePrivateCoverTemplateTabClick = () => {
+    handlePrivateCoverTab('template');
   };
 
   const stashCoverMedia = (kind, media) => {
@@ -1272,39 +1277,27 @@ const CreateSocialInvitation = () => {
                     </div>
 
                     <div className="form-group mb-4">
-                        <label className="elegant-label">{t('form_occasion_label')}</label>
-                        <div className="occasion-options" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-                            {[
-              { id: 'birthday', icon: <FaBirthdayCake />, label: 'Birthday' },
-              { id: 'social', icon: <FaUsers />, label: 'Social' },
-              { id: 'work', icon: <FaBriefcase />, label: 'Work' },
-              { id: 'nightlife', icon: <FaMoon />, label: 'Nightlife' },
-              { id: 'dining', icon: <FaUtensils />, label: 'Dining' },
-              { id: 'cafe', icon: <FaCoffee />, label: 'Café' },
-              { id: 'gaming', icon: <FaGamepad />, label: 'Gaming' },
-              { id: 'family', icon: <FaHome />, label: 'Family' },
-              { id: 'celebration', icon: <FaStar />, label: 'Celebration' },
-              { id: 'cinema', icon: <FaFilm />, label: 'Cinema' },
-              { id: 'sports', icon: <FaFutbol />, label: 'Sports' },
-              { id: 'concert', icon: <FaMicrophone />, label: 'Concert' }].
-              map((occ) => {
-                const selected = formData.occasionType === occ.label;
+                        <label className="elegant-label">{t('form_social_type_label', 'Invitation type')}</label>
+                        <div className="occasion-options" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                            {SOCIAL_INVITE_TYPES.map((tpe) => {
+                const icon = tpe.id === 'friendship' ? <FaHandshake /> : tpe.id === 'family' ? <FaHome /> : tpe.id === 'work' ? <FaBriefcase /> : <FaUsers />;
+                const selected = formData.occasionType === tpe.label;
                 return (
                   <div
-                    key={occ.id}
+                    key={tpe.id}
                     role="button"
                     tabIndex={0}
-                    onClick={() => setFormData((prev) => ({ ...prev, occasionType: occ.label }))}
+                    onClick={() => setFormData((prev) => ({ ...prev, occasionType: tpe.label }))}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        setFormData((prev) => ({ ...prev, occasionType: occ.label }));
+                        setFormData((prev) => ({ ...prev, occasionType: tpe.label }));
                       }
                     }}
                     className={`private-occasion-chip${selected ? ' private-occasion-chip--selected' : ''}`}>
 
-                                        <AppText as="span" className="private-occasion-chip__icon">{occ.icon}</AppText>
-                                        {t(`occasion_${occ.id}`, occ.label)}
+                                        <AppText as="span" className="private-occasion-chip__icon">{icon}</AppText>
+                                        {t(tpe.labelKey, tpe.defaultLabel)}
                                     </div>);
 
               })}
@@ -1421,6 +1414,17 @@ const CreateSocialInvitation = () => {
                                 <button
                   type="button"
                   role="tab"
+                  aria-selected={privateCoverTab === 'ai'}
+                  onClick={handlePrivateCoverAiTabClick}
+                  className={`private-cover-tab${privateCoverTab === 'ai' ? ' private-cover-tab--active' : ''}`}
+                  title={t('social_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' })}
+                  aria-label={t('social_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' })}>
+
+                                    <FaMagic aria-hidden />
+                                </button>
+                                <button
+                  type="button"
+                  role="tab"
                   aria-selected={privateCoverTab === 'upload'}
                   onClick={handlePrivateCoverUploadTabClick}
                   className={`private-cover-tab${privateCoverTab === 'upload' ? ' private-cover-tab--active' : ''}`}
@@ -1432,13 +1436,13 @@ const CreateSocialInvitation = () => {
                                 <button
                   type="button"
                   role="tab"
-                  aria-selected={privateCoverTab === 'ai'}
-                  onClick={handlePrivateCoverAiTabClick}
-                  className={`private-cover-tab${privateCoverTab === 'ai' ? ' private-cover-tab--active' : ''}`}
-                  title={t('social_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' })}
-                  aria-label={t('social_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' })}>
+                  aria-selected={privateCoverTab === 'template'}
+                  onClick={handlePrivateCoverTemplateTabClick}
+                  className={`private-cover-tab${privateCoverTab === 'template' ? ' private-cover-tab--active' : ''}`}
+                  title={t('social_cover_tab_templates', { defaultValue: 'Ready backgrounds' })}
+                  aria-label={t('social_cover_tab_templates', { defaultValue: 'Ready backgrounds' })}>
 
-                                    <FaMagic aria-hidden />
+                                    <FaImages aria-hidden />
                                 </button>
                             </div>
                         </div>

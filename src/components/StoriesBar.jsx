@@ -6,8 +6,14 @@ import StoryCircle from './StoryCircle';
 import LiveStageCircle from './LiveStageCircle';
 import LiveGameCircle from './LiveGameCircle';
 import { useLiveGamesDiscover } from '../hooks/useLiveGamesDiscover';
-import MatchShowCircle from './MatchShowCircle';
-import { useLiveMatchShows } from '../hooks/useLiveMatchShows';
+import SuitabilityCircle from './SuitabilityCircle';
+import { useLiveSuitabilityPosts } from '../hooks/useLiveSuitabilityPosts';
+import RealOrAiCircle from './RealOrAiCircle';
+import { useLiveRealOrAiPosts } from '../hooks/useLiveRealOrAiPosts';
+import { useMyLiveRealOrAiPost } from '../hooks/useMyLiveRealOrAiPost';
+import ZodiacCircle from './ZodiacCircle';
+import { useLiveZodiacPosts } from '../hooks/useLiveZodiacPosts';
+import { useMyLiveZodiacPost } from '../hooks/useMyLiveZodiacPost';
 import BusinessCommunityCircle from './BusinessCommunityCircle';
 import UserAvatar from './UserAvatar';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -53,8 +59,16 @@ const StoriesBar = ({ onStoryClick }) => {
   });
   // Live group games are open to everyone (consumers only browse the rail).
   const { games: liveGames } = useLiveGamesDiscover({ enabled: !isBusiness });
-  // Live "Match or Not" shows — prominent at the front of the rail.
-  const { shows: liveMatchShows } = useLiveMatchShows({ enabled: !isBusiness });
+  // Live "Who suits you?" polls — prominent at the front of the rail.
+  const { posts: suitabilityPosts } = useLiveSuitabilityPosts({ enabled: !isBusiness });
+  // Live "Camera or AI?" rounds — prominent at the front of the rail.
+  const { posts: realOrAiPosts } = useLiveRealOrAiPosts({ enabled: !isBusiness });
+  // The viewer's OWN live card (never in the guessing deck) — a dedicated entry
+  // so the owner can see results + end the round. "Publish = enter" lands here.
+  const { post: myRealOrAiCard } = useMyLiveRealOrAiPost();
+  // Live "Guess my sign?" cards + the viewer's own.
+  const { posts: zodiacPosts } = useLiveZodiacPosts({ enabled: !isBusiness });
+  const { post: myZodiacCard } = useMyLiveZodiacPost();
 
   // The host's OWN live Stage — always shown (even for business accounts, which
   // otherwise don't browse the rail) so they can jump back into their Stage.
@@ -109,7 +123,7 @@ const StoriesBar = ({ onStoryClick }) => {
   ]);
 
   // Keep the rail visible when rooms/games/your-stage exist even if stories are still loading.
-  if (loading && !myStage && liveMatchShows.length === 0 && activeLiveStages.length === 0 && businessRooms.length === 0 && liveGames.length === 0 && stories.length === 0) return null;
+  if (loading && !myStage && !myRealOrAiCard && !myZodiacCard && zodiacPosts.length === 0 && suitabilityPosts.length === 0 && realOrAiPosts.length === 0 && activeLiveStages.length === 0 && businessRooms.length === 0 && liveGames.length === 0 && stories.length === 0) return null;
 
   return (
     <div style={{
@@ -231,10 +245,38 @@ const StoriesBar = ({ onStoryClick }) => {
                     </div>)
         }
 
-                {/* Live "Match or Not" shows — prominent, at the very front */}
-                {liveMatchShows.map((s) => (
-                  <div key={`match-${s.id}`} role="listitem" style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
-                    <MatchShowCircle show={s} onClick={() => navigate(`/match-show/${s.id}`)} />
+                {/* Live "Who suits you?" polls — prominent, at the very front */}
+                {suitabilityPosts.map((p) => (
+                  <div key={`suit-${p.id}`} role="listitem" style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
+                    <SuitabilityCircle post={p} onClick={() => navigate(`/suitability?start=${p.id}`)} />
+                  </div>
+                ))}
+
+                {/* The viewer's OWN live "Camera or AI?" card → results + end */}
+                {myRealOrAiCard ? (
+                  <div key={`roa-mine-${myRealOrAiCard.id}`} role="listitem" style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
+                    <RealOrAiCircle post={myRealOrAiCard} label={t('cam_ai_your_card', 'Your card')} onClick={() => navigate('/realornai/mine')} />
+                  </div>
+                ) : null}
+
+                {/* Live "Camera or AI?" rounds — prominent, at the very front */}
+                {realOrAiPosts.map((p) => (
+                  <div key={`roa-${p.id}`} role="listitem" style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
+                    <RealOrAiCircle post={p} onClick={() => navigate(`/realornai?start=${p.id}`)} />
+                  </div>
+                ))}
+
+                {/* The viewer's OWN live "Guess my sign?" card → results + end */}
+                {myZodiacCard ? (
+                  <div key={`zod-mine-${myZodiacCard.id}`} role="listitem" style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
+                    <ZodiacCircle post={myZodiacCard} label={t('cam_ai_your_card', 'Your card')} onClick={() => navigate('/zodiac/mine')} />
+                  </div>
+                ) : null}
+
+                {/* Live "Guess my sign?" cards */}
+                {zodiacPosts.map((p) => (
+                  <div key={`zod-${p.id}`} role="listitem" style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
+                    <ZodiacCircle post={p} onClick={() => navigate(`/zodiac?start=${p.id}`)} />
                   </div>
                 ))}
 

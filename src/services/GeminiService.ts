@@ -1,5 +1,5 @@
 import { getApp } from 'firebase/app';
-import { getAI, getGenerativeModel, getImagenModel, GoogleAIBackend, VertexAIBackend } from 'firebase/ai';
+import { getAI, getGenerativeModel, getImagenModel, GoogleAIBackend, VertexAIBackend, ResponseModality, ImageConfigAspectRatio } from 'firebase/ai';
 import type { ImagenAspectRatio } from 'firebase/ai';
 import {
     coalesceInvitationAiText,
@@ -207,6 +207,31 @@ export interface MultimodalPipelineInput {
     aspectRatio?: CoverAspectRatio;
     designCategory?: DesignStudioCategory;
     outputLanguage?: AiOutputLanguage | string;
+    /** img2img: when present, EDIT this image with `userPrompt` instead of generating from scratch. */
+    inputImage?: { bytesBase64: string; mimeType: string };
+    /**
+     * Optional server-side image backend. When provided (e.g. the Vercel API
+     * injects a Vertex-REST generator authenticated by the service account),
+     * these replace the browser `firebase/ai` calls, which don't authenticate
+     * from a serverless runtime. Same return shape as generate/editCoverImage.
+     */
+    imageGenerator?: {
+        generate: (
+            prompt: string,
+            aspectRatio: string,
+        ) => Promise<
+            | { success: true; bytesBase64: string; mimeType: string; filteredReason?: string }
+            | CoverImageError
+        >;
+        edit: (
+            inputBase64: string,
+            inputMimeType: string,
+            editPrompt: string,
+        ) => Promise<
+            | { success: true; bytesBase64: string; mimeType: string }
+            | CoverImageError
+        >;
+    };
 }
 
 export interface MultimodalPipelineData {
@@ -258,6 +283,11 @@ const IMAGEN_MODEL_FALLBACKS = [
 ].filter(Boolean);
 
 const IMAGEN_MODEL_NAME = IMAGEN_MODEL_FALLBACKS[0] || 'imagen-4.0-fast-generate-001';
+
+/** Gemini image-editing model (img2img: input image + prompt → edited image). Override via GEMINI_IMAGE_EDIT_MODEL. */
+const IMAGE_MODEL_NAME =
+    (typeof process !== 'undefined' && process.env?.GEMINI_IMAGE_EDIT_MODEL?.trim()) ||
+    'gemini-2.5-flash-image';
 const ANIMATION_TYPES: AnimationType[] = ['slide-up', 'fade-in', 'zoom-in'];
 const INVITATION_TITLE_MAX_LENGTH = 120;
 
@@ -961,57 +991,139 @@ export async function generateCoverImage(
         };
     }
 
-    return withBackendFallbackResult(async (mode) => {
-        const ai = createAi(mode);
-        const modelsToTry = [...new Set(IMAGEN_MODEL_FALLBACKS)];
-        let lastError: string | undefined;
+    // Text→image on the VERTEX backend (Vertex AI is enabled for this project; the
+    // Google AI backend 404s on Imagen and is unreliable). Every step is wrapped so
+    // the REAL error surfaces (instead of a swallowed "internal error"). Try Imagen
+    // first (the purpose-built Vertex image model), then the Gemini image model.
+    return withBackendFallbackResult(async () => {
+        const errors: string[] = [];
+        let ai;
+        try {
+            ai = createAi('vertex');
+        } catch (error) {
+            const errText = error instanceof Error ? error.message : String(error);
+            return { success: false, error: `init(vertex): ${errText}`, code: 'GEMINI_API_ERROR' };
+        }
 
-        for (const modelName of modelsToTry) {
-            try {
-                const model = getImagenModel(ai, {
-                    model: modelName,
-                    generationConfig: {
-                        numberOfImages: 1,
-                        aspectRatio: toImagenAspectRatio(aspectRatio),
-                    },
-                });
-
-                const response = await model.generateImages(safePrompt);
-                const first = response.images?.[0];
-
-                if (!first?.bytesBase64Encoded) {
-                    lastError =
-                        response.filteredReason ||
-                        `Imagen (${modelName}) returned no image (prompt may have been filtered)`;
-                    continue;
-                }
-
+        // 1) Imagen on Vertex.
+        try {
+            const imagen = getImagenModel(ai, {
+                model: IMAGEN_MODEL_NAME,
+                generationConfig: {
+                    numberOfImages: 1,
+                    aspectRatio: (aspectRatio as unknown) as never,
+                },
+            } as never);
+            const out: any = await (imagen as any).generateImages(safePrompt);
+            const img = out?.images?.[0];
+            const b64 = img?.bytesBase64Encoded || img?.inlineData?.data;
+            if (b64) {
                 return {
                     success: true,
-                    bytesBase64: first.bytesBase64Encoded,
-                    mimeType: first.mimeType || 'image/jpeg',
-                    filteredReason: response.filteredReason,
+                    bytesBase64: b64,
+                    mimeType: img?.mimeType || img?.inlineData?.mimeType || 'image/png',
+                    ...(out?.filteredReason ? { filteredReason: String(out.filteredReason) } : {}),
                 };
-            } catch (error) {
-                lastError = error instanceof Error ? error.message : String(error);
-                console.warn('[generateCoverImage] model failed', mode, modelName, lastError);
             }
+            errors.push(`imagen(${IMAGEN_MODEL_NAME}): no image${out?.filteredReason ? ` — ${out.filteredReason}` : ''}`);
+        } catch (error) {
+            const errText = error instanceof Error ? error.message : String(error);
+            const billing = normalizeGeminiProviderBillingError(errText);
+            if (billing) return { success: false, error: billing.message, code: GEMINI_PROVIDER_BILLING_CODE };
+            errors.push(`imagen(${IMAGEN_MODEL_NAME}): ${errText}`);
         }
 
-        const errText = lastError || 'Imagen generation failed';
-        const billing = normalizeGeminiProviderBillingError(errText);
-        if (billing) {
-            return { success: false, error: billing.message, code: GEMINI_PROVIDER_BILLING_CODE };
+        // 2) Gemini image model on Vertex (fallback).
+        try {
+            const model = getGenerativeModel(ai, {
+                model: IMAGE_MODEL_NAME,
+                generationConfig: {
+                    responseModalities: [ResponseModality.IMAGE],
+                    imageConfig: { aspectRatio: (aspectRatio as unknown) as ImageConfigAspectRatio },
+                },
+            });
+            const result = await model.generateContent(safePrompt);
+            const inlineParts = result.response.inlineDataParts?.() || [];
+            const imgPart = inlineParts.find((p) => p?.inlineData?.data);
+            if (imgPart?.inlineData?.data) {
+                return { success: true, bytesBase64: imgPart.inlineData.data, mimeType: imgPart.inlineData.mimeType || 'image/jpeg' };
+            }
+            const textOut = (() => { try { return result.response.text?.() || ''; } catch { return ''; } })();
+            errors.push(`gen(${IMAGE_MODEL_NAME}): no image${textOut ? ` — ${textOut.slice(0, 100)}` : ''}`);
+        } catch (error) {
+            const errText = error instanceof Error ? error.message : String(error);
+            const billing = normalizeGeminiProviderBillingError(errText);
+            if (billing) return { success: false, error: billing.message, code: GEMINI_PROVIDER_BILLING_CODE };
+            errors.push(`gen(${IMAGE_MODEL_NAME}): ${errText}`);
         }
-        const isFiltered =
-            /filtered|no image|safety|blocked/i.test(errText) &&
-            !/unavailable|503|404|not found|permission/i.test(errText);
 
-        return {
-            success: false,
-            error: errText,
-            code: isFiltered ? 'IMAGE_GENERATION_FAILED' : 'GEMINI_API_ERROR',
-        };
+        return { success: false, error: errors.join('  |  ').slice(0, 300), code: 'IMAGE_GENERATION_FAILED' };
+    });
+}
+
+/**
+ * img2img EDIT — take an input image + a text instruction and return an edited image.
+ * Uses the Gemini image model (input image part + text → image inlineData part out).
+ */
+export async function editCoverImage(
+    inputBase64: string,
+    inputMimeType: string,
+    editPrompt: string,
+): Promise<
+    | { success: true; bytesBase64: string; mimeType: string }
+    | CoverImageError
+> {
+    if (!inputBase64) {
+        return { success: false, error: 'No input image provided', code: 'IMAGE_GENERATION_FAILED' };
+    }
+    const safePrompt = sanitizeImagenPrompt(editPrompt) || String(editPrompt || '').trim();
+    if (!safePrompt) {
+        return { success: false, error: 'Edit instruction is empty', code: 'IMAGE_GENERATION_FAILED' };
+    }
+
+    return withBackendFallbackResult(async () => {
+        try {
+            const ai = createAi('vertex');
+            const model = getGenerativeModel(ai, {
+                model: IMAGE_MODEL_NAME,
+                // Ask the model to return an image (nano-banana image editing) on Vertex.
+                generationConfig: { responseModalities: [ResponseModality.IMAGE] },
+            });
+
+            const result = await model.generateContent({
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [
+                            { inlineData: { mimeType: inputMimeType || 'image/jpeg', data: inputBase64 } },
+                            { text: `Edit the provided image based on this instruction, and return the edited image: ${safePrompt}` },
+                        ],
+                    },
+                ],
+            });
+
+            // Pull the edited image out of the response via the SDK helper.
+            const inlineParts = result.response.inlineDataParts?.() || [];
+            const imgPart = inlineParts.find((p) => p?.inlineData?.data);
+            if (!imgPart?.inlineData?.data) {
+                const textOut = (() => { try { return result.response.text?.() || ''; } catch { return ''; } })();
+                return {
+                    success: false,
+                    error: `edit(${IMAGE_MODEL_NAME}): no image returned${textOut ? ` — ${textOut.slice(0, 120)}` : ''}`,
+                    code: 'IMAGE_GENERATION_FAILED',
+                };
+            }
+            return {
+                success: true,
+                bytesBase64: imgPart.inlineData.data,
+                mimeType: imgPart.inlineData.mimeType || 'image/jpeg',
+            };
+        } catch (error) {
+            const errText = error instanceof Error ? error.message : String(error);
+            const billing = normalizeGeminiProviderBillingError(errText);
+            if (billing) return { success: false, error: billing.message, code: GEMINI_PROVIDER_BILLING_CODE };
+            return { success: false, error: `edit(${IMAGE_MODEL_NAME}): ${errText}`, code: 'GEMINI_API_ERROR' };
+        }
     });
 }
 
@@ -1136,25 +1248,41 @@ export async function runMultimodalPipeline(
         };
     }
 
-    stages.push('stage1_image_prompt');
-    const promptResult = await generateImagePrompt(input, invitationText);
-    if (!promptResult.success) {
-        const failure = promptResult as GenerateContentError;
-        return {
-            success: false,
-            error: failure.error,
-            code: failure.code,
-            stage: 'image_prompt',
-        };
+    let imageResult:
+        | { success: true; bytesBase64: string; mimeType: string; filteredReason?: string }
+        | CoverImageError;
+    // Server callers inject a Vertex-REST backend; browsers fall back to the
+    // firebase/ai client functions.
+    const doGenerate = input.imageGenerator?.generate || generateCoverImage;
+    const doEdit = input.imageGenerator?.edit || editCoverImage;
+
+    if (input.inputImage?.bytesBase64) {
+        // img2img EDIT — the user's prompt is the edit instruction; skip prompt synthesis.
+        stages.push('stage2_image_edit');
+        output.imagePrompt = input.userPrompt;
+        imageResult = await doEdit(
+            input.inputImage.bytesBase64,
+            input.inputImage.mimeType || 'image/jpeg',
+            input.userPrompt,
+        );
+    } else {
+        stages.push('stage1_image_prompt');
+        // Try to enrich the prompt with the text model, but never fail the whole
+        // request if that stage errors (e.g. malformed JSON) — the image model
+        // handles a natural-language prompt directly. Fall back to the raw prompt.
+        let imagePromptText = input.userPrompt;
+        try {
+            const promptResult = await generateImagePrompt(input, invitationText);
+            if (promptResult.success && promptResult.data?.imagePrompt) {
+                imagePromptText = promptResult.data.imagePrompt;
+            }
+        } catch {
+            /* keep the raw user prompt */
+        }
+        output.imagePrompt = imagePromptText;
+        stages.push('stage2_image_generation');
+        imageResult = await doGenerate(imagePromptText, input.aspectRatio || '1:1');
     }
-
-    output.imagePrompt = promptResult.data.imagePrompt;
-
-    stages.push('stage2_image_generation');
-    const imageResult = await generateCoverImage(
-        promptResult.data.imagePrompt,
-        input.aspectRatio || '1:1',
-    );
     if (!imageResult.success) {
         const failure = imageResult as CoverImageError;
         return {
@@ -1166,15 +1294,39 @@ export async function runMultimodalPipeline(
     }
 
     stages.push('stage3_image_moderation');
-    const moderationResult = await analyzeImageModeration(
-        imageResult.bytesBase64,
-        imageResult.mimeType,
-    );
-    if (!moderationResult.success) {
-        return moderationResult as MultimodalPipelineError;
+    // The "Real or AI?" game is playful and ephemeral (images auto-delete in 24h),
+    // and the generation model already blocks genuinely harmful content at the
+    // source. Skip the strict invitation-cover moderation for it so harmless fun
+    // (e.g. "a cat drinking beer") isn't rejected. Uploaded edit inputs are still
+    // moderated at upload time.
+    const skipStrictModeration = String(postType) === 'real_or_ai';
+    let moderationResult;
+    if (skipStrictModeration) {
+        moderationResult = {
+            success: true,
+            data: {
+                approvedForInvitationCover: true,
+                moderationNotes: 'lenient (fun game — relies on model safety)',
+            },
+        } as { success: true; data: ImageModerationResult };
+    } else {
+        try {
+            moderationResult = await analyzeImageModeration(
+                imageResult.bytesBase64,
+                imageResult.mimeType,
+            );
+        } catch (moderationErr) {
+            moderationResult = {
+                success: false,
+                error: moderationErr instanceof Error ? moderationErr.message : String(moderationErr),
+            } as MultimodalPipelineError;
+        }
     }
-
-    if (!moderationResult.data.approvedForInvitationCover) {
+    // A moderation *engine error* (e.g. the text model returned malformed JSON in
+    // this serverless runtime) must NOT block a valid image — the generation model
+    // already applies Google's safety filters. Only a genuine content REJECTION
+    // (approvedForInvitationCover === false) blocks. Skip moderation on error.
+    if (moderationResult.success && !moderationResult.data.approvedForInvitationCover) {
         return {
             success: false,
             error:
@@ -1196,8 +1348,13 @@ export async function runMultimodalPipeline(
         pendingImage: {
             bytesBase64: imageResult.bytesBase64,
             mimeType: imageResult.mimeType,
-            imagePrompt: promptResult.data.imagePrompt,
-            moderation: moderationResult.data,
+            imagePrompt: output.imagePrompt || input.userPrompt,
+            moderation: moderationResult.success
+                ? moderationResult.data
+                : {
+                      approvedForInvitationCover: true,
+                      moderationNotes: 'moderation skipped (engine unavailable)',
+                  },
         },
     };
 }

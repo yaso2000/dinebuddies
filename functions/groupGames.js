@@ -23,17 +23,42 @@ const ROUND_MS = 10000;   // 10s per question (two options — plenty)
 const GRACE_MS = 1500;    // network latency grace before the server rejects a late answer
 // Per game-type behaviour. Lobby / visibility / invites / discovery / spectator
 // are shared; only the content source, option count, timer and scoring differ.
+// Per game-type behaviour. Each game defines its OWN player bounds (minPlayers /
+// maxPlayers) — no single global rule — plus whether it has a configurable
+// question count (`hasRounds`; two_truths runs one round per player instead).
 const GAME_TYPES = {
-    taste_match: { options: 2, roundMs: 10000, scoring: 'agreement' },
-    zodiac_guess: { options: 3, roundMs: 20000, scoring: 'quiz' },
+    taste_match: { options: 2, roundMs: 10000, scoring: 'agreement', minPlayers: 3, maxPlayers: 16, hasRounds: true },
+    zodiac_guess: { options: 3, roundMs: 20000, scoring: 'quiz', minPlayers: 3, maxPlayers: 16, hasRounds: true },
     // "Most likely to": options are the players themselves (set at start), you
     // score by voting with the crowd (reading the room).
-    most_likely: { options: 'players', roundMs: 15000, scoring: 'vote' },
+    most_likely: { options: 'players', roundMs: 15000, scoring: 'vote', minPlayers: 3, maxPlayers: 16, hasRounds: true },
     // "Two truths and a lie": each player submits 3 statements (1 lie) in the
-    // lobby; rounds cycle through players and everyone else guesses the lie.
-    two_truths: { options: 3, roundMs: 20000, scoring: 'quiz', needsSubmission: true },
+    // lobby; rounds cycle through players IN JOIN ORDER and everyone else guesses
+    // the lie. No question count — one round per player.
+    two_truths: { options: 3, roundMs: 20000, scoring: 'quiz', needsSubmission: true, minPlayers: 3, maxPlayers: 16, hasRounds: false },
+    // "Who said it?": everyone secretly answers ONE shared prompt in the lobby;
+    // rounds reveal each answer and the crowd guesses WHO wrote it (options are the
+    // players). One round per answer. Correct guess of the author scores.
+    who_said_it: { options: 'players', roundMs: 20000, scoring: 'quiz', needsSubmission: true, minPlayers: 3, maxPlayers: 16, hasRounds: false },
 };
+
+// Shared prompts for "Who said it?" — one is picked per game (ar + en).
+const WHOSAID_PROMPTS = [
+    { ar: 'أكثر شيء يُحرجك؟', en: 'What embarrasses you the most?' },
+    { ar: 'لو ربحت مليونًا الآن، أول شيء تفعله؟', en: 'If you won a million right now, first thing you do?' },
+    { ar: 'أغرب عادة عندك؟', en: 'Your weirdest habit?' },
+    { ar: 'أكثر شيء تخاف منه؟', en: 'What are you most afraid of?' },
+    { ar: 'لو كنت حيوانًا، أي حيوان تكون؟', en: 'If you were an animal, which one?' },
+    { ar: 'أكبر حلم تريد تحقيقه؟', en: 'The biggest dream you want to achieve?' },
+    { ar: 'أكثر أكلة لا تستطيع مقاومتها؟', en: 'The food you can’t resist?' },
+    { ar: 'شيء يفعله الناس ويزعجك كثيرًا؟', en: 'Something people do that really annoys you?' },
+    { ar: 'أجمل مكان زرته في حياتك؟', en: 'The most beautiful place you’ve visited?' },
+    { ar: 'موهبة خفية عندك لا يعرفها أحد؟', en: 'A hidden talent no one knows about?' },
+];
+const pickWhoSaidPrompt = () => WHOSAID_PROMPTS[Math.floor(Math.random() * WHOSAID_PROMPTS.length)];
 const fixedOptionCount = (cfg) => (typeof cfg.options === 'number' ? cfg.options : 0);
+const gameMin = (cfg) => Math.max(2, Number(cfg?.minPlayers) || 3);
+const gameMax = (cfg) => Math.min(MAX_PLAYERS, Number(cfg?.maxPlayers) || MAX_PLAYERS);
 
 function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
     const FieldValue = admin.firestore.FieldValue;
@@ -204,6 +229,7 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             questions,
             roundCount: questions.length,
             optionCount: fixedOptionCount(cfg), // 0 for player-voting types (set at start)
+            ...(type === 'who_said_it' ? { whoSaidPrompt: pickWhoSaidPrompt() } : {}),
             roundDurationMs: cfg.roundMs,
             currentRound: -1,
             roundStatus: 'idle', // idle | answering | revealed
@@ -243,7 +269,8 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             throw new functions.https.HttpsError('permission-denied', 'This is a private game — you need an invite.');
         }
         if (game.status !== 'lobby') throw new functions.https.HttpsError('failed-precondition', 'This game already started.');
-        if ((game.playerIds || []).length >= MAX_PLAYERS) throw new functions.https.HttpsError('resource-exhausted', 'This game is full.');
+        const joinCfg = GAME_TYPES[game.type] || {};
+        if ((game.playerIds || []).length >= gameMax(joinCfg)) throw new functions.https.HttpsError('resource-exhausted', 'This game is full.');
 
         const me = await loadUser(uid);
         await ref.update({
@@ -282,6 +309,23 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         return { ok: true };
     });
 
+    // ---- Who said it?: submit your one answer (lobby) ------------------------
+    exports.submitWhoSaidItAnswer = functions.https.onCall(async (data, context) => {
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
+        const uid = context.auth.uid;
+        const { ref, game } = await requireGame(asTrimmed(data?.gameId));
+        if (game.type !== 'who_said_it') throw new functions.https.HttpsError('failed-precondition', 'Not this game type.');
+        if (game.status !== 'lobby') throw new functions.https.HttpsError('failed-precondition', 'Answers lock once the game starts.');
+        if (!(game.playerIds || []).includes(uid)) throw new functions.https.HttpsError('permission-denied', 'You are not in this game.');
+
+        const answer = asTrimmed(data?.answer).slice(0, 140);
+        if (!answer) throw new functions.https.HttpsError('invalid-argument', 'Write your answer.');
+        const now = FieldValue.serverTimestamp();
+        await ref.collection('whosaid_answers').doc(uid).set({ uid, answer, updatedAt: now });
+        await ref.update({ [`players.${uid}.ready`]: true, updatedAt: now });
+        return { ok: true };
+    });
+
     // ---- Start (host) ---------------------------------------------------------
     exports.startGroupGame = functions.https.onCall(async (data, context) => {
         if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
@@ -289,9 +333,9 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         const { ref, game } = await requireGame(asTrimmed(data?.gameId));
         assertHost(game, uid);
         if (game.status !== 'lobby') throw new functions.https.HttpsError('failed-precondition', 'Already started.');
-        // Minimum 3: with 2 players "most in sync with the group" is meaningless
-        // (their agreement is symmetric). Two-player compatibility is the 1:1 journey.
-        if ((game.playerIds || []).length < 3) throw new functions.https.HttpsError('failed-precondition', 'Need at least 3 players.');
+        const startCfg = GAME_TYPES[game.type] || {};
+        const minPlayers = gameMin(startCfg);
+        if ((game.playerIds || []).length < minPlayers) throw new functions.https.HttpsError('failed-precondition', `Need at least ${minPlayers} players.`);
 
         const clearedAnswered = {};
         for (const pid of game.playerIds) clearedAnswered[`players.${pid}.answered`] = false;
@@ -307,9 +351,29 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             const byUid = {};
             stSnap.forEach((d) => { byUid[d.id] = d.data() || {}; });
             const withStmts = (game.playerIds || []).filter((u) => Array.isArray(byUid[u]?.texts) && byUid[u].texts.length === 3);
-            if (withStmts.length < 3) throw new functions.https.HttpsError('failed-precondition', 'At least 3 players must submit their statements first.');
-            const qs = shuffle(withStmts).map((u) => ({ subjectId: u, texts: byUid[u].texts }));
+            if (withStmts.length < minPlayers) throw new functions.https.HttpsError('failed-precondition', `At least ${minPlayers} players must submit their statements first.`);
+            // Rounds follow JOIN ORDER — playerIds preserves it (arrayUnion). First
+            // to join is guessed first. (No shuffle — the order is deliberate.)
+            const qs = withStmts.map((u) => ({ subjectId: u, texts: byUid[u].texts }));
             extra = { questions: qs, roundCount: qs.length, optionCount: 3 };
+        } else if (game.type === 'who_said_it') {
+            // Everyone answered ONE prompt; rounds reveal each answer and the crowd
+            // guesses WHO wrote it. The author is the SECRET — keep it out of the
+            // public game doc; store the round→author order in a deny-all solution.
+            const ansSnap = await ref.collection('whosaid_answers').get();
+            const byUid = {};
+            ansSnap.forEach((d) => { byUid[d.id] = d.data() || {}; });
+            const answered = (game.playerIds || []).filter((u) => asTrimmed(byUid[u]?.answer));
+            if (answered.length < minPlayers) throw new functions.https.HttpsError('failed-precondition', `At least ${minPlayers} players must answer first.`);
+            const ordered = shuffle(answered); // round → author uid
+            const qs = ordered.map((u) => ({ text: asTrimmed(byUid[u].answer) })); // public: NO author
+            await ref.collection('whosaid_solution').doc('order').set({ authors: ordered });
+            // Tell each author (owner-only doc) which round is theirs, so the client
+            // can hide the guessing UI on that round by IDENTITY (not by text match).
+            const idxBatch = db.batch();
+            ordered.forEach((u, i) => idxBatch.set(ref.collection('whosaid_answers').doc(u), { roundIndex: i }, { merge: true }));
+            await idxBatch.commit();
+            extra = { questions: qs, roundCount: qs.length, optionCount: (game.playerIds || []).length, voteTargets: game.playerIds };
         }
         await ref.update({
             status: 'active',
@@ -337,6 +401,14 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         // Two truths: the subject of the round can't guess their own lie.
         if (game.type === 'two_truths' && game.questions?.[round]?.subjectId === uid) {
             throw new functions.https.HttpsError('failed-precondition', "It's your round — others are guessing.");
+        }
+        // Who said it: the author of the shown answer can't guess their own.
+        if (game.type === 'who_said_it') {
+            const sol = await ref.collection('whosaid_solution').doc('order').get();
+            const authors = Array.isArray(sol.data()?.authors) ? sol.data().authors : [];
+            if (authors[round] === uid) {
+                throw new functions.https.HttpsError('failed-precondition', "It's your answer — others are guessing.");
+            }
         }
         // Enforce the deadline (with a small grace for latency).
         const endsAtMs = game.roundEndsAt?.toMillis?.();
@@ -375,6 +447,18 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
 
         // Step 1: close the answering phase -> compute & reveal this round's tally.
         if (game.roundStatus === 'answering') {
+            // Atomically CLAIM this round so concurrent advance calls can't each
+            // apply the score increments (which would multiply points). Only the
+            // caller that flips `revealingRound` to this round proceeds.
+            const claimed = await db.runTransaction(async (tx) => {
+                const s = await tx.get(ref);
+                const d = s.data() || {};
+                if (d.roundStatus !== 'answering' || d.currentRound !== round || d.revealingRound === round) return false;
+                tx.update(ref, { revealingRound: round });
+                return true;
+            });
+            if (!claimed) return { ok: true, phase: 'revealed' };
+
             const cfg = GAME_TYPES[game.type] || GAME_TYPES.taste_match;
             const nOpt = Number(game.optionCount) || fixedOptionCount(cfg);
             const ansSnap = await ref.collection('answers').where('round', '==', round).get();
@@ -400,6 +484,13 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
                         const st = await ref.collection('statements').doc(subjectId).get();
                         correctIndex = Number(st.data()?.lieIndex);
                     }
+                } else if (game.type === 'who_said_it') {
+                    // The author (correct guess) lives in the deny-all solution doc.
+                    const sol = await ref.collection('whosaid_solution').doc('order').get();
+                    const authors = Array.isArray(sol.data()?.authors) ? sol.data().authors : [];
+                    const authorId = authors[round];
+                    const targets = game.voteTargets || game.playerIds || [];
+                    correctIndex = authorId ? targets.indexOf(authorId) : -1;
                 } else {
                     const qId = game.questions?.[round]?.id;
                     if (qId) {
@@ -611,14 +702,15 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         const { ref, game } = await requireGame(asTrimmed(data?.gameId));
         assertHost(game, uid);
 
-        // Remove answers, then the game doc itself.
-        const ansSnap = await ref.collection('answers').get();
-        if (!ansSnap.empty) {
-            const batch = db.batch();
-            ansSnap.forEach((d) => batch.delete(d.ref));
-            await batch.commit();
+        // Delete the game AND all its subcollections (answers, statements,
+        // whosaid_answers/solution) — ref.delete() alone orphans subcollections.
+        try {
+            if (typeof db.recursiveDelete === 'function') await db.recursiveDelete(ref);
+            else await ref.delete();
+        } catch (err) {
+            console.warn('[groupGames] delete', err?.message || err);
+            await ref.delete().catch(() => {});
         }
-        await ref.delete();
         await clearHostPointer(uid, ref.id);
         return { ok: true, deleted: true };
     });
@@ -630,25 +722,39 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
         const { ref, game } = await requireGame(asTrimmed(data?.gameId));
         assertHost(game, uid);
 
-        // Wipe old answers.
-        const ansSnap = await ref.collection('answers').get();
-        const batch = db.batch();
-        ansSnap.forEach((d) => batch.delete(d.ref));
-        await batch.commit();
+        const cfg = GAME_TYPES[game.type] || GAME_TYPES.taste_match;
+        const wipe = async (coll) => {
+            const snap = await ref.collection(coll).get();
+            if (snap.empty) return;
+            const b = db.batch();
+            snap.forEach((d) => b.delete(d.ref));
+            await b.commit();
+        };
+        // Wipe old answers + any secret submissions so a restart starts clean
+        // (stale who_said_it/two_truths submissions must NOT be reused).
+        await wipe('answers');
+        if (cfg.needsSubmission) {
+            await wipe('whosaid_answers');
+            await wipe('whosaid_solution');
+            await wipe('statements');
+        }
 
-        const questions = await pickForType(game.type, game.roundCount || DEFAULT_ROUNDS);
+        // Submission games rebuild their questions from fresh player input at start.
+        const questions = cfg.needsSubmission ? [] : await pickForType(game.type, game.roundCount || DEFAULT_ROUNDS);
         const resetPlayers = {};
         for (const pid of game.playerIds || []) {
             const p = game.players?.[pid] || {};
-            resetPlayers[pid] = { name: p.name || 'Player', avatar: p.avatar || '', score: 0, answered: false };
+            resetPlayers[pid] = { name: p.name || 'Player', avatar: p.avatar || '', score: 0, answered: false, ready: false };
         }
         await ref.update({
             status: 'lobby',
             currentRound: -1,
             roundStatus: 'idle',
             roundEndsAt: null,
+            revealingRound: FieldValue.delete(),
             questions,
             roundCount: questions.length,
+            ...(game.type === 'who_said_it' ? { whoSaidPrompt: pickWhoSaidPrompt() } : {}),
             players: resetPlayers,
             reveal: {},
             result: null,

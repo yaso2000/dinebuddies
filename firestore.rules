@@ -1206,6 +1206,29 @@ service cloud.firestore {
     }
 
     // ============================================
+    // BUSINESS JOB POSTINGS & APPLICATIONS
+    // ============================================
+    match /business_jobs/{jobId} {
+      // Public job announcements — visible on the business profile / directory.
+      allow read: if true;
+      // Created / edited / removed only via the jobPostings callables
+      // (Business Pro gate + rate limits). No direct client writes.
+      allow create, update, delete: if false;
+    }
+
+    match /job_applications/{applicationId} {
+      // Only the recipient business (and the applicant, for their own) may read.
+      allow read: if isSignedIn() && (
+        resource.data.businessId == request.auth.uid ||
+        resource.data.applicantId == request.auth.uid ||
+        isAdmin()
+      );
+      // Submission / status changes go through the submitJobApplication and
+      // setJobApplicationStatus callables (registered-only + rate-limited).
+      allow create, update, delete: if false;
+    }
+
+    // ============================================
     // COMPATIBILITY JOURNEY (two-player question game)
     // ============================================
     match /compat_questions/{qid} {
@@ -1250,6 +1273,49 @@ service cloud.firestore {
       }
     }
 
+    // "Who suits you?" (مَن يناسبك؟) — a story-rail poll. The post doc (photo,
+    // intro, live tally) is public; individual votes are owner-only so no one can
+    // see who voted what. All writes go through the suitability callables.
+    match /suitability_posts/{postId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if false;
+      match /votes/{voteId} {
+        allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid);
+        allow create, update, delete: if false;
+      }
+    }
+
+    // "Real or AI?" game. The post (image + tally) is public; individual guesses are
+    // owner-only. The TRUE source lives in realornai_truth (below) which NO client can
+    // read — voters learn the answer only through the voteRealOrAi callable.
+    match /realornai_posts/{postId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if false;
+      match /votes/{voteId} {
+        allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid);
+        allow create, update, delete: if false;
+      }
+    }
+    // Server-only truth (real/ai). Denied to every client so the answer stays hidden.
+    match /realornai_truth/{postId} {
+      allow read, write: if false;
+    }
+
+    // "Guess my sign?" cards — public doc (traits + tally), no client writes. The
+    // real sign lives in zodiac_truth (below); voters learn it only via voteZodiac.
+    match /zodiac_posts/{postId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if false;
+      match /votes/{voteId} {
+        allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid);
+        allow create, update, delete: if false;
+      }
+    }
+    // Server-only truth (the real sign). Denied to every client.
+    match /zodiac_truth/{postId} {
+      allow read, write: if false;
+    }
+
     match /group_games/{gameId} {
       // Group games are open to everyone; the doc holds no private data (raw
       // picks live in the owner-only `answers` subcollection). Any signed-in user
@@ -1263,6 +1329,12 @@ service cloud.firestore {
       // player. The server writes the revealed tally into the game doc after the
       // host closes each round.
       match /answers/{ansId} {
+        allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid);
+        allow create, update, delete: if false;
+      }
+      // "Who said it?" — a player may read only their OWN answer (to know their own
+      // round). The round→author solution (whosaid_solution) has no rule → deny-all.
+      match /whosaid_answers/{ansId} {
         allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid);
         allow create, update, delete: if false;
       }

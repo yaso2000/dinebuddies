@@ -9,8 +9,9 @@
  */
 import { requireAuth } from '../_auth.js';
 import { ensureFirebaseClientApp } from '../_firebaseClient.js';
+import { serverGenerateImage, serverEditImage } from '../_serverImageGen.js';
 import { takeRateLimit } from '../_rateLimit.js';
-import { uploadInvitationAiImage, persistUserMediaLibraryItem } from '../_aiStorage.js';
+import { uploadInvitationAiImage, persistUserMediaLibraryItem, downloadStorageObjectBuffer } from '../_aiStorage.js';
 import {
     buildClientDeliveredInvitationImage,
     shouldDeliverInvitationImageToClient,
@@ -65,13 +66,16 @@ function userMessageForPipelineError(result, outputLanguage = 'en') {
         return 'لم تجتز الصورة المُولَّدة فحص الاعتدال. تُسترد الكريدتات عند فشل الطلب على الخادم.';
     }
     if (result.code === 'IMAGE_GENERATION_FAILED') {
-        return 'تعذّر توليد الصورة (قد يكون الوصف محظوراً). جرّب وصفاً مختلفاً.';
+        const detail = String(result.error || '').slice(0, 240);
+        return detail
+            ? `تعذّر توليد الصورة — ${detail}`
+            : 'تعذّر توليد الصورة (قد يكون الوصف محظوراً). جرّب وصفاً مختلفاً.';
     }
     if (result.code === 'MALFORMED_JSON') {
         return 'تعذّر قراءة استجابة الذكاء الاصطناعي. حاول مرة أخرى بملاحظات أقصر.';
     }
     if (statusForPipelineError(result) === 503) {
-        return 'خدمة توليد الصور غير متاحة حالياً. تأكد من تفعيل Firebase AI Logic وImagen في مشروعك على Google Cloud، ثم أعد النشر.';
+        return `خدمة توليد الصور غير متاحة حالياً — ${String(result.error || '').slice(0, 240)}`;
     }
     return typeof result.error === 'string' ? result.error : 'تعذّر التوليد بالذكاء الاصطناعي.';
 }
@@ -196,6 +200,24 @@ export default async function handler(req, res) {
 
         const outputLanguage = normalizeAiOutputLanguage(request.outputLanguage);
 
+        // img2img EDIT: download the user's chosen image from Storage and pass its bytes.
+        let inputImage: { bytesBase64: string; mimeType: string } | undefined;
+        const editPath = (request as { inputImagePath?: string }).inputImagePath;
+        if (editPath) {
+            try {
+                const dl = await downloadStorageObjectBuffer(editPath, {
+                    preferredBucket: (request as { inputImageBucket?: string }).inputImageBucket,
+                });
+                inputImage = {
+                    bytesBase64: dl.buffer.toString('base64'),
+                    mimeType: dl.contentType || 'image/jpeg',
+                };
+            } catch (err) {
+                console.error('[multi-generate] input image download failed', err);
+                return res.status(400).json({ success: false, error: 'Could not read the image to edit', code: 'INPUT_IMAGE_ERROR' });
+            }
+        }
+
         const pipelineResult = await runMultimodalPipeline({
             generationPackage: request.generationPackage,
             userPrompt: request.userPrompt,
@@ -208,6 +230,13 @@ export default async function handler(req, res) {
             aspectRatio: request.aspectRatio,
             designCategory: request.designCategory,
             outputLanguage,
+            inputImage,
+            // Generate/edit images server-side via Vertex REST (service account),
+            // not the browser firebase/ai SDK which fails from a serverless runtime.
+            imageGenerator: {
+                generate: (prompt, aspectRatio) => serverGenerateImage(prompt, aspectRatio),
+                edit: (b64, mime, editPrompt) => serverEditImage(b64, mime, editPrompt),
+            },
         });
 
         if (pipelineResult.success === false) {
@@ -313,7 +342,7 @@ export default async function handler(req, res) {
             code: isClientConfig ? 'AI_CLIENT_NOT_CONFIGURED' : 'GEMINI_API_ERROR',
             message: isClientConfig
                 ? 'إعداد Firebase للذكاء الاصطناعي غير مكتمل على الخادم.'
-                : 'حدث خطأ داخلي أثناء توليد المحتوى.',
+                : `حدث خطأ داخلي أثناء توليد المحتوى: ${String(detail).slice(0, 200)}`,
         });
     }
 }

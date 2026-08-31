@@ -1,10 +1,17 @@
 import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FaEnvelope, FaLock, FaCheck, FaStore, FaChevronRight, FaChevronLeft } from 'react-icons/fa';
+import { FaEnvelope, FaLock, FaCheck, FaStore, FaChevronRight, FaChevronLeft, FaExclamationTriangle } from 'react-icons/fa';
+import { FcGoogle } from 'react-icons/fc';
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase/config';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app, { auth, db } from '../firebase/config';
+import { useAuth } from '../context/AuthContext';
+import {
+  stashBusinessGoogleSignupIntent,
+  clearBusinessGoogleSignupIntent,
+} from '../utils/businessGoogleSignup';
 import { sendVerificationEmailResend, verificationEmailErrorMessage } from '../services/verificationEmailService';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
@@ -21,298 +28,13 @@ import {
   clearPendingReferralCode,
   syncPendingReferralFromQueryString } from
 '../utils/pendingReferral';
-import {
-  formatToE164,
-  isValidE164,
-  defaultDialCodeForCountryIso,
-  cleanedPhoneLength,
-  toCountryCodeSelectValue,
-  formatPhoneForDisplay,
-  parseE164ToParts,
-  phoneNumberLtrStyle,
-  compactE164FromGoogleInternational,
-} from
-'../utils/phoneUtils';
-import { PHONE_COUNTRY_OPTIONS } from '../constants/phoneCountryCodes';
-import {
-  sendFirebaseBusinessPhoneOtp,
-  confirmFirebaseBusinessPhoneOtp,
-  clearBusinessPhoneRecaptcha,
-  firebasePhoneAuthErrorMessage,
-  BUSINESS_PHONE_RECAPTCHA_ID } from
-'../services/businessPhoneFirebaseAuth';
-import { lookupBusinessPhone, lookupBusinessPlace, finalizeBusinessSignup } from '../services/businessPhoneSignupApi';
-import { FaPhone } from 'react-icons/fa';
+import { lookupBusinessPlace, finalizeBusinessSignup } from '../services/businessPhoneSignupApi';
 import './BusinessSignup.css';
 import { AppText, AppTextInput } from "./base";
 
-const OTP_LENGTH = 6;
-const SEND_COOLDOWN_SEC = 60;
-
-/**
- * Business phone verification via Firebase Phone Auth (SMS OTP).
- * @param {{ defaultDialCode?: string, disabled?: boolean, lockFieldsAfterSend?: boolean, lockedPhoneE164?: string, onVerified: Function }} props
- */
-export function BusinessPhoneFields({ defaultDialCode, disabled, lockFieldsAfterSend = true, lockedPhoneE164 = '', onVerified }) {
-  const { t, i18n } = useTranslation();
-  const { showToast } = useToast();
-  const isRtl = typeof i18n.dir === 'function' && i18n.dir(i18n.language) === 'rtl';
-
-  const [countryCode, setCountryCode] = useState(() => toCountryCodeSelectValue(defaultDialCode || '61'));
-  const [rawPhone, setRawPhone] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [isOtpSent, setIsOtpSent] = useState(false);
-  const [phoneVerified, setPhoneVerified] = useState(false);
-  const [countdown, setCountdown] = useState(0);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [sending, setSending] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [standardizedPhone, setStandardizedPhone] = useState('');
-  const [claimMeta, setClaimMeta] = useState(null);
-
-  const phoneLocked = Boolean(String(lockedPhoneE164 || '').trim());
-
-  useEffect(() => {
-    if (!phoneLocked) return;
-    const parts = parseE164ToParts(lockedPhoneE164);
-    if (!parts) return;
-    setCountryCode(parts.countryCode);
-    setRawPhone(parts.localNumber);
-    setStandardizedPhone(compactE164FromGoogleInternational(lockedPhoneE164));
-  }, [lockedPhoneE164, phoneLocked]);
-
-  const standardizedPreview = useMemo(() => {
-    if (phoneLocked) {
-      return compactE164FromGoogleInternational(lockedPhoneE164);
-    }
-    return formatToE164(countryCode, rawPhone);
-  }, [phoneLocked, lockedPhoneE164, countryCode, rawPhone]);
-
-  useEffect(() => {
-    if (phoneLocked) return;
-    setCountryCode(toCountryCodeSelectValue(defaultDialCode || '61'));
-  }, [defaultDialCode, phoneLocked]);
-
-  useEffect(() => () => clearBusinessPhoneRecaptcha(), []);
-
-  /** @type {React.MutableRefObject<import('firebase/auth').ConfirmationResult | null>} */
-  const confirmationRef = React.useRef(null);
-
-  useEffect(() => {
-    let timer;
-    if (countdown > 0) {
-      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [countdown]);
-
-  const fieldsLocked = disabled || phoneVerified || phoneLocked || lockFieldsAfterSend && isOtpSent;
-
-  const handleSendOTP = async (e) => {
-    e?.preventDefault?.();
-    setErrorMessage('');
-
-    const standardized = phoneLocked
-      ? compactE164FromGoogleInternational(lockedPhoneE164)
-      : formatToE164(countryCode, rawPhone);
-    if (!standardized || !isValidE164(standardized)) {
-      setErrorMessage(t('business_phone_invalid'));
-      return;
-    }
-    if (!phoneLocked && cleanedPhoneLength(rawPhone) < 7) {
-      setErrorMessage(t('business_phone_invalid'));
-      return;
-    }
-
-    setCountdown(SEND_COOLDOWN_SEC);
-    setSending(true);
-    showToast(t('business_phone_sending'), 'info');
-
-    try {
-      const lookup = await lookupBusinessPhone(standardized);
-      if (!lookup.ok) {
-        setErrorMessage(
-          lookup.data?.message ||
-          t('business_phone_send_failed')
-        );
-        setCountdown(0);
-        return;
-      }
-
-      const status = lookup.data.status || 'new_register_flow';
-      if (status !== 'claim_flow') {
-        setClaimMeta(null);
-        setErrorMessage(t('business_phone_not_claimable'));
-        setCountdown(0);
-        return;
-      }
-
-      setClaimMeta({
-        businessId: lookup.data.businessId,
-        businessName: lookup.data.businessName
-      });
-      confirmationRef.current = await sendFirebaseBusinessPhoneOtp(standardized);
-      setStandardizedPhone(lookup.data.standardizedPhone || standardized);
-      setIsOtpSent(true);
-      showToast(t('business_phone_otp_sent', 'Verification code sent via SMS'), 'info');
-    } catch (err) {
-      setErrorMessage(firebasePhoneAuthErrorMessage(err));
-      setCountdown(0);
-      clearBusinessPhoneRecaptcha();
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleVerifyOtp = useCallback(async () => {
-    const code = otpCode.replace(/\D/g, '');
-    if (code.length < OTP_LENGTH || !standardizedPhone) {
-      setErrorMessage(t('business_phone_code_invalid'));
-      return;
-    }
-    setErrorMessage('');
-    setVerifying(true);
-    try {
-      if (!confirmationRef.current) {
-        setErrorMessage(t('business_phone_send_failed', 'Request a new code first'));
-        return;
-      }
-      const confirmed = await confirmFirebaseBusinessPhoneOtp(confirmationRef.current, code);
-      setPhoneVerified(true);
-      onVerified({
-        standardizedPhone: confirmed.phoneNumber || standardizedPhone,
-        firebaseUid: confirmed.uid,
-        idToken: confirmed.idToken,
-        flow: 'claim',
-        businessId: claimMeta?.businessId,
-        businessName: claimMeta?.businessName
-      });
-      showToast(t('business_phone_verified'), 'success');
-    } catch (err) {
-      setErrorMessage(firebasePhoneAuthErrorMessage(err));
-    } finally {
-      setVerifying(false);
-    }
-  }, [otpCode, standardizedPhone, claimMeta, onVerified, showToast, t]);
-
-  const sendBtnDisabled =
-  disabled || sending || countdown > 0 || lockFieldsAfterSend && isOtpSent || phoneVerified;
-
-  return (
-    <div className="biz-phone-verify signup-phone-block" dir={isRtl ? 'rtl' : 'ltr'}>
-            <div className="biz-phone-verify__row">
-                <label className="biz-phone-verify__label">
-                    {t('business_phone_label')}
-                </label>
-                {phoneLocked ?
-      <div
-        className="biz-phone-verify__locked-phone"
-        style={phoneNumberLtrStyle()}
-        dir="ltr"
-        aria-live="polite">
-                    {formatPhoneForDisplay(standardizedPreview)}
-                </div> :
-
-      <div className="biz-phone-verify__inputs">
-                    <select
-            className="biz-phone-verify__country"
-            value={countryCode}
-            onChange={(e) => setCountryCode(e.target.value)}
-            disabled={fieldsLocked}
-            aria-label={t('business_phone_country_code')}>
-
-                        {PHONE_COUNTRY_OPTIONS.map((c) =>
-            <option key={c.iso} value={`+${c.dial}`}>
-                                {t(c.labelKey, c.labelFallback)} (+{c.dial})
-                            </option>
-            )}
-                    </select>
-                    <div className="biz-phone-verify__local-wrap">
-                        <FaPhone className="biz-phone-verify__icon" aria-hidden />
-                        <input
-              type="tel"
-              inputMode="numeric"
-              autoComplete="tel-national"
-              className="biz-phone-verify__local"
-              placeholder="1012345678"
-              value={rawPhone}
-              onChange={(e) => setRawPhone(e.target.value)}
-              disabled={fieldsLocked} />
-
-                    </div>
-                </div>
-      }
-            </div>
-
-            {errorMessage &&
-      <AppText as="p" className="biz-phone-verify__error" role="alert">
-                    {errorMessage}
-                </AppText>
-      }
-
-            <div id={BUSINESS_PHONE_RECAPTCHA_ID} className="biz-phone-verify__recaptcha" aria-hidden="true" />
-            <button
-        type="button"
-        className="biz-phone-verify__send-btn"
-        disabled={sendBtnDisabled}
-        onClick={handleSendOTP}>
-
-                {sending ?
-        t('sending') :
-        countdown > 0 ?
-        t('business_phone_resend_in', { sec: countdown }) :
-        t('send_code')}
-            </button>
-
-            {phoneVerified &&
-      <AppText as="p" className="biz-phone-verify__verified">
-                    {t('business_phone_verified')} ({standardizedPhone})
-                </AppText>
-      }
-
-            {isOtpSent && !phoneVerified &&
-      <div className="biz-phone-verify__otp-block">
-                    <AppText as="h3" className="biz-phone-verify__otp-title">
-                        {t('business_phone_otp_hint')}
-                    </AppText>
-                    {claimMeta?.businessName &&
-        <AppText as="p" className="biz-phone-verify__otp-flow-msg">
-                            {t('business_phone_claim_banner', {
-            name: claimMeta.businessName,
-            defaultValue: 'We found an existing profile for this number: {{name}}. Verify to claim it.'
-          })}
-                        </AppText>
-        }
-                    <AppText as="p" className="biz-phone-verify__otp-flow-msg">
-                        {t('business_phone_claim_otp_hint')}
-                    </AppText>
-                    <AppTextInput
-          type="text"
-          inputMode="numeric"
-          maxLength={OTP_LENGTH}
-          className="biz-phone-verify__otp-single"
-          placeholder="******"
-          value={otpCode}
-          onChange={(e) =>
-          setOtpCode(e.target.value.replace(/\D/g, '').slice(0, OTP_LENGTH))
-          } />
-
-                    <button
-          type="button"
-          className="biz-phone-verify__verify-btn"
-          disabled={verifying || otpCode.replace(/\D/g, '').length < OTP_LENGTH}
-          onClick={handleVerifyOtp}>
-
-                        {verifying ?
-          t('verifying') :
-          t('business_phone_confirm_claim')}
-                    </button>
-                </div>
-      }
-        </div>);
-
-}
-
+// Business claim by SMS/phone was removed — businesses claim via Google Business
+// Profile (see BusinessClaimPanel) or register with email/password. This file now
+// only holds the email/password + Google-Place signup flow.
 const STEPS = {
   AUTH: 1,
   DETAILS: 2
@@ -354,7 +76,12 @@ const BusinessSignup = () => {
   };
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { signInWithGoogle } = useAuth();
   const [step, setStep] = useState(STEPS.AUTH);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [showConvert, setShowConvert] = useState(false);
+  const [convertBusy, setConvertBusy] = useState(false);
+  const [pendingGoogleUser, setPendingGoogleUser] = useState(null);
 
   useLayoutEffect(() => {
     syncPendingReferralFromQueryString(location.search);
@@ -484,6 +211,90 @@ const BusinessSignup = () => {
 
   const handleBack = () => {
     setStep(STEPS.AUTH);
+  };
+
+  /** After a successful Google business auth, prefill email and go to details. */
+  const proceedAfterGoogle = (user) => {
+    if (user?.email) setEmail(user.email);
+    setStep(STEPS.DETAILS);
+  };
+
+  const looksLikeBusiness = (data) =>
+    !!data &&
+    (String(data.accountType || '').toLowerCase() === 'business' ||
+      String(data.role || '').toLowerCase() === 'partner' ||
+      String(data.role || '').toLowerCase() === 'business' ||
+      String(data.registrationIntent || '').toLowerCase() === 'business' ||
+      data.pendingBusinessRegistration === true ||
+      (data.businessInfo && typeof data.businessInfo === 'object' && Object.keys(data.businessInfo).length > 0));
+
+  const hasFullBusinessInfo = (data) =>
+    !!data?.businessInfo && typeof data.businessInfo === 'object' && Object.keys(data.businessInfo).length > 0;
+
+  /** "Create business account with Google" — never mixes account kinds. */
+  const handleGoogleBusinessSignup = async () => {
+    setGoogleBusy(true);
+    stashBusinessGoogleSignupIntent();
+    try {
+      const res = await signInWithGoogle();
+      if (res?.__oauthRedirect) return; // redirect flow: page reloads, resumes on return
+      const user = res?.user;
+      if (!user?.uid) throw new Error('no-user');
+
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      const data = snap.exists() ? snap.data() : null;
+
+      if (res.isNewUser || (looksLikeBusiness(data) && !hasFullBusinessInfo(data))) {
+        // Fresh business shell (new / converted / mid-registration) → finish details.
+        clearBusinessGoogleSignupIntent();
+        proceedAfterGoogle(user);
+      } else if (looksLikeBusiness(data)) {
+        // Already a complete business → straight to the dashboard.
+        clearBusinessGoogleSignupIntent();
+        navigate('/business-dashboard', { replace: true });
+      } else {
+        // Existing PERSONAL account → require an explicit convert (destructive).
+        setPendingGoogleUser(user);
+        setShowConvert(true);
+      }
+    } catch (err) {
+      clearBusinessGoogleSignupIntent();
+      const code = String(err?.code || '');
+      if (code === 'auth/in-app-browser') {
+        showToast(t('business_google_open_chrome', 'Open the app in Chrome to sign in with Google.'), 'info');
+      } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        /* user closed the popup — no toast */
+      } else {
+        showToast(t('business_google_signup_failed', 'Google sign-in failed. Please try again.'), 'error');
+      }
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
+  /** Confirmed convert: purge the personal account, keep Google login, open business. */
+  const confirmConvertAndContinue = async () => {
+    const user = pendingGoogleUser;
+    if (!user) return;
+    setConvertBusy(true);
+    try {
+      const functions = getFunctions(app, 'us-central1');
+      await httpsCallable(functions, 'convertPersonalToBusinessIntent')({});
+      clearBusinessGoogleSignupIntent();
+      setShowConvert(false);
+      setPendingGoogleUser(null);
+      proceedAfterGoogle(user);
+    } catch (err) {
+      showToast(t('business_convert_failed', 'Could not convert the account. Please try again.'), 'error');
+    } finally {
+      setConvertBusy(false);
+    }
+  };
+
+  const cancelConvert = () => {
+    clearBusinessGoogleSignupIntent();
+    setShowConvert(false);
+    setPendingGoogleUser(null);
   };
 
   const redirectToExistingBusinessClaim = useCallback(
@@ -757,6 +568,26 @@ const BusinessSignup = () => {
                         </AppText>
                     </div>
 
+                    <button
+                      type="button"
+                      onClick={handleGoogleBusinessSignup}
+                      disabled={googleBusy || loading}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                        padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border-color)',
+                        background: 'var(--bg-card)', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.98rem',
+                        cursor: googleBusy ? 'not-allowed' : 'pointer', marginBottom: '1rem',
+                      }}>
+                        <FcGoogle size={20} />
+                        {googleBusy ? t('please_wait', 'Please wait…') : t('business_signup_google', 'Create account with Google')}
+                    </button>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
+                        <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('or', 'or')}</span>
+                        <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+                    </div>
+
                     <form onSubmit={handleNext}>
                         <div style={{ marginBottom: '1rem' }}>
                             <label style={labelStyle}>{t('email', 'Business Email')}</label>
@@ -900,6 +731,39 @@ const BusinessSignup = () => {
                     </button>
                 </AppText>
             </div>
+
+            {showConvert &&
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)', padding: '16px'
+      }}>
+                    <div style={{ background: 'var(--bg-card)', borderRadius: '20px', width: '100%', maxWidth: '440px', padding: '22px', boxShadow: '0 10px 40px rgba(0,0,0,0.25)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', color: '#dc2626' }}>
+                            <FaExclamationTriangle size={20} />
+                            <AppText as="h3" style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                                {t('business_convert_title', 'Convert this account to a business?')}
+                            </AppText>
+                        </div>
+                        <AppText as="p" style={{ margin: '0 0 16px', fontSize: '0.92rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                            {t('business_convert_body', 'This Google account is already a personal account on DineBuddies. To keep accounts separate, your personal account and its data will be permanently deleted, and a fresh business account will be opened under the same Google login. This cannot be undone.')}
+                        </AppText>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button type="button" onClick={cancelConvert} disabled={convertBusy} style={{
+                              flex: 1, padding: '13px', borderRadius: '12px', border: '1px solid var(--border-color)',
+                              background: 'var(--bg-elevated)', color: 'var(--text-main)', fontWeight: 700, cursor: 'pointer'
+                            }}>
+                                {t('cancel', 'Cancel')}
+                            </button>
+                            <button type="button" onClick={confirmConvertAndContinue} disabled={convertBusy} style={{
+                              flex: 1, padding: '13px', borderRadius: '12px', border: 'none',
+                              background: '#dc2626', color: '#fff', fontWeight: 800, cursor: convertBusy ? 'not-allowed' : 'pointer'
+                            }}>
+                                {convertBusy ? t('please_wait', 'Please wait…') : t('business_convert_confirm_cta', 'Delete personal & continue')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+      }
         </BusinessAuthShell>);
 
 };

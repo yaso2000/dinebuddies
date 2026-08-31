@@ -1,7 +1,9 @@
+import adminNs from 'firebase-admin';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { ensureFirebaseAdmin } from './_firebaseAdmin.js';
-import { lookupBusinessPhone } from './_businessPhoneRegistry.js';
+// Shared, backend-agnostic deletion cascade (also used by Cloud Functions).
+import accountDeletionCore from '../functions/accountDeletionCore.js';
 import {
     claimRestaurantOwnershipTransaction,
     buildUserProfileFromClaimedRestaurant,
@@ -11,243 +13,7 @@ import {
     loadGoogleBusinessClaimSession,
 } from './_googleBusinessClaimSessions.js';
 import { userManagesGooglePlace } from './_googleBusinessProfileLocations.js';
-import { loadExistingRestaurantForImport } from './_virtualBusinessIngest.js';
-
-/**
- * @param {string | null | undefined} phone
- */
-function normalizeAuthPhone(phone) {
-    const s = String(phone || '').trim();
-    if (!s) return '';
-    return s.startsWith('+') ? s : `+${s.replace(/\D/g, '')}`;
-}
-
-/**
- * @param {import('firebase-admin/firestore').Firestore} db
- * @param {string} claimId
- */
-async function resolveClaimSource(db, claimId) {
-    const restaurantSnap = await db.collection('restaurants').doc(claimId).get();
-    if (restaurantSnap.exists) {
-        return { source: 'restaurants', snap: restaurantSnap };
-    }
-    const userSnap = await db.collection('users').doc(claimId).get();
-    if (userSnap.exists) {
-        return { source: 'users', snap: userSnap };
-    }
-    return { source: null, snap: null };
-}
-
-/**
- * Finalize business Firestore profile after Firebase Phone Auth (+ email link on client).
- * @param {{
- *   firebaseUid: string,
- *   standardizedPhone: string,
- *   email: string,
- *   businessInfo: Record<string, unknown>,
- *   claimBusinessId?: string | null,
- *   referredBy?: string | null,
- * }} input
- */
-export async function completeBusinessPhoneSignup(input) {
-    ensureFirebaseAdmin();
-    const db = getFirestore();
-    const auth = getAuth();
-
-    const firebaseUid = String(input.firebaseUid || '').trim();
-    const standardizedPhone = String(input.standardizedPhone || '').trim();
-    const email = String(input.email || '').trim().toLowerCase();
-
-    if (!firebaseUid || !standardizedPhone || !email) {
-        throw Object.assign(new Error('INVALID_COMPLETE_PAYLOAD'), { code: 'invalid-request' });
-    }
-
-    const userRecord = await auth.getUser(firebaseUid);
-    const accountPhone = normalizeAuthPhone(userRecord.phoneNumber);
-    if (!accountPhone || accountPhone !== standardizedPhone) {
-        throw Object.assign(new Error('PHONE_MISMATCH'), { code: 'phone-mismatch' });
-    }
-
-    const accountEmail = String(userRecord.email || '').trim().toLowerCase();
-    if (accountEmail && accountEmail !== email) {
-        throw Object.assign(new Error('EMAIL_MISMATCH'), { code: 'invalid-request' });
-    }
-
-    const lookup = await lookupBusinessPhone(standardizedPhone);
-    if (lookup.flow === 'claimed') {
-        const claimId = input.claimBusinessId || null;
-        if (claimId) {
-            const { source, snap } = await resolveClaimSource(db, claimId);
-            if (source === 'restaurants' && snap?.exists) {
-                const data = snap.data() || {};
-                if (data.isClaimed === true && data.ownerId === firebaseUid) {
-                    /* allow idempotent finalize for same owner */
-                } else if (data.isClaimed === true && data.ownerId !== firebaseUid) {
-                    throw Object.assign(new Error('PHONE_IN_USE'), { code: 'phone-already-in-use' });
-                }
-            } else if (source === 'users' && snap?.exists) {
-                const data = snap.data() || {};
-                if (data.businessInfo?.isClaimed === true && claimId !== firebaseUid) {
-                    throw Object.assign(new Error('PHONE_IN_USE'), { code: 'phone-already-in-use' });
-                }
-            } else {
-                throw Object.assign(new Error('PHONE_IN_USE'), { code: 'phone-already-in-use' });
-            }
-        } else {
-            throw Object.assign(new Error('PHONE_IN_USE'), { code: 'phone-already-in-use' });
-        }
-    }
-
-    let mergedBusinessInfo = { ...(input.businessInfo || {}) };
-    const claimId = input.claimBusinessId || (lookup.flow === 'claim' ? lookup.businessId : null);
-    let claimedFromRestaurantId = null;
-
-    if (claimId) {
-        const { source, snap } = await resolveClaimSource(db, claimId);
-        if (source === 'restaurants' && snap?.exists) {
-            const preData = snap.data() || {};
-            const docPhone =
-                String(preData.standardized_phone || '').trim() ||
-                String(preData.businessInfo?.standardized_phone || '').trim();
-            if (docPhone && docPhone !== standardizedPhone) {
-                throw Object.assign(new Error('PHONE_MISMATCH'), { code: 'phone-mismatch' });
-            }
-            const claimData = await claimRestaurantOwnershipTransaction({
-                restaurantId: claimId,
-                firebaseUid,
-                standardizedPhone,
-            });
-            const userPayload = buildUserProfileFromClaimedRestaurant(
-                claimData,
-                claimId,
-                firebaseUid,
-                email,
-                standardizedPhone
-            );
-            mergedBusinessInfo = { ...userPayload.businessInfo, ...mergedBusinessInfo };
-            claimedFromRestaurantId = claimId;
-
-            if (!accountEmail) {
-                try {
-                    await auth.updateUser(firebaseUid, {
-                        email,
-                        emailVerified: false,
-                        displayName: String(mergedBusinessInfo.businessName || '').trim() || undefined,
-                    });
-                } catch (err) {
-                    const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : '';
-                    if (code === 'auth/email-already-exists') {
-                        throw Object.assign(new Error('EMAIL_IN_USE'), { code: 'auth/email-already-in-use' });
-                    }
-                    throw err;
-                }
-            }
-
-            const userPayloadOut = {
-                ...userPayload,
-                businessInfo: mergedBusinessInfo,
-                created_at: FieldValue.serverTimestamp(),
-                last_active_time: FieldValue.serverTimestamp(),
-            };
-            if (input.referredBy) {
-                userPayloadOut.referred_by = input.referredBy;
-            }
-
-            await db.collection('users').doc(firebaseUid).set(userPayloadOut, { merge: true });
-
-            return {
-                uid: firebaseUid,
-                email,
-                flow: 'claim',
-                claimedFromBusinessId: claimId,
-                claimedFromRestaurantId,
-            };
-        }
-
-        if (source === 'users' && snap?.exists) {
-            const claimData = snap.data() || {};
-            const claimBi =
-                claimData.businessInfo && typeof claimData.businessInfo === 'object'
-                    ? claimData.businessInfo
-                    : {};
-            mergedBusinessInfo = { ...claimBi, ...mergedBusinessInfo };
-        }
-    }
-
-    mergedBusinessInfo.standardized_phone = standardizedPhone;
-    mergedBusinessInfo.isClaimed = true;
-    mergedBusinessInfo.phone_verified = true;
-    mergedBusinessInfo.phone_claimed = true;
-    mergedBusinessInfo.createdAt = FieldValue.serverTimestamp();
-    if (!mergedBusinessInfo.phone) {
-        mergedBusinessInfo.phone = standardizedPhone;
-    }
-
-    if (!accountEmail) {
-        try {
-            await auth.updateUser(firebaseUid, {
-                email,
-                emailVerified: false,
-                displayName: String(mergedBusinessInfo.businessName || '').trim() || undefined,
-            });
-        } catch (err) {
-            const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : '';
-            if (code === 'auth/email-already-exists') {
-                throw Object.assign(new Error('EMAIL_IN_USE'), { code: 'auth/email-already-in-use' });
-            }
-            throw err;
-        }
-    }
-
-    const userPayload = {
-        uid: firebaseUid,
-        email,
-        authInfo: { email },
-        accountType: 'business',
-        role: 'partner',
-        display_name: String(mergedBusinessInfo.businessName || '').trim() || email,
-        photo_url: userRecord.photoURL || null,
-        created_at: FieldValue.serverTimestamp(),
-        last_active_time: FieldValue.serverTimestamp(),
-        pendingBusinessRegistration: false,
-        businessProfileSetupPending: false,
-        isProfileComplete: true,
-        registrationIntent: null,
-        businessInfo: mergedBusinessInfo,
-        claimedFromBusinessId: claimId || null,
-        followersCount: 0,
-        ownedCommunities: [],
-    };
-    if (input.referredBy) {
-        userPayload.referred_by = input.referredBy;
-    }
-
-    await db.collection('users').doc(firebaseUid).set(userPayload, { merge: true });
-
-    if (claimId && claimId !== firebaseUid) {
-        await db.collection('users').doc(claimId).set(
-            {
-                unclaimedProfileMergedInto: firebaseUid,
-                mergedAt: FieldValue.serverTimestamp(),
-                isClaimed: true,
-                businessInfo: {
-                    isClaimed: true,
-                    phone_claimed: true,
-                    standardized_phone: standardizedPhone,
-                },
-            },
-            { merge: true }
-        );
-    }
-
-    return {
-        uid: firebaseUid,
-        email,
-        flow: claimId ? 'claim' : 'new',
-        claimedFromBusinessId: claimId || null,
-        claimedFromRestaurantId,
-    };
-}
+import { loadExistingRestaurantForImport, findExistingByGooglePlaceId } from './_virtualBusinessIngest.js';
 
 /**
  * New business registration via email/password only (no SMS OTP).
@@ -295,6 +61,21 @@ export async function completeBusinessEmailSignup(input) {
         throw Object.assign(new Error('PLACE_ALREADY_CLAIMED'), {
             code: 'place-already-claimed',
             restaurantId: existingRestaurant.docId,
+        });
+    }
+
+    // A Google place already owned by ANOTHER account (a user-created business,
+    // not an admin-imported restaurant) must never be taken over — one owner per
+    // Google listing. The rightful owner keeps it; a second signup is rejected.
+    const existingOwner = await findExistingByGooglePlaceId(placeId);
+    if (
+        existingOwner &&
+        existingOwner.collection === 'users' &&
+        existingOwner.doc.id !== firebaseUid
+    ) {
+        throw Object.assign(new Error('PLACE_ALREADY_CLAIMED'), {
+            code: 'place-already-claimed',
+            restaurantId: existingOwner.doc.id,
         });
     }
 
@@ -359,6 +140,9 @@ export async function completeBusinessGoogleClaimSignup(input) {
     const email = String(input.email || '').trim().toLowerCase();
     const restaurantId = String(input.restaurantId || '').trim();
     const sessionId = String(input.googleClaimSessionId || '').trim();
+    // Explicit opt-in (frontend shows a destructive-action confirmation): allow a
+    // personal account to CONVERT into a business by purging its personal data first.
+    const convertPersonal = input.convertPersonal === true;
 
     if (!firebaseUid || !email || !restaurantId || !sessionId) {
         throw Object.assign(new Error('INVALID_COMPLETE_PAYLOAD'), { code: 'invalid-request' });
@@ -381,6 +165,7 @@ export async function completeBusinessGoogleClaimSignup(input) {
     // Business and personal accounts never mix — reject if this Firebase user is already a
     // genuine personal profile (the frontend always creates/uses a dedicated business account
     // for a claim, but a direct API call must not be able to convert someone's personal account).
+    let willConvertPersonal = false;
     const existingUserSnap = await db.collection('users').doc(firebaseUid).get();
     if (existingUserSnap.exists) {
         const existingData = existingUserSnap.data() || {};
@@ -393,9 +178,14 @@ export async function completeBusinessGoogleClaimSignup(input) {
         const isExistingBusiness =
             roleLc === 'business' || roleLc === 'partner' || accountTypeLc === 'business' || hasBusinessInfoDoc;
         if (!isExistingBusiness) {
-            throw Object.assign(new Error('PERSONAL_ACCOUNT_CANNOT_CLAIM'), {
-                code: 'personal-account-cannot-claim',
-            });
+            // Personal account: convert only with explicit opt-in; otherwise keep the
+            // hard separation guard (a direct API call must not silently convert someone).
+            if (!convertPersonal) {
+                throw Object.assign(new Error('PERSONAL_ACCOUNT_CANNOT_CLAIM'), {
+                    code: 'personal-account-cannot-claim',
+                });
+            }
+            willConvertPersonal = true;
         }
     }
 
@@ -429,6 +219,22 @@ export async function completeBusinessGoogleClaimSignup(input) {
         String(preData.businessInfo?.standardized_phone || '').trim() ||
         String(preData.businessInfo?.phone || '').trim() ||
         String(preData.phone || '').trim();
+
+    // Personal→business conversion. Ownership + restaurant are now fully verified, so
+    // this is the last safe point to permanently delete the personal account's data
+    // (keeping the Google login). Purging deletes users/{uid}, so the claim below
+    // recreates it as a clean business profile with no stale consumer fields. We check
+    // the listing is still unclaimed first, so we never purge on a request the claim
+    // transaction would reject.
+    if (willConvertPersonal) {
+        if (!restaurantDocIsUnclaimed(preData)) {
+            throw Object.assign(new Error('ALREADY_CLAIMED'), {
+                code: 'already-claimed',
+                restaurantId,
+            });
+        }
+        await accountDeletionCore.purgeUserAccountData(adminNs, firebaseUid, { deleteAuthUser: false });
+    }
 
     const claimData = await claimRestaurantOwnershipTransaction({
         restaurantId,

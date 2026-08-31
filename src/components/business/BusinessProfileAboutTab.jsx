@@ -8,6 +8,7 @@ import BrandColorSwatchRail from './BrandColorSwatchRail';
 import EnhancedGallery from '../EnhancedGallery';
 import EnhancedReviews from '../EnhancedReviews';
 import PremiumOfferCard from '../PremiumOfferCard';
+import BusinessJobsPanel from './BusinessJobsPanel';
 
 export default function BusinessProfileAboutTab({ profile }) {
   const { t } = useTranslation();
@@ -132,6 +133,10 @@ export default function BusinessProfileAboutTab({ profile }) {
                     <AppText as="p" style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{t('feedback_desc', 'Have a complaint or suggestion? Contact the management directly and privately.')}</AppText>
                 </BusinessSectionCard>
       }
+
+            {/* Open positions — visitors can apply; owners see a hint */}
+            <BusinessJobsPanel profileId={profileId} isOwner={isOwner} />
+
             <EnhancedReviews
       reviews={reviews}
       profileId={profileId}

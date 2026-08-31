@@ -6820,6 +6820,56 @@ button.notification-bell {
   transform: scale(0.99);
 }
 
+/* Horizontal swipeable layout for the mobile create menu */
+.business-create-sheet__options--horizontal {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 12px;
+  padding: 4px 2px 12px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-padding-inline: 2px;
+}
+
+.business-create-sheet__options--horizontal::-webkit-scrollbar {
+  display: none;
+}
+
+.business-create-sheet__options--horizontal .business-create-option {
+  flex: 0 0 auto;
+  width: 150px;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 16px 12px;
+  scroll-snap-align: start;
+}
+
+.business-create-sheet__options--horizontal .business-create-option__text {
+  align-items: center;
+  text-align: center;
+}
+
+.business-create-sheet__options--horizontal .business-create-option__label,
+.business-create-sheet__options--horizontal .business-create-option__desc {
+  text-align: center;
+}
+
+.business-create-sheet__options--horizontal .business-create-option__desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.business-create-sheet__options--horizontal .business-create-option__arrow {
+  display: none;
+}
+
 .business-create-option__icon {
   width: 52px;
   height: 52px;
@@ -6855,6 +6905,10 @@ button.notification-bell {
 
 .business-create-option__icon--stage {
   background: linear-gradient(145deg, #0e7490 0%, #0891b2 55%, #22d3ee 100%);
+}
+
+.business-create-option__icon--match {
+  background: linear-gradient(145deg, #9f1239 0%, #e11d48 55%, #fb7185 100%);
 }
 
 .business-create-option__icon--offer {

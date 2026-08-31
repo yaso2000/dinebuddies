@@ -70,6 +70,9 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
   // Busy logo only when returning from the account picker / finishing sign-in — never before it opens.
   const [loading, setLoading] = useState(() => isOAuthReturnBusy());
   const [error, setError] = useState('');
+  // True when the sign-in was blocked because the email belongs to a business
+  // account — we then offer a direct button to the Business sign-in portal.
+  const [businessConflict, setBusinessConflict] = useState(false);
 
   const missingFirebaseEnv = useMemo(() => {
     if (!import.meta.env.DEV) return [];
@@ -142,10 +145,11 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     if (isBusinessUser(userProfile)) {
       setError(
         t(
-          'auth_business_portal_only',
-          'This account is a business account. Use Business sign-in (email and password).'
+          'auth_business_claim_offer',
+          'You have a business account with this email. Would you like to claim this business? (free)'
         )
       );
+      setBusinessConflict(true);
       void rejectWrongAccountType();
     }
   }, [authLoading, currentUser, guestLike, userProfile, t, isBusinessLoginTab]);
@@ -323,6 +327,7 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
     clearGuestModeForSignIn();
     // Do not show the busy logo before Google/Facebook account UI opens.
     setError('');
+    setBusinessConflict(false);
     let startedRedirect = false;
     let authFinished = false;
     try {
@@ -400,6 +405,15 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
       } else if (err.code === 'auth/in-app-browser') {
         setError(
           t('auth_in_app_browser_hint', 'Open this site in Safari or Chrome to sign in.')
+        );
+      } else if (err.code === 'auth/business-email-in-use' || err.code === 'auth/business-portal-only') {
+        // The email belongs to a business we hold — offer to claim it, not an error.
+        setBusinessConflict(true);
+        setError(
+          t(
+            'auth_business_claim_offer',
+            'You have a business account with this email. Would you like to claim this business? (free)'
+          )
         );
       } else {
         setError(getAuthErrorMessage(err) || err.message);
@@ -504,8 +518,28 @@ export default function PersonalAuthPanel({ singleCardShell = false }) {
         textAlign: 'center',
         border: '1px solid rgba(239,68,68,0.2)'
       }}>
-      
+
                     {error}
+                    {businessConflict &&
+        <button
+          type="button"
+          onClick={() => navigate('/signup/business')}
+          style={{
+            display: 'block',
+            width: '100%',
+            marginTop: '0.6rem',
+            padding: '0.6rem 0.75rem',
+            borderRadius: '10px',
+            border: 'none',
+            background: '#E86E2E',
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: '0.85rem',
+            cursor: 'pointer'
+          }}>
+                        {t('auth_claim_your_business', 'Claim this business (free)')}
+                    </button>
+        }
                 </div>
     }
 

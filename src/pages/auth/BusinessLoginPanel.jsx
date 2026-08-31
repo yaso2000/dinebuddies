@@ -3,6 +3,9 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import { FaEnvelope, FaLock, FaArrowRight, FaEye, FaEyeSlash, FaUser } from 'react-icons/fa';
+import { FcGoogle } from 'react-icons/fc';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import {
   resolveBusinessLoginForSignIn,
   requestBusinessPasswordReset,
@@ -28,6 +31,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
   const { showToast } = useToast();
   const {
     signInWithEmail,
+    signInWithGoogle,
     sendPasswordResetToEmail,
     userProfile,
     currentUser,
@@ -35,6 +39,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
     loading: authLoading,
     profileServerSynced
   } = useAuth();
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   const [loginId, setLoginId] = useState('');
   const [countryCode, setCountryCode] = useState('+20');
@@ -102,6 +107,53 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
       setError(invalidLoginMsg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setGoogleBusy(true);
+    setError('');
+    setAiUnclaimedHint(false);
+    try {
+      const res = await signInWithGoogle();
+      if (res?.__oauthRedirect) return; // redirect flow: LoginHub resumes on return
+      const user = res?.user;
+      if (!user?.uid) throw new Error('no-user');
+
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      const data = snap.exists() ? snap.data() : null;
+      const isBusiness =
+        !!data &&
+        (String(data.accountType || '').toLowerCase() === 'business' ||
+          ['partner', 'business'].includes(String(data.role || '').toLowerCase()) ||
+          String(data.registrationIntent || '').toLowerCase() === 'business' ||
+          data.pendingBusinessRegistration === true ||
+          (data.businessInfo && typeof data.businessInfo === 'object' && Object.keys(data.businessInfo).length > 0));
+
+      if (isBusiness) {
+        clearPostLogoutRedirect();
+        setJustLoggedIn(true); // LoginHub navigates to the dashboard once profileServerSynced
+      } else {
+        // This Google account is a personal (or empty) account — not a business.
+        setError(
+          t(
+            'business_login_google_not_business',
+            'This Google account is not a business account. Create a business account, or sign in as a regular user.'
+          )
+        );
+        await signOut().catch(() => {});
+      }
+    } catch (err) {
+      const code = String(err?.code || '');
+      if (code === 'auth/in-app-browser') {
+        setError(t('business_google_open_chrome', 'Open the app in Chrome to sign in with Google.'));
+      } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        /* user closed the popup — no error */
+      } else {
+        setError(t('business_google_signup_failed', 'Google sign-in failed. Please try again.'));
+      }
+    } finally {
+      setGoogleBusy(false);
     }
   };
 
@@ -312,6 +364,26 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                     </div>
         }
 
+                <button
+          type="button"
+          onClick={handleGoogleLogin}
+          disabled={googleBusy || loading}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+            padding: '12px', borderRadius: '12px', border: '1px solid var(--border-color)',
+            background: 'var(--bg-card)', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.95rem',
+            cursor: googleBusy ? 'not-allowed' : 'pointer', marginBottom: '1rem'
+          }}>
+                    <FcGoogle size={20} />
+                    {googleBusy ? t('please_wait', 'Please wait…') : t('business_login_google', 'Sign in with Google')}
+                </button>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
+                    <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+                    <AppText as="span" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('or', 'or')}</AppText>
+                    <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+                </div>
+
                 <form onSubmit={handleSubmit} className="business-auth-form">
                     <div style={{ marginBottom: '1rem' }}>
                         <label
@@ -322,7 +394,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                 fontWeight: 600,
                 color: 'var(--text-secondary)'
               }}>
-              
+
                             {t('business_login_credentials_label')}
                         </label>
                         <div style={{ position: 'relative' }}>

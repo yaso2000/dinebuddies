@@ -59,6 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const restaurantId = String(body.restaurantId || '').trim();
     const googleClaimSessionId = String(body.googleClaimSessionId || '').trim();
     const email = String(body.email || authResult.claims.email || '').trim().toLowerCase();
+    const convertPersonal = body.convertPersonal === true;
 
     if (!restaurantId || !googleClaimSessionId) {
         return res.status(400).json({
@@ -82,6 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             email,
             restaurantId,
             googleClaimSessionId,
+            convertPersonal,
         });
 
         try {

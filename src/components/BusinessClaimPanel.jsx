@@ -135,7 +135,7 @@ export default function BusinessClaimPanel({
 }) {
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const { currentUser, isBusiness, loading: authLoading } = useAuth();
+  const { currentUser, isBusiness, isGuest, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const placeId = String(googlePlaceId || restaurantId || '').trim();
@@ -184,7 +184,7 @@ export default function BusinessClaimPanel({
   }, [googleFlowStatus, isModalLocked]);
 
   const finalizeGoogleClaim = useCallback(
-    async (sessionId, accountEmail, idToken) => {
+    async (sessionId, accountEmail, idToken, { convertPersonal = false } = {}) => {
       setGoogleFlowStatus('finalizing');
       const normalizedEmail = String(accountEmail || '').trim().toLowerCase();
       const { ok, data } = await finalizeGoogleBusinessClaim(
@@ -192,6 +192,7 @@ export default function BusinessClaimPanel({
           restaurantId,
           googleClaimSessionId: sessionId,
           email: normalizedEmail,
+          convertPersonal,
         },
         idToken
       );
@@ -208,6 +209,25 @@ export default function BusinessClaimPanel({
     },
     [restaurantId, showToast, t, navigate, currentUser?.uid]
   );
+
+  // A personal (non-business) account is signed in and just proved Google Business
+  // ownership. Converting claims the business AND permanently deletes the personal
+  // account's data (posts, messages, follows). Gated behind an explicit confirmation.
+  const isPersonalSignedIn = Boolean(currentUser && !isBusiness && !isGuest);
+  const [convertConfirmed, setConvertConfirmed] = useState(false);
+
+  const handleConvertAndClaim = useCallback(async () => {
+    if (!currentUser || !googleSessionId) return;
+    setGoogleFlowStatus('finalizing');
+    try {
+      const idToken = await currentUser.getIdToken();
+      const accountEmail = String(currentUser.email || email || '').trim().toLowerCase();
+      await finalizeGoogleClaim(googleSessionId, accountEmail, idToken, { convertPersonal: true });
+    } catch (err) {
+      setGoogleFlowStatus('verified');
+      showToast(err?.message || t('claim_business_failed', 'Could not claim this business'), 'error');
+    }
+  }, [currentUser, googleSessionId, email, finalizeGoogleClaim, showToast, t]);
 
   const runGoogleVerificationAndClaim = useCallback(
     async (sessionId) => {
@@ -489,10 +509,15 @@ export default function BusinessClaimPanel({
           {googleFlowStatus === 'verified' && !showGoogleLoading && (!currentUser || !isBusiness) && !authLoading && (
             <AlertBox variant="success">
               {t('claim_business_google_verify_success', 'Verification successful!')}{' '}
-              {currentUser
+              {isPersonalSignedIn
+                ? t(
+                    'claim_business_google_convert_intro',
+                    'This business is yours. Claim it to turn this account into a business account.'
+                  )
+                : currentUser
                 ? t(
                     'claim_business_google_personal_signed_in',
-                    "You're signed in with a personal account. Create a dedicated business account below to finish — your personal account stays untouched."
+                    'Create a dedicated business account below to finish.'
                   )
                 : t('claim_business_google_create_account', 'Create your business account to finish.')}
               {verifiedGoogleEmail && (
@@ -570,7 +595,57 @@ export default function BusinessClaimPanel({
             </>
           )}
 
-          {googleFlowStatus === 'verified' && (!currentUser || !isBusiness) && !authLoading && !showGoogleLoading && (
+          {googleFlowStatus === 'verified' && isPersonalSignedIn && !authLoading && !showGoogleLoading && (
+            <div style={{ marginTop: '1rem' }}>
+              <AlertBox variant="error">
+                <strong>{t('claim_business_convert_warning_title', 'This will convert your account')}</strong>
+                <br />
+                {t(
+                  'claim_business_convert_warning_body',
+                  'Claiming turns this account into a business account and permanently deletes your personal account — all your posts, messages and follows. This cannot be undone.'
+                )}
+              </AlertBox>
+              <label
+                style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', margin: '0.75rem 0', fontSize: '0.85rem', cursor: 'pointer' }}
+              >
+                <input
+                  type="checkbox"
+                  checked={convertConfirmed}
+                  onChange={(ev) => setConvertConfirmed(ev.target.checked)}
+                  disabled={isModalLocked}
+                  style={{ marginTop: 3 }}
+                />
+                <span>
+                  {t(
+                    'claim_business_convert_confirm',
+                    'I understand my personal account and all its data will be permanently deleted.'
+                  )}
+                </span>
+              </label>
+              <button
+                type="button"
+                disabled={!convertConfirmed || isModalLocked}
+                onClick={handleConvertAndClaim}
+                style={{
+                  width: '100%',
+                  minHeight: '48px',
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  fontWeight: 800,
+                  fontSize: '1rem',
+                  cursor: !convertConfirmed || isModalLocked ? 'not-allowed' : 'pointer',
+                  opacity: !convertConfirmed || isModalLocked ? 0.55 : 1,
+                  ...SUBMIT_BTN_GREEN,
+                }}
+              >
+                {isFinalizing
+                  ? t('claim_business_claiming', 'Claiming…')
+                  : t('claim_business_convert_cta', 'Claim & convert to business')}
+              </button>
+            </div>
+          )}
+
+          {googleFlowStatus === 'verified' && !isPersonalSignedIn && (!currentUser || !isBusiness) && !authLoading && !showGoogleLoading && (
             <form onSubmit={handleGoogleClaimSubmit} style={{ marginTop: '1rem' }}>
               <AppText as="h3" style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 800 }}>
                 {t('claim_business_create_account', 'Create Account')}

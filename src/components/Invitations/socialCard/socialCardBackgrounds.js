@@ -6,39 +6,29 @@
 import { resolveOccasionCategoryId } from './socialCardOccasionMap';
 
 /** Template ids whose artwork is predominantly dark — frame text must be lifted for contrast */
-export const DARK_TEMPLATE_BACKGROUND_IDS = new Set(['birthday-dark', 'birthday-dark-1', 'birthday-dark-neon']);
+export const DARK_TEMPLATE_BACKGROUND_IDS = new Set([]);
 
-/** New private-invite create: default occasion + first birthday template art */
-export const DEFAULT_PRIVATE_OCCASION_LABEL = 'Birthday';
-export const DEFAULT_PRIVATE_CARD_BACKGROUND_ID = 'birthday-warm';
+/** New social-invite create: default type + first social template art */
+export const DEFAULT_PRIVATE_OCCASION_LABEL = 'Social';
+export const DEFAULT_PRIVATE_CARD_BACKGROUND_ID = 'social-1';
 
 /** Typographic apostrophe (U+2019) — matches Windows/macOS “smart quote” filenames on disk. */
 const CURLY_APOSTROPHE = '\u2019';
 
+// Social invitations have four types only: friendship, social, family, work.
+// Each folder lives at public/invitation-card-backgrounds/{category}/{id}.webp.
 export const CARD_BACKGROUNDS_BY_CATEGORY = {
-    birthday: [
-        { id: 'birthday-warm' },
-        { id: 'birthday-candlecake' },
-        { id: 'birthday-fun' },
-        { id: 'birthday-dark' },
-        { id: 'birthday-dark-1' },
-        { id: 'birthday-dark-neon' },
-        { id: 'birthday-kids' },
-        { id: 'birthday-kids2' },
-        { id: 'birthday-gold' },
-        { id: 'birthday-gold2' }
-    ],
-    cafe: [
-        { id: 'cafe-1' },
-        { id: 'cafe-2' },
-        { id: 'cafe-3' },
-        { id: 'cafe-4' },
-        { id: 'cafe-5' },
-        { id: 'cafe-6' },
-        { id: 'cafe-7' },
-        { id: 'cafe-8' },
-        { id: 'cafe-9' },
-        { id: 'cafe-10' }
+    friendship: [
+        { id: 'friendship-1' },
+        { id: 'friendship-2' },
+        { id: 'friendship-3' },
+        { id: 'friendship-4' },
+        { id: 'friendship-5' },
+        { id: 'friendship-6' },
+        { id: 'friendship-7' },
+        { id: 'friendship-8' },
+        { id: 'friendship-9' },
+        { id: 'friendship-10' }
     ],
     social: [
         { id: 'social-1' },
@@ -52,6 +42,18 @@ export const CARD_BACKGROUNDS_BY_CATEGORY = {
         { id: 'social-9' },
         { id: 'social-10' }
     ],
+    family: [
+        { id: 'family-1' },
+        { id: 'family-2' },
+        { id: 'family-3' },
+        { id: 'family-4' },
+        { id: 'family-5' },
+        { id: 'family-6' },
+        { id: 'family-7' },
+        { id: 'family-8' },
+        { id: 'family-9' },
+        { id: 'family-10' }
+    ],
     work: [
         { id: 'work-1' },
         { id: 'work-2' },
@@ -63,118 +65,6 @@ export const CARD_BACKGROUNDS_BY_CATEGORY = {
         { id: 'work-8' },
         { id: 'work-9' },
         { id: 'work-10' }
-    ],
-    nightlife: [
-        { id: 'nightlife-1' },
-        { id: 'nightlife-2' },
-        { id: 'nightlife-3' },
-        { id: 'nightlife-4' },
-        { id: 'nightlife-5' },
-        { id: 'nightlife-6' },
-        { id: 'nightlife-7' },
-        { id: 'nightlife-8' },
-        { id: 'nightlife-9' },
-        { id: 'nightlife-10' }
-    ],
-    dining: [
-        { id: 'dining-1' },
-        { id: 'dining-2' },
-        { id: 'dining-3' },
-        { id: 'dining-4' },
-        { id: 'dining-5' },
-        { id: 'dining-6' },
-        { id: 'dining-7' },
-        { id: 'dining-8' },
-        { id: 'dining-9' },
-        { id: 'dining-10' },
-        { id: 'dining-11' }
-    ],
-    gaming: [
-        { id: 'gaming-1' },
-        { id: 'gaming-2' },
-        { id: 'gaming-3' },
-        { id: 'gaming-4' },
-        { id: 'gaming-5' },
-        { id: 'gaming-6' },
-        { id: 'gaming-7' },
-        { id: 'gaming-8' },
-        { id: 'gaming-9' },
-        { id: 'gaming-10' }
-    ],
-    family: [
-        { id: 'family-1' },
-        { id: 'family-2' },
-        { id: 'family-3' },
-        { id: 'family-4' },
-        { id: 'family-5' },
-        { id: 'family-6' },
-        { id: 'family-7' },
-        { id: 'family-8' },
-        { id: 'family-9' },
-        { id: 'family-10' },
-        { id: 'family-11' },
-        { id: 'family-12' },
-        { id: 'family-13' }
-    ],
-    /** fileStem matches on-disk filename (spaces + typographic apostrophe kept). */
-    celebration: [
-        { id: 'celebration-mothers-day', fileStem: `Mother${CURLY_APOSTROPHE}s Day` },
-        { id: 'celebration-fathers-day', fileStem: `Father${CURLY_APOSTROPHE}s Day` },
-        { id: 'celebration-christmas', fileStem: 'Christmas' },
-        { id: 'celebration-thanksgiving', fileStem: 'Thanksgiving' },
-        { id: 'celebration-halloween', fileStem: 'Halloween' },
-        { id: 'celebration-new-year-1', fileStem: 'New Year1' },
-        { id: 'celebration-new-year-2', fileStem: 'New Year2' },
-        { id: 'celebration-new-year-3', fileStem: 'New Year3' },
-        { id: 'celebration-valentines-day-1', fileStem: `Valentine${CURLY_APOSTROPHE}s Day1` },
-        { id: 'celebration-valentines-day-2', fileStem: `Valentine${CURLY_APOSTROPHE}s Day2` },
-        { id: 'celebration-valentines-day-3', fileStem: `Valentine${CURLY_APOSTROPHE}s Day3` },
-        { id: 'celebration-valentines-day-4', fileStem: `Valentine${CURLY_APOSTROPHE}s Day4` },
-        { id: 'celebration-ramadan', fileStem: 'Ramadan' },
-        { id: 'celebration-eid-al-fitr', fileStem: 'Eid al-Fitr' },
-        { id: 'celebration-wedding', fileStem: 'Wedding' },
-        { id: 'celebration-wedding-2', fileStem: 'Wedding2' },
-        { id: 'celebration-wedding-3', fileStem: 'Wedding3' },
-        { id: 'celebration-wedding-4', fileStem: 'Wedding4' },
-        { id: 'celebration-graduation', fileStem: 'Graduation' },
-        { id: 'celebration-baby-gender-reveal', fileStem: 'Baby Gender Reveal' },
-        { id: 'celebration-reunion', fileStem: 'Reunion' }
-    ],
-    cinema: [
-        { id: 'cinema-1' },
-        { id: 'cinema-2' },
-        { id: 'cinema-3' },
-        { id: 'cinema-4' },
-        { id: 'cinema-5' },
-        { id: 'cinema-6' },
-        { id: 'cinema-7' },
-        { id: 'cinema-8' },
-        { id: 'cinema-9' },
-        { id: 'cinema-10' }
-    ],
-    sports: [
-        { id: 'sports-1' },
-        { id: 'sports-2' },
-        { id: 'sports-3' },
-        { id: 'sports-4' },
-        { id: 'sports-5' },
-        { id: 'sports-6' },
-        { id: 'sports-7' },
-        { id: 'sports-8' },
-        { id: 'sports-9' },
-        { id: 'sports-10' }
-    ],
-    concert: [
-        { id: 'concert-1' },
-        { id: 'concert-2' },
-        { id: 'concert-3' },
-        { id: 'concert-4' },
-        { id: 'concert-5' },
-        { id: 'concert-6' },
-        { id: 'concert-7' },
-        { id: 'concert-8' },
-        { id: 'concert-9' },
-        { id: 'concert-10' }
     ]
 };
 
@@ -190,8 +80,9 @@ const BIRTHDAY_LEGACY_CANONICAL_ID = {
 };
 
 export function getCardBackgroundOptions(categoryId) {
-    if (!categoryId || typeof categoryId !== 'string') return [];
-    return CARD_BACKGROUNDS_BY_CATEGORY[categoryId] || [];
+    if (!categoryId || typeof categoryId !== 'string') return CARD_BACKGROUNDS_BY_CATEGORY.social || [];
+    // Categories without their own artwork (e.g. friendship) reuse the social set.
+    return CARD_BACKGROUNDS_BY_CATEGORY[categoryId] || CARD_BACKGROUNDS_BY_CATEGORY.social || [];
 }
 
 /**

@@ -24,8 +24,11 @@ export const CONNECTION_KIND = {
  * @param {object | null | undefined} viewerProfile
  * @param {object | null | undefined} targetProfile
  */
-export function profileShowsLikeButton(viewerProfile, targetProfile) {
-    return isUserOpenToDating(viewerProfile) && isUserOpenToDating(targetProfile);
+export function profileShowsLikeButton() {
+    // Dating removed: there is no heart/like action anywhere — everyone connects
+    // through a single Follow. This always returns false so every card, list and
+    // profile shows the Follow button instead of the (dating) heart.
+    return false;
 }
 
 /**
@@ -34,12 +37,10 @@ export function profileShowsLikeButton(viewerProfile, targetProfile) {
  * @param {object | null | undefined} profileB
  * @returns {ConnectionKind}
  */
-export function resolveConnectionKind(profileA, profileB) {
-    const aOpen = isUserOpenToDating(profileA);
-    const bOpen = isUserOpenToDating(profileB);
-    if (aOpen && bOpen) return CONNECTION_KIND.DATING;
-    if (!aOpen && !bOpen) return CONNECTION_KIND.FRIENDSHIP;
-    return CONNECTION_KIND.ACQUAINTANCE;
+export function resolveConnectionKind() {
+    // Dating removed: every connection is a friendship, so chat unlocks on a
+    // mutual Follow (see isConnectionCompleteSync). No dating/acquaintance tiers.
+    return CONNECTION_KIND.FRIENDSHIP;
 }
 
 /** @param {ConnectionKind} kind */

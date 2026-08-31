@@ -64,6 +64,7 @@ import {
     resolveRedirectProviderId,
 } from '../utils/oauthRedirectFinish';
 import { createGoogleAuthProvider } from '../utils/googleAuthProvider';
+import { peekBusinessGoogleSignupIntent } from '../utils/businessGoogleSignup';
 import { getFirebaseRedirectResultOnce, resetFirebaseRedirectBootstrap } from '../firebase/authBootstrap';
 import app, { getFirebaseOAuthHandlerUrl, auth, db } from '../firebase/config';
 import { needsOAuthRedirectProfileFinish, shouldRunOAuthRedirectBootstrap } from '../utils/oauthRedirectState';
@@ -922,6 +923,13 @@ export const AuthProvider = ({ children }) => {
                     photo_url: result.user.photoURL,
                     authProvider: 'google'
                 });
+            } else if (accountKindFromProfileData(userDoc.data()) === AUTH_PORTAL.BUSINESS) {
+                // A business account that signs in with Google (e.g. one that was CONVERTED
+                // from a personal account by claiming a business). Route it to the business
+                // side instead of rejecting it as wrong-portal.
+                syncBusinessNavHint(userDoc.data(), result.user.uid);
+                const googleUpdates = { last_active_time: serverTimestamp() };
+                await updateDoc(doc(db, 'users', result.user.uid), googleUpdates);
             } else {
                 assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
                 const photoPatch = resolveOAuthPhotoUpdate(userDoc.data(), result.user.photoURL);
@@ -1200,7 +1208,11 @@ export const AuthProvider = ({ children }) => {
                 await fetchUserProfile(userId);
                 return;
             }
+            // A brand-new Google user who came through the BUSINESS signup button
+            // must be provisioned as a business shell — never a consumer stub.
+            const businessGoogleSignupIntent = !existing && peekBusinessGoogleSignupIntent();
             const pendingBusinessFlow =
+                businessGoogleSignupIntent ||
                 String(existing?.registrationIntent || '').toLowerCase() === 'business' ||
                 existing?.pendingBusinessRegistration === true ||
                 String(existing?.accountType || '').toLowerCase() === 'business' ||
@@ -1246,6 +1258,14 @@ export const AuthProvider = ({ children }) => {
             // Do not stamp role:user on business accounts or in-progress business signup.
             if (!pendingBusinessFlow) {
                 baseProfile.role = 'user';
+            }
+
+            // New Google user from the business signup button → clean business shell.
+            if (businessGoogleSignupIntent) {
+                baseProfile.registrationIntent = 'business';
+                baseProfile.pendingBusinessRegistration = true;
+                baseProfile.accountType = 'business';
+                baseProfile.authProvider = userData.authProvider || 'google';
             }
 
             await setDoc(doc(db, 'users', userId), baseProfile, { merge: true });
@@ -1296,6 +1316,11 @@ export const AuthProvider = ({ children }) => {
                 photo_url: user.photoURL,
                 authProvider,
             });
+        } else if (authProvider === 'google' && accountKindFromProfileData(userDoc.data()) === AUTH_PORTAL.BUSINESS) {
+            // A business account (e.g. converted from personal by claiming a business)
+            // completing a Google redirect — route to business instead of rejecting.
+            syncBusinessNavHint(userDoc.data(), uid);
+            await updateDoc(doc(db, 'users', uid), { last_active_time: serverTimestamp() });
         } else {
             assertProfileMatchesPortal(userDoc.data(), AUTH_PORTAL.PERSONAL);
             const photoPatch = resolveOAuthPhotoUpdate(userDoc.data(), user.photoURL);

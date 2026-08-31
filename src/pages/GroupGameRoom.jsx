@@ -9,6 +9,8 @@ import { goToLogin } from '../utils/goToLogin';
 import { playWavePingSound } from '../utils/socialPingSound';
 import { playMatchCelebrationSound } from '../utils/matchCelebrationSound';
 import { AppText } from '../components/base';
+import GroupGameParticipantsSheet from '../components/GroupGameParticipantsSheet';
+import OverlappingAvatars from '../components/OverlappingAvatars';
 
 const MUTE_KEY = 'db_group_game_muted';
 const ROUND_MS = 10000; // must match the server's per-question window
@@ -60,26 +62,31 @@ export default function GroupGameRoom() {
   const { showToast } = useToast();
   const lang = (i18n.language || 'ar').split('-')[0];
 
-  const { game, players, loading, uid, isHost, isPlayer, start, answer, advance, restart, leave, kick, remove, submitStatements } = useGroupGame(gameId);
+  const { game, players, loading, uid, isHost, isPlayer, start, answer, advance, restart, leave, kick, remove, submitStatements, submitWhoSaidAnswer, myAuthoredRound } = useGroupGame(gameId);
 
   const [myPick, setMyPick] = useState(null);
   const [busy, setBusy] = useState('');
   const [joining, setJoining] = useState(false);
+  const [showParticipants, setShowParticipants] = useState(false);
   const [muted, setMuted] = useState(() => { try { return localStorage.getItem(MUTE_KEY) === '1'; } catch { return false; } });
   const [burst, setBurst] = useState(false);
   const [stTexts, setStTexts] = useState(['', '', '']);
   const [stLie, setStLie] = useState(0);
+  const [stWhoSaid, setStWhoSaid] = useState('');
   const prevPhase = useRef('');
 
   const isQuiz = game?.type === 'zodiac_guess';
   const isVote = game?.type === 'most_likely';
   const isTruths = game?.type === 'two_truths';
+  const isWhoSaid = game?.type === 'who_said_it';
+  const needsSubmission = isTruths || isWhoSaid;
   const signLabel = (key) => (ZODIAC[key] ? (ZODIAC[key][lang] || ZODIAC[key].en) : key);
   const qText = (q) => q?.text?.[lang] || q?.text?.en || q?.text?.ar || '';
-  // For "most likely", the options are the players themselves.
+  const whoSaidPromptText = game?.whoSaidPrompt ? (game.whoSaidPrompt[lang] || game.whoSaidPrompt.en || game.whoSaidPrompt.ar) : '';
+  // For "most likely" + "who said it", the options are the players themselves.
   const voteOptions = (game?.voteTargets || game?.playerIds || []).map((pid) => ({ label: game?.players?.[pid]?.name || 'Player', avatar: game?.players?.[pid]?.avatar || '', uid: pid }));
   // Returns option descriptors [{ label, icon?, avatar? }] for the game type.
-  const qOpts = (q) => (isVote ? voteOptions
+  const qOpts = (q) => (isVote || isWhoSaid ? voteOptions
     : isTruths ? (q?.texts || []).map((txt) => ({ label: txt }))
       : isQuiz ? (q?.signs || []).map((s) => ({ label: signLabel(s), icon: ZODIAC[s]?.icon || '⭐' }))
         : (q?.options?.[lang] || q?.options?.en || q?.options?.ar || []).map((o) => ({ label: o })));
@@ -92,6 +99,9 @@ export default function GroupGameRoom() {
   const subjectId = isTruths && question ? question.subjectId : null;
   const subjectName = subjectId ? (game?.players?.[subjectId]?.name || 'Player') : '';
   const iAmSubject = !!subjectId && subjectId === uid;
+  // Who said it: hide the guessing grid on MY OWN round, by identity (the server
+  // tells me my round index in my owner-only answer doc) — not by text match.
+  const iAmAuthor = isWhoSaid && myAuthoredRound != null && myAuthoredRound === round;
 
   useEffect(() => { setMyPick(null); }, [round]);
 
@@ -154,7 +164,7 @@ export default function GroupGameRoom() {
   };
 
   const spectator = status === 'active' && !isPlayer;
-  const cantVote = spectator || iAmSubject; // subject can't guess their own round
+  const cantVote = spectator || iAmSubject || iAmAuthor; // subject/author can't guess their own round
   const pick = async (idx) => {
     if (timeUp || cantVote) return;
     setMyPick(idx);
@@ -164,7 +174,15 @@ export default function GroupGameRoom() {
 
   const myReady = !!game?.players?.[uid]?.ready;
   const readyCount = players.filter((p) => p.ready).length;
-  const canStart = players.length >= 3 && (!isTruths || readyCount >= 3);
+  const canStart = players.length >= 3 && (!needsSubmission || readyCount >= 3);
+  const doSubmitWhoSaid = async () => {
+    const a = stWhoSaid.trim();
+    if (!a) { showToast(t('whosaid_need_answer', 'Write your answer first.'), 'info'); return; }
+    setBusy('statements');
+    try { await submitWhoSaidAnswer(a); }
+    catch (e) { showToast(e?.message || t('admin_failed', 'Something went wrong.'), 'error'); }
+    finally { setBusy(''); }
+  };
   const doSubmitStatements = async () => {
     const texts = stTexts.map((s) => s.trim());
     if (texts.some((s) => !s)) { showToast(t('two_truths_need_three', 'Fill all three statements.'), 'info'); return; }
@@ -222,8 +240,8 @@ export default function GroupGameRoom() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '12px 14px', borderBottom: '1px solid var(--border-color)', background: 'color-mix(in srgb, var(--bg-card) 88%, transparent)', backdropFilter: 'blur(6px)' }}>
         <AppText as="div" style={{ fontWeight: 900, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span style={{ fontSize: '1.15rem' }}>{isVote ? '🕵️' : isQuiz ? '⭐' : '💞'}</span>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isVote ? t('most_likely_title', 'Most Likely To') : isQuiz ? t('zodiac_game_title', 'Guess the Sign') : t('group_game_taste_title', 'Group Compatibility')}</span>
+          <span style={{ fontSize: '1.15rem' }}>{isVote ? '🕵️' : isQuiz ? '⭐' : isTruths ? '🤥' : isWhoSaid ? '🗣️' : '💞'}</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isVote ? t('most_likely_title', 'Most Likely To') : isQuiz ? t('zodiac_game_title', 'Guess the Sign') : isTruths ? t('two_truths_title', 'Two Truths & a Lie') : isWhoSaid ? t('whosaid_title', 'Who said it?') : t('group_game_taste_title', 'Group Compatibility')}</span>
         </AppText>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <button type="button" onClick={copyCode} title={t('group_game_code', 'Join code')} className="gg-code">
@@ -257,13 +275,17 @@ export default function GroupGameRoom() {
               </div>
             </div>
 
-            <AppText as="div" style={{ fontWeight: 800, marginBottom: 10 }}>{t('group_game_players', 'Players')} · {players.length} / {MAX_PLAYERS}</AppText>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+              <AppText as="div" style={{ fontWeight: 800 }}>{t('group_game_players', 'Players')} · {players.length} / {MAX_PLAYERS}</AppText>
+              <OverlappingAvatars people={players.map((p) => ({ avatar: p.avatar, name: p.name }))} total={players.length}
+                onClick={() => setShowParticipants(true)} label={t('group_game_tap_people', 'greet · gift · follow')} />
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
               {players.map((p) => (
                 <div key={p.uid} className="gg-card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px' }}>
                   <Avatar src={p.avatar} name={p.name} />
                   <AppText as="span" style={{ flex: 1, fontWeight: 700 }}>{p.name}{p.uid === game.hostId ? <span style={{ color: 'var(--primary)', marginInlineStart: 6, fontSize: '0.78rem' }}>👑 {t('group_game_host', 'Host')}</span> : null}</AppText>
-                  {isTruths && p.ready ? <FaCheck size={12} color="#16a34a" /> : null}
+                  {needsSubmission && p.ready ? <FaCheck size={12} color="#16a34a" /> : null}
                   {isHost && p.uid !== uid ? <button type="button" onClick={wrap('kick', () => kick(p.uid))} aria-label="kick" className="gg-icon gg-icon--danger"><FaTimes /></button> : null}
                 </div>
               ))}
@@ -289,6 +311,22 @@ export default function GroupGameRoom() {
               )
             ) : null}
 
+            {isWhoSaid && isPlayer ? (
+              myReady ? (
+                <div className="gg-card" style={{ padding: 12, marginBottom: 16, textAlign: 'center', color: '#16a34a', fontWeight: 800 }}>✅ {t('whosaid_ready', 'Your answer is in — waiting for the others.')}</div>
+              ) : (
+                <div className="gg-card" style={{ padding: 14, marginBottom: 16 }}>
+                  <AppText as="div" style={{ fontWeight: 800, marginBottom: 4 }}>🕵️ {t('whosaid_write_title', 'Answer secretly')}</AppText>
+                  <AppText as="div" style={{ fontSize: '1.05rem', fontWeight: 900, margin: '6px 0 4px' }}>{whoSaidPromptText}</AppText>
+                  <AppText as="div" style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 10 }}>{t('whosaid_hint', 'Everyone answers the same question — then guess who wrote what.')}</AppText>
+                  <input value={stWhoSaid} onChange={(e) => setStWhoSaid(e.target.value)} maxLength={140}
+                    placeholder={t('whosaid_placeholder', 'Your answer…')}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '11px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-elevated)', color: 'var(--text-main)', fontFamily: 'inherit', marginBottom: 10 }} />
+                  <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'statements'} onClick={doSubmitWhoSaid}>{busy === 'statements' ? '…' : t('whosaid_submit', 'Submit answer')}</button>
+                </div>
+              )
+            ) : null}
+
             {!isPlayer ? (
               <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={joining} onClick={doJoin}>
                 {joining ? t('group_game_joining', 'Joining…') : `🎮 ${t('group_game_join', 'Join the game')}`}
@@ -297,7 +335,7 @@ export default function GroupGameRoom() {
               <>
                 <button type="button" className="gg-btn gg-btn--primary gg-btn--block" disabled={busy === 'start' || !canStart} onClick={wrap('start', start)}>
                   {players.length < 3 ? `⏳ ${t('group_game_need_players_3', 'Need at least 3 players…')}`
-                    : (isTruths && readyCount < 3) ? `⏳ ${t('two_truths_waiting', 'Waiting for players to submit…')}`
+                    : (needsSubmission && readyCount < 3) ? `⏳ ${t('two_truths_waiting', 'Waiting for players to submit…')}`
                       : `🚀 ${t('group_game_start', 'Start game')}`}
                 </button>
                 <button type="button" onClick={doDelete} disabled={busy === 'delete'} className="gg-textbtn gg-textbtn--danger"><FaTrashAlt /> {t('group_game_delete', 'Delete game')}</button>
@@ -319,7 +357,8 @@ export default function GroupGameRoom() {
                   {p.answered ? <span className="gg-tick"><FaCheck size={8} /></span> : null}
                 </div>
               ))}
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginInlineStart: 6, fontWeight: 700 }}>{answeredCount}/{players.length}</span>
+              <button type="button" onClick={() => setShowParticipants(true)} title={t('group_game_view_people', 'Tap to greet · gift · follow')}
+                style={{ fontSize: '0.8rem', color: 'var(--primary)', marginInlineStart: 6, fontWeight: 800, background: 'transparent', border: 'none', cursor: 'pointer' }}>{answeredCount}/{players.length} 👥</button>
             </div>
 
             {spectator ? (
@@ -329,6 +368,10 @@ export default function GroupGameRoom() {
             ) : iAmSubject ? (
               <div className="gg-card" style={{ padding: '10px 12px', marginBottom: 12, textAlign: 'center', fontWeight: 700, color: 'var(--primary)', border: '1px dashed var(--primary)' }}>
                 🙈 {t('two_truths_your_turn', 'Your round — the others are guessing your lie.')}
+              </div>
+            ) : iAmAuthor ? (
+              <div className="gg-card" style={{ padding: '10px 12px', marginBottom: 12, textAlign: 'center', fontWeight: 700, color: 'var(--primary)', border: '1px dashed var(--primary)' }}>
+                🙈 {t('whosaid_your_answer', 'This is your answer — the others are guessing.')}
               </div>
             ) : null}
 
@@ -353,6 +396,12 @@ export default function GroupGameRoom() {
                     <AppText as="span" style={{ fontWeight: 800 }}>{subjectName}</AppText>
                   </div>
                   <AppText as="div" style={{ fontSize: '1.1rem', fontWeight: 900 }}>{t('two_truths_prompt', 'Which one is the lie? 🤥')}</AppText>
+                </>
+              ) : isWhoSaid ? (
+                <>
+                  {whoSaidPromptText ? <AppText as="div" style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 6 }}>{whoSaidPromptText}</AppText> : null}
+                  <AppText as="div" style={{ fontSize: '1.3rem', fontWeight: 900, lineHeight: 1.35, marginBottom: 8 }}>“{question?.text || ''}”</AppText>
+                  <AppText as="div" style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--primary)' }}>{t('whosaid_guess_prompt', 'Who wrote this? 🕵️')}</AppText>
                 </>
               ) : (
                 <AppText as="div" style={{ fontSize: '1.35rem', fontWeight: 900, lineHeight: 1.35 }}>{qText(question)}</AppText>
@@ -404,6 +453,10 @@ export default function GroupGameRoom() {
           <ResultScreen result={game.result} isHost={isHost} busy={busy} onRestart={wrap('restart', restart)} onExit={() => navigate('/posts-feed')} t={t} />
         ) : null}
       </div>
+
+      {showParticipants ? (
+        <GroupGameParticipantsSheet players={players} hostId={game.hostId} onClose={() => setShowParticipants(false)} />
+      ) : null}
     </div>
   );
 }

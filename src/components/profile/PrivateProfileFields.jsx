@@ -14,9 +14,6 @@ import {
 import {
   getLookingForOptions,
 } from '../../constants/personalInviteCategories';
-import {
-  syncLookingForWithOpenToDating,
-} from '../../utils/openToDating';
 import './PrivateProfileFields.css';
 import { AppText, AppTextInput } from "../base";
 import { shouldUseAppEmojiPicker, showComposerEmojiButton } from '../../utils/emojiInputMode';
@@ -128,16 +125,9 @@ export default function PrivateProfileFields({
   diningPersona.length < DINING_PERSONA_MAX_TAGS;
 
   const joinReasonOptions = getJoinReasonOptions({ includePrivateOnly: showInvitePreference });
-  const lookingForOptions = getLookingForOptions({ includeDating: openToDating });
+  const lookingForOptions = getLookingForOptions();
   const invitePrefMissing = requireInviteFields && !isInvitePreferenceChosen(invitePreference);
   const lookingForMissing = requireInviteFields && !lookingFor.length;
-
-  const setOpenToDating = (next) => {
-    emit({
-      openToDating: next,
-      lookingFor: syncLookingForWithOpenToDating(lookingFor, next),
-    });
-  };
 
   return (
     <div className="private-profile-fields">
@@ -167,42 +157,7 @@ export default function PrivateProfileFields({
             </div> :
       null}
 
-            <div className={`private-profile-fields__dating-switch${openToDating ? ' private-profile-fields__dating-switch--on' : ''}`}>
-                <div className="private-profile-fields__dating-switch-copy">
-                    <label className="private-profile-fields__pref-label private-profile-fields__dating-label" htmlFor="profile-open-to-dating">
-                        <FaHeart
-              className={`private-profile-fields__dating-label-icon${openToDating ? '' : ' private-profile-fields__dating-label-icon--muted'}`}
-              aria-hidden />
-                        {t('profile_open_to_dating_title', 'Open to dating')}
-                    </label>
-                    <AppText as="p" className="private-profile-fields__join-hint">
-                        {t(
-              'profile_open_to_dating_hint',
-              'When on, others see a heart on your card (dating). When off, they can follow you as friends.'
-            )}
-                    </AppText>
-                    {datingToggleLock?.locked && datingToggleLockMessage ?
-        <AppText as="p" className="private-profile-fields__dating-locked">
-                        🔒 {datingToggleLockMessage}
-                    </AppText> :
-        null}
-                </div>
-                <button
-          id="profile-open-to-dating"
-          type="button"
-          role="switch"
-          aria-checked={openToDating === true}
-          className={`private-profile-fields__switch${openToDating ? ' private-profile-fields__switch--on' : ''}${datingToggleLock?.locked ? ' private-profile-fields__switch--locked' : ''}`}
-          disabled={datingToggleLock?.locked === true}
-          aria-disabled={datingToggleLock?.locked === true}
-          onClick={() => setOpenToDating(!openToDating)}>
-          
-                    {openToDating ?
-          <FaHeart className="private-profile-fields__switch-heart" aria-hidden /> :
-          null}
-                    <AppText as="span" className="private-profile-fields__switch-knob" aria-hidden />
-                </button>
-            </div>
+            {/* "Open to dating" toggle removed — the app connects through Follow only. */}
 
             {showInvitePreference ?
       <div className={invitePrefMissing ? 'private-profile-fields__section--required' : ''}>

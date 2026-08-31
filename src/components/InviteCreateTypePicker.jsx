@@ -1,8 +1,9 @@
 import React from 'react';
-import { FaChevronRight, FaGlobe, FaHeart, FaLock, FaMicrophone, FaUsers } from 'react-icons/fa';
+import { FaChevronRight, FaGlobe, FaGamepad, FaMicrophone, FaUserFriends, FaQuestion, FaTheaterMasks } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { AppText } from './base';
 import { useInviteCreateNavigation } from '../hooks/useInviteCreateNavigation';
+import { useDesktopShell } from '../hooks/useDesktopShell';
 import './CreateInvitationSelector.css';
 
 export function inviteCreateTypeSubtitle(t, venueName) {
@@ -27,9 +28,11 @@ export default function InviteCreateTypePicker({
   onAfterNavigate = null,
   className = '',
   includeStage = false,
+  horizontal = false,
 }) {
   const { t } = useTranslation();
-  const { goCreate, publicGateChecking, activeHostedStage, activeGameId, activeShowId } = useInviteCreateNavigation({
+  const isDesktopShell = useDesktopShell();
+  const { goCreate, publicGateChecking, activeHostedStage, activeGameId, activeSuitabilityPostId } = useInviteCreateNavigation({
     navigationState,
     businessId,
     onAfterNavigate,
@@ -37,7 +40,11 @@ export default function InviteCreateTypePicker({
 
   const hasLiveStage = Boolean(activeHostedStage?.id);
   const hasActiveGame = Boolean(activeGameId);
-  const hasActiveShow = Boolean(activeShowId);
+  const hasActiveSuitabilityPost = Boolean(activeSuitabilityPostId);
+
+  // Live games and the match show are mobile-first experiences — they must not
+  // appear inside the desktop "create invitation" surface.
+  const includeLiveGames = !isDesktopShell;
 
   const options = [
     {
@@ -54,41 +61,65 @@ export default function InviteCreateTypePicker({
     {
       kind: 'social',
       className: 'social',
-      sheetIconClass: 'business-create-option__icon--private',
-      icon: FaLock,
+      sheetIconClass: 'business-create-option__icon--motion',
+      icon: FaUserFriends,
       title: t('invite_create_social_title'),
       desc: t('invite_create_social_desc'),
     },
-    {
-      kind: 'private',
-      className: 'personal',
-      sheetIconClass: 'business-create-option__icon--dating',
-      icon: FaHeart,
-      title: t('invite_create_private_title'),
-      desc: t('invite_create_private_desc'),
-    },
-    {
-      kind: 'group_game',
-      className: 'social',
-      sheetIconClass: 'business-create-option__icon--stage',
-      icon: FaUsers,
-      title: hasActiveGame
-        ? t('invite_enter_group_game_title', 'Enter your game')
-        : t('invite_create_group_game_title', 'Group game'),
-      desc: hasActiveGame
-        ? t('invite_enter_group_game_desc', 'You already have a live game. Tap to enter.')
-        : t('invite_create_group_game_desc', 'Play a live compatibility game with friends — open to everyone.'),
-    },
-    {
-      kind: 'match_show',
-      className: 'personal',
-      sheetIconClass: 'business-create-option__icon--dating',
-      icon: FaHeart,
-      title: hasActiveShow ? t('invite_enter_match_show_title', 'Enter your show') : t('match_title', 'Match or Not?'),
-      desc: hasActiveShow
-        ? t('invite_enter_match_show_desc', 'You already have a live show. Tap to enter.')
-        : t('invite_create_match_show_desc', 'Host a live matchmaking show — people apply, the room votes.'),
-    },
+    ...(includeLiveGames
+      ? [
+          {
+            kind: 'group_game',
+            className: 'game',
+            sheetIconClass: 'business-create-option__icon--featured',
+            icon: FaGamepad,
+            title: hasActiveGame
+              ? t('invite_enter_group_game_title', 'Enter your game')
+              : t('invite_create_group_game_title', 'Group game'),
+            desc: hasActiveGame
+              ? t('invite_enter_group_game_desc', 'You already have a live game. Tap to enter.')
+              : t('invite_create_group_game_desc', 'Play a live compatibility game with friends — open to everyone.'),
+          },
+        ]
+      : []),
+    // "Who suits you?" — a warm, story-rail poll open to everyone (mobile-first).
+    ...(includeLiveGames
+      ? [
+          {
+            kind: 'suitability',
+            className: 'match',
+            sheetIconClass: 'business-create-option__icon--match',
+            icon: FaQuestion,
+            title: hasActiveSuitabilityPost
+              ? t('invite_enter_suitability_title', 'Open your card')
+              : t('suitability_title', 'Who suits you?'),
+            desc: hasActiveSuitabilityPost
+              ? t('invite_enter_suitability_desc', 'Your card is live. Tap to see the results.')
+              : t('invite_create_suitability_desc', 'Post your card and let the crowd pick which partner type suits you.'),
+          },
+        ]
+      : []),
+    // "Real or AI?" — a guessing game, open to everyone (mobile-first).
+    ...(includeLiveGames
+      ? [
+          {
+            kind: 'realornai',
+            className: 'game',
+            sheetIconClass: 'business-create-option__icon--featured',
+            icon: FaTheaterMasks,
+            title: t('roa_title', 'Real or AI?'),
+            desc: t('invite_create_roa_desc', 'Post a real photo or an AI image — the crowd guesses which.'),
+          },
+          {
+            kind: 'zodiac',
+            className: 'game',
+            sheetIconClass: 'business-create-option__icon--featured',
+            icon: FaQuestion,
+            title: t('zodiac_title', 'Guess my sign?'),
+            desc: t('invite_create_zodiac_desc', 'Post your traits — the crowd guesses your zodiac sign.'),
+          },
+        ]
+      : []),
     ...(includeStage
       ? [
           {
@@ -115,7 +146,7 @@ export default function InviteCreateTypePicker({
 
   if (variant === 'sheet') {
     return (
-      <div className={`business-create-sheet__options${className ? ` ${className}` : ''}`}>
+      <div className={`business-create-sheet__options${horizontal ? ' business-create-sheet__options--horizontal' : ''}${className ? ` ${className}` : ''}`}>
         {options.map((opt) => {
           const Icon = opt.icon;
           return (

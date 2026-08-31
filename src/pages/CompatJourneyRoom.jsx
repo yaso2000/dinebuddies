@@ -16,6 +16,26 @@ import { FaArrowLeft, FaArrowRight, FaHeart, FaSpinner, FaLock, FaCheck, FaRedo,
 
 const MUTE_KEY = 'db_compat_muted';
 
+/** Overall-compatibility rating bands (%). Highest matching min wins. */
+const COMPAT_TIERS = [
+  { min: 80, key: 'deep', label: 'Deep match', color: '#22c55e' },
+  { min: 65, key: 'strong', label: 'Strong match', color: '#0ea5e9' },
+  { min: 50, key: 'good', label: 'Good match', color: '#14b8a6' },
+  { min: 30, key: 'modest', label: 'Modest match', color: '#f59e0b' },
+  { min: 0, key: 'low', label: 'Low match', color: '#94a3b8' },
+];
+const COMPAT_TIER_DEFAULT_BODY = {
+  deep: 'Overall compatibility: {{n}}%. A deep match — a strong signal, maybe it is time to meet.',
+  strong: 'Overall compatibility: {{n}}%. A strong match — a very encouraging sign.',
+  good: 'Overall compatibility: {{n}}%. A good match — there is clear common ground.',
+  modest: 'Overall compatibility: {{n}}%. A modest match — some shared ground worth exploring.',
+  low: 'Overall compatibility: {{n}}%. A low match this time — every pair is different.',
+};
+function getCompatTier(pct) {
+  const p = Number(pct) || 0;
+  return COMPAT_TIERS.find((tier) => p >= tier.min) || COMPAT_TIERS[COMPAT_TIERS.length - 1];
+}
+
 const LEVEL_TITLES = [
   ['compat_level_1', 'Icebreakers'],
   ['compat_level_2', 'Lifestyle'],
@@ -240,17 +260,27 @@ export default function CompatJourneyRoom() {
         <div style={{ fontSize: '3rem', margin: '8px 0' }}>🎉</div>
         <AppText as="h3" style={{ margin: '0 0 8px', color: 'var(--text-main)' }}>{t('compat_done_title', 'You reached the top together!')}</AppText>
         <AppText as="p" style={{ color: 'var(--text-secondary)', lineHeight: 1.55, margin: '0 0 8px', fontSize: '0.9rem' }}>
-          {t('compat_done_body', 'Overall compatibility: {{n}}%. That is a strong signal — maybe it is time to meet.', { n: journey.overallCompat ?? 0 })}
+          {t(`compat_body_${getCompatTier(journey.overallCompat).key}`, COMPAT_TIER_DEFAULT_BODY[getCompatTier(journey.overallCompat).key], { n: journey.overallCompat ?? 0 })}
         </AppText>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(34,197,94,0.12)', color: '#22c55e', borderRadius: 20, padding: '6px 14px', fontWeight: 800, marginTop: 6 }}>
-          <FaCheck /> {t('compat_badge_deep_match', 'Deep Match')}
-        </div>
+        {(() => {
+          const tier = getCompatTier(journey.overallCompat);
+          return (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: `${tier.color}22`, color: tier.color, borderRadius: 20, padding: '6px 14px', fontWeight: 800, marginTop: 6 }}>
+              <FaCheck /> {t(`compat_tier_${tier.key}`, tier.label)}
+            </div>
+          );
+        })()}
         <button onClick={() => navigate('/create-private')} style={{ marginTop: 18, padding: '13px 24px', borderRadius: 14, background: 'var(--brand-primary)', color: '#fff', border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           <FaHeart /> {t('compat_invite_to_meet', 'Invite them to meet')}
         </button>
         <div>
           <button onClick={handleReset} style={{ marginTop: 12, padding: '10px 20px', borderRadius: 14, background: 'var(--bg-elevated)', color: 'var(--text-main)', border: '1px solid var(--border-color)', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <FaRedo /> {t('compat_play_again', 'Play again')}
+          </button>
+        </div>
+        <div>
+          <button onClick={() => navigate(`/chat/${otherUserId}`)} style={{ marginTop: 10, padding: '10px 20px', borderRadius: 14, background: 'transparent', color: 'var(--text-secondary)', border: 'none', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <FaArrowLeft style={{ transform: i18n.dir() === 'rtl' ? 'scaleX(-1)' : 'none' }} /> {t('compat_back_to_chat', 'Back to chat')}
           </button>
         </div>
       </div>
@@ -275,9 +305,8 @@ export default function CompatJourneyRoom() {
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 14px 20px', maxWidth: 520, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
         <Panel compat={data.compatPct} />
         <Ladder />
-        <div style={{ textAlign: 'center', margin: '2px 0 10px', fontWeight: 800, fontSize: '0.9rem', color: data.passed ? '#22c55e' : '#ec4899' }}>
-          {data.passed ? t('compat_passed', 'Compatible enough — level unlocked! ({{n}}%)', { n: data.compatPct })
-            : t('compat_not_passed', 'You matched {{n}}% this round.', { n: data.compatPct })}
+        <div style={{ textAlign: 'center', margin: '2px 0 10px', fontWeight: 800, fontSize: '0.9rem', color: '#ec4899' }}>
+          {t('compat_round_result', 'You matched {{n}}% this round.', { n: data.compatPct })}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {ids.map((qid) => {

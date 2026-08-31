@@ -1,6 +1,5 @@
-import { isValidE164 } from '../_phoneUtils.js';
 import { requireAuth } from '../_auth.js';
-import { completeBusinessPhoneSignup, completeBusinessEmailSignup } from '../_businessPhoneAccount.js';
+import { completeBusinessEmailSignup } from '../_businessPhoneAccount.js';
 import { syncUserPublicProfile } from '../_publicProfileSync.js';
 import { applyApiCors, handleCorsPreflight } from '../_cors.js';
 
@@ -28,9 +27,7 @@ export default async function handler(req, res) {
     }
 
     const body = readJsonBody(req);
-    const standardizedPhone = String(body.standardizedPhone || '').trim();
     const email = String(body.email || authResult.claims.email || '').trim().toLowerCase();
-    const claimBusinessId = body.claimBusinessId || body.businessId || null;
 
     if (!email) {
         return res.status(400).json({
@@ -40,31 +37,14 @@ export default async function handler(req, res) {
         });
     }
 
-    const requiresPhone = Boolean(claimBusinessId || standardizedPhone);
-    if (requiresPhone && !isValidE164(standardizedPhone)) {
-        return res.status(400).json({
-            status: 'error',
-            code: 'invalid-request',
-            message: 'Invalid phone number',
-        });
-    }
-
     try {
-        const result = requiresPhone
-            ? await completeBusinessPhoneSignup({
-                  firebaseUid: authResult.uid,
-                  standardizedPhone,
-                  email,
-                  businessInfo: body.businessInfo || {},
-                  claimBusinessId,
-                  referredBy: body.referredBy || null,
-              })
-            : await completeBusinessEmailSignup({
-                  firebaseUid: authResult.uid,
-                  email,
-                  businessInfo: body.businessInfo || {},
-                  referredBy: body.referredBy || null,
-              });
+        // Business signup is email/password + Google-Place only (SMS/phone removed).
+        const result = await completeBusinessEmailSignup({
+            firebaseUid: authResult.uid,
+            email,
+            businessInfo: body.businessInfo || {},
+            referredBy: body.referredBy || null,
+        });
 
         try {
             await syncUserPublicProfile(result.uid);
@@ -77,18 +57,10 @@ export default async function handler(req, res) {
             uid: result.uid,
             email: result.email,
             flow: result.flow,
-            standardizedPhone: requiresPhone ? standardizedPhone : null,
             claimedFromBusinessId: result.claimedFromBusinessId,
         });
     } catch (err) {
         const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : '';
-        if (code === 'phone-already-in-use') {
-            return res.status(409).json({
-                status: 'error',
-                code: 'phone-already-in-use',
-                message: 'This phone is already registered to a business',
-            });
-        }
         if (code === 'auth/email-already-in-use') {
             return res.status(409).json({
                 status: 'error',
@@ -96,7 +68,7 @@ export default async function handler(req, res) {
                 message: 'Email already in use',
             });
         }
-        if (code === 'phone-mismatch' || code === 'invalid-request' || code === 'place-required') {
+        if (code === 'invalid-request' || code === 'place-required') {
             return res.status(400).json({
                 status: 'error',
                 code,

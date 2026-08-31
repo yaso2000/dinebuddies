@@ -52,6 +52,18 @@ const CommunityGuidelines = () => {
                         قد يؤدي عدم اتباع هذه الإرشادات إلى إزالة المحتوى أو تقييد الحساب أو الإيقاف الدائم.
                     </AppText>
 
+                    <section style={{ marginBottom: '2rem', padding: '1rem 1.25rem', border: '2px solid var(--primary)', borderRadius: 12 }}>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaShieldAlt /> عدم التسامح إطلاقًا مع المحتوى المسيء والإساءة</AppText>
+                        <AppText as="p">يطبّق DineBuddies سياسة <strong>عدم تسامح مطلقة مع المحتوى المسيء والمستخدمين المسيئين</strong>. تشمل كل المحتوى الذي ينشئه المستخدمون — البروفايلات والصور والرسائل والدعوات وفضاء المواعدة.</AppText>
+                        <AppText as="p"><strong>وسائل الحماية متاحة في كل سطح:</strong></AppText>
+                        <ul style={listStyle(isAr)}>
+                            <li>فلترة تلقائية للصور المسيئة قبل نشرها.</li>
+                            <li>زر <strong>إبلاغ</strong> على البروفايلات والرسائل ومحتوى المواعدة.</li>
+                            <li>زر <strong>حظر</strong> يمنع أي مستخدم من التواصل معك أو رؤيتك.</li>
+                        </ul>
+                        <AppText as="p">نراجع المحتوى المُبلَّغ عنه و<strong>نتحرّك خلال 24 ساعة</strong> — بإزالة المحتوى المخالف وطرد المستخدمين المسيئين. يشمل المحتوى المسيء المواد الجنسية أو العنيفة أو المحرّضة على الكراهية أو التحرّش، وأي محتوى يستغلّ القُصّر أو يعرّضهم للخطر.</AppText>
+                    </section>
+
                     <section style={{ marginBottom: '2rem' }}>
                         <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaHeart /> 1. احترام المستخدمين الآخرين</AppText>
                         <AppText as="p">تم بناء DineBuddies على التفاعل الاجتماعي الإيجابي.</AppText>
@@ -218,6 +230,18 @@ const CommunityGuidelines = () => {
                     <AppText as="p" style={{ marginBottom: '2rem', fontWeight: '600' }}>
                         Failure to follow these guidelines may result in content removal, account restrictions, or permanent suspension.
                     </AppText>
+
+                    <section style={{ marginBottom: '2rem', padding: '1rem 1.25rem', border: '2px solid var(--primary)', borderRadius: 12 }}>
+                        <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaShieldAlt /> Zero Tolerance for Objectionable Content and Abuse</AppText>
+                        <AppText as="p">DineBuddies has a strict <strong>zero-tolerance policy for objectionable content and abusive users</strong>. This applies to all user-generated content — profiles, photos, messages, invitations, and the dating space.</AppText>
+                        <AppText as="p"><strong>Safeguards available on every surface:</strong></AppText>
+                        <ul style={listStyle(isAr)}>
+                            <li>Automatic filtering of objectionable images before they are published.</li>
+                            <li>A <strong>Report</strong> control on profiles, messages, and dating content.</li>
+                            <li>A <strong>Block</strong> control to stop any user from contacting or seeing you.</li>
+                        </ul>
+                        <AppText as="p">We review reported content and <strong>act within 24 hours</strong> — removing offending content and ejecting offending users. Objectionable content includes sexual, violent, hateful, harassing, or otherwise abusive material, and any content that sexualizes or endangers minors.</AppText>
+                    </section>
 
                     <section style={{ marginBottom: '2rem' }}>
                         <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaHeart /> 1. Respect Other Users</AppText>

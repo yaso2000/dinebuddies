@@ -10,7 +10,7 @@ import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import BusinessPaidFeatureGate from '../components/business/BusinessPaidFeatureGate';
 import { syncBusinessPublicProfile } from '../services/businessPublicProfileSync';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { FaUsers, FaUserPlus, FaHeart, FaComments, FaChartLine, FaArchive, FaEye, FaStar, FaEdit, FaCalendar, FaCog, FaCheckCircle, FaGlobe, FaSearch, FaBell, FaInbox } from 'react-icons/fa';
+import { FaUsers, FaUserPlus, FaHeart, FaComments, FaChartLine, FaArchive, FaEye, FaStar, FaEdit, FaCalendar, FaCog, FaCheckCircle, FaGlobe, FaSearch, FaBell, FaInbox, FaBriefcase } from 'react-icons/fa';
 import { useNotifications } from '../context/NotificationContext';
 import { hasBusinessSessionHint } from '../utils/accountRole';
 import { AppText } from "../components/base";
@@ -664,6 +664,11 @@ const BusinessDashboard = () => {
             icon={<FaInbox />}
             label={t('inbox_and_complaints', 'Inbox & complaints')}
             onClick={() => navigate('/business-dashboard/inbox')} />
+
+                    <QuickActionButton
+            icon={<FaBriefcase />}
+            label={t('jobs_and_applications', 'Jobs & applications')}
+            onClick={() => navigate('/business-dashboard/jobs')} />
 
                     <QuickActionButton
             icon={<FaEdit />}

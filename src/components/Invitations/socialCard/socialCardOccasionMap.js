@@ -1,23 +1,15 @@
 /**
- * Maps stored occasion label (English, from CreateSocialInvitation grid) → stable category id for icons.
- * Fallback: social
+ * Maps stored social-invite type label (English, from CreateSocialInvitation) → stable
+ * category id for icons/card art. Social invites now have three types only.
+ * Legacy occasion labels fall back to 'social'.
  */
 export const OCCASION_TYPE_TO_CATEGORY_ID = {
-    Dating: 'dating',
-    Birthday: 'birthday',
+    Friendship: 'friendship',
     Social: 'social',
-    Work: 'work',
-    Nightlife: 'nightlife',
-    Dining: 'dining',
-    Café: 'cafe',
-    Gaming: 'gaming',
     Family: 'family',
-    Celebration: 'celebration',
-    Cinema: 'cinema',
-    Sports: 'sports',
-    'Singing Party': 'concert',
-    Concert: 'concert',
-    BBQ: 'concert'
+    Work: 'work',
+    'Serious relationship': 'serious',
+    'Getting acquainted': 'acquaintance',
 };
 
 export function resolveOccasionCategoryId(occasionType) {

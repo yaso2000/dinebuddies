@@ -77,6 +77,12 @@ export const ChatProvider = ({ children }) => {
 
                 for (const docSnap of snapshot.docs) {
                     const data = docSnap.data();
+
+                    // Dating conversations live in their own (dating) inbox — never the social one.
+                    if (data.context === 'dating') {
+                        continue;
+                    }
+
                     const otherUserId = data.participants.find(id => id !== currentUser.uid);
 
                     if (otherUserId && (myBlocked.has(otherUserId) || myMuted.has(otherUserId))) {

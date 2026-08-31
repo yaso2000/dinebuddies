@@ -13,6 +13,7 @@ import { extractAIImageUrl } from '../utils/aiContentFieldMapper';
 import { resolveAiGeneratedCoverPreview } from '../services/mediaService';
 import { AI_IMAGE_GENERATION_CREDITS, CREDITS_WALLET_PATH } from '../utils/aiCreditCosts';
 import { AI_USER_PROMPT_MAX_CHARS } from '../constants/aiPromptLimits';
+import AiContentNotice from './AiContentNotice';
 import { AppText, AppTextInput } from './base';
 import './FeedAiImageLauncher.css';
 
@@ -159,6 +160,8 @@ export default function FeedAiImageLauncher({ disabled = false, onInsert }) {
               </button>
             ) : null}
           </div>
+          <AiContentNotice />
+
           {previewUrl ? (
             <div className="feed-ai-image-sheet__preview">
               <img src={previewUrl} alt={t('ai_design_studio_preview_alt')} />

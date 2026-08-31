@@ -47,6 +47,19 @@ service firebase.storage {
       allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
+    // Job application photos — the applicant uploads their own headshot; the
+    // download URL is surfaced only to the receiving business (via the
+    // owner-read job_applications doc / the generated PDF).
+    match /job_application_photos/{userId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+                   && request.auth.uid == userId
+                   && uidPrefixed(fileName)
+                   && isImage()
+                   && request.resource.size < 8 * 1024 * 1024;
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
     // Chat images — client write locked; only moderateImage (Admin SDK) publishes after Vision.
     match /chat_images/{userId}/{fileName} {
       allow read: if isSignedIn();
@@ -206,6 +219,22 @@ service firebase.storage {
 
     // AI Design Studio — server / moderateImage only (no direct client image write)
     match /ai-design-studio/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // "Real or AI?" game images — server-written (AI pipeline / moderation callable),
+    // public read. Auto-deleted after 24h by purgeExpiredRealOrAi.
+    match /realornai/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /realornai-photos/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if false;
+    }
+    // AI image-edit input images (moderated), server-written. Temporary.
+    match /ai-edit-inputs/{userId}/{fileName} {
       allow read: if true;
       allow write: if false;
     }

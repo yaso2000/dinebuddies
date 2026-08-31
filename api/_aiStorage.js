@@ -279,6 +279,10 @@ export function resolveAiStorageFolder(postType) {
             return 'business-motion';
         case 'design_studio':
             return 'ai-design-studio';
+        case 'real_or_ai':
+            // "Real or AI?" game AI image — distinct folder so the server can derive
+            // the true source from the path (see functions/realOrAiPost.js).
+            return 'realornai';
         case 'invitation':
         default:
             return 'invitations';

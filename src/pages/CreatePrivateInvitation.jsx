@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
   FaCalendarAlt, FaChevronLeft,
-  FaUpload, FaMagic } from
+  FaUpload, FaMagic, FaImages } from
 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
@@ -183,7 +183,7 @@ const CreatePrivateInvitation = () => {
       }
     }
     return getDefaultPrivateCardBackgroundId(
-      editInvitation?.personalInviteCategory || DEFAULT_PERSONAL_INVITE_CATEGORY
+      editInvitation?.personalInviteCategory || 'social'
     );
   });
   const [cardGradientId, setCardGradientId] = useState(
@@ -193,7 +193,7 @@ const CreatePrivateInvitation = () => {
     editInvitation.cardGradientId ||
     null
   );
-  const [datingCoverTab, setDatingCoverTab] = useState('upload');
+  const [datingCoverTab, setDatingCoverTab] = useState('template');
   const [aiCoverSheetOpen, setAiCoverSheetOpen] = useState(false);
   const [aiCoverCommittingId, setAiCoverCommittingId] = useState(null);
   /** Dating card: show personal message + profile on the preview (default on). */
@@ -221,7 +221,8 @@ const CreatePrivateInvitation = () => {
     userLat: null,
     userLng: null,
     occasionType: 'Private',
-    personalInviteCategory: DEFAULT_PERSONAL_INVITE_CATEGORY,
+    // Direct 1-on-1 invitation — category is one of the unified relationship types.
+    personalInviteCategory: 'social',
     venueType: restaurantData?.businessType || 'Restaurant'
   });
 
@@ -910,6 +911,10 @@ const CreatePrivateInvitation = () => {
     }
   };
 
+  const handleDatingCoverTemplateTabClick = () => {
+    handleDatingCoverTab('template');
+  };
+
   const stashCoverMedia = (kind, media) => {
     if (isCoverStashKindAtLimit(coverMediaStashRef.current, kind)) {
       toastCoverStashLimit(kind);
@@ -1589,32 +1594,7 @@ const CreatePrivateInvitation = () => {
                     </div> :
             null}
 
-                    <div className="form-group mb-4">
-                        <label className="elegant-label">
-                            {t('personal_invite_category_label', 'Purpose of invitation')}
-                        </label>
-                        <div className="personal-invite-categories" role="group" aria-label={t('personal_invite_category_label', 'Purpose of invitation')}>
-                            {PERSONAL_INVITE_CATEGORIES.map((cat) => {
-                const selected = formData.personalInviteCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    className={`private-occasion-chip personal-invite-purpose-chip${selected ? ' private-occasion-chip--selected' : ''}`}
-                    aria-pressed={selected}
-                    onClick={() => handlePersonalInviteCategoryChange(cat.id)}>
-
-                                        <AppText as="span" className="private-occasion-chip__icon" aria-hidden>
-                                            {cat.icon}
-                                        </AppText>
-                                        <AppText as="span" className="private-occasion-chip__label personal-invite-purpose-chip__label">
-                                            {t(cat.labelKey, cat.defaultLabel)}
-                                        </AppText>
-                                    </button>);
-
-              })}
-                        </div>
-                    </div>
+                    {/* Private invitations are dating-only — no purpose selector. */}
 
                     {/* Date & time — one compact row */}
                     <div className="form-group mb-3 private-datetime-inline">
@@ -1774,6 +1754,17 @@ const CreatePrivateInvitation = () => {
                             <button
                   type="button"
                   role="tab"
+                  aria-selected={datingCoverTab === 'ai'}
+                  onClick={handleDatingCoverAiTabClick}
+                  className={`private-cover-tab${datingCoverTab === 'ai' ? ' private-cover-tab--active' : ''}`}
+                  title={t('social_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' })}
+                  aria-label={t('social_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' })}>
+
+                                <FaMagic aria-hidden />
+                            </button>
+                            <button
+                  type="button"
+                  role="tab"
                   aria-selected={datingCoverTab === 'upload'}
                   onClick={handleDatingCoverUploadTabClick}
                   className={`private-cover-tab${datingCoverTab === 'upload' ? ' private-cover-tab--active' : ''}`}
@@ -1785,13 +1776,13 @@ const CreatePrivateInvitation = () => {
                             <button
                   type="button"
                   role="tab"
-                  aria-selected={datingCoverTab === 'ai'}
-                  onClick={handleDatingCoverAiTabClick}
-                  className={`private-cover-tab${datingCoverTab === 'ai' ? ' private-cover-tab--active' : ''}`}
-                  title={t('social_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' })}
-                  aria-label={t('social_cover_tab_ai_generate', { defaultValue: 'Generate AI cover' })}>
+                  aria-selected={datingCoverTab === 'template'}
+                  onClick={handleDatingCoverTemplateTabClick}
+                  className={`private-cover-tab${datingCoverTab === 'template' ? ' private-cover-tab--active' : ''}`}
+                  title={t('social_cover_tab_templates', { defaultValue: 'Ready backgrounds' })}
+                  aria-label={t('social_cover_tab_templates', { defaultValue: 'Ready backgrounds' })}>
 
-                                <FaMagic aria-hidden />
+                                <FaImages aria-hidden />
                             </button>
                             </div>
                         </div>

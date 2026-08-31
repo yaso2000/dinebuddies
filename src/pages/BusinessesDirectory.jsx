@@ -936,6 +936,7 @@ const BusinessesDirectory = () => {
   { id: 'Cafe', label: t('type_cafe'), icon: '☕' },
   { id: 'Bar', label: t('type_bar', 'Bar'), icon: '🍺' },
   { id: 'Night Club', label: t('type_nightclub', 'Night Club'), icon: '🎵' },
+  { id: 'Hotel', label: t('type_hotel', 'Hotel'), icon: '🏨' },
   { id: 'Food Truck', label: t('type_foodtruck', 'Food Truck'), icon: '🚚' },
   { id: 'Fast Food', label: t('type_fastfood', 'Fast Food'), icon: '🍟' }];
 

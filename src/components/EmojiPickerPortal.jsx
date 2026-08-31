@@ -103,7 +103,16 @@ const EmojiPickerPortal = ({ open, onClose, onEmojiClick, anchorRef, panelHeight
 
     if (isMobile ? !sheetMounted : !open) return null;
 
-    const mobileHeight = Math.max(220, Math.round(panelHeight || DEFAULT_MOBILE_EMOJI_PANEL_HEIGHT));
+    // Cap the sheet to a keyboard-sized fraction of the viewport. Some iOS WebViews
+    // report an over-large keyboard height via visualViewport, which without a cap
+    // makes the emoji sheet fill most of the screen; a real keyboard is ~35–45% tall,
+    // so 48% stays above Android's (accurately measured) keyboard without clipping it.
+    const rawEmojiHeight = Math.round(panelHeight || DEFAULT_MOBILE_EMOJI_PANEL_HEIGHT);
+    const emojiHeightCap =
+        typeof window !== 'undefined' && window.innerHeight
+            ? Math.round(window.innerHeight * 0.48)
+            : 360;
+    const mobileHeight = Math.max(220, Math.min(rawEmojiHeight, emojiHeightCap));
 
     const pickerBody = (
         <Suspense fallback={<div style={{ width: '100%', height: isMobile ? mobileHeight : 380, background: '#111827' }} />}>

@@ -11,6 +11,8 @@ export const ImageUploadZone = {
     POST: 'post',
     STORY: 'story',
     AVATAR: 'avatar',
+    /** Dating-space profile photo — moderated + must contain a human face */
+    DATING_PHOTO: 'dating_photo',
     COVER: 'cover',
     LOGO: 'logo',
     GALLERY: 'gallery',
@@ -20,6 +22,10 @@ export const ImageUploadZone = {
     BUSINESS: 'business',
     PLACE: 'place',
     FEATURED: 'featured',
+    /** "Real or AI?" game camera photo — moderated (NSFW), faces allowed */
+    REAL_OR_AI_PHOTO: 'realornai_photo',
+    /** Reusable AI image-edit input — moderated (NSFW), faces allowed */
+    AI_EDIT_INPUT: 'ai_edit_input',
 };
 
 /** @param {string} folder */

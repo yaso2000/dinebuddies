@@ -69,8 +69,15 @@ const CompatJourneyRoom = lazy(() => import('./pages/CompatJourneyRoom'));
 const CreateStage = lazy(() => import('./pages/CreateStage'));
 const CreateGroupGame = lazy(() => import('./pages/CreateGroupGame'));
 const GroupGameRoom = lazy(() => import('./pages/GroupGameRoom'));
-const CreateMatchShow = lazy(() => import('./pages/CreateMatchShow'));
-const MatchShowRoom = lazy(() => import('./pages/MatchShowRoom'));
+const CreateSuitabilityPost = lazy(() => import('./pages/CreateSuitabilityPost'));
+const SuitabilityPostRoom = lazy(() => import('./pages/SuitabilityPostRoom'));
+const SuitabilityDeck = lazy(() => import('./pages/SuitabilityDeck'));
+const RealOrAiDeck = lazy(() => import('./pages/RealOrAiDeck'));
+const CreateRealOrAiPost = lazy(() => import('./pages/CreateRealOrAiPost'));
+const MyRealOrAiCard = lazy(() => import('./pages/MyRealOrAiCard'));
+const ZodiacDeck = lazy(() => import('./pages/ZodiacDeck'));
+const CreateZodiacPost = lazy(() => import('./pages/CreateZodiacPost'));
+const MyZodiacCard = lazy(() => import('./pages/MyZodiacCard'));
 const StagesHub = lazy(() => import('./pages/StagesHub'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const HomeInvitations = lazy(() => import('./pages/Home'));
@@ -80,6 +87,7 @@ const BusinessSignup = lazy(() => import('./components/BusinessSignup'));
 const BusinessOnboarding = lazy(() => import('./pages/BusinessOnboarding'));
 const BusinessDashboard = lazy(() => import('./pages/BusinessDashboard'));
 const BusinessInboxManage = lazy(() => import('./pages/BusinessInboxManage'));
+const BusinessJobsManage = lazy(() => import('./pages/BusinessJobsManage'));
 // Eager — lazy chunks here caused ChunkLoadError on mobile after deploy → feed redirect.
 import SocialInvitationDetails from './pages/SocialInvitationDetails';
 import SocialInvitationPreview from './pages/SocialInvitationPreview';
@@ -285,6 +293,7 @@ function App() {
 
                                                     <Route path="/business-dashboard" element={<GuestBlockedRoute><BusinessDashboard /></GuestBlockedRoute>} />
                                                     <Route path="/business-dashboard/inbox" element={<GuestBlockedRoute><BusinessInboxManage /></GuestBlockedRoute>} />
+                                                    <Route path="/business-dashboard/jobs" element={<GuestBlockedRoute><BusinessJobsManage /></GuestBlockedRoute>} />
 
                                                     <Route
                                                         path="/search"
@@ -329,8 +338,15 @@ function App() {
                                                     <Route path="/create-stage" element={<GuestBlockedRoute><CreateStage /></GuestBlockedRoute>} />
                                                     <Route path="/create-group-game" element={<GuestBlockedRoute><CreateGroupGame /></GuestBlockedRoute>} />
                                                     <Route path="/group-game/:gameId" element={<GuestBlockedRoute><GroupGameRoom /></GuestBlockedRoute>} />
-                                                    <Route path="/create-match-show" element={<GuestBlockedRoute><CreateMatchShow /></GuestBlockedRoute>} />
-                                                    <Route path="/match-show/:showId" element={<GuestBlockedRoute><MatchShowRoom /></GuestBlockedRoute>} />
+                                                    <Route path="/suitability" element={<GuestBlockedRoute><SuitabilityDeck /></GuestBlockedRoute>} />
+                                                    <Route path="/realornai" element={<GuestBlockedRoute><RealOrAiDeck /></GuestBlockedRoute>} />
+                                                    <Route path="/realornai/new" element={<GuestBlockedRoute><CreateRealOrAiPost /></GuestBlockedRoute>} />
+                                                    <Route path="/realornai/mine" element={<GuestBlockedRoute><MyRealOrAiCard /></GuestBlockedRoute>} />
+                                                    <Route path="/zodiac" element={<GuestBlockedRoute><ZodiacDeck /></GuestBlockedRoute>} />
+                                                    <Route path="/zodiac/new" element={<GuestBlockedRoute><CreateZodiacPost /></GuestBlockedRoute>} />
+                                                    <Route path="/zodiac/mine" element={<GuestBlockedRoute><MyZodiacCard /></GuestBlockedRoute>} />
+                                                    <Route path="/suitability/new" element={<GuestBlockedRoute><CreateSuitabilityPost /></GuestBlockedRoute>} />
+                                                    <Route path="/suitability/:id" element={<GuestBlockedRoute><SuitabilityPostRoom /></GuestBlockedRoute>} />
                                                     <Route path="/stages" element={<GuestBlockedRoute><StagesHub /></GuestBlockedRoute>} />
                                                     <Route path="/create-post" element={<GuestBlockedRoute><BusinessCreatePostGate /></GuestBlockedRoute>} />
                                                     <Route path="/create-featured-post" element={<GuestBlockedRoute><CreateFeaturedPost /></GuestBlockedRoute>} />

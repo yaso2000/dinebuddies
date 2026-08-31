@@ -164,12 +164,17 @@ function registerCompatJourney(exports, { db, admin, enforceCallableRateLimit })
         }
         const compatPct = totalWeight > 0 ? Math.round((matchedWeight / totalWeight) * 100) : 0;
         const threshold = LEVEL_THRESHOLDS[level] || 60;
-        const passed = compatPct >= threshold;
+        // The score no longer gates progress: every level advances regardless of the
+        // percentage. The % is always revealed, and the final result rates the match
+        // by the overall %. `hitThreshold` is kept only as an informational flag.
+        const hitThreshold = compatPct >= threshold;
+        const passed = true;
 
         const updates = {
             [`perLevel.${level}`]: {
                 compatPct,
                 passed,
+                hitThreshold,
                 threshold,
                 reveal,
                 computedAt: now,
@@ -199,14 +204,17 @@ function registerCompatJourney(exports, { db, admin, enforceCallableRateLimit })
 
         await ref.update(updates);
 
+        const isFinal = level >= LEVELS;
         await notifyUser(
             otherUid, uid, journeyId,
             'compat_reveal',
-            passed ? 'Level unlocked 💗' : 'Results are in ✨',
-            passed ? `You matched ${compatPct}% — the next level is open!` : `You matched ${compatPct}% this round.`
+            isFinal ? 'Journey complete 💗' : 'Level unlocked 💗',
+            isFinal
+                ? `Your overall match is ${updates.overallCompat}%!`
+                : `You matched ${compatPct}% — the next level is open!`
         );
 
-        return { ok: true, bothSubmitted: true, compatPct, passed, completed: passed && level >= LEVELS };
+        return { ok: true, bothSubmitted: true, compatPct, passed, hitThreshold, completed: isFinal };
     });
 
     // Restart: wipe the journey and its answers so the pair can play fresh.

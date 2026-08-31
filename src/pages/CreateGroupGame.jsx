@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaChevronLeft, FaHeart, FaUsers, FaGlobe, FaLock, FaCheck } from 'react-icons/fa';
+import { FaChevronLeft, FaHeart, FaGlobe, FaLock, FaCheck } from 'react-icons/fa';
 import { groupGameApi } from '../hooks/useGroupGame';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -11,6 +11,29 @@ import { getSafeAvatar } from '../utils/avatarUtils';
 import { AppText } from '../components/base';
 
 const MAX_INVITEES = 30;
+
+// Per-game identity + its OWN settings (no global settings): question options
+// (`rounds`, null = no question count), default round count, and player bounds.
+const GAME_META = [
+  { key: 'taste_match', emoji: '💞', a: '#ec4899', b: '#e11d48',
+    titleKey: 'group_game_taste_title', titleDefault: 'Group Compatibility',
+    descKey: 'group_game_desc_taste', descDefault: 'Everyone answers fun this-or-that questions — discover who is most in sync.',
+    rounds: [4, 6, 8, 10], defaultRounds: 6, minPlayers: 3, maxPlayers: 16 },
+  { key: 'most_likely', emoji: '🕵️', a: '#0d9488', b: '#0891b2',
+    titleKey: 'most_likely_title', titleDefault: 'Most Likely To',
+    descKey: 'group_game_desc_most_likely', descDefault: '“Who is most likely to…” — vote on the people in the room.',
+    rounds: [4, 6, 8, 10], defaultRounds: 6, minPlayers: 3, maxPlayers: 16 },
+  { key: 'two_truths', emoji: '🤥', a: '#f59e0b', b: '#ea580c',
+    titleKey: 'two_truths_title', titleDefault: 'Two Truths & a Lie',
+    descKey: 'group_game_desc_two_truths', descDefault: 'Write two truths and a lie — everyone else guesses the lie.',
+    rounds: null, defaultRounds: 0, minPlayers: 3, maxPlayers: 16 },
+  { key: 'who_said_it', emoji: '🗣️', a: '#8b5cf6', b: '#6d28d9',
+    titleKey: 'whosaid_title', titleDefault: 'Who said it?',
+    descKey: 'group_game_desc_whosaid', descDefault: 'Everyone answers one question secretly — then guess who wrote each answer.',
+    rounds: null, defaultRounds: 0, minPlayers: 3, maxPlayers: 16 },
+];
+
+const metaFor = (key) => GAME_META.find((g) => g.key === key) || GAME_META[0];
 
 export default function CreateGroupGame() {
   const navigate = useNavigate();
@@ -95,49 +118,63 @@ export default function CreateGroupGame() {
       </div>
 
       <div style={{ maxWidth: 560, margin: '0 auto', padding: 20 }}>
-        <div style={{ textAlign: 'center', marginBottom: 22 }}>
-          <div style={{ width: 68, height: 68, borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-            <FaUsers size={30} color="#fff" />
+        {/* Visibility — compact segmented pill at the top (inline styles for cross-platform parity) */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}>
+          <div role="tablist" style={{ display: 'inline-flex', background: 'var(--bg-elevated)', border: '1px solid var(--border-color)', borderRadius: 999, padding: 3, gap: 3 }}>
+            {[
+              { key: 'public', icon: FaGlobe, label: t('group_game_vis_public', 'Everyone') },
+              { key: 'invite_only', icon: FaLock, label: t('group_game_vis_private', 'Private') },
+            ].map(({ key, icon: Icon, label }) => {
+              const on = visibility === key;
+              return (
+                <button key={key} type="button" role="tab" onClick={() => setVisibility(key)}
+                  style={{ border: 'none', borderRadius: 999, padding: '7px 16px', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+                    background: on ? 'linear-gradient(135deg, var(--primary), #f0a24b)' : 'transparent',
+                    color: on ? '#fff' : 'var(--text-muted)', boxShadow: on ? '0 2px 8px rgba(232,110,46,0.35)' : 'none' }}>
+                  <Icon size={12} /> {label}
+                </button>
+              );
+            })}
           </div>
-          <AppText as="h1" style={{ fontSize: '1.4rem', fontWeight: 900, marginBottom: 6 }}>{t('group_game_taste_title', 'Group Compatibility')}</AppText>
-          <AppText as="p" style={{ color: 'var(--text-muted)', fontSize: '0.92rem', maxWidth: 420, margin: '0 auto' }}>
-            {t('group_game_taste_desc', 'Everyone answers fun this-or-that questions. See who is most in sync — and the couple of the night.')}
-          </AppText>
         </div>
 
-        {/* Game type */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-          {[
-            { key: 'taste_match', emoji: '💞', title: t('group_game_taste_title', 'Group Compatibility') },
-            { key: 'zodiac_guess', emoji: '⭐', title: t('zodiac_game_title', 'Guess the Sign') },
-            { key: 'most_likely', emoji: '🕵️', title: t('most_likely_title', 'Most Likely To') },
-            { key: 'two_truths', emoji: '🤥', title: t('two_truths_title', 'Two Truths & a Lie') },
-          ].map(({ key, emoji, title }) => (
-            <button key={key} type="button" onClick={() => setGameType(key)}
-              style={{ padding: '14px 10px', borderRadius: 14, cursor: 'pointer', textAlign: 'center',
-                border: `2px solid ${gameType === key ? 'var(--primary)' : 'var(--border-color)'}`,
-                background: gameType === key ? 'rgba(232,110,46,0.08)' : 'var(--bg-card)', color: 'var(--text-main)' }}>
-              <div style={{ fontSize: '1.5rem' }}>{emoji}</div>
-              <AppText as="div" style={{ fontWeight: 800, marginTop: 4, fontSize: '0.9rem' }}>{title}</AppText>
-            </button>
-          ))}
-        </div>
+        {/* Dynamic hero — reflects the selected game */}
+        {(() => {
+          const g = GAME_META.find((x) => x.key === gameType) || GAME_META[0];
+          return (
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ width: 74, height: 74, borderRadius: '50%', display: 'grid', placeItems: 'center', margin: '0 auto 12px',
+                fontSize: '2.2rem', background: `linear-gradient(140deg, ${g.a}, ${g.b})`, color: '#fff',
+                boxShadow: `0 10px 26px ${g.b}55, inset 0 1px 8px rgba(255,255,255,0.35)`, border: '1.5px solid rgba(255,255,255,0.35)' }}>
+                {g.emoji}
+              </div>
+              <AppText as="h1" style={{ fontSize: '1.4rem', fontWeight: 900, marginBottom: 6 }}>{t(g.titleKey, g.titleDefault)}</AppText>
+              <AppText as="p" style={{ color: 'var(--text-muted)', fontSize: '0.92rem', maxWidth: 420, margin: '0 auto' }}>{t(g.descKey, g.descDefault)}</AppText>
+            </div>
+          );
+        })()}
 
-        {/* Visibility */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-          {[
-            { key: 'public', icon: FaGlobe, title: t('group_game_vis_public', 'Everyone'), hint: t('group_game_vis_public_hint', 'Anyone can join') },
-            { key: 'invite_only', icon: FaLock, title: t('group_game_vis_private', 'Private'), hint: t('group_game_vis_private_hint', 'Invite specific people') },
-          ].map(({ key, icon: Icon, title, hint }) => (
-            <button key={key} type="button" onClick={() => setVisibility(key)}
-              style={{ padding: '14px 10px', borderRadius: 14, cursor: 'pointer', textAlign: 'center',
-                border: `2px solid ${visibility === key ? 'var(--primary)' : 'var(--border-color)'}`,
-                background: visibility === key ? 'rgba(232,110,46,0.08)' : 'var(--bg-card)', color: 'var(--text-main)' }}>
-              <Icon color={visibility === key ? 'var(--primary)' : 'var(--text-muted)'} size={18} />
-              <AppText as="div" style={{ fontWeight: 800, marginTop: 6 }}>{title}</AppText>
-              <AppText as="div" style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{hint}</AppText>
-            </button>
-          ))}
+        {/* Game type — glassy gradient cards (inline styles for cross-platform parity) */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
+          {GAME_META.map((g) => {
+            const sel = gameType === g.key;
+            return (
+              <button key={g.key} type="button" onClick={() => { setGameType(g.key); setRounds(metaFor(g.key).defaultRounds || 0); }}
+                style={{ position: 'relative', borderRadius: 18, padding: '16px 10px', cursor: 'pointer', textAlign: 'center',
+                  color: '#fff', overflow: 'hidden', border: '1.5px solid rgba(255,255,255,0.22)',
+                  background: `linear-gradient(140deg, ${g.a}, ${g.b})`,
+                  transform: sel ? 'translateY(-3px)' : 'none', transition: 'transform .16s ease, box-shadow .2s ease',
+                  boxShadow: sel ? '0 12px 30px rgba(0,0,0,0.30), 0 0 0 3px rgba(255,255,255,0.9)' : '0 8px 22px rgba(0,0,0,0.18)' }}>
+                <span aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+                  background: 'linear-gradient(160deg, rgba(255,255,255,0.30), rgba(255,255,255,0) 46%)' }} />
+                <div style={{ position: 'relative', width: 54, height: 54, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                  margin: '0 auto 8px', fontSize: '1.7rem', background: 'rgba(255,255,255,0.22)',
+                  border: '1px solid rgba(255,255,255,0.35)', boxShadow: 'inset 0 1px 6px rgba(255,255,255,0.25)' }}>{g.emoji}</div>
+                <AppText as="div" style={{ position: 'relative', fontWeight: 900, fontSize: '0.95rem', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.18)' }}>{t(g.titleKey, g.titleDefault)}</AppText>
+              </button>
+            );
+          })}
         </div>
 
         {/* Invitee picker (private only) */}
@@ -167,22 +204,51 @@ export default function CreateGroupGame() {
           </div>
         ) : null}
 
-        {/* Rounds */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 16, padding: 18, marginBottom: 18 }}>
-          <AppText as="div" style={{ fontWeight: 700, marginBottom: 10 }}>{t('group_game_rounds', 'Number of questions')}</AppText>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {[4, 6, 8, 10].map((n) => (
-              <button key={n} type="button" onClick={() => setRounds(n)}
-                style={{ flex: 1, minWidth: 60, padding: '10px', borderRadius: 12, fontWeight: 800, cursor: 'pointer',
-                  border: `2px solid ${rounds === n ? 'var(--primary)' : 'var(--border-color)'}`,
-                  background: rounds === n ? 'var(--primary)' : 'var(--bg-card)', color: rounds === n ? '#fff' : 'var(--text-main)' }}>{n}</button>
-            ))}
-          </div>
-        </div>
+        {/* Per-game settings: question count (only for games that have one) + the
+            game's own player bounds. No global settings — each game differs. */}
+        {(() => {
+          const g = metaFor(gameType);
+          return (
+            <div style={{ background: 'var(--bg-card)', border: `1.5px solid ${g.b}`, borderRadius: 16, padding: 18, marginBottom: 18 }}>
+              <AppText as="div" style={{ fontWeight: 800, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span aria-hidden style={{ fontSize: '1.1rem' }}>{g.emoji}</span>
+                {t('group_game_settings_for', { defaultValue: '{{game}} — settings', game: t(g.titleKey, g.titleDefault) })}
+              </AppText>
+              {Array.isArray(g.rounds) && g.rounds.length ? (
+                <>
+                  <AppText as="div" style={{ fontWeight: 700, marginBottom: 10, fontSize: '0.9rem', color: 'var(--text-muted)' }}>{t('group_game_rounds', 'Number of questions')}</AppText>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                    {g.rounds.map((n) => (
+                      <button key={n} type="button" onClick={() => setRounds(n)}
+                        style={{ flex: 1, minWidth: 60, padding: '10px', borderRadius: 12, fontWeight: 800, cursor: 'pointer',
+                          border: `2px solid ${rounds === n ? 'var(--primary)' : 'var(--border-color)'}`,
+                          background: rounds === n ? 'var(--primary)' : 'var(--bg-card)', color: rounds === n ? '#fff' : 'var(--text-main)' }}>{n}</button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <AppText as="div" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 14 }}>
+                  {t('group_game_rounds_auto', 'One round per player — no question count to set.')}
+                </AppText>
+              )}
+              <AppText as="div" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                👥 {t('group_game_player_range', { defaultValue: '{{min}}–{{max}} players', min: g.minPlayers, max: g.maxPlayers })}
+              </AppText>
+            </div>
+          );
+        })()}
 
-        <button type="button" className="db-btn db-btn--lime" style={{ width: '100%', padding: 16, fontSize: '1.05rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} disabled={creating} onClick={create}>
-          <FaHeart /> {creating ? t('group_game_creating', 'Creating…') : t('group_game_create_cta', 'Create game')}
-        </button>
+        {(() => {
+          const g = GAME_META.find((x) => x.key === gameType) || GAME_META[0];
+          return (
+            <button type="button" style={{ width: '100%', padding: 16, fontSize: '1.05rem', fontWeight: 900, borderRadius: 16, border: '1.5px solid rgba(255,255,255,0.25)',
+              cursor: creating ? 'default' : 'pointer', opacity: creating ? 0.7 : 1, color: '#fff',
+              background: `linear-gradient(140deg, ${g.a}, ${g.b})`, boxShadow: `0 10px 26px ${g.b}55`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} disabled={creating} onClick={create}>
+              <FaHeart /> {creating ? t('group_game_creating', 'Creating…') : t('group_game_create_cta', 'Create game')}
+            </button>
+          );
+        })()}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '22px 0', color: 'var(--text-muted)' }}>
           <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />

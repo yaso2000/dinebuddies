@@ -2977,6 +2977,55 @@ async function adminDeleteUserCascade(targetUid) {
     return { deletedItems, storageObjectsDeleted: stats.storagePrefixes || 0, stats };
 }
 
+// ─── Convert the caller's PERSONAL account into a fresh BUSINESS shell ───────
+// Used by the "Sign up for business with Google" flow: if the Google account
+// already exists as a personal account, we do NOT mix — we permanently purge the
+// personal data (keeping the Firebase Auth UID / Google login) and re-stamp a
+// clean business-intent doc. Mirrors the claim→convert path but has no listing.
+exports.convertPersonalToBusinessIntent = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Please sign in first.');
+    }
+    const uid = context.auth.uid;
+    const userRef = db.collection('users').doc(uid);
+    const snap = await userRef.get();
+    const existing = snap.exists ? snap.data() || {} : {};
+
+    const role = String(existing.role || '').toLowerCase();
+    const isBusiness =
+        role === 'business' ||
+        role === 'partner' ||
+        String(existing.accountType || '').toLowerCase() === 'business' ||
+        String(existing.registrationIntent || '').toLowerCase() === 'business' ||
+        existing.pendingBusinessRegistration === true ||
+        (existing.businessInfo && typeof existing.businessInfo === 'object' && Object.keys(existing.businessInfo).length > 0);
+
+    // Already a business (or mid-registration): nothing to convert.
+    if (isBusiness) {
+        return { ok: true, alreadyBusiness: true };
+    }
+
+    // Personal (or empty) account → purge personal data, keep the Google login.
+    const { purgeUserAccountData } = require('./accountDeletionCore');
+    await purgeUserAccountData(admin, uid, { deleteAuthUser: false });
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    await userRef.set({
+        uid,
+        registrationIntent: 'business',
+        pendingBusinessRegistration: true,
+        accountType: 'business',
+        authProvider: 'google',
+        email: (context.auth.token && context.auth.token.email) || existing.email || '',
+        display_name: (context.auth.token && context.auth.token.name) || existing.display_name || '',
+        isGuest: false,
+        created_time: now,
+        last_active_time: now,
+    }, { merge: true });
+
+    return { ok: true, converted: true };
+});
+
 // ─── Trusted admin callable: delete user (destructive) ──────────────────────
 exports.adminDeleteUser = functions.https.onCall(async (data, context) => {
     const { isSuperOwner } = await assertAdminContext(context);
@@ -3509,6 +3558,9 @@ registerPartnerNotificationInbox(exports, { db, admin, sendPushToUser });
 const { registerFeedbackTickets } = require('./feedbackTickets');
 registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit });
 
+const { registerJobPostings } = require('./jobPostings');
+registerJobPostings(exports, { db, admin, enforceCallableRateLimit });
+
 const { registerCompatJourney } = require('./compatJourney');
 registerCompatJourney(exports, { db, admin, enforceCallableRateLimit });
 
@@ -3518,8 +3570,13 @@ const { registerSupportAgent } = require('./supportAgent');
 registerSupportAgent(exports, { db, admin, enforceCallableRateLimit });
 const { registerGroupGames } = require('./groupGames');
 registerGroupGames(exports, { db, admin, enforceCallableRateLimit });
-const { registerMatchShow } = require('./matchShow');
-registerMatchShow(exports, { db, admin, enforceCallableRateLimit });
+const { registerSuitabilityPost } = require('./suitabilityPost');
+registerSuitabilityPost(exports, { db, admin, enforceCallableRateLimit });
+const { registerRealOrAiPost } = require('./realOrAiPost');
+registerRealOrAiPost(exports, { db, admin, enforceCallableRateLimit });
+
+const { registerZodiacPost } = require('./zodiacPost');
+registerZodiacPost(exports, { db, admin, enforceCallableRateLimit });
 const { registerFoodTrivia } = require('./foodTrivia');
 registerFoodTrivia(exports, { db, admin, enforceCallableRateLimit });
 

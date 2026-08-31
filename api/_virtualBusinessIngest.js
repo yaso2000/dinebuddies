@@ -32,7 +32,7 @@ async function applyPreviewCoverToDetails(placeId, details) {
 /**
  * @param {string} placeId
  */
-async function findExistingByGooglePlaceId(placeId) {
+export async function findExistingByGooglePlaceId(placeId) {
     ensureFirebaseAdmin();
     const db = getFirestore();
 

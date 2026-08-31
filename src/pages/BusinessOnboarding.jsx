@@ -25,6 +25,7 @@ const BUSINESS_TYPES = [
 'Cafe',
 'Bar',
 'Night Club',
+'Hotel',
 'BBQ Parties',
 'Food Truck',
 'Lounge',

@@ -1242,7 +1242,7 @@
     position: fixed;
     left: 50%;
     transform: translateX(-50%);
-    bottom: var(--nav-height, 65px);
+    bottom: calc(var(--nav-height, 65px) + env(safe-area-inset-bottom, 0px));
     width: 100%;
     max-width: var(--max-width, 500px);
     box-sizing: border-box;

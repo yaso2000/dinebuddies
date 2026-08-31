@@ -138,10 +138,13 @@
         max-width: calc(100vw - 40px);
         right: 20px;
         left: 20px;
+        /* Keyboard-sized on phones — never taller than the on-screen keyboard. */
+        max-height: min(340px, 48vh);
     }
 
     .emoji-grid {
         grid-template-columns: repeat(7, 1fr);
+        max-height: min(260px, 40vh);
     }
 
     .emoji-category-btn {

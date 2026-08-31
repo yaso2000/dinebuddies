@@ -480,6 +480,7 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                     <option value="Cafe">Cafe</option>
                                     <option value="Bar">Bar</option>
                                     <option value="Night Club">Night Club</option>
+                                    <option value="Hotel">Hotel</option>
                                     <option value="Food Truck">Food Truck</option>
                                     <option value="Fast Food">Fast Food</option>
                                 </select>

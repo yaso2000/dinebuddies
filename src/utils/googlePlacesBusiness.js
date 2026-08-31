@@ -99,6 +99,7 @@ export function mapGoogleTypesToBusinessType(types) {
     if (!Array.isArray(types) || types.length === 0) return null;
     const lower = new Set(types.map((x) => String(x).toLowerCase()));
     if (lower.has('night_club')) return 'Night Club';
+    if (lower.has('lodging') || lower.has('hotel') || lower.has('resort_hotel') || lower.has('motel')) return 'Hotel';
     if (lower.has('bar')) return 'Bar';
     if (lower.has('cafe') || lower.has('bakery')) return 'Cafe';
     if (lower.has('restaurant') || lower.has('meal_takeaway') || lower.has('meal_delivery')) return 'Restaurant';

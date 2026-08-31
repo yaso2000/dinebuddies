@@ -27,7 +27,7 @@ export function useInviteCreateNavigation({
   const { showToast } = useToast();
   const { cannotCreateInvitations, currentUser, isBusiness, userProfile } = useAuth();
   const activeGameId = userProfile?.hostActiveGameId || null;
-  const activeShowId = userProfile?.hostActiveShowId || null;
+  const activeSuitabilityPostId = userProfile?.suitabilityActivePostId || null;
   const { canCreateSocialInvitation, restaurants: restaurantsFromContext } = useInvitations();
   const { stageId: liveStageId, hasLiveStage, loading: liveStageLoading } = useMyLiveStage();
   const [publicGateChecking, setPublicGateChecking] = useState(false);
@@ -80,9 +80,23 @@ export function useInviteCreateNavigation({
         return;
       }
 
-      // "Match or Not" live show — one per host, same enter/create pattern.
-      if (kind === 'match_show') {
-        navigate(activeShowId ? `/match-show/${activeShowId}` : '/create-match-show');
+      // "Who suits you?" — a story-rail poll. Reopen the live post if one exists.
+      if (kind === 'suitability') {
+        navigate(activeSuitabilityPostId ? `/suitability/${activeSuitabilityPostId}` : '/suitability/new');
+        onAfterNavigate?.();
+        return;
+      }
+
+      // "Real or AI?" — create a round (camera or AI image).
+      if (kind === 'realornai') {
+        navigate('/realornai/new');
+        onAfterNavigate?.();
+        return;
+      }
+
+      // "Guess my sign?" — a story-rail card. Reopen the live one if it exists.
+      if (kind === 'zodiac') {
+        navigate('/zodiac/new');
         onAfterNavigate?.();
         return;
       }
@@ -156,29 +170,10 @@ export function useInviteCreateNavigation({
         return;
       }
 
-      if (kind === 'private' || kind === 'dating') {
-        const quotaInfo = canCreateSocialInvitation('private', {
-          freeSlotAvailable: Boolean(dailyFreeStatus?.privateFree),
-        });
-        if (!quotaInfo.profileLoading && !quotaInfo.canCreate) {
-          showToast(
-            t(
-              'insufficient_dine_credits_wallet',
-              'Not enough Dine Credits. Open Settings → Dine Credits to top up.'
-            ),
-            'error'
-          );
-          navigate('/settings/credits');
-          onAfterNavigate?.();
-          return;
-        }
-        navigate(withBusinessIdInPath('/create-private', businessId), { state });
-        onAfterNavigate?.();
-      }
     },
     [
       activeGameId,
-      activeShowId,
+      activeSuitabilityPostId,
       businessId,
       canCreateSocialInvitation,
       cannotCreateInvitations,
@@ -205,7 +200,7 @@ export function useInviteCreateNavigation({
     cannotCreateInvitations,
     activeHostedStage,
     activeGameId,
-    activeShowId,
+    activeSuitabilityPostId,
     liveStageLoading,
   };
 }
