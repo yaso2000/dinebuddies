@@ -31,23 +31,22 @@ export default function UserDirectoryFilters({
   );
 
   return (
-    <div className="users-directory-filters-wrap">
-      <div
-        id={id}
-        className="users-directory-filters users-directory-filters--toolbar"
-        role="group"
-        aria-label={t('user_directory_gender_filter_aria', 'Gender filter')}>
-        {genderFilters.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            className={`home-geo-chip home-geo-chip--compact users-directory-filter-chip${genderFilter === f.id ? ' home-geo-chip--active' : ''}`}
-            onClick={() => onGenderFilterChange(f.id)}
-            aria-pressed={genderFilter === f.id}>
-            <AppText as="span" className="home-geo-chip__label">{f.label}</AppText>
-          </button>
-        ))}
-      </div>
+    <div
+      id={id}
+      className="users-directory-filters users-directory-filters--toolbar"
+      role="group"
+      aria-label={t('user_directory_gender_filter_aria', 'Gender filter')}
+      style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+      {genderFilters.map((f) => (
+        <button
+          key={f.id}
+          type="button"
+          className={`home-geo-chip home-geo-chip--compact users-directory-filter-chip${genderFilter === f.id ? ' home-geo-chip--active' : ''}`}
+          onClick={() => onGenderFilterChange(f.id)}
+          aria-pressed={genderFilter === f.id}>
+          <AppText as="span" className="home-geo-chip__label">{f.label}</AppText>
+        </button>
+      ))}
 
       {onAgeCategoryFilterChange && (
         <select
@@ -56,10 +55,10 @@ export default function UserDirectoryFilters({
           onChange={(e) => onAgeCategoryFilterChange(e.target.value)}
           aria-label={t('user_directory_age_filter_aria', 'Age category filter')}
           style={{
-            padding: '6px 10px', borderRadius: '999px', fontSize: '0.85rem', fontWeight: 600,
+            padding: '6px 8px', borderRadius: '999px', fontSize: '0.82rem', fontWeight: 600,
             cursor: 'pointer', background: ageCategoryFilter !== 'all' ? 'var(--primary)' : 'var(--bg-elevated, var(--bg-card))',
             color: ageCategoryFilter !== 'all' ? '#fff' : 'var(--text-main)',
-            border: '1px solid var(--border-color)', minWidth: '92px',
+            border: '1px solid var(--border-color)', minWidth: '84px', height: '30px',
           }}>
           {ageFilters.map((f) => (
             <option key={f.id} value={f.id}>
