@@ -26,7 +26,7 @@ import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
+import { getBusinessProAccess } from '../utils/businessSubscription';
 import { uploadImage, uploadVoiceMessage } from '../utils/mediaUtils';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { createNotification } from '../utils/notificationHelpers';
@@ -155,7 +155,7 @@ export function useStageChatRoom(stageId) {
     /** Business Stages need the host's Paid plan; messages are rules-blocked otherwise. */
     const isBusinessStageUnpaid =
         String(partner?.hostKind || '').toLowerCase() === 'business' &&
-        !getBusinessSubscriptionAccess(partner?.subscriptionTier).canCreateBusinessStage;
+        !getBusinessProAccess(partner).canCreateBusinessStage;
 
     useEffect(() => {
         setIsDisplaySession(false);

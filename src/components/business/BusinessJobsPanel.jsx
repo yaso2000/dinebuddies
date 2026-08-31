@@ -35,7 +35,11 @@ export default function BusinessJobsPanel({ profileId, isOwner }) {
         const unsub = onSnapshot(
             q,
             (snap) => {
-                const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                const nowSec = Date.now() / 1000;
+                const rows = snap.docs
+                    .map((d) => ({ id: d.id, ...d.data() }))
+                    // Hide expired postings client-side (the scheduled purge closes them later).
+                    .filter((j) => !(j.expiresAt?.seconds && j.expiresAt.seconds < nowSec));
                 rows.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
                 setJobs(rows);
                 setLoaded(true);

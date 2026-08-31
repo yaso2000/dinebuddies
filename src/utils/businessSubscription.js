@@ -14,4 +14,7 @@ export {
     normalizeBusinessPlanTier as normalizeBusinessTier,
     getBusinessPlanLimits,
     getBusinessPlanAccess as getBusinessSubscriptionAccess,
+    getBusinessProAccess,
+    isBusinessProLiteActive,
+    BUSINESS_PRO_LITE,
 } from '../config/businessPlanFeatures';

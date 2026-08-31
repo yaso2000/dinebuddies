@@ -3905,7 +3905,7 @@
   "settings_blocked_users": "Blockierte Benutzer",
   "settings_business_plan_row": "Geschäftsplan",
   "settings_business_plan_value_free": "Frei",
-  "settings_business_plan_value_paid": "Bezahlt ($${BUSINESS_PAID_MONTHLY_USD}/Monat)",
+  "settings_business_plan_value_paid": "Bezahlt (${{amount}}/Monat)",
   "settings_declined_invitations": "Abgelehnte Einladungen",
   "settings_preferences": "Präferenzen",
   "settings_privacy": "Datenschutz und Sicherheit",

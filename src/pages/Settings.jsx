@@ -165,13 +165,15 @@ const Settings = () => {
   {
     title: t('settings_privacy', 'Privacy & Security'),
     items: [
-    {
+    // Personal privacy (age/dating/visibility) does not apply to a business —
+    // a business only shows or hides its listing (from the dashboard).
+    ...(!isBusiness ? [{
       icon: <FaShieldAlt />,
       label: t('privacy_settings', 'Privacy Settings'),
       value: t('public', 'Public'),
       onClick: () => navigate('/settings/privacy'),
       color: '#06b6d4'
-    },
+    }] : []),
     {
       icon: <FaBan />,
       label: t('settings_blocked_users', 'Blocked users'),
@@ -182,12 +184,13 @@ const Settings = () => {
       onClick: () => navigate('/settings/blocked-users'),
       color: '#b91c1c'
     },
-    {
+    // Declined social invitations — consumer-only.
+    ...(!isBusiness ? [{
       icon: <FaUserClock />,
       label: t('settings_declined_invitations', 'Declined invitations'),
       onClick: () => navigate('/settings/declined-invitations'),
       color: '#8b5cf6'
-    }]
+    }] : [])]
 
   },
   {

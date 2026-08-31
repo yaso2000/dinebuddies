@@ -34,6 +34,47 @@ function registerJobPostings(exports, { db, admin, enforceCallableRateLimit }) {
 
     const asTrimmed = (v) => (typeof v === 'string' ? v.trim() : '');
 
+    /** Parse a job expiry (YYYY-MM-DD string or ms) into a Timestamp; end-of-day. */
+    function parseExpiry(raw) {
+        if (!raw) return null;
+        const d = typeof raw === 'number' ? new Date(raw) : new Date(String(raw));
+        if (Number.isNaN(d.getTime())) return null;
+        if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) {
+            d.setHours(23, 59, 59, 999);
+        }
+        return admin.firestore.Timestamp.fromDate(d);
+    }
+
+    /** Remove the mirrored feed post + swipe feature tied to a job (best-effort). */
+    async function cleanupJobDistribution(job, jobId, ownerId) {
+        const tasks = [];
+        if (job && job.feedPostId) {
+            tasks.push(db.collection('communityPosts').doc(job.feedPostId).delete().catch(() => {}));
+        }
+        // Clear the featured swipe job if it points at this job.
+        tasks.push(
+            (async () => {
+                try {
+                    const uSnap = await db.collection('users').doc(ownerId).get();
+                    const fj = uSnap.exists ? (uSnap.data() || {}).businessInfo?.featuredJob : null;
+                    if (fj && fj.jobId === jobId) {
+                        await db.collection('users').doc(ownerId).set(
+                            { businessInfo: { featuredJob: admin.firestore.FieldValue.delete() } },
+                            { merge: true }
+                        );
+                        await db.collection('public_profiles').doc(ownerId).set(
+                            { featuredJob: admin.firestore.FieldValue.delete() },
+                            { merge: true }
+                        ).catch(() => {});
+                    }
+                } catch {
+                    /* ignore */
+                }
+            })()
+        );
+        await Promise.all(tasks);
+    }
+
     /** Read the caller's user doc and confirm they are a Business Pro account. */
     async function assertBusinessPro(uid) {
         const snap = await db.collection('users').doc(uid).get();
@@ -76,6 +117,10 @@ function registerJobPostings(exports, { db, admin, enforceCallableRateLimit }) {
         const description = asTrimmed(data?.description);
         let jobType = asTrimmed(data?.jobType).toLowerCase();
         const location = asTrimmed(data?.location).slice(0, MAX_LOCATION);
+        // Distribution options (like the special offer): feed post, swipe banner.
+        const publishToFeed = data?.publishToFeed !== false; // default on
+        const showOnSwipe = data?.showOnSwipe === true;
+        const expiresAt = parseExpiry(data?.expiresAt); // Timestamp | null
 
         if (!title) throw new functions.https.HttpsError('invalid-argument', 'Job title is required.');
         if (title.length > MAX_TITLE) throw new functions.https.HttpsError('invalid-argument', 'Job title is too long.');
@@ -116,12 +161,69 @@ function registerJobPostings(exports, { db, admin, enforceCallableRateLimit }) {
             location: location || null,
             status: 'open', // open | closed
             applicationCount: 0,
+            expiresAt: expiresAt || null,
+            inFeed: publishToFeed,
+            onSwipeCard: showOnSwipe,
             createdAt: now,
             updatedAt: now,
             closedAt: null,
         });
 
-        return { ok: true, jobId: jobRef.id };
+        // (1) Mirror as a feed post in communityPosts (like motion posts).
+        let feedPostId = null;
+        if (publishToFeed) {
+            try {
+                const feedRef = db.collection('communityPosts').doc();
+                await feedRef.set({
+                    type: 'job_post',
+                    jobId: jobRef.id,
+                    authorId: uid,
+                    businessId: uid,
+                    author: { id: uid, name: business.name || '', avatar: business.avatar || null },
+                    content: title,
+                    jobSnapshot: {
+                        title,
+                        jobType,
+                        location: location || null,
+                        description: description.slice(0, 500),
+                        expiresAt: expiresAt || null,
+                    },
+                    status: 'published',
+                    likes: [],
+                    comments: [],
+                    reposts: [],
+                    authorInterests: [],
+                    publishedAt: now,
+                    createdAt: now,
+                    updatedAt: now,
+                });
+                feedPostId = feedRef.id;
+                await jobRef.update({ feedPostId });
+            } catch (e) {
+                console.warn('[createJobPosting] feed mirror failed:', e && e.message);
+            }
+        }
+
+        // (6) Feature the newest job on the business swipe card (mirror onto the
+        // user doc + public profile, like businessInfo.swipeSpecialOffer).
+        if (showOnSwipe) {
+            const featured = {
+                jobId: jobRef.id,
+                title,
+                jobType,
+                location: location || null,
+                expiresAt: expiresAt || null,
+                updatedAt: admin.firestore.Timestamp.now(),
+            };
+            try {
+                await db.collection('users').doc(uid).set({ businessInfo: { featuredJob: featured } }, { merge: true });
+                await db.collection('public_profiles').doc(uid).set({ featuredJob: featured }, { merge: true });
+            } catch (e) {
+                console.warn('[createJobPosting] swipe feature failed:', e && e.message);
+            }
+        }
+
+        return { ok: true, jobId: jobRef.id, feedPostId };
     });
 
     // ── Business edits / opens / closes a posting ─────────────────────────────
@@ -163,6 +265,10 @@ function registerJobPostings(exports, { db, admin, enforceCallableRateLimit }) {
         if (typeof data?.location === 'string') {
             updates.location = asTrimmed(data.location).slice(0, MAX_LOCATION) || null;
         }
+        if ('expiresAt' in (data || {})) {
+            updates.expiresAt = parseExpiry(data.expiresAt) || null;
+        }
+        let closing = false;
         if (typeof data?.status === 'string') {
             const status = asTrimmed(data.status).toLowerCase();
             if (status !== 'open' && status !== 'closed') {
@@ -170,9 +276,14 @@ function registerJobPostings(exports, { db, admin, enforceCallableRateLimit }) {
             }
             updates.status = status;
             updates.closedAt = status === 'closed' ? now : null;
+            closing = status === 'closed';
         }
 
         await jobRef.update(updates);
+        // Closing a job pulls its feed post + swipe banner.
+        if (closing) {
+            await cleanupJobDistribution(job, jobId, uid);
+        }
         return { ok: true };
     });
 
@@ -192,6 +303,9 @@ function registerJobPostings(exports, { db, admin, enforceCallableRateLimit }) {
         if (uid !== job.businessId) {
             throw new functions.https.HttpsError('permission-denied', 'Only the owner can delete this job.');
         }
+
+        // Pull the mirrored feed post + swipe banner first.
+        await cleanupJobDistribution(job, jobId, uid);
 
         // Remove applications tied to this job, then the job itself.
         const appsSnap = await db
@@ -328,6 +442,33 @@ function registerJobPostings(exports, { db, admin, enforceCallableRateLimit }) {
         if (status) updates.status = status;
         await appRef.update(updates);
         return { ok: true };
+    });
+
+    // ── Scheduled: auto-close expired jobs + pull their feed post / swipe banner ─
+    exports.purgeExpiredJobs = functions.pubsub.schedule('every 6 hours').onRun(async () => {
+        const nowTs = admin.firestore.Timestamp.now();
+        // Equality+inequality on different fields needs a composite index; query by
+        // the expiresAt inequality only (single-field) and filter status in code.
+        const snap = await db
+            .collection('business_jobs')
+            .where('expiresAt', '<=', nowTs)
+            .limit(300)
+            .get();
+        if (snap.empty) return null;
+        let closed = 0;
+        for (const docSnap of snap.docs) {
+            const job = docSnap.data() || {};
+            if (job.status !== 'open') continue;
+            try {
+                await docSnap.ref.update({ status: 'closed', closedAt: nowTs, updatedAt: nowTs });
+                await cleanupJobDistribution(job, docSnap.id, job.businessId);
+                closed += 1;
+            } catch (e) {
+                console.warn('[purgeExpiredJobs]', docSnap.id, e && e.message);
+            }
+        }
+        console.log(`[purgeExpiredJobs] closed ${closed} expired job(s)`);
+        return null;
     });
 }
 

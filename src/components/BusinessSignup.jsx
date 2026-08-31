@@ -1,12 +1,11 @@
 import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FaEnvelope, FaLock, FaCheck, FaStore, FaChevronRight, FaChevronLeft, FaExclamationTriangle } from 'react-icons/fa';
+import { FaEnvelope, FaLock, FaCheck, FaStore, FaChevronRight, FaChevronLeft } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import app, { auth, db } from '../firebase/config';
+import { auth, db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import {
   stashBusinessGoogleSignupIntent,
@@ -79,9 +78,6 @@ const BusinessSignup = () => {
   const { signInWithGoogle } = useAuth();
   const [step, setStep] = useState(STEPS.AUTH);
   const [googleBusy, setGoogleBusy] = useState(false);
-  const [showConvert, setShowConvert] = useState(false);
-  const [convertBusy, setConvertBusy] = useState(false);
-  const [pendingGoogleUser, setPendingGoogleUser] = useState(null);
 
   useLayoutEffect(() => {
     syncPendingReferralFromQueryString(location.search);
@@ -213,12 +209,6 @@ const BusinessSignup = () => {
     setStep(STEPS.AUTH);
   };
 
-  /** After a successful Google business auth, prefill email and go to details. */
-  const proceedAfterGoogle = (user) => {
-    if (user?.email) setEmail(user.email);
-    setStep(STEPS.DETAILS);
-  };
-
   const looksLikeBusiness = (data) =>
     !!data &&
     (String(data.accountType || '').toLowerCase() === 'business' ||
@@ -231,7 +221,15 @@ const BusinessSignup = () => {
   const hasFullBusinessInfo = (data) =>
     !!data?.businessInfo && typeof data.businessInfo === 'object' && Object.keys(data.businessInfo).length > 0;
 
-  /** "Create business account with Google" — never mixes account kinds. */
+  /**
+   * "Create business account with Google".
+   * - New Google account → the real completion page (/business/onboarding: type,
+   *   Google address, Google-Business ownership verification → verified badge).
+   * - Existing COMPLETE business → dashboard.
+   * - Existing PERSONAL account → REJECTED. We never silently convert a personal
+   *   account here; the destructive personal→business conversion lives only in the
+   *   explicit "claim your Google Business" flow (with its own double confirmation).
+   */
   const handleGoogleBusinessSignup = async () => {
     setGoogleBusy(true);
     stashBusinessGoogleSignupIntent();
@@ -244,18 +242,31 @@ const BusinessSignup = () => {
       const snap = await getDoc(doc(db, 'users', user.uid));
       const data = snap.exists() ? snap.data() : null;
 
-      if (res.isNewUser || (looksLikeBusiness(data) && !hasFullBusinessInfo(data))) {
-        // Fresh business shell (new / converted / mid-registration) → finish details.
-        clearBusinessGoogleSignupIntent();
-        proceedAfterGoogle(user);
-      } else if (looksLikeBusiness(data)) {
+      if (looksLikeBusiness(data) && hasFullBusinessInfo(data)) {
         // Already a complete business → straight to the dashboard.
         clearBusinessGoogleSignupIntent();
         navigate('/business-dashboard', { replace: true });
+      } else if (res.isNewUser || looksLikeBusiness(data)) {
+        // New Google account (fresh business shell) or a business still finishing
+        // registration → the forced completion page (type + address + verify).
+        clearBusinessGoogleSignupIntent();
+        navigate('/business/onboarding', { replace: true });
       } else {
-        // Existing PERSONAL account → require an explicit convert (destructive).
-        setPendingGoogleUser(user);
-        setShowConvert(true);
+        // Existing PERSONAL account → reject and keep the accounts separate.
+        // Use a BLOCKING alert (not a toast) so the message is never lost to the
+        // auth-state-driven navigation that fires right after sign-in — the user
+        // must clearly understand that business and personal accounts are separate.
+        clearBusinessGoogleSignupIntent();
+        const msg = t(
+          'business_google_personal_rejected_full',
+          "This Google account is already a PERSONAL account on DineBuddies.\n\nBusiness and personal accounts are kept separate. To open a BUSINESS account, use a business email + password, or sign in with a different Google account."
+        );
+        if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+          window.alert(msg);
+        } else {
+          showToast(msg, 'error');
+        }
+        await signOut(auth).catch(() => {});
       }
     } catch (err) {
       clearBusinessGoogleSignupIntent();
@@ -270,31 +281,6 @@ const BusinessSignup = () => {
     } finally {
       setGoogleBusy(false);
     }
-  };
-
-  /** Confirmed convert: purge the personal account, keep Google login, open business. */
-  const confirmConvertAndContinue = async () => {
-    const user = pendingGoogleUser;
-    if (!user) return;
-    setConvertBusy(true);
-    try {
-      const functions = getFunctions(app, 'us-central1');
-      await httpsCallable(functions, 'convertPersonalToBusinessIntent')({});
-      clearBusinessGoogleSignupIntent();
-      setShowConvert(false);
-      setPendingGoogleUser(null);
-      proceedAfterGoogle(user);
-    } catch (err) {
-      showToast(t('business_convert_failed', 'Could not convert the account. Please try again.'), 'error');
-    } finally {
-      setConvertBusy(false);
-    }
-  };
-
-  const cancelConvert = () => {
-    clearBusinessGoogleSignupIntent();
-    setShowConvert(false);
-    setPendingGoogleUser(null);
   };
 
   const redirectToExistingBusinessClaim = useCallback(
@@ -731,39 +717,6 @@ const BusinessSignup = () => {
                     </button>
                 </AppText>
             </div>
-
-            {showConvert &&
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)', padding: '16px'
-      }}>
-                    <div style={{ background: 'var(--bg-card)', borderRadius: '20px', width: '100%', maxWidth: '440px', padding: '22px', boxShadow: '0 10px 40px rgba(0,0,0,0.25)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', color: '#dc2626' }}>
-                            <FaExclamationTriangle size={20} />
-                            <AppText as="h3" style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)' }}>
-                                {t('business_convert_title', 'Convert this account to a business?')}
-                            </AppText>
-                        </div>
-                        <AppText as="p" style={{ margin: '0 0 16px', fontSize: '0.92rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                            {t('business_convert_body', 'This Google account is already a personal account on DineBuddies. To keep accounts separate, your personal account and its data will be permanently deleted, and a fresh business account will be opened under the same Google login. This cannot be undone.')}
-                        </AppText>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <button type="button" onClick={cancelConvert} disabled={convertBusy} style={{
-                              flex: 1, padding: '13px', borderRadius: '12px', border: '1px solid var(--border-color)',
-                              background: 'var(--bg-elevated)', color: 'var(--text-main)', fontWeight: 700, cursor: 'pointer'
-                            }}>
-                                {t('cancel', 'Cancel')}
-                            </button>
-                            <button type="button" onClick={confirmConvertAndContinue} disabled={convertBusy} style={{
-                              flex: 1, padding: '13px', borderRadius: '12px', border: 'none',
-                              background: '#dc2626', color: '#fff', fontWeight: 800, cursor: convertBusy ? 'not-allowed' : 'pointer'
-                            }}>
-                                {convertBusy ? t('please_wait', 'Please wait…') : t('business_convert_confirm_cta', 'Delete personal & continue')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-      }
         </BusinessAuthShell>);
 
 };

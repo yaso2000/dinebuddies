@@ -134,7 +134,16 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
         clearPostLogoutRedirect();
         setJustLoggedIn(true); // LoginHub navigates to the dashboard once profileServerSynced
       } else {
-        // This Google account is a personal (or empty) account — not a business.
+        // Personal (or empty) Google account on the BUSINESS sign-in — reject with a
+        // blocking, unmissable message (a toast/inline error would be lost to the
+        // auth-state navigation), so the user understands the two account kinds.
+        const msg = t(
+          'business_login_google_not_business_full',
+          "This Google account is a PERSONAL account, not a business.\n\nBusiness and personal accounts are separate on DineBuddies. Use the personal sign-in for this account, or open a business account first."
+        );
+        if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+          window.alert(msg);
+        }
         setError(
           t(
             'business_login_google_not_business',

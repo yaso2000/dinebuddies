@@ -145,6 +145,7 @@ import { ChatProvider } from './context/ChatContext';
 import { NotificationProvider } from './context/NotificationContext';
 // Guards & Utils
 import GuestBlockedRoute from './components/GuestBlockedRoute';
+import BusinessBlockedRoute from './components/BusinessBlockedRoute';
 import AuthRoutingGate from './components/AuthRoutingGate';
 import AccountShellGate from './components/AccountShellGate';
 import AdminRoute from './components/AdminRoute';
@@ -311,8 +312,9 @@ function App() {
                                                     <Route path="/restaurant/:id" element={<RestaurantDetails />} />
 
                                                     <Route path="/notifications" element={<GuestBlockedRoute><Notifications /></GuestBlockedRoute>} />
+                                                    {/* Business may open the hub for NOTIFICATIONS only; ChatList hides the DM tab for business. */}
                                                     <Route path="/messages" element={<GuestBlockedRoute><ChatList /></GuestBlockedRoute>} />
-                                                    <Route path="/chat/:userId" element={<GuestBlockedRoute><Chat /></GuestBlockedRoute>} />
+                                                    <Route path="/chat/:userId" element={<BusinessBlockedRoute><Chat /></BusinessBlockedRoute>} />
 
                                                     <Route path="/profile" element={<GuestBlockedRoute><Profile /></GuestBlockedRoute>} />
                                                     <Route path="/profile/:userId" element={<UserProfile />} />
@@ -332,9 +334,9 @@ function App() {
                                                     />
                                                     <Route path="/ai-design-studio" element={<GuestBlockedRoute><AiDesignStudio /></GuestBlockedRoute>} />
                                                     <Route path="/ai-text-studio" element={<GuestBlockedRoute><AiTextStudio /></GuestBlockedRoute>} />
-                                                    <Route path="/create" element={<GuestBlockedRoute><CreateInvitation /></GuestBlockedRoute>} />
-                                                    <Route path="/create-social" element={<GuestBlockedRoute><CreateSocialInvitation /></GuestBlockedRoute>} />
-                                                    <Route path="/create-private" element={<GuestBlockedRoute><CreatePrivateInvitation /></GuestBlockedRoute>} />
+                                                    <Route path="/create" element={<BusinessBlockedRoute><CreateInvitation /></BusinessBlockedRoute>} />
+                                                    <Route path="/create-social" element={<BusinessBlockedRoute><CreateSocialInvitation /></BusinessBlockedRoute>} />
+                                                    <Route path="/create-private" element={<BusinessBlockedRoute><CreatePrivateInvitation /></BusinessBlockedRoute>} />
                                                     <Route path="/create-stage" element={<GuestBlockedRoute><CreateStage /></GuestBlockedRoute>} />
                                                     <Route path="/create-group-game" element={<GuestBlockedRoute><CreateGroupGame /></GuestBlockedRoute>} />
                                                     <Route path="/group-game/:gameId" element={<GuestBlockedRoute><GroupGameRoom /></GuestBlockedRoute>} />

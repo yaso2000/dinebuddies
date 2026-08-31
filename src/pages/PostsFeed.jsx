@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import PostCard from '../components/PostCard';
 import MotionPostFeedCard from '../components/MotionPostFeedCard';
+import JobFeedCard from '../components/JobFeedCard';
 import StoriesBar from '../components/StoriesBar';
 import StoryViewer from '../components/StoryViewer';
 import FeaturedPostSlideCard from '../components/FeaturedPostSlideCard';
@@ -498,6 +499,9 @@ const PostsFeed = () => {
   }, [posts]);
 
   const renderFeedPost = (post) => {
+    if (post.type === 'job_post' || (post.jobId && post.jobSnapshot)) {
+      return <JobFeedCard key={post.id} post={post} />;
+    }
     const isMotion =
     post._isMotionPost ||
     post.type === 'motion_post' ||

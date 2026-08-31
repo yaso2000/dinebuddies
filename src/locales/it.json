@@ -4044,7 +4044,7 @@
   "settings_blocked_users": "Utenti bloccati",
   "settings_business_plan_row": "Piano aziendale",
   "settings_business_plan_value_free": "Gratuito",
-  "settings_business_plan_value_paid": "A pagamento ($${BUSINESS_PAID_MONTHLY_USD}/mese)",
+  "settings_business_plan_value_paid": "A pagamento (${{amount}}/mese)",
   "settings_preferences": "Preferenze",
   "settings_privacy": "Privacy e sicurezza",
   "settings_saved": "Impostazioni salvate con successo!",

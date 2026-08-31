@@ -417,14 +417,8 @@ const BusinessDashboard = () => {
                             </AppText>
             }
                     </button>
-                    <button
-            className="back-btn"
-            onClick={() => navigate('/search')}
-            aria-label="Search"
-            title="Search">
-
-                        <FaSearch />
-                    </button>
+                    {/* User discovery/search is a consumer feature — businesses must not
+                        browse, like, or contact regular users, so no search here. */}
                     <button className="back-btn" onClick={() => currentUser && navigate(`/business/${currentUser.uid}`)}>
                         <FaEdit />
                     </button>
@@ -675,10 +669,6 @@ const BusinessDashboard = () => {
             label={t('btn_edit_profile', 'Edit Profile')}
             onClick={() => currentUser && navigate(`/business/${currentUser.uid}`)} />
 
-                    <QuickActionButton
-            icon={<FaComments />}
-            label={t('chat', 'Chat')}
-            onClick={() => currentUser && navigate(`/community/${currentUser.uid}`)} />
 
                     <QuickActionButton
             icon={<FaChartLine />}
@@ -698,19 +688,7 @@ const BusinessDashboard = () => {
                 </div>
             </div>
 
-            {/* Stats Grid */}
-            <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-        gap: '1rem',
-        marginBottom: '1.5rem'
-      }}>
-                <StatTile icon={<FaUsers />} iconColor="#22c55e" iconBg="rgba(34, 197, 94, 0.1)" value={memberCountLoading ? '…' : stats.memberCount} label={t('stat_cmty_members', 'Community Members')} />
-                <StatTile icon={<FaUserPlus />} iconColor="var(--primary)" iconBg="rgba(139, 92, 246, 0.1)" value={stats.activeInvitations} label={t('stat_active_invites', 'Active Invitations')} />
-                <StatTile icon={<FaEye />} iconColor="#3b82f6" iconBg="rgba(59, 130, 246, 0.1)" value={stats.profileViews} label={t('stat_profile_views', 'Profile Views')} />
-                <StatTile icon={<FaStar />} iconColor="#fbbf24" iconBg="rgba(251, 191, 36, 0.1)" value={stats.rating.toFixed(1)} label={`${t('stat_rating_reviews', 'Rating')} (${stats.reviewCount} ${t('stat_reviews', 'reviews')})`} />
-                <StatTile icon={<FaHeart />} iconColor="#ef4444" iconBg="rgba(239, 68, 68, 0.1)" value={stats.engagement} label={t('engagement', 'Engagement')} title={t('engagement_tooltip', 'Likes and comments on your community posts')} />
-            </div>
+            {/* Stats moved to the Analytics page (BusinessCoreStats) — dashboard stays action-focused. */}
 
             {/* Recent Activity */}
             <div style={{

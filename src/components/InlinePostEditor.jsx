@@ -401,7 +401,58 @@ const InlinePostEditor = ({
           value={text}
           onChange={handleTextChange}
           maxLength={POST_BODY_MAX} />
-          
+
+                    {/* Media/embed preview sits INSIDE the text box, above the send button. */}
+                    {media && !embedData &&
+        <div className="inline-post-editor__media-preview">
+                        <button
+            type="button"
+            onClick={() => setMedia(null)}
+            className="inline-post-editor__media-remove"
+            aria-label={t('remove', 'Remove')}>
+
+                            <FaTimes size={12} />
+                        </button>
+                        <img src={media.preview} alt="Preview" />
+                    </div>
+        }
+
+                    {embedData &&
+        <div className={`inline-post-editor__embed-preview${embedData.type === 'youtube' && embedData.isShort ? ' inline-post-editor__embed-preview--vertical' : ''}`}>
+                        <button
+            type="button"
+            onClick={() => setEmbedData(null)}
+            className="inline-post-editor__media-remove"
+            aria-label={t('remove', 'Remove')}>
+
+                            <FaTimes size={12} />
+                        </button>
+                        {embedData.type === 'youtube' && (
+          embedData.isShort ?
+          <div className="inline-post-editor__embed-vertical">
+                                    <iframe
+              width="100%"
+              height="100%"
+              src={buildYoutubeEmbedSrc(embedData.id, { autoplay: false })}
+              frameBorder="0"
+              allow={YOUTUBE_EMBED_ALLOW}
+              allowFullScreen
+              title="YouTube Short" />
+
+                                </div> :
+
+          <iframe width="100%" height="250" src={buildYoutubeEmbedSrc(embedData.id, { autoplay: false })} frameBorder="0" allow={YOUTUBE_EMBED_ALLOW} allowFullScreen title="YouTube" />)
+
+          }
+                        {embedData.type === 'tiktok' &&
+          <TikTokEmbed videoId={embedData.id} />
+          }
+                        {embedData.type === 'instagram' &&
+          <iframe width="100%" height="300" src={`https://www.instagram.com/p/${embedData.id}/embed/captioned`} frameBorder="0" scrolling="no" title="Instagram" />
+          }
+                    </div>
+        }
+
                     <div className="composer-field__footer">
                         <div className="composer-field__ai-actions">
                         <AIFloatingLauncher
@@ -451,55 +502,6 @@ const InlinePostEditor = ({
                     </AppText>
                 </div>
 
-                {media && !embedData &&
-        <div className="inline-post-editor__media-preview">
-                        <button
-            type="button"
-            onClick={() => setMedia(null)}
-            className="inline-post-editor__media-remove"
-            aria-label={t('remove', 'Remove')}>
-            
-                            <FaTimes size={12} />
-                        </button>
-                        <img src={media.preview} alt="Preview" />
-                    </div>
-        }
-
-                {embedData &&
-        <div className={`inline-post-editor__embed-preview${embedData.type === 'youtube' && embedData.isShort ? ' inline-post-editor__embed-preview--vertical' : ''}`}>
-                        <button
-            type="button"
-            onClick={() => setEmbedData(null)}
-            className="inline-post-editor__media-remove"
-            aria-label={t('remove', 'Remove')}>
-            
-                            <FaTimes size={12} />
-                        </button>
-                        {embedData.type === 'youtube' && (
-          embedData.isShort ?
-          <div className="inline-post-editor__embed-vertical">
-                                    <iframe
-              width="100%"
-              height="100%"
-              src={buildYoutubeEmbedSrc(embedData.id, { autoplay: false })}
-              frameBorder="0"
-              allow={YOUTUBE_EMBED_ALLOW}
-              allowFullScreen
-              title="YouTube Short" />
-            
-                                </div> :
-
-          <iframe width="100%" height="250" src={buildYoutubeEmbedSrc(embedData.id, { autoplay: false })} frameBorder="0" allow={YOUTUBE_EMBED_ALLOW} allowFullScreen title="YouTube" />)
-
-          }
-                        {embedData.type === 'tiktok' &&
-          <TikTokEmbed videoId={embedData.id} />
-          }
-                        {embedData.type === 'instagram' &&
-          <iframe width="100%" height="300" src={`https://www.instagram.com/p/${embedData.id}/embed/captioned`} frameBorder="0" scrolling="no" title="Instagram" />
-          }
-                    </div>
-        }
             </div>
 
             <div className="inline-post-editor__toolbar-divider" />

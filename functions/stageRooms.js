@@ -7,6 +7,7 @@
  */
 const functions = require('firebase-functions');
 const { isBusinessUserDoc, normalizeBusinessSubscriptionTier } = require('./creditsCore');
+const { businessHasProLite } = require('./businessProLite');
 
 const MAX_INVITEES = 40;
 const TITLE_MAX = 80;
@@ -347,10 +348,14 @@ function registerStageRooms(exportsObj, { db, admin, enforceCallableRateLimit })
             const hostIsBusiness = isBusinessUserDoc(host);
             const hostKind = hostIsBusiness ? 'business' : 'people';
 
-            if (hostIsBusiness && normalizeBusinessSubscriptionTier(host.subscriptionTier) !== 'paid') {
+            if (
+                hostIsBusiness &&
+                normalizeBusinessSubscriptionTier(host.subscriptionTier) !== 'paid' &&
+                !businessHasProLite(host)
+            ) {
                 throw new functions.https.HttpsError(
                     'failed-precondition',
-                    'Business Stage requires a Paid Business plan.'
+                    'Business Stage requires a Paid Business plan or an active Pro Lite pass.'
                 );
             }
 

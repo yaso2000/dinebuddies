@@ -18,7 +18,7 @@ import { useProfileGiftPicker } from '../hooks/useProfileGiftPicker';
 import { useDesktopShell } from '../hooks/useDesktopShell';
 import { useAppBackNavigation } from '../hooks/useAppBackNavigation';
 import { attachChatShellToVisualViewport } from '../utils/chatVisualViewportLock';
-import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
+import { getBusinessProAccess } from '../utils/businessSubscription';
 import {
   buildCommunityGuestFrameBackgroundStyle,
   getCommunityGuestFrameShellAttributes,
@@ -89,9 +89,7 @@ export default function StageChatRoom() {
         if (raw === 'invite_only') return 'invite_only';
         return 'followers'; // legacy stage docs stored 'private' for this tier
       })();
-  const stageHostHasPaidPlan = getBusinessSubscriptionAccess(
-    room.partner?.subscriptionTier
-  ).canCreateBusinessStage;
+  const stageHostHasPaidPlan = getBusinessProAccess(room.partner).canCreateBusinessStage;
   const hostId = room.partner?.hostId || room.partner?.ownerId || null;
   const followsHost = useMemo(() => {
     if (!hostId) return false;

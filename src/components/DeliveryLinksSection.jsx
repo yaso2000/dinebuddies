@@ -8,7 +8,7 @@ import {
   createEmptyDeliveryLinkRow,
   deliveryLinksReadyToSave } from
 '../utils/deliveryLinkMeta';
-import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
+import { getBusinessProAccess } from '../utils/businessSubscription';
 import { openExternalUrl } from '../platform/externalLinks';
 import { AppText, AppTextInput } from "./base";
 
@@ -99,7 +99,8 @@ const DeliveryLinksSection = ({
   const { t } = useTranslation();
   const [fetchingId, setFetchingId] = useState(null);
 
-  const isPaid = getBusinessSubscriptionAccess(business?.subscriptionTier).isPaid;
+  // Delivery/ordering links unlock on the full plan OR an active Pro-Lite pass.
+  const isPaid = getBusinessProAccess(business).canManageDeliveryProfiles;
   const savedLinks = deliveryLinksReadyToSave(deliveryLinks);
   const hasAnyLink = savedLinks.length > 0;
 

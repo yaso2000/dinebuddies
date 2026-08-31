@@ -3669,7 +3669,7 @@
   "settings_blocked_users": "Utilisateurs bloqués",
   "settings_business_plan_row": "Plan professionnel",
   "settings_business_plan_value_free": "Gratuit",
-  "settings_business_plan_value_paid": "Payant ($${BUSINESS_PAID_MONTHLY_USD}/mois)",
+  "settings_business_plan_value_paid": "Payant (${{amount}}/mois)",
   "settings_preferences": "Préférences",
   "settings_privacy": "Confidentialité et sécurité",
   "settings_saved": "Paramètres enregistrés avec succès !",

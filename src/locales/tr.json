@@ -3669,7 +3669,7 @@
   "settings_blocked_users": "Engellenen kullanıcılar",
   "settings_business_plan_row": "İşletme planı",
   "settings_business_plan_value_free": "Ücretsiz",
-  "settings_business_plan_value_paid": "Ücretli ($${BUSINESS_PAID_MONTHLY_USD}/ay)",
+  "settings_business_plan_value_paid": "Ücretli (${{amount}}/ay)",
   "settings_preferences": "Tercihler",
   "settings_privacy": "Gizlilik & Güvenlik",
   "settings_saved": "Ayarlar başarıyla kaydedildi!",

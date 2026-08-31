@@ -9,6 +9,7 @@ import EnhancedGallery from '../EnhancedGallery';
 import EnhancedReviews from '../EnhancedReviews';
 import PremiumOfferCard from '../PremiumOfferCard';
 import BusinessJobsPanel from './BusinessJobsPanel';
+import BusinessVerifyBadge from './BusinessVerifyBadge';
 
 export default function BusinessProfileAboutTab({ profile }) {
   const { t } = useTranslation();
@@ -37,6 +38,11 @@ export default function BusinessProfileAboutTab({ profile }) {
 
   return (
     <div className="profile-section-content">
+
+            {/* Google Business verification badge / owner verify action */}
+            <div style={{ marginBottom: '12px' }}>
+                <BusinessVerifyBadge business={business} businessInfo={businessInfo} profileId={profileId} isOwner={isOwner} />
+            </div>
 
             {/* About Card */}
             <BusinessSectionCard

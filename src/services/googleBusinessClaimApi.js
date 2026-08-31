@@ -61,6 +61,25 @@ export async function finalizeGoogleBusinessClaim(params, idToken) {
 }
 
 /**
+ * Grant the "Google Business verified" badge to the caller's OWN business after a
+ * completed business.manage OAuth session (server confirms they manage the place).
+ * @param {string} sessionId
+ * @param {string} idToken Firebase ID token of the business owner
+ */
+export async function verifyMyBusiness(sessionId, idToken) {
+    const res = await fetch(resolveApiUrl('/api/business/verify-my-business'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ sessionId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+}
+
+/**
  * Read Google claim callback params from the current URL.
  * @param {URLSearchParams} searchParams
  */

@@ -22,6 +22,7 @@ import {
 '../../utils/businessSubscription';
 import { useToast } from '../../context/ToastContext';
 import StripeTestModeBanner from '../../components/StripeTestModeBanner';
+import BusinessProLiteCard from '../../components/business/BusinessProLiteCard';
 import { isAppleStoreCommerce, isGooglePlayCommerce } from '../../utils/commercePlatform';
 import {
   purchaseBusinessSubscriptionViaAppleStore,
@@ -335,6 +336,7 @@ const ProSubscription = () => {
   return (
     <div>
             <StripeTestModeBanner />
+            <BusinessProLiteCard userProfile={userProfile} isFullPaid={isPaid} />
             <div
         style={{
           background: bannerBg,

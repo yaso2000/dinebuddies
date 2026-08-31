@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaArrowLeft } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
-import { getBusinessSubscriptionAccess } from '../../utils/businessSubscription';
+import { getBusinessProAccess } from '../../utils/businessSubscription';
 import BusinessPaidFeatureGate from '../../components/business/BusinessPaidFeatureGate';
 import BusinessSwipeSpecialOfferEditor from '../../components/business/BusinessSwipeSpecialOfferEditor';
 import { AppText } from '../../components/base';
@@ -18,7 +18,7 @@ export default function CreateSwipeSpecialOffer() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { userProfile } = useAuth();
-  const tier = getBusinessSubscriptionAccess(userProfile?.subscriptionTier);
+  const tier = getBusinessProAccess(userProfile);
 
   if (!tier.canUseSwipeSpecialOffer) {
     return (

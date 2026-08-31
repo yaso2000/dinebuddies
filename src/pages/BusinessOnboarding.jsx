@@ -18,6 +18,7 @@ import {
   GEOLOCATION_OPTIONS,
   detectCityCountryInBackground } from
 '../utils/bigDataCloudGeocode';
+import { checkBusinessPlaceAvailable } from '../services/businessPhoneSignupApi';
 import { AppText, AppTextInput } from "../components/base";
 
 const BUSINESS_TYPES = [
@@ -214,6 +215,26 @@ export default function BusinessOnboarding() {
 
     setSaving(true);
     try {
+      // One owner per Google place — this completion writes client-side, so verify
+      // the chosen listing isn't already taken by another account before saving.
+      if (formData.placeId) {
+        const idToken = await currentUser.getIdToken();
+        const { ok, data } = await checkBusinessPlaceAvailable(formData.placeId, idToken);
+        if (!ok) {
+          showToast(data?.message || t('business_place_check_failed', 'Could not verify this listing. Please try again.'), 'error');
+          return;
+        }
+        if (data?.available === false) {
+          if (data.reason === 'imported' && data.restaurantId) {
+            showToast(t('business_place_imported', 'This business is already listed. Continue on its page to claim it.'), 'info');
+            navigate(`/business/${data.restaurantId}?claim=1`, { replace: true });
+            return;
+          }
+          showToast(t('business_place_taken', 'This Google Business listing is already registered by another account.'), 'error');
+          return;
+        }
+      }
+
       const hoursModel = formData.importedHours ?
       openingHoursToBusinessHours(formData.importedHours) :
       null;

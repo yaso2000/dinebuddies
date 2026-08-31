@@ -2,14 +2,14 @@ import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { uploadManagedImage } from './managedImageUpload';
 import { ImageUploadZone } from './imageUploadZones';
-import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
+import { getBusinessProAccess } from '../utils/businessSubscription';
 import { normalizeSwipeSpecialOffer, toDateInputValue } from '../utils/businessSwipeSpecialOffer';
 import { syncBusinessPublicProfile } from './businessPublicProfileSync';
 
 function assertPaidBusiness(userData) {
-  const { isPaid } = getBusinessSubscriptionAccess(userData?.subscriptionTier);
-  if (!isPaid) {
-    throw new Error('Swipe special offers require a Paid Business subscription.');
+  // Full plan OR an active credit Pro-Lite pass unlocks special offers.
+  if (!getBusinessProAccess(userData).canUseSwipeSpecialOffer) {
+    throw new Error('Swipe special offers require a Paid Business subscription or a Pro Lite pass.');
   }
 }
 

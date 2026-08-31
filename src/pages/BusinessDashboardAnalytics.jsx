@@ -7,6 +7,7 @@ import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import { computeBusinessRankingBreakdown } from '../services/businessRankingService';
 import { loadBusinessRankingStats } from '../services/businessRankingStats';
 import BusinessDashboardShell from '../components/BusinessDashboardShell';
+import BusinessCoreStats from '../components/business/BusinessCoreStats';
 import './MyCommunity.css';
 import { AppText } from "../components/base";
 
@@ -72,6 +73,9 @@ export default function BusinessDashboardAnalytics() {
         title={t('analytics', 'Analytics')}
         icon={<FaChartLine />}>
 
+                {/* Core stats — available to every business (free + paid). */}
+                <BusinessCoreStats />
+
                 <div className="my-community-stat-card ui-card" style={{ textAlign: 'center', padding: '2rem 1.25rem' }}>
                     <FaChartLine style={{ fontSize: '2rem', color: 'var(--primary)', marginBottom: '12px' }} />
                     <AppText as="h4" style={{ margin: '0 0 8px', fontSize: '1.1rem', fontWeight: 800 }}>
@@ -100,6 +104,9 @@ export default function BusinessDashboardAnalytics() {
     <BusinessDashboardShell
       title={t('analytics', 'Analytics')}
       icon={<FaChartLine />}>
+
+            {/* Core stats — shown for every business, above the paid ranking breakdown. */}
+            <BusinessCoreStats />
 
             {loading ?
       <AppText as="p" className="my-community-empty ui-prompt__desc">{t('loading', 'Loading…')}</AppText> :

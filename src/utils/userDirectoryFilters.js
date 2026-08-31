@@ -60,6 +60,13 @@ export function memberMatchesGenderFilter(user, genderFilter) {
     return String(user?.gender || '').trim().toLowerCase() === genderFilter;
 }
 
+/** Match a member against an age-category filter (privacy: category, not exact age). */
+export function memberMatchesAgeCategory(user, ageCategoryFilter) {
+    if (!ageCategoryFilter || ageCategoryFilter === 'all') return true;
+    const cat = String(user?.ageCategory || user?.age_category || user?.ageRange || '').trim();
+    return cat === ageCategoryFilter;
+}
+
 /**
  * Infer how precise a Google (or OSM) place selection is.
  * @param {object | null | undefined} place
@@ -189,6 +196,7 @@ export function memberMatchesGeoScope(user, geoScope, {
 /** @param {object[]} users */
 export function filterDirectoryUsers(users, {
     genderFilter = 'all',
+    ageCategoryFilter = 'all',
     geoScope = 'global',
     selectedPlace = null,
     userCityNorm = '',
@@ -198,6 +206,7 @@ export function filterDirectoryUsers(users, {
 } = {}) {
     const filtered = (users || []).filter((user) => {
         if (!memberMatchesGenderFilter(user, genderFilter)) return false;
+        if (!memberMatchesAgeCategory(user, ageCategoryFilter)) return false;
         if (selectedPlace) return memberMatchesSelectedPlace(user, selectedPlace);
         return memberMatchesGeoScope(user, geoScope, {
             userCityNorm,
@@ -219,11 +228,13 @@ export function filterDirectoryUsers(users, {
 
 export function directoryHasActiveFilters({
     genderFilter = 'all',
+    ageCategoryFilter = 'all',
     geoScope = 'global',
     selectedPlace = null,
 } = {}) {
     return (
         genderFilter !== 'all' ||
+        ageCategoryFilter !== 'all' ||
         Boolean(selectedPlace) ||
         (geoScope !== 'global' && geoScope !== 'All')
     );

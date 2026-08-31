@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaMapMarkerAlt, FaTimes } from 'react-icons/fa';
 import { LuSparkles } from 'react-icons/lu';
@@ -24,11 +24,12 @@ import PullToRefresh from '../components/PullToRefresh';
 
 export default function UsersDirectory() {
   const { t, i18n } = useTranslation();
-  const { currentUser, userProfile, isGuest } = useAuth();
+  const { currentUser, userProfile, isGuest, isBusiness } = useAuth();
   const rtl = i18n.language === 'ar';
   const loadMoreRef = useRef(null);
 
   const [genderFilter, setGenderFilter] = useState('all');
+  const [ageCategoryFilter, setAgeCategoryFilter] = useState('all');
   const [deviceLocation, setDeviceLocation] = useState(null);
   const [placeQuery, setPlaceQuery] = useState('');
   const [selectedPlace, setSelectedPlace] = useState(null);
@@ -73,10 +74,11 @@ export default function UsersDirectory() {
     () =>
       filterDirectoryUsers(users, {
         genderFilter,
+        ageCategoryFilter,
         selectedPlace,
         userLocation,
       }),
-    [users, genderFilter, selectedPlace, userLocation]
+    [users, genderFilter, ageCategoryFilter, selectedPlace, userLocation]
   );
 
   // When a place is selected, keep loading a few more pages (capped) until we have matches.
@@ -149,6 +151,9 @@ export default function UsersDirectory() {
     document.querySelector('.app-main')?.scrollTo({ top: 0, behavior: 'smooth' });
     await refresh();
   }, [refresh]);
+
+  // Businesses may not browse / contact regular users.
+  if (isBusiness) return <Navigate to="/business-dashboard" replace />;
 
   if (!canBrowse) {
     return (
@@ -226,6 +231,8 @@ export default function UsersDirectory() {
               id="users-directory-filters-panel"
               genderFilter={genderFilter}
               onGenderFilterChange={setGenderFilter}
+              ageCategoryFilter={ageCategoryFilter}
+              onAgeCategoryFilterChange={setAgeCategoryFilter}
             />
             <Link
               to="/search"

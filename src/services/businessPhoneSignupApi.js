@@ -20,6 +20,21 @@ export async function lookupBusinessPlace(placeId) {
  * @param {object} params
  * @param {string} idToken Firebase ID token after phone (+ email link) auth
  */
+/**
+ * Check "one owner per Google place" before a client-side onboarding write.
+ * @param {string} placeId
+ * @param {string} idToken Firebase ID token
+ */
+export async function checkBusinessPlaceAvailable(placeId, idToken) {
+    const res = await fetch(resolveApiUrl('/api/business/place-available'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ placeId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+}
+
 export async function finalizeBusinessSignup(params, idToken) {
     const res = await fetch(resolveApiUrl('/api/complete-business-signup'), {
         method: 'POST',

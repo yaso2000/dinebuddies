@@ -21,6 +21,7 @@ import {
   FaThLarge,
   FaMicrophone,
   FaTag,
+  FaBriefcase,
 } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useChat } from '../context/ChatContext';
@@ -519,14 +520,18 @@ const Layout = ({ children }) => {
               
                                 <FaImages />
                             </Link>
+                            {!isBusinessAccount && (
                             <Link
               to="/ai-text-studio"
               className={`notification-bell header-ai-studio-btn header-ai-studio-btn--text${isAiTextRoute ? ' active' : ''}`}
               title={t('ai_text_nav', 'Relationship tips')}
               aria-label={t('ai_text_nav', 'Relationship tips')}>
-              
+
                                 <FaPenAlt />
                             </Link>
+                            )}
+                            {/* DM inbox — businesses do no user chat, so hide it for them. */}
+                            {!isBusinessAccount && (
                             <Link
               to="/messages"
               className={`notification-bell header-inbox-btn${isMessagesHub || isNotificationsRoute ? ' active' : ''}`}
@@ -534,11 +539,27 @@ const Layout = ({ children }) => {
               title={t('inbox_hub_title', 'Inbox')}>
                                 <FaComments />
                                 {(totalChatUnread + unreadBellCount) > 0 && (
-                                  <AppText as="span" className="badge">
+                                  <AppText as="span" className="badge" style={{ fontSize: '0.58rem', minWidth: '15px', height: '15px', lineHeight: '15px', padding: '0 3px' }}>
                                     {(totalChatUnread + unreadBellCount) > 99 ? '99+' : totalChatUnread + unreadBellCount}
                                   </AppText>
                                 )}
                             </Link>
+                            )}
+                            {/* Businesses keep NOTIFICATIONS (complaints, post likes/comments, job applications) — no chat. */}
+                            {isBusinessAccount && (
+                            <Link
+              to="/notifications"
+              className={`notification-bell header-inbox-btn${isNotificationsRoute ? ' active' : ''}`}
+              aria-label={t('notifications', 'Notifications')}
+              title={t('notifications', 'Notifications')}>
+                                <FaBell />
+                                {unreadBellCount > 0 && (
+                                  <AppText as="span" className="badge" style={{ fontSize: '0.58rem', minWidth: '15px', height: '15px', lineHeight: '15px', padding: '0 3px' }}>
+                                    {unreadBellCount > 99 ? '99+' : unreadBellCount}
+                                  </AppText>
+                                )}
+                            </Link>
+                            )}
                             <Link
               to="/settings"
               className={`notification-bell header-settings-btn${isActive('/settings') || location.pathname.startsWith('/settings/') ? ' active' : ''}`}
@@ -599,11 +620,13 @@ const Layout = ({ children }) => {
             className={`ds-nav-item ds-nav-item--ai-image${isAiDesignRoute ? ' active' : ''}`}>
                                 <FaImages aria-hidden /><AppText as="span">{t('ai_image_nav', 'AI Images')}</AppText>
                             </Link>
+          {!isBusinessAccount &&
           <Link
             to="/ai-text-studio"
             className={`ds-nav-item ds-nav-item--ai-text${isAiTextRoute ? ' active' : ''}`}>
                                 <FaPenAlt aria-hidden /><AppText as="span">{t('ai_text_nav', 'AI Text')}</AppText>
                             </Link>
+          }
                         {!isBusinessAccount && currentUser &&
           <>
           <button
@@ -943,6 +966,27 @@ const Layout = ({ children }) => {
                     'business_create_offer_desc',
                     'Title and dates on your partner swipe card.'
                   )}
+                                    </AppText>
+                                </AppText>
+                                <FaChevronRight className="business-create-option__arrow" aria-hidden />
+                            </button>
+                            <button
+              type="button"
+              className="business-create-option"
+              onClick={() => {
+                setBusinessCreateOpen(false);
+                navigate('/business-dashboard/jobs');
+              }}>
+
+                                <AppText as="span" className="business-create-option__icon business-create-option__icon--offer" aria-hidden>
+                                    <FaBriefcase />
+                                </AppText>
+                                <AppText as="span" className="business-create-option__text">
+                                    <AppText as="span" className="business-create-option__label">
+                                        {t('business_create_job_title', 'Post a job')}
+                                    </AppText>
+                                    <AppText as="span" className="business-create-option__desc">
+                                        {t('business_create_job_desc', 'Hire from your community — applicants apply in-app.')}
                                     </AppText>
                                 </AppText>
                                 <FaChevronRight className="business-create-option__arrow" aria-hidden />

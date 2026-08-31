@@ -1,9 +1,19 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaTimes, FaSpinner } from 'react-icons/fa';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app from '../../firebase/config';
 import { useToast } from '../../context/ToastContext';
 import { createJobPosting, updateJobPosting, JOB_TYPES } from '../../services/jobPostings';
 import { AppText, AppTextInput } from '../base';
+
+function jobExpiryToInputDate(ts) {
+    const d = ts?.toDate ? ts.toDate() : ts?.seconds ? new Date(ts.seconds * 1000) : null;
+    if (!d || Number.isNaN(d.getTime())) return '';
+    // Local YYYY-MM-DD for the <input type="date">.
+    const off = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - off).toISOString().slice(0, 10);
+}
 
 /**
  * Create / edit a job posting (business owner, Pro). When `job` is provided the
@@ -19,6 +29,11 @@ export default function BusinessJobEditor({ isOpen, onClose, job = null, onSaved
     const [description, setDescription] = useState(job?.description || '');
     const [jobType, setJobType] = useState(job?.jobType || 'full_time');
     const [location, setLocation] = useState(job?.location || '');
+    const [expiresAt, setExpiresAt] = useState(jobExpiryToInputDate(job?.expiresAt));
+    // Distribution options — new postings only (like the special offer).
+    const [publishToFeed, setPublishToFeed] = useState(true);
+    const [notifyMembers, setNotifyMembers] = useState(false);
+    const [showOnSwipe, setShowOnSwipe] = useState(false);
     const [saving, setSaving] = useState(false);
 
     if (!isOpen) return null;
@@ -40,11 +55,26 @@ export default function BusinessJobEditor({ isOpen, onClose, job = null, onSaved
                 description: description.trim(),
                 jobType,
                 location: location.trim() || null,
+                expiresAt: expiresAt || null,
             };
             if (isEdit) {
                 await updateJobPosting({ jobId: job.id, ...payload });
             } else {
-                await createJobPosting(payload);
+                await createJobPosting({ ...payload, publishToFeed, showOnSwipe });
+                // Optionally announce to every community member (lands in their inbox).
+                if (notifyMembers) {
+                    try {
+                        const functions = getFunctions(app, 'us-central1');
+                        await httpsCallable(functions, 'sendBusinessBroadcast')({
+                            kind: 'announcement',
+                            title: t('job_broadcast_title', 'New job: {{title}}', { title: title.trim() }),
+                            body: description.trim().slice(0, 1500),
+                        });
+                    } catch (be) {
+                        console.warn('job member broadcast failed:', be);
+                        showToast(t('job_broadcast_partial', 'Job posted, but the member announcement could not be sent.'), 'info');
+                    }
+                }
             }
             showToast(isEdit ? t('job_edit_updated', 'Job updated.') : t('job_edit_created', 'Job posted.'), 'success');
             onSaved?.();
@@ -117,6 +147,31 @@ export default function BusinessJobEditor({ isOpen, onClose, job = null, onSaved
                             placeholder={t('job_field_desc_ph', 'Responsibilities, requirements, hours, pay...')}
                             style={{ ...fieldStyle, height: '140px', resize: 'vertical' }} />
                     </div>
+
+                    {/* Expiry date — the posting auto-closes after this day */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <label style={labelStyle}>{t('job_field_expiry', 'Open until')} <AppText as="span" style={{ color: 'var(--text-muted)', fontWeight: 500 }}>({t('optional', 'optional')})</AppText></label>
+                        <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} style={fieldStyle} />
+                        <AppText as="span" style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{t('job_field_expiry_hint', 'The job automatically closes after this date.')}</AppText>
+                    </div>
+
+                    {/* Distribution options — new postings only */}
+                    {!isEdit && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px', borderRadius: '14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-color)' }}>
+                            <AppText as="span" style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-main)' }}>{t('job_distribute_title', 'Where to show this job')}</AppText>
+                            {[
+                                { k: 'feed', on: publishToFeed, set: setPublishToFeed, label: t('job_distribute_feed', 'Post to the community feed') },
+                                { k: 'members', on: notifyMembers, set: setNotifyMembers, label: t('job_distribute_members', 'Send to all my community members') },
+                                { k: 'swipe', on: showOnSwipe, set: setShowOnSwipe, label: t('job_distribute_swipe', 'Feature on my business swipe card') },
+                            ].map((opt) => (
+                                <label key={opt.k} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                    <input type="checkbox" checked={opt.on} onChange={(e) => opt.set(e.target.checked)} style={{ width: 18, height: 18 }} />
+                                    {opt.label}
+                                </label>
+                            ))}
+                            <AppText as="span" style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{t('job_distribute_hint', 'Your job always appears on your business profile.')}</AppText>
+                        </div>
+                    )}
 
                     <button type="submit" disabled={saving} style={{
                         width: '100%', padding: '15px', borderRadius: '14px', background: 'var(--brand-primary)',

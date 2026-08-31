@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import DiscoveryFeed from '../components/discovery/DiscoveryFeed';
 import { useAuth } from '../context/AuthContext';
@@ -19,7 +19,7 @@ import { AppText } from '../components/base';
 export default function DiscoveryPage() {
   const { t, i18n } = useTranslation();
   const { showToast, showPersistentWarning } = useToast();
-  const { currentUser, userProfile, isGuest } = useAuth();
+  const { currentUser, userProfile, isGuest, isBusiness } = useAuth();
 
   const viewerUid = currentUser?.uid || currentUser?.id;
   const { profiles, loading, loadingMore, hasMore, loadMore, canLoad } = useDiscoveryProfiles();
@@ -116,6 +116,9 @@ export default function DiscoveryPage() {
     }),
     [handleGift, handleGreeting, handleLike, handleNearEnd]
   );
+
+  // Businesses may not discover / like / contact regular users.
+  if (isBusiness) return <Navigate to="/business-dashboard" replace />;
 
   return (
     <div className="discovery-shell discovery-shell--in-layout discovery-shell--connect">

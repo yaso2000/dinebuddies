@@ -47,6 +47,7 @@ export const BUSINESS_PAID_PLAN_FEATURE_KEYS = [
     ['biz_plan_paid_feat_gallery_20', 'Photo gallery — up to 20 images'],
     ['biz_plan_paid_feat_offers', 'Special offers & premium offers'],
     ['biz_plan_paid_feat_swipe_offer', 'Special offer banner on business swipe cards'],
+    ['biz_plan_paid_feat_jobs', 'Job postings — hire from your community (in-app applications + PDF)'],
     ['biz_plan_paid_feat_member_notifs', 'Member notifications & broadcasts'],
     ['biz_plan_paid_feat_analytics', 'Advanced analytics & ranking breakdown'],
     ['biz_plan_paid_feat_priority', 'Priority in business rankings & directory'],
@@ -121,4 +122,52 @@ export function getBusinessPlanAccess(subscriptionTier) {
         canAppearInPaidRankings: isPaid,
         showPaidProfileBadge: isPaid,
     };
+}
+
+/**
+ * Credit-based "Pro Lite" pass — pay-on-demand (non-recurring), a cheaper
+ * alternative to the $29/mo full plan that unlocks only a small set of practical
+ * features. Coexists with Dine-Credit top-ups and the full subscription.
+ */
+export const BUSINESS_PRO_LITE = Object.freeze({
+    creditCost: 2000,
+    durationDays: 30,
+    /** The ONLY feature flags a Pro-Lite pass unlocks (a subset of full Paid). */
+    features: Object.freeze([
+        'canManageDeliveryProfiles', // delivery / ordering links
+        'canCreateSpecialOfferPost', // special offers
+        'canUseSwipeSpecialOffer', // special-offer banner on swipe cards
+        'canCreateBusinessStage', // 24h Stage
+    ]),
+});
+
+/**
+ * True while a credit Pro-Lite pass is still active.
+ * Accepts a Firestore Timestamp | Date | ms number | ISO string.
+ * @param {any} proLiteUntil
+ */
+export function isBusinessProLiteActive(proLiteUntil) {
+    if (!proLiteUntil) return false;
+    let ms;
+    if (typeof proLiteUntil === 'number') ms = proLiteUntil;
+    else if (typeof proLiteUntil.toDate === 'function') ms = proLiteUntil.toDate().getTime();
+    else if (typeof proLiteUntil.seconds === 'number') ms = proLiteUntil.seconds * 1000;
+    else ms = Date.parse(String(proLiteUntil));
+    return Number.isFinite(ms) && ms > Date.now();
+}
+
+/**
+ * Lite-aware access — identical to getBusinessPlanAccess EXCEPT the Pro-Lite
+ * feature subset unlocks on EITHER the full ($29) plan OR an active credit
+ * Pro-Lite pass. Use this ONLY at the call sites that gate those few features;
+ * every other gate keeps calling getBusinessPlanAccess unchanged (zero risk).
+ * @param {{ subscriptionTier?: string, businessProLiteUntil?: any }|null|undefined} profile
+ */
+export function getBusinessProAccess(profile) {
+    const base = getBusinessPlanAccess(profile?.subscriptionTier);
+    const isLite = isBusinessProLiteActive(profile?.businessProLiteUntil);
+    const unlocked = base.isPaid || isLite;
+    const access = { ...base, isLite, isPaidOrLite: unlocked };
+    for (const key of BUSINESS_PRO_LITE.features) access[key] = unlocked;
+    return access;
 }

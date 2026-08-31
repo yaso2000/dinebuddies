@@ -3561,6 +3561,9 @@ registerFeedbackTickets(exports, { db, admin, enforceCallableRateLimit });
 const { registerJobPostings } = require('./jobPostings');
 registerJobPostings(exports, { db, admin, enforceCallableRateLimit });
 
+const { registerBusinessProLite } = require('./businessProLite');
+registerBusinessProLite(exports, { db, admin, enforceCallableRateLimit });
+
 const { registerCompatJourney } = require('./compatJourney');
 registerCompatJourney(exports, { db, admin, enforceCallableRateLimit });
 

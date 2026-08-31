@@ -69,7 +69,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
   const { t, i18n } = useTranslation();
   const confirm = useConfirm();
   const navigate = useNavigate();
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser, userProfile, isBusiness } = useAuth();
   const { showToast } = useToast();
   const { requestOpenLink } = useExternalLinkGuard();
 
@@ -1217,7 +1217,8 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
 
                 {/* Actions Bar */}
                 <div className="post-actions">
-                    {/* Like */}
+                    {/* Like + Comment are social interactions — hidden for businesses. */}
+                    {!isBusiness && (
                     <button
             className={`action-item like ${hasLiked ? 'liked' : ''}`}
             onClick={handleLike}>
@@ -1228,8 +1229,9 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
             <AppText as="span" className="action-count">{localLikes.length}</AppText> :
             null}
                     </button>
+                    )}
 
-                    {/* Comment */}
+                    {!isBusiness && (
                     <button
             className="action-item reply"
             onClick={(e) => {
@@ -1243,6 +1245,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
             <AppText as="span" className="action-count">{commentCount}</AppText> :
             null}
                     </button>
+                    )}
 
                     {/* Share */}
                     <button

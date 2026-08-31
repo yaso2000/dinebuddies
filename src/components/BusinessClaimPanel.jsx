@@ -218,6 +218,17 @@ export default function BusinessClaimPanel({
 
   const handleConvertAndClaim = useCallback(async () => {
     if (!currentUser || !googleSessionId) return;
+    // Second (final) warning on top of the confirmation checkbox — this permanently
+    // deletes the personal account, so we gate it twice.
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      const ok = window.confirm(
+        t(
+          'claim_business_convert_final_confirm',
+          'Final confirmation: your personal account and ALL its data will be permanently deleted and cannot be recovered. Continue?'
+        )
+      );
+      if (!ok) return;
+    }
     setGoogleFlowStatus('finalizing');
     try {
       const idToken = await currentUser.getIdToken();

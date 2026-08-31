@@ -68,7 +68,7 @@ const PACKS = DINE_CREDIT_PACKS.map((p) => ({
  */
 export default function CreditsWallet() {
   const { t } = useTranslation();
-  const { userProfile } = useAuth();
+  const { userProfile, isBusiness } = useAuth();
   const { buyPack, loadingId, isGooglePlay, isAppleStore } = useCreditsPurchase();
   const { showToast } = useToast();
   const [restoringPayPal, setRestoringPayPal] = useState(false);
@@ -330,6 +330,9 @@ export default function CreditsWallet() {
             rechargeSection
           )}
 
+          {/* Savings wallet (gift receipts) — businesses don't receive gifts, so hide it for them. */}
+          {!isBusiness && (
+          <>
           <section className="settings-card credits-wallet__balance credits-wallet__balance--savings">
             <div className="credits-wallet__balance-top">
               <div className="credits-wallet__hero-ring credits-wallet__hero-ring--savings" aria-hidden>
@@ -368,6 +371,8 @@ export default function CreditsWallet() {
               pendingRequestId={pendingCashoutRequestId}
             />
           ) : null}
+          </>
+          )}
 
           <section className="settings-card credits-wallet__ai-pricing">
             <div className="credits-wallet__hints-title">

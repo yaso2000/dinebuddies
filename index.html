@@ -4,16 +4,15 @@
 <head>
   <meta charset="UTF-8" />
   <script>
-    // TEMPORARY boot diagnostics: if the app fails to render (blank screen), show the
-    // actual JS error directly on screen instead of leaving a silent black void — lets
-    // us debug native-shell issues (iOS TestFlight etc.) without Xcode/Safari attached.
-    // Remove once the native black-screen issue is confirmed fixed.
+    // Boot watchdog: if the app hasn't mounted after a grace period, show a FRIENDLY
+    // themed "taking longer than usual · Reload" screen to users. The raw technical
+    // diagnostic (green terminal + JS error/stack) is shown ONLY on localhost so we
+    // can still debug dev/native-shell issues without alarming real users.
     (function () {
       window.__bootErrors = [];
-      function record(msg) {
-        window.__bootErrors.push(msg);
-        render();
-      }
+      var isDev = /^(localhost|127\.0\.0\.1|\[::1\]|.*\.local)$/i.test(location.hostname);
+      var shown = false;
+      function record(msg) { window.__bootErrors.push(msg); if (shown) render(); }
       window.addEventListener('error', function (e) {
         var msg = (e.error && e.error.message) || e.message || String(e);
         var stack = (e.error && e.error.stack) || '';
@@ -28,27 +27,36 @@
       function render() {
         var root = document.getElementById('root');
         if (!root || root.children.length > 0) return;
-        var pre = document.getElementById('__boot_diag');
-        if (!pre) {
-          pre = document.createElement('pre');
-          pre.id = '__boot_diag';
-          pre.style.cssText = 'position:fixed;inset:0;background:#000;color:#0f0;' +
-            'font:11px/1.4 monospace;padding:14px;overflow:auto;z-index:999999;' +
-            'white-space:pre-wrap;margin:0;';
-          document.body.appendChild(pre);
+        if (isDev) {
+          var pre = document.getElementById('__boot_diag');
+          if (!pre) {
+            pre = document.createElement('pre');
+            pre.id = '__boot_diag';
+            pre.style.cssText = 'position:fixed;inset:0;background:#000;color:#0f0;font:11px/1.4 monospace;padding:14px;overflow:auto;z-index:999999;white-space:pre-wrap;margin:0;';
+            document.body.appendChild(pre);
+          }
+          pre.textContent = 'BOOT DIAGNOSTICS (dev only)\nlocation.href: ' + location.href +
+            '\n\n' + window.__bootErrors.join('\n\n---\n\n');
+          return;
         }
-        pre.textContent = 'BOOT DIAGNOSTICS\nlocation.href: ' + location.href +
-          '\nCapacitor scheme detected: ' + location.protocol + '//' + location.host +
-          '\n\n' + window.__bootErrors.join('\n\n---\n\n');
+        if (document.getElementById('__boot_friendly')) return;
+        var dark = document.documentElement.getAttribute('data-theme') !== 'light';
+        var wrap = document.createElement('div');
+        wrap.id = '__boot_friendly';
+        wrap.dir = 'rtl';
+        wrap.style.cssText = 'position:fixed;inset:0;z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:' + (dark ? '#0f1115' : '#f7f8fa') + ';color:' + (dark ? '#e6e8ec' : '#1a1a1a') + ';';
+        wrap.innerHTML =
+          '<style>@keyframes __bootspin{to{transform:rotate(360deg)}}</style>' +
+          '<div style="width:40px;height:40px;border:3px solid rgba(128,128,128,.25);border-top-color:#f97316;border-radius:50%;animation:__bootspin .9s linear infinite;"></div>' +
+          '<div style="font-size:15px;font-weight:700;">التحميل يستغرق وقتًا أطول من المعتاد</div>' +
+          '<div style="font-size:12px;opacity:.6;">Taking a little longer than usual</div>' +
+          '<button onclick="location.reload()" style="margin-top:6px;padding:11px 24px;border:none;border-radius:12px;background:#f97316;color:#fff;font-weight:700;font-size:14px;cursor:pointer;">إعادة التحميل · Reload</button>';
+        document.body.appendChild(wrap);
       }
       setTimeout(function () {
         var root = document.getElementById('root');
-        if (root && root.children.length === 0) {
-          record(window.__bootErrors.length
-            ? '(app still not mounted after 6s — see errors above)'
-            : 'App did not render after 6s and NO error was caught.\nScript may be hung, or blocked before executing.');
-        }
-      }, 6000);
+        if (root && root.children.length === 0) { shown = true; render(); }
+      }, 10000);
     })();
   </script>
   <script>

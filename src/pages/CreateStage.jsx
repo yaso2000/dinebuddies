@@ -13,7 +13,7 @@ import app from '../firebase/config';
 import { getMutualFollowers } from '../utils/followHelpers';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { isVirtualUser } from '../utils/accountRole';
-import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
+import { getBusinessProAccess } from '../utils/businessSubscription';
 import './CreateStage.css';
 
 const MAX_INVITEES = 40;
@@ -38,7 +38,7 @@ export default function CreateStage() {
   const uid = currentUser?.uid || userProfile?.id;
   const blockedAccount = isVirtualUser(userProfile);
   const businessStageBlocked =
-    isBusiness && !getBusinessSubscriptionAccess(userProfile?.subscriptionTier).canCreateBusinessStage;
+    isBusiness && !getBusinessProAccess(userProfile).canCreateBusinessStage;
 
   useEffect(() => {
     if (blockedAccount) {

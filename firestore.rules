@@ -414,8 +414,10 @@ service cloud.firestore {
       allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && isBusinessSignupCompletionFromIntent();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
       allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && isUpgradingStubToBusinessProfile();
-      // Follow / unfollow: owner may update only their following[] list
+      // Follow / unfollow: owner may update only their following[] list.
+      // Businesses do not follow users (no social interaction).
       allow update: if isOwner(userId) &&
+                       !convoParticipantIsBusiness(request.auth.uid) &&
                        ownerAffiliateWriteGuards() &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['following']) &&
                        request.resource.data.following is list;
@@ -430,8 +432,9 @@ service cloud.firestore {
                          .hasOnly(['businessInfo']) &&
                        request.resource.data.get('businessInfo', {}).diff(resource.data.get('businessInfo', {})).affectedKeys()
                          .hasOnly(['profileViews', 'profileLikes', 'profileShares', 'totalInvitations']);
-      // Follow / unfollow: any signed-in user may bump followersCount by ±1 only
-      allow update: if isSignedIn() &&
+      // Follow / unfollow: any signed-in user may bump followersCount by ±1 only.
+      // Businesses do not follow users, so they cannot bump follower counts.
+      allow update: if isSignedIn() && !convoParticipantIsBusiness(request.auth.uid) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount']) &&
                        (
                          request.resource.data.followersCount == resource.data.get('followersCount', 0) + 1 ||
@@ -907,8 +910,9 @@ service cloud.firestore {
         (resource.data.author != null && resource.data.author.id == request.auth.uid) ||
         isAdmin()
       );
-      // Any signed-in user can like, repost, or comment (social interactions only)
-      allow update: if isSignedIn() &&
+      // Any signed-in user can like, repost, or comment (social interactions only).
+      // Businesses do no social interaction with the feed.
+      allow update: if isSignedIn() && !convoParticipantIsBusiness(request.auth.uid) &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['likes', 'reposts', 'comments', 'commentCount']);
     }
@@ -961,13 +965,17 @@ service cloud.firestore {
 
     match /comments/{commentId} {
       allow read: if true;
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      // Businesses do no social interaction — no commenting.
+      allow create: if isSignedIn() && !convoParticipantIsBusiness(request.auth.uid) &&
+        request.resource.data.userId == request.auth.uid;
       // Owner (edit) or Admin may change anything; anyone signed-in may only
       // toggle the `likes` array (no whole-array rewrites — each comment is a doc).
       allow update: if isSignedIn() && (
         resource.data.userId == request.auth.uid ||
         isAdmin() ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+        // Liking a comment is social — businesses cannot.
+        (!convoParticipantIsBusiness(request.auth.uid) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']))
       );
       allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
@@ -1163,8 +1171,9 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() &&
                                (resource.data.partnerId == request.auth.uid || isAdmin());
 
-      // Any signed-in user can like, comment, or repost (social interactions only)
-      allow update: if isSignedIn() &&
+      // Any signed-in user can like, comment, or repost (social interactions only).
+      // Businesses do no social interaction with the feed.
+      allow update: if isSignedIn() && !convoParticipantIsBusiness(request.auth.uid) &&
                        request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['likes', 'reposts', 'comments', 'commentCount']);
     }
@@ -1483,7 +1492,9 @@ service cloud.firestore {
         resource.data.targetUserId == request.auth.uid
       );
       allow list: if false;
+      // Businesses do no social interaction with users — no likes.
       allow create: if isSignedIn() &&
+        !convoParticipantIsBusiness(request.auth.uid) &&
         request.resource.data.likerId == request.auth.uid &&
         request.resource.data.targetUserId is string &&
         request.resource.data.targetUserId != request.auth.uid &&
@@ -1515,7 +1526,9 @@ service cloud.firestore {
         resource.data.targetUserId == request.auth.uid
       );
       allow list: if false;
+      // Businesses do no social interaction with users — no greetings.
       allow create: if isSignedIn() &&
+        !convoParticipantIsBusiness(request.auth.uid) &&
         request.resource.data.senderId == request.auth.uid &&
         request.resource.data.targetUserId is string &&
         request.resource.data.targetUserId != request.auth.uid &&

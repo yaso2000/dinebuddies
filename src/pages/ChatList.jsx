@@ -147,6 +147,16 @@ const ChatList = () => {
     navigate('/stages', { replace: true });
   }, [searchParams, navigate, isBusiness, setSearchParams]);
 
+  // Business accounts have no user DM chat — keep them on the notifications panel
+  // only (the hub is reachable just for notifications: complaints, post likes/
+  // comments, job applications).
+  useEffect(() => {
+    if (!isBusiness) return;
+    if (searchParams.get('panel') !== PANEL_NOTIFICATIONS) {
+      setSearchParams({ panel: PANEL_NOTIFICATIONS }, { replace: true });
+    }
+  }, [isBusiness, searchParams, setSearchParams]);
+
   const setActivePanel = (panel) => {
     if (panel === PANEL_NOTIFICATIONS) {
       setSearchParams({ panel: PANEL_NOTIFICATIONS }, { replace: true });

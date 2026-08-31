@@ -1086,7 +1086,7 @@ const UserProfile = () => {
               className="user-profile-action user-profile-action--message">
               <FaCommentDots aria-hidden /> {t('message')}
             </button> :
-            canChat && !canChatLoading && user?.role !== 'business' ?
+            canChat && !canChatLoading && user?.role !== 'business' && userProfile?.role !== 'business' ?
             <button
               type="button"
               onClick={() => navigate(`/chat/${userId}`)}

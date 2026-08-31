@@ -28,7 +28,7 @@ import {
   getActiveSwipeSpecialOffer,
   resolveBusinessSwipeSpecialOffer,
 } from '../../utils/businessSwipeSpecialOffer';
-import { getBusinessSubscriptionAccess } from '../../utils/businessSubscription';
+import { getBusinessProAccess } from '../../utils/businessSubscription';
 import { useMagneticCardDrag } from '../../hooks/useMagneticCardDrag';
 import CreateInvitationSelector from '../CreateInvitationSelector';
 import './discovery.css';
@@ -45,12 +45,23 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
   const [inviteSelectorState, setInviteSelectorState] = useState(null);
 
   const res = item?.raw || {};
-  const partnerPaid = getBusinessSubscriptionAccess(res.subscriptionTier).isPaid;
-  const specialOffer = partnerPaid
+  const proAccess = getBusinessProAccess(res);
+  const partnerPaid = proAccess.isPaid; // full plan only (job banner is a full-plan feature)
+  const specialOffer = proAccess.canUseSwipeSpecialOffer // full OR Pro-Lite
     ? getActiveSwipeSpecialOffer(resolveBusinessSwipeSpecialOffer(res))
     : null;
   const offerAccentVars = specialOffer ? buildSwipeOfferAccentVars(res.brandKit) : undefined;
   const cardAccentVars = buildPartnerCardAccentVars(res.brandKit);
+  // Featured job banner (Paid only, like the special offer) — hidden once expired.
+  const featuredJob = (() => {
+    if (!partnerPaid) return null;
+    const fj = res.businessInfo?.featuredJob || res.featuredJob || null;
+    if (!fj || !fj.title) return null;
+    const ts = fj.expiresAt;
+    const exp = ts?.toDate ? ts.toDate() : ts?.seconds ? new Date(ts.seconds * 1000) : null;
+    if (exp && exp.getTime() < Date.now()) return null;
+    return fj;
+  })();
   const openProfile = useCallback(() => {
     navigate(item.href || `/business/${res.id}`);
   }, [item.href, navigate, res.id]);
@@ -240,6 +251,19 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
                   </AppText>
                   <AppText as="span" className="discovery-card__special-offer-dates">
                     {formatSwipeOfferDateRange(specialOffer, i18n.language)}
+                  </AppText>
+                </div>
+              </div>
+            ) : null}
+
+            {featuredJob ? (
+              <div className="discovery-card__special-offer discovery-card__special-offer--text-only">
+                <div className="discovery-card__special-offer-copy">
+                  <AppText as="span" className="discovery-card__special-offer-title">
+                    💼 {t('job_post_card_label', 'Hiring')}: {featuredJob.title}
+                  </AppText>
+                  <AppText as="span" className="discovery-card__special-offer-dates">
+                    {t(`job_type_${String(featuredJob.jobType || 'full_time')}`, String(featuredJob.jobType || 'full_time').replace(/_/g, ' '))}
                   </AppText>
                 </div>
               </div>
