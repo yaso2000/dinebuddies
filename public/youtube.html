@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <!--
+    Same-origin YouTube proxy page.
+    iOS WKWebView strips/misconfigures the HTTP Referer header, so a YouTube
+    <iframe> loaded directly from the app fails with "Video player
+    configuration error / Error 153". Loading the embed from THIS page — which
+    is served on the app's own origin and declares an explicit referrer policy —
+    makes the player receive a valid Referer and configure correctly.
+    A transparent postMessage relay forwards the host app's JS-API commands
+    (play / pause / mute / seek / sync) to the nested player and the player's
+    events back up, so custom controls and Stage sync keep working.
+  -->
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>DineBuddies player</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+    iframe { display: block; width: 100%; height: 100%; border: 0; }
+  </style>
+</head>
+<body>
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var path = params.get('v') || '';
+      params.delete('v');
+      // Accept 11-char video ids plus known path tokens (e.g. "videoseries").
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(path)) return;
+
+      var qs = params.toString();
+      var src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(path) + (qs ? '?' + qs : '');
+
+      var f = document.createElement('iframe');
+      f.setAttribute('src', src);
+      f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+      f.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+      f.setAttribute('allowfullscreen', '');
+      f.setAttribute('frameborder', '0');
+      f.setAttribute('title', 'YouTube');
+      document.body.appendChild(f);
+
+      // Relay messages both ways: app (parent) <-> nested YouTube player.
+      window.addEventListener('message', function (e) {
+        var yt = f.contentWindow;
+        if (!yt) return;
+        if (e.source === yt) {
+          // player -> app
+          try { window.parent.postMessage(e.data, '*'); } catch (_) {}
+        } else if (e.source === window.parent) {
+          // app -> player
+          try { yt.postMessage(e.data, '*'); } catch (_) {}
+        }
+      }, false);
+    })();
+  </script>
+</body>
+</html>

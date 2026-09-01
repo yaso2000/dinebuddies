@@ -1,3 +1,21 @@
+import { getRuntime } from '../platform/runtime';
+
+/**
+ * Native (Capacitor) WKWebView strips the HTTP Referer, so YouTube embeds fail
+ * with "Video player configuration error / Error 153". Route the embed through
+ * a same-origin proxy page (`/youtube.html`) that re-sends the referrer and
+ * relays JS-API postMessages. On web we keep the direct embed unchanged.
+ * @param {string} pathId video id or "videoseries"
+ * @param {URLSearchParams} params
+ */
+function resolveYoutubeEmbedUrl(pathId, params) {
+    const qs = params.toString();
+    if (getRuntime().isNative) {
+        return `/youtube.html?v=${encodeURIComponent(pathId)}${qs ? `&${qs}` : ''}`;
+    }
+    return `https://www.youtube-nocookie.com/embed/${pathId}${qs ? `?${qs}` : ''}`;
+}
+
 /** iPhone / iPad / iOS Safari (including iPadOS desktop UA). */
 export function isIosLikeDevice() {
     if (typeof navigator === 'undefined') return false;
@@ -208,7 +226,7 @@ export function buildYoutubeEmbedSrc(videoId, { autoplay = false, mute = false, 
     // viewer's own YouTube Premium session can't trip Google's per-account
     // concurrent-stream cap ("too many devices streaming on your plan") inside
     // our embed. Fully supported by the same JS API postMessage origin allowlist.
-    return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
+    return resolveYoutubeEmbedUrl(videoId, params);
 }
 
 /** @param {unknown} ts Firestore Timestamp or ms number */
@@ -277,7 +295,10 @@ const YOUTUBE_MESSAGE_ORIGINS = new Set([
 
 /** @param {MessageEvent} event */
 export function parseYoutubeEmbedMessage(event) {
-    if (!YOUTUBE_MESSAGE_ORIGINS.has(event.origin)) return null;
+    // Direct embed → messages come from a YouTube origin. Native proxy embed →
+    // the /youtube.html relay forwards them, so they arrive from our own origin.
+    const selfOrigin = typeof window !== 'undefined' ? window.location?.origin : '';
+    if (!YOUTUBE_MESSAGE_ORIGINS.has(event.origin) && event.origin !== selfOrigin) return null;
     let data = event.data;
     if (typeof data === 'string') {
         try {
@@ -324,7 +345,13 @@ export function postYoutubeEmbedCommand(iframe, func, args = []) {
     const win = iframe?.contentWindow;
     if (!win) return;
     const payload = JSON.stringify({ event: 'command', func, args });
-    for (const origin of YOUTUBE_MESSAGE_ORIGINS) {
+    // Direct embed → target a YouTube origin. Native proxy embed → the iframe is
+    // our same-origin /youtube.html relay, so also target our own origin.
+    const targets = [...YOUTUBE_MESSAGE_ORIGINS];
+    if (typeof window !== 'undefined' && window.location?.origin) {
+        targets.push(window.location.origin);
+    }
+    for (const origin of targets) {
         try {
             win.postMessage(payload, origin);
         } catch {
@@ -610,7 +637,7 @@ export function buildYoutubeBannerBackgroundSrc(
     // See buildYoutubeEmbedSrc above — nocookie mode avoids the viewer's own
     // YouTube session/cookies so a guest's personal Premium concurrent-stream
     // limit can't trigger "too many devices streaming" inside the banner.
-    return `https://www.youtube-nocookie.com/embed/${pathId}?${params.toString()}`;
+    return resolveYoutubeEmbedUrl(pathId, params);
 }
 
 /** Whether banner has any YouTube media (video and/or playlist). */
