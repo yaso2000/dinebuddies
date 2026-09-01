@@ -3,6 +3,7 @@
   "appName": "DineBuddies",
   "webDir": "dist",
   "server": {
+    "hostname": "www.dinebuddies.com",
     "androidScheme": "https",
     "iosScheme": "https",
     "cleartext": false
