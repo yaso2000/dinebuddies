@@ -3562,6 +3562,8 @@
   "login_toggle_personal": "Personal",
   "logo_upload_failed": "Logo upload failed. Try again.",
   "logout": "Logout",
+  "logout_confirm_title": "Log out?",
+  "logout_confirm_message": "You will need to sign in again to use your account.",
   "lowest": "Lowest Rating",
   "magic_cover_applied_toast": "AI cover applied to this invitation.",
   "magic_cover_apply_explain": "Apply updates the title, message, colors, font, motion, and cover image on this draft. You can still edit everything afterward.",

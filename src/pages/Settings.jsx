@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase/config';
@@ -29,6 +30,7 @@ const Settings = () => {
   const location = useLocation();
   const { currentUser, userProfile, deleteUserAccount, isBusiness, signOut } = useAuth();
   const { showToast } = useToast();
+  const confirm = useConfirm();
   const { t, i18n } = useTranslation();
   const { isDark, toggleTheme } = useTheme();
   const currentLanguageCode = resolveLanguageCode(i18n.language);
@@ -66,6 +68,15 @@ const Settings = () => {
 
 
   const handleLogout = async () => {
+    // Guard against accidental sign-outs (raised in closed testing feedback).
+    const ok = await confirm({
+      title: t('logout_confirm_title', 'Log out?'),
+      message: t('logout_confirm_message', 'You will need to sign in again to use your account.'),
+      confirmLabel: t('logout', 'Log Out'),
+      cancelLabel: t('cancel', 'Cancel'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await signOut('/login');
     } catch (error) {

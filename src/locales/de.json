@@ -2987,6 +2987,8 @@
   "login_toggle_personal": "Privat",
   "logo_upload_failed": "Logo-Upload fehlgeschlagen. Versuchen Sie es erneut.",
   "logout": "Abmelden",
+  "logout_confirm_title": "Abmelden?",
+  "logout_confirm_message": "Du musst dich erneut anmelden, um dein Konto zu nutzen.",
   "logout_failed": "Failed to log out. Please try again.",
   "lowest": "Niedrigste Bewertung",
   "Loyalty program integration": "Treueprogramm-Integration",

@@ -2796,6 +2796,8 @@
   "login_toggle_personal": "Kişisel",
   "logo_upload_failed": "Logo yüklenemedi. Tekrar dene.",
   "logout": "Çıkış yap",
+  "logout_confirm_title": "Çıkış yapılsın mı?",
+  "logout_confirm_message": "Hesabınızı kullanmak için tekrar giriş yapmanız gerekir.",
   "logout_failed": "Failed to log out. Please try again.",
   "lowest": "En Düşük Puan",
   "Loyalty program integration": "Sadakat programı entegrasyonu",

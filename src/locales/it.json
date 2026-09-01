@@ -3171,6 +3171,8 @@
   "login_toggle_personal": "Personale",
   "logo_upload_failed": "Caricamento logo fallito. Riprova.",
   "logout": "Esci",
+  "logout_confirm_title": "Disconnettersi?",
+  "logout_confirm_message": "Dovrai accedere di nuovo per usare il tuo account.",
   "logout_failed": "Failed to log out. Please try again.",
   "lowest": "Valutazione più bassa",
   "Loyalty program integration": "Integrazione programma fedeltà",

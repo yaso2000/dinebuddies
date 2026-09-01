@@ -2796,6 +2796,8 @@
   "login_toggle_personal": "Personnel",
   "logo_upload_failed": "Échec du téléchargement du logo. Réessayez.",
   "logout": "Déconnexion",
+  "logout_confirm_title": "Se déconnecter ?",
+  "logout_confirm_message": "Vous devrez vous reconnecter pour utiliser votre compte.",
   "logout_failed": "Failed to log out. Please try again.",
   "lowest": "Note la plus basse",
   "Loyalty program integration": "Intégration du programme de fidélité",

@@ -2987,6 +2987,8 @@
   "login_toggle_personal": "Pessoal",
   "logo_upload_failed": "Falha ao enviar o logotipo. Tente novamente.",
   "logout": "Sair",
+  "logout_confirm_title": "Terminar sessão?",
+  "logout_confirm_message": "Você precisará entrar novamente para usar sua conta.",
   "logout_failed": "Failed to log out. Please try again.",
   "lowest": "Pior avaliação",
   "Loyalty program integration": "Integração com programa de fidelidade",

@@ -2987,6 +2987,8 @@
   "login_toggle_personal": "ذاتی",
   "logo_upload_failed": "لوگو اپ لوڈ ناکام ہو گیا۔ دوبارہ کوشش کریں۔",
   "logout": "لاگ آؤٹ",
+  "logout_confirm_title": "لاگ آؤٹ کریں؟",
+  "logout_confirm_message": "اپنا اکاؤنٹ استعمال کرنے کے لیے آپ کو دوبارہ سائن ان کرنا ہوگا۔",
   "logout_failed": "Failed to log out. Please try again.",
   "lowest": "سب سے کم درجہ بندی",
   "Loyalty program integration": "لائلٹی پروگرام انضمام",
