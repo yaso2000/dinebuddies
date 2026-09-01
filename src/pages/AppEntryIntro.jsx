@@ -208,7 +208,7 @@ export default function AppEntryIntro() {
             DineBuddies
           </AppText>
           <AppText as="p" className="app-entry-intro__tag">
-            Never dine alone
+            {t('app_tagline', 'Never Dine Alone')}
           </AppText>
           <div className="app-entry-intro__cta-actions">
             <button
