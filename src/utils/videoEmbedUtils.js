@@ -1,17 +1,22 @@
 import { getRuntime } from '../platform/runtime';
+import { PRODUCTION_API_ORIGIN } from './resolveApiUrl';
 
 /**
  * Native (Capacitor) WKWebView strips the HTTP Referer, so YouTube embeds fail
- * with "Video player configuration error / Error 153". Route the embed through
- * a same-origin proxy page (`/youtube.html`) that re-sends the referrer and
- * relays JS-API postMessages. On web we keep the direct embed unchanged.
+ * with "Video player configuration error / Error 153". Fix: load the embed from
+ * a proxy page served over REAL HTTPS on our production domain (NOT the local
+ * bundle — a locally-served page has no real network origin, so its Referer is
+ * still stripped). The remote proxy declares `strict-origin-when-cross-origin`,
+ * so the YouTube request carries a valid `https://www.dinebuddies.com` Referer.
+ * A postMessage relay in the proxy keeps the JS API (controls + Stage sync)
+ * working across the origin boundary. On web we keep the direct embed unchanged.
  * @param {string} pathId video id or "videoseries"
  * @param {URLSearchParams} params
  */
 function resolveYoutubeEmbedUrl(pathId, params) {
     const qs = params.toString();
     if (getRuntime().isNative) {
-        return `/youtube.html?v=${encodeURIComponent(pathId)}${qs ? `&${qs}` : ''}`;
+        return `${PRODUCTION_API_ORIGIN}/youtube.html?v=${encodeURIComponent(pathId)}${qs ? `&${qs}` : ''}`;
     }
     return `https://www.youtube-nocookie.com/embed/${pathId}${qs ? `?${qs}` : ''}`;
 }
@@ -296,9 +301,15 @@ const YOUTUBE_MESSAGE_ORIGINS = new Set([
 /** @param {MessageEvent} event */
 export function parseYoutubeEmbedMessage(event) {
     // Direct embed → messages come from a YouTube origin. Native proxy embed →
-    // the /youtube.html relay forwards them, so they arrive from our own origin.
+    // the youtube.html relay forwards them, so they arrive from the proxy's
+    // origin (our production domain) or, as a fallback, our own WebView origin.
     const selfOrigin = typeof window !== 'undefined' ? window.location?.origin : '';
-    if (!YOUTUBE_MESSAGE_ORIGINS.has(event.origin) && event.origin !== selfOrigin) return null;
+    if (
+        !YOUTUBE_MESSAGE_ORIGINS.has(event.origin) &&
+        event.origin !== PRODUCTION_API_ORIGIN &&
+        event.origin !== selfOrigin
+    )
+        return null;
     let data = event.data;
     if (typeof data === 'string') {
         try {
@@ -346,8 +357,9 @@ export function postYoutubeEmbedCommand(iframe, func, args = []) {
     if (!win) return;
     const payload = JSON.stringify({ event: 'command', func, args });
     // Direct embed → target a YouTube origin. Native proxy embed → the iframe is
-    // our same-origin /youtube.html relay, so also target our own origin.
-    const targets = [...YOUTUBE_MESSAGE_ORIGINS];
+    // the youtube.html relay on our production domain, so also target that (and
+    // our own WebView origin as a fallback).
+    const targets = [...YOUTUBE_MESSAGE_ORIGINS, PRODUCTION_API_ORIGIN];
     if (typeof window !== 'undefined' && window.location?.origin) {
         targets.push(window.location.origin);
     }
