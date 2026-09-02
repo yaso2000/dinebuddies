@@ -470,9 +470,24 @@ async function assertAdminContext(context, data) {
     throw new functions.https.HttpsError('permission-denied', 'Admin privileges required.');
 }
 
+/**
+ * Block region-scoped regional managers from destructive / global actions
+ * (deleting any account, changing roles or subscriptions). These stay with the
+ * owner / full admins only. The owner "viewing as" a region keeps role 'owner',
+ * so impersonation is NOT blocked here — only a real regional_manager caller is.
+ */
+function denyRegionalManager(adminCtx) {
+    if (adminCtx && adminCtx.role === 'regional_manager') {
+        throw new functions.https.HttpsError(
+            'permission-denied',
+            'Regional managers cannot perform this action — it is reserved for the owner.',
+        );
+    }
+}
+
 registerAdminSearchUsers(exports, { db, admin, assertAdminContext });
 registerAdminBrowseUsers(exports, { db, admin, assertAdminContext });
-registerAdminDashboard(exports, { db, admin, assertAdminContext });
+registerAdminDashboard(exports, { db, admin, assertAdminContext, denyRegionalManager });
 registerProfileGiftCallables(exports);
 const { registerCashoutCallables } = require('./cashout');
 registerCashoutCallables(exports, { assertAdminContext });
@@ -2447,7 +2462,9 @@ exports.adminSetUserBanStatus = functions.https.onCall(async (data, context) => 
 
 // ─── Trusted admin callable: system role changes ────────────────────────────
 exports.adminSetUserRole = functions.https.onCall(async (data, context) => {
-    const { requesterUid, isSuperOwner } = await assertAdminContext(context);
+    const adminCtx = await assertAdminContext(context);
+    denyRegionalManager(adminCtx);
+    const { requesterUid, isSuperOwner } = adminCtx;
 
     const targetUid = data?.targetUid;
     const role = data?.role;
@@ -2499,7 +2516,7 @@ exports.adminSetUserRole = functions.https.onCall(async (data, context) => {
 
 // ─── Trusted admin callable: subscription tier changes ──────────────────────
 exports.adminSetUserSubscriptionTier = functions.https.onCall(async (data, context) => {
-    await assertAdminContext(context);
+    denyRegionalManager(await assertAdminContext(context));
     const targetUid = data?.targetUid;
     const subscriptionTier = data?.subscriptionTier;
     const isBusinessUser = data?.isBusinessUser === true;
@@ -2526,7 +2543,7 @@ exports.adminSetUserSubscriptionTier = functions.https.onCall(async (data, conte
 
 // ─── Trusted admin callable: cancel user subscription ───────────────────────
 exports.adminCancelUserSubscription = functions.https.onCall(async (data, context) => {
-    await assertAdminContext(context);
+    denyRegionalManager(await assertAdminContext(context));
     const targetUid = data?.targetUid;
     if (!targetUid || typeof targetUid !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'targetUid is required.');
@@ -3082,7 +3099,9 @@ exports.convertPersonalToBusinessIntent = functions.https.onCall(async (data, co
 
 // ─── Trusted admin callable: delete user (destructive) ──────────────────────
 exports.adminDeleteUser = functions.https.onCall(async (data, context) => {
-    const { isSuperOwner } = await assertAdminContext(context);
+    const adminCtx = await assertAdminContext(context);
+    denyRegionalManager(adminCtx);
+    const { isSuperOwner } = adminCtx;
     const targetUid = data?.targetUid;
     if (!targetUid || typeof targetUid !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'targetUid is required.');
@@ -3098,7 +3117,7 @@ exports.adminDeleteUser = functions.https.onCall(async (data, context) => {
 
 // ─── Trusted admin callable: delete partner (destructive) ───────────────────
 exports.adminDeletePartner = functions.https.onCall(async (data, context) => {
-    await assertAdminContext(context);
+    denyRegionalManager(await assertAdminContext(context));
     const targetUid = data?.targetUid;
     if (!targetUid || typeof targetUid !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'targetUid is required.');

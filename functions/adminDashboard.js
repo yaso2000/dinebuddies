@@ -102,7 +102,7 @@ async function listInvitationsPage(db, col, collectionKind, predicate, startAfte
  * @param {typeof import('firebase-admin')} admin
  * @param {(ctx: import('firebase-functions').https.CallableContext) => Promise<{requesterUid: string}>} assertAdminContext
  */
-function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
+function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext, denyRegionalManager }) {
     exportsObj.adminSetUserFreezeStatus = functions.https.onCall(async (data, context) => {
         const { regionScope } = await assertAdminContext(context, data);
         const targetUid = asTrimmedString(data?.targetUid);
@@ -894,7 +894,9 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminDeleteBusiness = functions.https.onCall(async (data, context) => {
-        const { regionScope } = await assertAdminContext(context, data);
+        const adminCtx = await assertAdminContext(context, data);
+        denyRegionalManager(adminCtx); // deleting any account is owner-only
+        const { regionScope } = adminCtx;
         const businessId = asTrimmedString(data?.businessId);
         if (!businessId) {
             throw new functions.https.HttpsError('invalid-argument', 'businessId is required.');
