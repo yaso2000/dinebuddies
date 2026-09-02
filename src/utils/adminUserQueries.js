@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import app from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { withViewAsRegion } from '../admin/viewAsRegion';
 
 const ADMIN_FUNCTIONS_REGION = 'us-central1';
 
@@ -212,12 +213,12 @@ export async function browseUsersPage(db, { roleFilter, startAfterId = null, pag
 
     try {
         const fn = httpsCallable(getFunctions(app, ADMIN_FUNCTIONS_REGION), 'adminBrowseUsers');
-        const res = await fn({
+        const res = await fn(withViewAsRegion({
             roleFilter: opts.roleFilter,
             startAfterId: opts.startAfterId,
             pageSize: opts.pageSize,
             bannedOnly: opts.bannedOnly,
-        });
+        }));
         const users = Array.isArray(res?.data?.users) ? res.data.users : [];
         return {
             users: users.filter((row) => row && typeof row === 'object' && row.id),
@@ -262,7 +263,7 @@ export async function searchUsers(db, raw) {
     if (!term) return [];
     try {
         const fn = httpsCallable(getFunctions(app, ADMIN_FUNCTIONS_REGION), 'adminSearchUsers');
-        const res = await fn({ query: term });
+        const res = await fn(withViewAsRegion({ query: term }));
         const list = res?.data?.users;
         if (Array.isArray(list)) {
             return list.filter((row) => row && typeof row === 'object' && row.id);

@@ -152,7 +152,7 @@ const { docInRegionScope } = require('./_adminRegion');
 
 function registerAdminSearchUsers(exportsObj, { db, admin, assertAdminContext }) {
     exportsObj.adminSearchUsers = functions.https.onCall(async (data, context) => {
-        const { regionScope } = await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context, data);
         const q = String(data?.query || '').trim().slice(0, 200);
         const users = await runAdminSearchUsers(db, admin, q);
         // A regional manager only sees users inside their region.

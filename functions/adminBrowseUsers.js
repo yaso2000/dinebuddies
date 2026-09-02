@@ -85,7 +85,7 @@ async function runAdminBrowseUsers(db, admin, { roleFilter, startAfterId, pageSi
 
 function registerAdminBrowseUsers(exportsObj, { db, admin, assertAdminContext }) {
     exportsObj.adminBrowseUsers = functions.https.onCall(async (data, context) => {
-        const { regionScope } = await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context, data);
         const roleFilter = String(data?.roleFilter || 'all').slice(0, 32);
         const startAfterId = data?.startAfterId ? String(data.startAfterId).slice(0, 128) : null;
         const pageSize = Number(data?.pageSize) || 25;

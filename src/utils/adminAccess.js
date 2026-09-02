@@ -23,15 +23,40 @@ export function isAdminPanelStaffRole(userProfile) {
  * carries `role: 'regional_manager'` + `region: '<key>'` (e.g. 'gulf').
  * ------------------------------------------------------------------------- */
 
-/** Supported admin regions → the ISO country codes they cover. */
+/** Supported admin regions → the ISO country codes they cover. Keep in sync with functions/_adminRegion.js. */
 export const ADMIN_REGIONS = {
     gulf: {
         key: 'gulf',
         labelKey: 'admin_region_gulf',
-        defaultLabel: 'الخليج العربي',
-        countryCodes: ['AE', 'SA', 'KW', 'QA', 'BH', 'OM'],
+        defaultLabel: 'الخليج',
+        emoji: '🌊',
+        countryCodes: ['AE', 'SA', 'KW', 'QA', 'BH', 'OM', 'YE'],
+    },
+    levant: {
+        key: 'levant',
+        labelKey: 'admin_region_levant',
+        defaultLabel: 'بلاد الشام',
+        emoji: '🏛',
+        countryCodes: ['SY', 'LB', 'JO', 'PS', 'IQ'],
+    },
+    egypt: {
+        key: 'egypt',
+        labelKey: 'admin_region_egypt',
+        defaultLabel: 'مصر',
+        emoji: '🐫',
+        countryCodes: ['EG', 'SD'],
+    },
+    maghreb: {
+        key: 'maghreb',
+        labelKey: 'admin_region_maghreb',
+        defaultLabel: 'المغرب العربي',
+        emoji: '🕌',
+        countryCodes: ['LY', 'TN', 'DZ', 'MA', 'MR'],
     },
 };
+
+/** Ordered list of regions for the owner's "act as region" switcher. */
+export const ADMIN_REGION_LIST = Object.values(ADMIN_REGIONS);
 
 /** Admin paths a regional manager may NOT open (money + global tools + destructive). */
 export const ADMIN_OWNER_ONLY_PATHS = new Set([

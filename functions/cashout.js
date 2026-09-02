@@ -229,7 +229,7 @@ function registerCashoutCallables(exportsMap, deps) {
      * resolveCashoutRequest({ requestId, action: 'paid'|'reject', rejectReason? })
      */
     exportsMap.resolveCashoutRequest = functions.https.onCall(async (data, context) => {
-        const { requesterUid } = await assertAdminContext(context);
+        const { requesterUid } = await assertAdminContext(context, data);
         const requestId = String(data?.requestId || '').trim();
         const action = String(data?.action || '')
             .trim()

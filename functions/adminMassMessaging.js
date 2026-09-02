@@ -164,7 +164,7 @@ function registerAdminMassMessaging(exportsObj, { db, admin, assertAdminContext 
     exportsObj.adminSendMassMessage = functions
         .runWith({ timeoutSeconds: 540, memory: '512MB' })
         .https.onCall(async (data, context) => {
-            const { requesterUid } = await assertAdminContext(context);
+            const { requesterUid } = await assertAdminContext(context, data);
             const audience = asTrimmedString(data?.audience) || 'all';
             if (!Object.prototype.hasOwnProperty.call(AUDIENCE_MAP, audience)) {
                 throw new functions.https.HttpsError('invalid-argument', 'Invalid audience filter.');
@@ -266,7 +266,7 @@ function registerAdminMassMessaging(exportsObj, { db, admin, assertAdminContext 
         });
 
     exportsObj.adminListAnnouncements = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        await assertAdminContext(context, data);
         const pageSize = Math.min(Math.max(Number(data?.pageSize) || 20, 1), 50);
         const snap = await db
             .collection('admin_announcements')

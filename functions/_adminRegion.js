@@ -6,9 +6,12 @@
  * unscoped. Fail closed: a regional_manager with an unknown region sees nothing.
  */
 
-/** Region key → ISO country codes it covers. */
+/** Region key → ISO country codes it covers. Extend this map to add regions. */
 const ADMIN_REGION_COUNTRIES = {
-    gulf: ['AE', 'SA', 'KW', 'QA', 'BH', 'OM'],
+    gulf: ['AE', 'SA', 'KW', 'QA', 'BH', 'OM', 'YE'],
+    levant: ['SY', 'LB', 'JO', 'PS', 'IQ'],
+    egypt: ['EG', 'SD'],
+    maghreb: ['LY', 'TN', 'DZ', 'MA', 'MR'],
 };
 
 /** @param {string} regionKey @returns {string[] | null} */

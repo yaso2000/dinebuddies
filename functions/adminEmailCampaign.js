@@ -256,7 +256,7 @@ function registerAdminEmailCampaign({ exports, functions, db, assertAdminContext
     }
 
     exports.adminPreviewEmailCampaign = functions.runWith(opts).https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        await assertAdminContext(context, data);
 
         let audience;
         try {
@@ -289,7 +289,7 @@ function registerAdminEmailCampaign({ exports, functions, db, assertAdminContext
     });
 
     exports.adminSendEmailCampaign = functions.runWith(opts).https.onCall(async (data, context) => {
-        const { requesterUid } = await assertAdminContext(context);
+        const { requesterUid } = await assertAdminContext(context, data);
 
         const apiKey = process.env.RESEND_API_KEY;
         if (!apiKey || typeof apiKey !== 'string') {

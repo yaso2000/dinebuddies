@@ -1,5 +1,6 @@
 import app from '../firebase/config';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { withViewAsRegion } from './viewAsRegion';
 
 const functions = getFunctions(app, 'us-central1');
 
@@ -12,7 +13,8 @@ const LONG_RUNNING_ADMIN_CALLS = new Set([
 async function call(name, payload) {
     const opts = LONG_RUNNING_ADMIN_CALLS.has(name) ? { timeout: 540000 } : undefined;
     const fn = httpsCallable(functions, name, opts);
-    const res = await fn(payload);
+    // Stamp the owner's "act as region" selection (no-op in the global view).
+    const res = await fn(withViewAsRegion(payload));
     return res?.data || {};
 }
 

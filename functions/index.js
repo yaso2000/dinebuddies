@@ -409,7 +409,7 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
 
 /** Matches client AdminRoute / Firestore isAdminOrPanelStaff — staff must reach adminSearchUsers & other callables. */
 const ADMIN_PANEL_ROLES = new Set(['admin', 'moderator', 'support', 'staff', 'regional_manager']);
-const { resolveCallerRegionScope, targetUserInRegion } = require('./_adminRegion');
+const { resolveCallerRegionScope, targetUserInRegion, regionCountries } = require('./_adminRegion');
 
 /** Full admins (owner / claim / admin role) are not region-scoped. */
 const UNSCOPED_REGION = { scoped: false, countries: [] };
@@ -420,7 +420,7 @@ const UNSCOPED_REGION = { scoped: false, countries: [] };
  * Backward-compatible: existing callers that destructure { requesterUid, isSuperOwner }
  * keep working; region-aware callers read `regionScope`.
  */
-async function assertAdminContext(context) {
+async function assertAdminContext(context, data) {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
     }
@@ -428,7 +428,28 @@ async function assertAdminContext(context) {
     const requesterEmail = (context.auth.token.email || '').toLowerCase();
     const isSuperOwner = SUPER_OWNER_UIDS.includes(requesterUid) || SUPER_OWNER_EMAILS.includes(requesterEmail);
     if (isSuperOwner || context.auth.token.admin === true) {
-        return { requesterUid, isSuperOwner, role: isSuperOwner ? 'owner' : 'admin', region: null, regionScope: UNSCOPED_REGION };
+        const base = {
+            requesterUid,
+            isSuperOwner,
+            role: isSuperOwner ? 'owner' : 'admin',
+            region: null,
+            regionScope: UNSCOPED_REGION,
+            viewAsRegion: null,
+        };
+        // Owner / full admin may "act as" a regional manager to supervise a region.
+        // Per-request and opt-in: only honored when a valid region key is supplied.
+        const requested = data && typeof data === 'object'
+            ? String(data.viewAsRegion || '').trim().toLowerCase()
+            : '';
+        if (requested && regionCountries(requested)) {
+            return {
+                ...base,
+                viewAsRegion: requested,
+                region: requested,
+                regionScope: resolveCallerRegionScope('regional_manager', requested),
+            };
+        }
+        return base;
     }
 
     const requesterDoc = await db.collection('users').doc(requesterUid).get();
@@ -442,6 +463,7 @@ async function assertAdminContext(context) {
             role: requesterRole,
             region,
             regionScope: resolveCallerRegionScope(requesterRole, region),
+            viewAsRegion: null,
         };
     }
 
@@ -2398,7 +2420,7 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
 
 // ─── Trusted admin callable: moderation ban/unban ───────────────────────────
 exports.adminSetUserBanStatus = functions.https.onCall(async (data, context) => {
-    const { regionScope } = await assertAdminContext(context);
+    const { regionScope } = await assertAdminContext(context, data);
 
     const targetUid = data?.targetUid;
     const banned = data?.banned === true;
@@ -2921,7 +2943,7 @@ exports.adminGetDashboardStats = functions.https.onCall(async (_data, context) =
 
 // ─── Trusted admin callable: moderation report status ───────────────────────
 exports.adminSetReportStatus = functions.https.onCall(async (data, context) => {
-    const { regionScope } = await assertAdminContext(context);
+    const { regionScope } = await assertAdminContext(context, data);
     const reportId = asTrimmedString(data?.reportId);
     const status = asTrimmedString(data?.status);
     const allowed = new Set(['pending', 'resolved', 'dismissed']);

@@ -104,7 +104,7 @@ async function listInvitationsPage(db, col, collectionKind, predicate, startAfte
  */
 function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     exportsObj.adminSetUserFreezeStatus = functions.https.onCall(async (data, context) => {
-        const { regionScope } = await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context, data);
         const targetUid = asTrimmedString(data?.targetUid);
         const frozen = data?.frozen === true;
         if (!targetUid) {
@@ -138,7 +138,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminGrantFreeCredits = functions.https.onCall(async (data, context) => {
-        const { requesterUid } = await assertAdminContext(context);
+        const { requesterUid } = await assertAdminContext(context, data);
         const targetUid = asTrimmedString(data?.targetUid);
         const amount = Math.floor(Number(data?.amount));
         const note = asTrimmedString(data?.note).slice(0, 200);
@@ -186,7 +186,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     exportsObj.adminResetAllCredits = functions
         .runWith({ timeoutSeconds: 540, memory: '1GB' })
         .https.onCall(async (data, context) => {
-            const { requesterUid } = await assertAdminContext(context);
+            const { requesterUid } = await assertAdminContext(context, data);
             const confirmPhrase = asTrimmedString(data?.confirmPhrase);
             if (confirmPhrase !== 'RESET ALL CREDITS') {
                 throw new functions.https.HttpsError(
@@ -252,7 +252,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         });
 
     exportsObj.adminListInvitations = functions.https.onCall(async (data, context) => {
-        const { regionScope } = await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context, data);
         const inviteTypeFilter = asTrimmedString(data?.inviteType) || 'all';
         const allowedTypes = new Set(['all', 'public', 'private', 'dating']);
         if (!allowedTypes.has(inviteTypeFilter)) {
@@ -317,7 +317,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminModerateInvitation = functions.https.onCall(async (data, context) => {
-        const { regionScope } = await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context, data);
         const invitationId = asTrimmedString(data?.invitationId);
         const inviteType = asTrimmedString(data?.inviteType);
         const legacyKind = data?.kind === 'social' ? 'private' : 'public';
@@ -640,7 +640,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     }
 
     exportsObj.adminListPosts = functions.https.onCall(async (data, context) => {
-        const { regionScope } = await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context, data);
         const pageSize = Math.min(Math.max(Number(data?.pageSize) || 25, 1), POSTS_PAGE_MAX);
         const startAfterId = asTrimmedString(data?.startAfterId) || null;
         const startAfterSource = asTrimmedString(data?.startAfterSource) || null;
@@ -726,7 +726,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     }
 
     exportsObj.adminModeratePost = functions.https.onCall(async (data, context) => {
-        const { regionScope } = await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context, data);
         const postId = asTrimmedString(data?.postId);
         const action = asTrimmedString(data?.action);
         const sourceRaw = asTrimmedString(data?.source) || 'community';
@@ -825,7 +825,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     }
 
     exportsObj.adminListBusinesses = functions.https.onCall(async (data, context) => {
-        const { regionScope } = await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context, data);
         const startAfterId = asTrimmedString(data?.startAfterId) || null;
         const pageSize = Math.min(Math.max(Number(data?.pageSize) || 25, 1), BUSINESSES_PAGE_MAX);
 
@@ -894,7 +894,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminDeleteBusiness = functions.https.onCall(async (data, context) => {
-        const { regionScope } = await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context, data);
         const businessId = asTrimmedString(data?.businessId);
         if (!businessId) {
             throw new functions.https.HttpsError('invalid-argument', 'businessId is required.');
@@ -961,7 +961,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminListReports = functions.https.onCall(async (data, context) => {
-        const { regionScope } = await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context, data);
         const status = asTrimmedString(data?.status) || 'pending';
         const allowedStatus = new Set(['pending', 'resolved', 'dismissed', 'all']);
         if (!allowedStatus.has(status)) {
@@ -1036,7 +1036,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     const demoUserFnOpts = { timeoutSeconds: 540, memory: '1GB' };
 
     exportsObj.adminListDemoUsers = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        await assertAdminContext(context, data);
         const cities = await listDemoCitySummaries(db);
         const users = await listDemoUserProfiles(db, {
             demoCityId: asTrimmedString(data?.demoCityId) || undefined,
@@ -1046,7 +1046,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminListDemoUserProfiles = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        await assertAdminContext(context, data);
         const users = await listDemoUserProfiles(db, {
             demoCityId: asTrimmedString(data?.demoCityId) || undefined,
             limit: data?.limit,
@@ -1055,7 +1055,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminCreateDemoUser = functions.https.onCall(async (data, context) => {
-        const { requesterUid } = await assertAdminContext(context);
+        const { requesterUid } = await assertAdminContext(context, data);
         try {
             return await createDemoUser(
                 db,
@@ -1080,7 +1080,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminSuggestDemoUserProfile = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        await assertAdminContext(context, data);
         const city = asTrimmedString(data?.city);
         const countryCode = asTrimmedString(data?.countryCode).toUpperCase().slice(0, 2);
         const countryName = asTrimmedString(data?.countryName || data?.country);
@@ -1128,7 +1128,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     exportsObj.adminGenerateDemoUserImage = functions
         .runWith(demoUserFnOpts)
         .https.onCall(async (data, context) => {
-            const { requesterUid } = await assertAdminContext(context);
+            const { requesterUid } = await assertAdminContext(context, data);
             const kind = asTrimmedString(data?.kind).toLowerCase();
             if (kind !== 'avatar' && kind !== 'cover') {
                 throw new functions.https.HttpsError(
@@ -1162,7 +1162,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     exportsObj.adminGenerateDemoUserCharacterPair = functions
         .runWith(demoUserFnOpts)
         .https.onCall(async (data, context) => {
-            const { requesterUid } = await assertAdminContext(context);
+            const { requesterUid } = await assertAdminContext(context, data);
             try {
                 const { generateDemoUserCharacterPair } = require('./demoUsersImagen');
                 return await generateDemoUserCharacterPair({
@@ -1186,7 +1186,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         });
 
     exportsObj.adminDeleteDemoUser = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        await assertAdminContext(context, data);
         const uid = asTrimmedString(data?.uid);
         if (!uid) {
             throw new functions.https.HttpsError('invalid-argument', 'uid is required.');
@@ -1250,7 +1250,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     exportsObj.adminCreateDemoUsers = functions
         .runWith(demoUserFnOpts)
         .https.onCall(async (data, context) => {
-        const { requesterUid } = await assertAdminContext(context);
+        const { requesterUid } = await assertAdminContext(context, data);
         return runCreateDemoUsers(data, requesterUid);
     });
 
@@ -1258,12 +1258,12 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     exportsObj.generateDemoUsersBatch = functions
         .runWith(demoUserFnOpts)
         .https.onCall(async (data, context) => {
-        const { requesterUid } = await assertAdminContext(context);
+        const { requesterUid } = await assertAdminContext(context, data);
         return runCreateDemoUsers(data, requesterUid);
     });
 
     exportsObj.adminWipeDemoUsers = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        await assertAdminContext(context, data);
         const demoCityId =
             asTrimmedString(data?.demoCityId) ||
             buildDemoCityId(data?.city, data?.countryCode);
@@ -1276,7 +1276,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminCreateDemoPost = functions.https.onCall(async (data, context) => {
-        const { requesterUid } = await assertAdminContext(context);
+        const { requesterUid } = await assertAdminContext(context, data);
         try {
             return await createDemoUserPost(db, admin, data || {}, requesterUid);
         } catch (err) {
@@ -1288,7 +1288,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminCreateDemoPublicInvitation = functions.https.onCall(async (data, context) => {
-        const { requesterUid } = await assertAdminContext(context);
+        const { requesterUid } = await assertAdminContext(context, data);
         try {
             return await createDemoUserPublicInvitation(db, admin, data || {}, requesterUid);
         } catch (err) {
@@ -1301,7 +1301,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
 
     // ---- Support tickets (AI customer-service escalations) --------------------
     exportsObj.adminListSupportTickets = functions.https.onCall(async (data, context) => {
-        const { regionScope } = await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context, data);
         const status = asTrimmedString(data?.status) || 'open';
         const allowed = new Set(['open', 'answered', 'resolved', 'all']);
         if (!allowed.has(status)) {
@@ -1340,7 +1340,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminReplySupportTicket = functions.https.onCall(async (data, context) => {
-        const { requesterUid, regionScope } = await assertAdminContext(context);
+        const { requesterUid, regionScope } = await assertAdminContext(context, data);
         const ticketId = asTrimmedString(data?.ticketId);
         const message = asTrimmedString(data?.message).slice(0, 2000);
         if (!ticketId) throw new functions.https.HttpsError('invalid-argument', 'ticketId is required.');
@@ -1382,7 +1382,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminSetSupportTicketStatus = functions.https.onCall(async (data, context) => {
-        const { regionScope } = await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context, data);
         const ticketId = asTrimmedString(data?.ticketId);
         const status = asTrimmedString(data?.status);
         const allowed = new Set(['open', 'answered', 'resolved']);
