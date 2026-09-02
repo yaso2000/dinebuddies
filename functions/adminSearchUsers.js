@@ -148,12 +148,18 @@ async function runAdminSearchUsers(db, admin, raw) {
     return [...merged.values()].slice(0, 60);
 }
 
+const { docInRegionScope } = require('./_adminRegion');
+
 function registerAdminSearchUsers(exportsObj, { db, admin, assertAdminContext }) {
     exportsObj.adminSearchUsers = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context);
         const q = String(data?.query || '').trim().slice(0, 200);
         const users = await runAdminSearchUsers(db, admin, q);
-        return { users };
+        // A regional manager only sees users inside their region.
+        const scoped = regionScope?.scoped
+            ? users.filter((u) => docInRegionScope(u, regionScope))
+            : users;
+        return { users: scoped };
     });
 }
 

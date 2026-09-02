@@ -408,8 +408,18 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
 }
 
 /** Matches client AdminRoute / Firestore isAdminOrPanelStaff — staff must reach adminSearchUsers & other callables. */
-const ADMIN_PANEL_ROLES = new Set(['admin', 'moderator', 'support', 'staff']);
+const ADMIN_PANEL_ROLES = new Set(['admin', 'moderator', 'support', 'staff', 'regional_manager']);
+const { resolveCallerRegionScope } = require('./_adminRegion');
 
+/** Full admins (owner / claim / admin role) are not region-scoped. */
+const UNSCOPED_REGION = { scoped: false, countries: [] };
+
+/**
+ * @returns {Promise<{ requesterUid: string, isSuperOwner: boolean, role: string,
+ *   region: string|null, regionScope: { scoped: boolean, countries: string[] } }>}
+ * Backward-compatible: existing callers that destructure { requesterUid, isSuperOwner }
+ * keep working; region-aware callers read `regionScope`.
+ */
 async function assertAdminContext(context) {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
@@ -417,11 +427,23 @@ async function assertAdminContext(context) {
     const requesterUid = context.auth.uid;
     const requesterEmail = (context.auth.token.email || '').toLowerCase();
     const isSuperOwner = SUPER_OWNER_UIDS.includes(requesterUid) || SUPER_OWNER_EMAILS.includes(requesterEmail);
-    if (isSuperOwner || context.auth.token.admin === true) return { requesterUid, isSuperOwner };
+    if (isSuperOwner || context.auth.token.admin === true) {
+        return { requesterUid, isSuperOwner, role: isSuperOwner ? 'owner' : 'admin', region: null, regionScope: UNSCOPED_REGION };
+    }
 
     const requesterDoc = await db.collection('users').doc(requesterUid).get();
-    const requesterRole = requesterDoc.exists ? String(requesterDoc.data()?.role || '').toLowerCase() : '';
-    if (ADMIN_PANEL_ROLES.has(requesterRole)) return { requesterUid, isSuperOwner: false };
+    const requesterData = requesterDoc.exists ? (requesterDoc.data() || {}) : {};
+    const requesterRole = String(requesterData.role || '').toLowerCase();
+    if (ADMIN_PANEL_ROLES.has(requesterRole)) {
+        const region = String(requesterData.region || '') || null;
+        return {
+            requesterUid,
+            isSuperOwner: false,
+            role: requesterRole,
+            region,
+            regionScope: resolveCallerRegionScope(requesterRole, region),
+        };
+    }
 
     throw new functions.https.HttpsError('permission-denied', 'Admin privileges required.');
 }

@@ -3,6 +3,7 @@
  */
 const functions = require('firebase-functions');
 const { plainUserRow } = require('./adminSearchUsers');
+const { docInRegionScope } = require('./_adminRegion');
 
 const SCAN_BATCH = 80;
 const MAX_SCAN = 2500;
@@ -42,7 +43,7 @@ function matchesRoleFilter(data, roleFilter, bannedOnly = false) {
  * @param {typeof import('firebase-admin')} admin
  * @param {{ roleFilter: string, startAfterId: string|null, pageSize: number }} opts
  */
-async function runAdminBrowseUsers(db, admin, { roleFilter, startAfterId, pageSize, bannedOnly }) {
+async function runAdminBrowseUsers(db, admin, { roleFilter, startAfterId, pageSize, bannedOnly, regionScope }) {
     const limit = Math.min(Math.max(Number(pageSize) || 25, 1), 50);
     const need = limit + 1;
     const rows = [];
@@ -61,7 +62,10 @@ async function runAdminBrowseUsers(db, admin, { roleFilter, startAfterId, pageSi
         scanned += snap.size;
         for (const doc of snap.docs) {
             cursor = doc.id;
-            if (matchesRoleFilter(doc.data(), filter, onlyBanned)) {
+            if (
+                matchesRoleFilter(doc.data(), filter, onlyBanned) &&
+                docInRegionScope(doc.data(), regionScope)
+            ) {
                 rows.push(plainUserRow(doc.id, doc.data(), admin));
                 if (rows.length >= need) break;
             }
@@ -81,12 +85,12 @@ async function runAdminBrowseUsers(db, admin, { roleFilter, startAfterId, pageSi
 
 function registerAdminBrowseUsers(exportsObj, { db, admin, assertAdminContext }) {
     exportsObj.adminBrowseUsers = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context);
         const roleFilter = String(data?.roleFilter || 'all').slice(0, 32);
         const startAfterId = data?.startAfterId ? String(data.startAfterId).slice(0, 128) : null;
         const pageSize = Number(data?.pageSize) || 25;
         const bannedOnly = data?.bannedOnly === true;
-        return runAdminBrowseUsers(db, admin, { roleFilter, startAfterId, pageSize, bannedOnly });
+        return runAdminBrowseUsers(db, admin, { roleFilter, startAfterId, pageSize, bannedOnly, regionScope });
     });
 }
 
