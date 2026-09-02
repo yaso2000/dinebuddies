@@ -21,12 +21,17 @@ export default function ManagersPage() {
 
     const [managers, setManagers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [accessLog, setAccessLog] = useState([]);
 
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await adminApi.listRegionalManagers();
-            setManagers(Array.isArray(res?.managers) ? res.managers : []);
+            const [mgrs, log] = await Promise.all([
+                adminApi.listRegionalManagers(),
+                adminApi.listAccessLog(40).catch(() => ({ entries: [] })),
+            ]);
+            setManagers(Array.isArray(mgrs?.managers) ? mgrs.managers : []);
+            setAccessLog(Array.isArray(log?.entries) ? log.entries : []);
         } catch (e) {
             setError(e?.message || String(e));
         } finally {
@@ -191,6 +196,40 @@ export default function ManagersPage() {
                                             </button>
                                         </div>
                                     </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            <h2 className="db-h2" style={{ marginTop: 28 }}>{t('admin_access_title', 'آخر عمليات الدخول')}</h2>
+            <p className="db-lead">{t('admin_access_lead', 'سجل دخول المدراء إلى اللوحة. يصلك تنبيه فوري عند دخول مدير من جهاز جديد.')}</p>
+            <div className="db-panel">
+                <table className="db-table">
+                    <thead>
+                        <tr>
+                            <th>{t('admin_access_who', 'المستخدم')}</th>
+                            <th>{t('admin_access_region', 'المنطقة')}</th>
+                            <th>IP</th>
+                            <th>{t('admin_access_when', 'الوقت')}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {accessLog.length === 0 ? (
+                            <tr><td colSpan={4}><div className="db-empty">{t('admin_access_empty', 'لا سجل بعد.')}</div></td></tr>
+                        ) : (
+                            accessLog.map((e) => (
+                                <tr key={e.id}>
+                                    <td>
+                                        <div style={{ fontWeight: 600 }}>{e.email || '—'}</div>
+                                        <div className="db-id">{e.role || 'admin'}{e.isNewDevice ? ' · ' : ''}
+                                            {e.isNewDevice ? <span className="db-badge db-badge--warn">{t('admin_access_new_device', 'جهاز جديد')}</span> : null}
+                                        </div>
+                                    </td>
+                                    <td>{e.region ? regionLabel(e.region) : '—'}</td>
+                                    <td className="db-id">{e.ip || '—'}</td>
+                                    <td className="db-muted">{e.at ? new Date(e.at).toLocaleString() : '—'}</td>
                                 </tr>
                             ))
                         )}

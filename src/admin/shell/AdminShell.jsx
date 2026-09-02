@@ -12,6 +12,7 @@ import {
     isRegionalManager,
 } from '../../utils/adminAccess';
 import { getViewAsRegion, setViewAsRegion, subscribeViewAsRegion } from '../viewAsRegion';
+import { adminApi } from '../api';
 import '../styles/shell.css';
 
 export default function AdminShell() {
@@ -25,6 +26,11 @@ export default function AdminShell() {
     const canViewAsRegion = !isRegionalManager(userProfile);
     const [viewRegion, setViewRegion] = React.useState(getViewAsRegion());
     React.useEffect(() => subscribeViewAsRegion(setViewRegion), []);
+
+    // Record this admin-panel entry (audit + owner alert on a new manager device).
+    React.useEffect(() => {
+        adminApi.logAdminAccess().catch(() => {});
+    }, []);
     const activeView = canViewAsRegion ? ADMIN_REGIONS[viewRegion] : null;
 
     // While impersonating, mirror the manager's exact menu (hide owner-only tools).

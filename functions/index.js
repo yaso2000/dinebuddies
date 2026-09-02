@@ -490,6 +490,8 @@ registerAdminBrowseUsers(exports, { db, admin, assertAdminContext });
 registerAdminDashboard(exports, { db, admin, assertAdminContext, denyRegionalManager });
 const { registerRegionalManagerCallables } = require('./adminRegionalManagers');
 registerRegionalManagerCallables(exports, { db, admin, assertAdminContext });
+const { registerAdminAccessAudit } = require('./adminAccessAudit');
+registerAdminAccessAudit(exports, { db, admin, assertAdminContext, superOwnerUids: SUPER_OWNER_UIDS });
 registerProfileGiftCallables(exports);
 const { registerCashoutCallables } = require('./cashout');
 registerCashoutCallables(exports, { assertAdminContext });

@@ -63,4 +63,7 @@ export const adminApi = {
         call('adminCreateRegionalManager', { email, region, displayName }),
     listRegionalManagers: () => call('adminListRegionalManagers', {}),
     revokeRegionalManager: (uid) => call('adminRevokeRegionalManager', { uid }),
+    // Access audit
+    logAdminAccess: () => call('logAdminAccess', {}),
+    listAccessLog: (limit = 50) => call('adminListAccessLog', { limit }),
 };
