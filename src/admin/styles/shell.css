@@ -1,143 +1,164 @@
-/* DineBuddies Admin — Black & Acid Lime */
+/* DineBuddies Admin — Navy & Orange (unified with the regional-manager mockup) */
 .db-shell {
-    --db-bg: #030303;
-    --db-panel: #0a0a0a;
-    --db-elevated: #111111;
-    --db-border: #222222;
-    --db-text: #f4f4f5;
-    --db-muted: #6b6b6b;
-    --db-lime: #c8ff00;
-    --db-lime-dim: rgba(200, 255, 0, 0.12);
-    --db-danger: #ff4d4d;
-    --db-warn: #facc15;
-    --db-ok: #c8ff00;
+    --db-bg: #0a1120;
+    --db-panel: #111b2e;
+    --db-elevated: #16233a;
+    --db-raised: #1b2b46;
+    --db-border: #233350;
+    --db-border-soft: #1a2740;
+    --db-text: #eaf0f8;
+    --db-muted: #8695ad;
+    --db-faint: #5c6b83;
+    /* --db-lime kept as the accent token name so existing classes theme for free */
+    --db-lime: #f97316;
+    --db-lime-dim: rgba(249, 115, 22, 0.14);
+    --db-danger: #ef4444;
+    --db-warn: #f59e0b;
+    --db-ok: #22c55e;
+    --db-radius: 16px;
+    --db-radius-sm: 10px;
     min-height: 100vh;
     display: flex;
     background: var(--db-bg);
+    background-image: radial-gradient(1100px 460px at 92% -8%, rgba(249, 115, 22, 0.07), transparent 60%);
     color: var(--db-text);
-    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-family: 'Cairo', 'Segoe UI', system-ui, -apple-system, sans-serif;
     font-size: 14px;
 }
 
 .db-side {
-    width: 216px;
+    width: 244px;
     flex-shrink: 0;
-    border-right: 1px solid var(--db-border);
-    padding: 1.25rem 0;
+    border-inline-end: 1px solid var(--db-border-soft);
+    padding: 1.1rem 0.75rem;
     background: var(--db-panel);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: auto;
 }
 
 .db-brand {
-    padding: 0 1.1rem 1.25rem;
-    font-size: 0.7rem;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--db-lime);
+    padding: 0.35rem 0.7rem 1rem;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    color: var(--db-text);
+}
+
+.db-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
 }
 
 .db-nav a {
     display: block;
-    padding: 0.55rem 1.1rem;
+    padding: 0.62rem 0.7rem;
     color: var(--db-muted);
     text-decoration: none;
-    border-left: 2px solid transparent;
-    font-size: 0.85rem;
+    border-radius: var(--db-radius-sm);
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: background 0.15s, color 0.15s;
 }
 
 .db-nav a:hover {
     color: var(--db-text);
-    background: var(--db-lime-dim);
+    background: var(--db-elevated);
 }
 
 .db-nav a.active {
-    color: var(--db-lime);
-    border-left-color: var(--db-lime);
+    color: #ffd8b8;
     background: var(--db-lime-dim);
+    box-shadow: inset 3px 0 0 var(--db-lime);
 }
 
 .db-main {
     flex: 1;
     min-width: 0;
-    padding: 1.5rem 1.75rem;
+    padding: 1.6rem 1.9rem 2.5rem;
     overflow: auto;
 }
 
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
+.db-h1 {
+    margin: 0 0 0.3rem;
+    font-size: 1.45rem;
+    font-weight: 800;
 }
 
-.db-h1 {
-    margin: 0 0 0.25rem;
-    font-size: 1.35rem;
-    font-weight: 600;
+.db-h2 {
+    font-size: 1.05rem;
+    font-weight: 800;
+    margin: 0 0 0.75rem;
+    color: var(--db-text);
 }
 
 .db-lead {
-    margin: 0 0 1.25rem;
+    margin: 0 0 1.35rem;
     color: var(--db-muted);
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     max-width: 52rem;
-    line-height: 1.5;
+    line-height: 1.55;
 }
 
 .db-env-banner {
     margin-bottom: 1rem;
-    padding: 0.55rem 0.85rem;
-    border-radius: 4px;
+    padding: 0.6rem 0.9rem;
+    border-radius: var(--db-radius-sm);
     font-size: 0.78rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.03em;
 }
 
 .db-env-banner--sandbox {
-    border: 1px solid var(--db-warn);
+    border: 1px solid rgba(245, 158, 11, 0.4);
     color: var(--db-warn);
-    background: rgba(250, 204, 21, 0.06);
+    background: rgba(245, 158, 11, 0.08);
 }
 
 .db-env-banner--production {
-    border: 1px solid var(--db-lime);
-    color: var(--db-lime);
+    border: 1px solid rgba(249, 115, 22, 0.4);
+    color: #fdba74;
     background: var(--db-lime-dim);
 }
 
 .db-tabs {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-bottom: 1rem;
-    border-bottom: 1px solid var(--db-border);
-    padding-bottom: 0.65rem;
+    gap: 0.4rem;
+    margin-bottom: 1.15rem;
+    border-bottom: 1px solid var(--db-border-soft);
+    padding-bottom: 0.8rem;
 }
 
 .db-tab {
-    padding: 0.45rem 0.9rem;
+    padding: 0.45rem 0.95rem;
     border: 1px solid var(--db-border);
-    border-radius: 4px;
-    background: transparent;
+    border-radius: 999px;
+    background: var(--db-elevated);
     color: var(--db-muted);
     cursor: pointer;
-    font-size: 0.8rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    font-family: inherit;
 }
 
 .db-tab.active {
     border-color: var(--db-lime);
-    color: var(--db-lime);
+    color: #ffd8b8;
     background: var(--db-lime-dim);
 }
 
 .db-hint {
     margin: 0 0 1rem;
-    padding: 0.6rem 0.75rem;
-    border-left: 2px solid var(--db-lime);
+    padding: 0.7rem 0.85rem;
+    border-inline-start: 3px solid var(--db-lime);
+    border-radius: var(--db-radius-sm);
     background: var(--db-elevated);
     color: var(--db-muted);
-    font-size: 0.78rem;
-    line-height: 1.45;
+    font-size: 0.8rem;
+    line-height: 1.5;
 }
 
 .db-hint strong {
@@ -147,8 +168,8 @@
 .db-toolbar {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
+    gap: 0.55rem;
+    margin-bottom: 1.15rem;
     align-items: center;
 }
 
@@ -157,9 +178,10 @@
     background: var(--db-elevated);
     border: 1px solid var(--db-border);
     color: var(--db-text);
-    border-radius: 4px;
-    padding: 0.45rem 0.65rem;
+    border-radius: var(--db-radius-sm);
+    padding: 0.5rem 0.7rem;
     font-size: 0.85rem;
+    font-family: inherit;
     min-width: 140px;
 }
 
@@ -167,17 +189,24 @@
 .db-select:focus {
     outline: none;
     border-color: var(--db-lime);
+    box-shadow: 0 0 0 3px var(--db-lime-dim);
 }
 
 .db-btn {
     border: 1px solid var(--db-border);
-    border-radius: 4px;
-    padding: 0.4rem 0.75rem;
-    font-size: 0.78rem;
-    font-weight: 600;
+    border-radius: var(--db-radius-sm);
+    padding: 0.45rem 0.85rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-family: inherit;
     cursor: pointer;
     background: var(--db-elevated);
     color: var(--db-text);
+    transition: filter 0.15s, border-color 0.15s;
+}
+
+.db-btn:hover:not(:disabled) {
+    border-color: var(--db-faint);
 }
 
 .db-btn:disabled {
@@ -187,8 +216,12 @@
 
 .db-btn--lime {
     background: var(--db-lime);
-    color: #030303;
+    color: #fff;
     border-color: var(--db-lime);
+}
+
+.db-btn--lime:hover:not(:disabled) {
+    filter: brightness(1.07);
 }
 
 .db-btn--ghost {
@@ -197,41 +230,49 @@
 }
 
 .db-btn--danger {
-    border-color: var(--db-danger);
-    color: var(--db-danger);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.08);
 }
 
 .db-btn--warn {
-    border-color: var(--db-warn);
-    color: var(--db-warn);
+    border-color: rgba(245, 158, 11, 0.4);
+    color: #fcd34d;
+    background: rgba(245, 158, 11, 0.08);
 }
 
 .db-panel {
     background: var(--db-panel);
-    border: 1px solid var(--db-border);
-    border-radius: 6px;
+    border: 1px solid var(--db-border-soft);
+    border-radius: var(--db-radius);
     overflow: hidden;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
 
 .db-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.82rem;
+    font-size: 0.85rem;
 }
 
 .db-table th,
 .db-table td {
-    text-align: left;
-    padding: 0.65rem 0.75rem;
-    border-bottom: 1px solid var(--db-border);
+    text-align: start;
+    padding: 0.75rem 0.9rem;
+    border-bottom: 1px solid var(--db-border-soft);
+    vertical-align: middle;
 }
 
 .db-table th {
     color: var(--db-muted);
-    font-weight: 500;
-    font-size: 0.7rem;
+    font-weight: 700;
+    font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
+    background: var(--db-elevated);
+}
+
+.db-table tbody tr:hover {
     background: var(--db-elevated);
 }
 
@@ -240,55 +281,59 @@
 }
 
 .db-id {
-    font-size: 0.72rem;
+    font-size: 0.74rem;
     color: var(--db-muted);
-    font-family: ui-monospace, monospace;
+    font-family: ui-monospace, 'Cascadia Code', monospace;
 }
 
 .db-badge {
     display: inline-block;
-    padding: 0.12rem 0.4rem;
-    border-radius: 3px;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
     font-size: 0.68rem;
-    font-weight: 700;
-    text-transform: uppercase;
+    font-weight: 800;
 }
 
 .db-badge--ok {
-    background: var(--db-lime-dim);
-    color: var(--db-lime);
+    background: rgba(34, 197, 94, 0.14);
+    color: #86efac;
 }
 
 .db-badge--warn {
-    background: rgba(250, 204, 21, 0.12);
-    color: var(--db-warn);
+    background: rgba(245, 158, 11, 0.14);
+    color: #fcd34d;
 }
 
 .db-badge--ban {
-    background: rgba(255, 77, 77, 0.12);
-    color: var(--db-danger);
+    background: rgba(239, 68, 68, 0.14);
+    color: #fca5a5;
 }
 
 .db-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
+    gap: 0.4rem;
 }
 
 .db-empty {
-    padding: 2.5rem;
+    padding: 2.75rem;
     text-align: center;
     color: var(--db-muted);
 }
 
+.db-spin,
+.db-spin::after {
+    box-sizing: border-box;
+}
+
 .db-spin {
-    width: 28px;
-    height: 28px;
-    margin: 2rem auto;
-    border: 2px solid var(--db-border);
+    width: 30px;
+    height: 30px;
+    margin: 2.25rem auto;
+    border: 3px solid var(--db-border);
     border-top-color: var(--db-lime);
     border-radius: 50%;
-    animation: db-spin 0.7s linear infinite;
+    animation: db-spin 0.75s linear infinite;
 }
 
 @keyframes db-spin {
@@ -297,10 +342,51 @@
     }
 }
 
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ---- KPI stat tiles (dashboards) ---- */
+.db-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 1.4rem;
+}
+
+.db-kpi {
+    background: var(--db-panel);
+    border: 1px solid var(--db-border-soft);
+    border-radius: var(--db-radius);
+    padding: 15px 16px;
+}
+
+.db-kpi__label {
+    font-size: 0.8rem;
+    color: var(--db-muted);
+    font-weight: 600;
+}
+
+.db-kpi__val {
+    font-size: 1.7rem;
+    font-weight: 800;
+    margin-top: 6px;
+}
+
+.db-kpi__foot {
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-top: 4px;
+    color: var(--db-ok);
+}
+
+/* ---- Credits page bits (unchanged structure, re-themed via tokens) ---- */
 .db-credit-user-list {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.45rem;
 }
 
 .db-credit-user-row {
@@ -309,10 +395,10 @@
     justify-content: space-between;
     gap: 0.75rem;
     width: 100%;
-    text-align: left;
-    padding: 0.65rem 0.75rem;
+    text-align: start;
+    padding: 0.7rem 0.8rem;
     border: 1px solid var(--db-border);
-    border-radius: 6px;
+    border-radius: var(--db-radius-sm);
     background: var(--db-elevated);
     color: inherit;
     cursor: pointer;
@@ -330,7 +416,7 @@
 }
 
 .db-credit-user-row__name {
-    font-weight: 650;
+    font-weight: 700;
     font-size: 0.95rem;
 }
 
@@ -347,10 +433,10 @@
 
 .db-credit-user-chip {
     min-width: 4.5rem;
-    padding: 0.35rem 0.5rem;
-    border-radius: 4px;
+    padding: 0.4rem 0.55rem;
+    border-radius: var(--db-radius-sm);
     border: 1px solid var(--db-border);
-    background: var(--db-bg, transparent);
+    background: var(--db-raised);
     text-align: center;
 }
 
@@ -365,7 +451,7 @@
 .db-credit-user-chip__val {
     display: block;
     font-size: 1rem;
-    font-weight: 700;
+    font-weight: 800;
     line-height: 1.2;
 }
 
@@ -377,21 +463,6 @@
     color: var(--db-lime);
 }
 
-@media (max-width: 640px) {
-    .db-credit-user-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .db-credit-user-row__wallets {
-        width: 100%;
-    }
-
-    .db-credit-user-chip {
-        flex: 1;
-    }
-}
-
 .db-credit-row {
     display: flex;
     gap: 0.75rem;
@@ -400,9 +471,9 @@
 
 .db-credit-box {
     flex: 1;
-    padding: 0.75rem;
+    padding: 0.8rem;
     border: 1px solid var(--db-border);
-    border-radius: 4px;
+    border-radius: var(--db-radius-sm);
     background: var(--db-elevated);
 }
 
@@ -417,7 +488,7 @@
 
 .db-credit-box .val {
     font-size: 1.25rem;
-    font-weight: 700;
+    font-weight: 800;
 }
 
 .db-credit-box--paid .val {
@@ -436,19 +507,12 @@
 
 .db-fin .pending {
     color: var(--db-warn);
-    font-weight: 700;
+    font-weight: 800;
 }
 
 .db-fin .total {
     color: var(--db-lime);
-    font-weight: 700;
-}
-
-.db-h2 {
-    font-size: 1.05rem;
-    font-weight: 700;
-    margin: 0 0 0.75rem;
-    color: var(--db-text);
+    font-weight: 800;
 }
 
 .db-field-label {
@@ -468,7 +532,19 @@
 .db-status-msg {
     margin-top: 0.75rem;
     font-size: 0.85rem;
-    color: var(--db-lime);
+    color: #86efac;
+}
+
+/* Regional manager scope badge in the admin sidebar */
+.db-region-badge {
+    margin: 4px 2px 12px;
+    padding: 8px 11px;
+    border-radius: var(--db-radius-sm);
+    background: var(--db-lime-dim);
+    color: #fdba74;
+    border: 1px solid rgba(249, 115, 22, 0.28);
+    font-size: 12.5px;
+    font-weight: 800;
 }
 
 @media (max-width: 768px) {
@@ -478,33 +554,31 @@
 
     .db-side {
         width: 100%;
-        border-right: none;
-        border-bottom: 1px solid var(--db-border);
+        height: auto;
+        position: static;
+        border-inline-end: none;
+        border-bottom: 1px solid var(--db-border-soft);
     }
 
     .db-nav {
-        display: flex;
+        flex-direction: row;
         flex-wrap: wrap;
     }
 
-    .db-nav a {
-        border-left: none;
-        border-bottom: 2px solid transparent;
-    }
-
     .db-nav a.active {
-        border-bottom-color: var(--db-lime);
+        box-shadow: inset 0 -3px 0 var(--db-lime);
     }
-}
 
-/* Regional manager scope badge in the admin sidebar */
-.db-region-badge {
-  margin: 6px 0 12px;
-  padding: 7px 11px;
-  border-radius: 10px;
-  background: rgba(249, 115, 22, 0.12);
-  color: #fdba74;
-  border: 1px solid rgba(249, 115, 22, 0.28);
-  font-size: 12.5px;
-  font-weight: 700;
+    .db-credit-user-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .db-credit-user-row__wallets {
+        width: 100%;
+    }
+
+    .db-credit-user-chip {
+        flex: 1;
+    }
 }
