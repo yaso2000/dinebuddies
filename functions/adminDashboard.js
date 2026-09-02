@@ -2,6 +2,7 @@
  * Admin dashboard callables — moderation, credits, invitations (server-trusted).
  */
 const functions = require('firebase-functions');
+const { docInRegionScope, targetUserInRegion } = require('./_adminRegion');
 const {
     grantAdminPaidCreditsInTransaction,
     creditBalanceResetPatch,
@@ -41,7 +42,7 @@ function asTrimmedString(v) {
  * @param {string|null} startAfterId
  * @param {number} pageSize
  */
-async function listInvitationsPage(db, col, collectionKind, predicate, startAfterId, pageSize) {
+async function listInvitationsPage(db, col, collectionKind, predicate, startAfterId, pageSize, regionScope) {
     const need = pageSize + 1;
     const items = [];
     let cursor = startAfterId;
@@ -64,6 +65,7 @@ async function listInvitationsPage(db, col, collectionKind, predicate, startAfte
             const d = docSnap.data() || {};
             const inviteType = inferInviteCategory(d, collectionKind);
             if (predicate && !predicate(d, inviteType)) continue;
+            if (!docInRegionScope(d, regionScope)) continue;
 
             const createdAt = d.createdAt?.toDate?.()?.toISOString?.() || null;
             const title = d.title || d.occasionType || d.type || docSnap.id;
@@ -102,11 +104,14 @@ async function listInvitationsPage(db, col, collectionKind, predicate, startAfte
  */
 function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     exportsObj.adminSetUserFreezeStatus = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context);
         const targetUid = asTrimmedString(data?.targetUid);
         const frozen = data?.frozen === true;
         if (!targetUid) {
             throw new functions.https.HttpsError('invalid-argument', 'targetUid is required.');
+        }
+        if (!(await targetUserInRegion(db, targetUid, regionScope))) {
+            throw new functions.https.HttpsError('permission-denied', 'Outside your region.');
         }
 
         const updates = {
@@ -247,7 +252,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         });
 
     exportsObj.adminListInvitations = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context);
         const inviteTypeFilter = asTrimmedString(data?.inviteType) || 'all';
         const allowedTypes = new Set(['all', 'public', 'private', 'dating']);
         if (!allowedTypes.has(inviteTypeFilter)) {
@@ -264,7 +269,8 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
                 'public',
                 (_d, cat) => cat === 'public',
                 startAfterId,
-                pageSize
+                pageSize,
+                regionScope
             );
         }
 
@@ -275,7 +281,8 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
                 'private',
                 (_d, cat) => cat === 'private',
                 startAfterId,
-                pageSize
+                pageSize,
+                regionScope
             );
         }
 
@@ -286,14 +293,15 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
                 'private',
                 (_d, cat) => cat === 'dating',
                 startAfterId,
-                pageSize
+                pageSize,
+                regionScope
             );
         }
 
         const half = Math.ceil(pageSize / 2);
         const [pub, priv] = await Promise.all([
-            listInvitationsPage(db, 'invitations', 'public', null, null, half),
-            listInvitationsPage(db, 'social_invitations', 'private', null, null, half),
+            listInvitationsPage(db, 'invitations', 'public', null, null, half, regionScope),
+            listInvitationsPage(db, 'social_invitations', 'private', null, null, half, regionScope),
         ]);
         const merged = [...pub.items, ...priv.items].sort((a, b) => {
             const ta = a.createdAt ? Date.parse(a.createdAt) : 0;
@@ -309,7 +317,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminModerateInvitation = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context);
         const invitationId = asTrimmedString(data?.invitationId);
         const inviteType = asTrimmedString(data?.inviteType);
         const legacyKind = data?.kind === 'social' ? 'private' : 'public';
@@ -327,6 +335,9 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         const snap = await ref.get();
         if (!snap.exists) {
             throw new functions.https.HttpsError('not-found', 'Invitation not found.');
+        }
+        if (!docInRegionScope(snap.data(), regionScope)) {
+            throw new functions.https.HttpsError('permission-denied', 'Outside your region.');
         }
 
         const now = admin.firestore.FieldValue.serverTimestamp();
@@ -784,7 +795,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     }
 
     exportsObj.adminListBusinesses = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context);
         const startAfterId = asTrimmedString(data?.startAfterId) || null;
         const pageSize = Math.min(Math.max(Number(data?.pageSize) || 25, 1), BUSINESSES_PAGE_MAX);
 
@@ -809,7 +820,9 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         const hasNext = snap.size > pageSize;
         const docs = snap.docs.slice(0, pageSize);
 
-        const items = docs.map((docSnap) => {
+        const items = docs
+            .filter((docSnap) => docInRegionScope(docSnap.data(), regionScope))
+            .map((docSnap) => {
             const r = docSnap.data() || {};
             const bi = r.businessInfo && typeof r.businessInfo === 'object' ? r.businessInfo : {};
             const name = r.name || bi.businessName || bi.name || docSnap.id;
@@ -836,6 +849,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
             for (const docSnap of orphanSnap.docs) {
                 if (listedIds.has(docSnap.id)) continue;
                 const p = docSnap.data() || {};
+                if (!docInRegionScope(p, regionScope)) continue;
                 if (p.sourceCollection && p.sourceCollection !== 'restaurants') continue;
                 const restSnap = await db.collection('restaurants').doc(docSnap.id).get();
                 if (restSnap.exists) continue;
@@ -850,7 +864,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminDeleteBusiness = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context);
         const businessId = asTrimmedString(data?.businessId);
         if (!businessId) {
             throw new functions.https.HttpsError('invalid-argument', 'businessId is required.');
@@ -865,6 +879,13 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         }
 
         const r = restSnap.exists ? (restSnap.data() || {}) : (profileSnap.data() || {});
+        if (
+            regionScope?.scoped &&
+            !docInRegionScope(r, regionScope) &&
+            !(profileSnap.exists && docInRegionScope(profileSnap.data(), regionScope))
+        ) {
+            throw new functions.https.HttpsError('permission-denied', 'Outside your region.');
+        }
         const bi = r.businessInfo && typeof r.businessInfo === 'object' ? r.businessInfo : {};
         const profileInfo = profileSnap.exists
             ? ((profileSnap.data() || {}).businessPublic || {})

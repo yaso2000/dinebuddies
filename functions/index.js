@@ -409,7 +409,7 @@ async function canSenderTriggerNotificationType({ senderId, userId, type, invita
 
 /** Matches client AdminRoute / Firestore isAdminOrPanelStaff — staff must reach adminSearchUsers & other callables. */
 const ADMIN_PANEL_ROLES = new Set(['admin', 'moderator', 'support', 'staff', 'regional_manager']);
-const { resolveCallerRegionScope } = require('./_adminRegion');
+const { resolveCallerRegionScope, targetUserInRegion } = require('./_adminRegion');
 
 /** Full admins (owner / claim / admin role) are not region-scoped. */
 const UNSCOPED_REGION = { scoped: false, countries: [] };
@@ -2398,12 +2398,15 @@ exports.grantAdminRole = functions.https.onCall(async (data, context) => {
 
 // ─── Trusted admin callable: moderation ban/unban ───────────────────────────
 exports.adminSetUserBanStatus = functions.https.onCall(async (data, context) => {
-    await assertAdminContext(context);
+    const { regionScope } = await assertAdminContext(context);
 
     const targetUid = data?.targetUid;
     const banned = data?.banned === true;
     if (!targetUid || typeof targetUid !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'targetUid is required.');
+    }
+    if (!(await targetUserInRegion(db, targetUid, regionScope))) {
+        throw new functions.https.HttpsError('permission-denied', 'Outside your region.');
     }
 
     await db.collection('users').doc(targetUid).set({

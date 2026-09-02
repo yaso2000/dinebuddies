@@ -30,6 +30,8 @@ function docCountryCode(data) {
         data.userCountryCode,
         data.businessInfo?.countryCode,
         data.businessInfo?.country,
+        data.businessPublic?.countryCode,
+        data.businessPublic?.country,
         data.location?.countryCode,
         data.location?.country,
     ];
@@ -69,10 +71,26 @@ function docInRegionScope(data, scope) {
     return scope.countries.includes(cc);
 }
 
+/**
+ * For scoped callers, confirm a target user doc is inside the region before an
+ * action (ban/freeze/etc.). Unscoped callers always pass. One extra read.
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} targetUid
+ * @param {{ scoped: boolean, countries: string[] }} scope
+ * @returns {Promise<boolean>}
+ */
+async function targetUserInRegion(db, targetUid, scope) {
+    if (!scope || !scope.scoped) return true;
+    if (!targetUid) return false;
+    const snap = await db.collection('users').doc(String(targetUid)).get();
+    return snap.exists && docInRegionScope(snap.data(), scope);
+}
+
 module.exports = {
     ADMIN_REGION_COUNTRIES,
     regionCountries,
     docCountryCode,
     resolveCallerRegionScope,
     docInRegionScope,
+    targetUserInRegion,
 };
