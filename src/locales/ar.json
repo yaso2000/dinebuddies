@@ -2927,6 +2927,7 @@
   "support_escalate_error": "تعذّر الإرسال. حاول مرة أخرى.",
   "support_ask_first": "اكتب سؤالك أولًا، ثم تحدّث مع شخص.",
   "admin_nav_support": "الدعم",
+  "admin_nav_managers": "المدراء الإقليميون",
   "admin_support_lead": "أسئلة المستخدمين المُصعّدة من المساعد الذكي.",
   "admin_support_open": "مفتوحة",
   "admin_support_answered": "تمت الإجابة",

@@ -2725,6 +2725,7 @@
   "support_escalate_error": "Could not send. Please try again.",
   "support_ask_first": "Type your question first, then talk to a human.",
   "admin_nav_support": "Support",
+  "admin_nav_managers": "Regional managers",
   "admin_support_lead": "User questions escalated from the AI assistant.",
   "admin_support_open": "Open",
   "admin_support_answered": "Answered",

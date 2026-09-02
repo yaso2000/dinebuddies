@@ -13,6 +13,7 @@ const ADMIN_NAV_BASE = [
     { path: '/admin/messaging', labelKey: 'admin_nav_messaging' },
     { path: '/admin/reports', labelKey: 'admin_nav_reports' },
     { path: '/admin/support', labelKey: 'admin_nav_support' },
+    { path: '/admin/managers', labelKey: 'admin_nav_managers' },
 ];
 
 export const ADMIN_NAV = isCashoutFeatureEnabled()

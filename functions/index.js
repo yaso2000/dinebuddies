@@ -488,6 +488,8 @@ function denyRegionalManager(adminCtx) {
 registerAdminSearchUsers(exports, { db, admin, assertAdminContext });
 registerAdminBrowseUsers(exports, { db, admin, assertAdminContext });
 registerAdminDashboard(exports, { db, admin, assertAdminContext, denyRegionalManager });
+const { registerRegionalManagerCallables } = require('./adminRegionalManagers');
+registerRegionalManagerCallables(exports, { db, admin, assertAdminContext });
 registerProfileGiftCallables(exports);
 const { registerCashoutCallables } = require('./cashout');
 registerCashoutCallables(exports, { assertAdminContext });

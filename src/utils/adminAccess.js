@@ -63,6 +63,7 @@ export const ADMIN_OWNER_ONLY_PATHS = new Set([
     '/admin/credits',
     '/admin/cashouts',
     '/admin/messaging',
+    '/admin/managers',
 ]);
 
 export function isRegionalManager(userProfile) {

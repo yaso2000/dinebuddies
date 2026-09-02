@@ -52,6 +52,7 @@ const AdminInvitationsPage = lazy(() => import('./admin/pages/InvitationsPage'))
 const AdminPostsPage = lazy(() => import('./admin/pages/PostsPage'));
 const AdminBusinessesPage = lazy(() => import('./admin/pages/BusinessesPage'));
 const AdminSmartSenderPage = lazy(() => import('./admin/pages/SmartSenderPage'));
+const AdminManagersPage = lazy(() => import('./admin/pages/ManagersPage'));
 const AdminReportsPage = lazy(() => import('./admin/pages/ReportsPage'));
 const AdminSupportPage = lazy(() => import('./admin/pages/SupportPage'));
 const AdminGooglePlacesImportPage = lazy(() => import('./admin/pages/GooglePlacesImportPage'));
@@ -414,6 +415,7 @@ function App() {
                                                         <Route path="invitations" element={<AdminInvitationsPage />} />
                                                         <Route path="reports" element={<AdminReportsPage />} />
                                                         <Route path="support" element={<AdminSupportPage />} />
+                                                        <Route path="managers" element={<AdminOwnerOnly><AdminManagersPage /></AdminOwnerOnly>} />
                                                         <Route path="dashboard" element={<Navigate to="/admin/users" replace />} />
                                                         <Route path="*" element={<Navigate to="/admin/users" replace />} />
                                                         <Route index element={<Navigate to="/admin/users" replace />} />

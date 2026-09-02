@@ -58,4 +58,9 @@ export const adminApi = {
     wipeDemoUsers: (payload) => call('adminWipeDemoUsers', payload),
     createDemoPost: (payload) => call('adminCreateDemoPost', payload),
     createDemoPublicInvitation: (payload) => call('adminCreateDemoPublicInvitation', payload),
+    // Regional managers (owner only)
+    createRegionalManager: (email, region, displayName) =>
+        call('adminCreateRegionalManager', { email, region, displayName }),
+    listRegionalManagers: () => call('adminListRegionalManagers', {}),
+    revokeRegionalManager: (uid) => call('adminRevokeRegionalManager', { uid }),
 };
