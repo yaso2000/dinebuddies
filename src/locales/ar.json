@@ -514,6 +514,8 @@
   "admin_nav_subscriptions": "الاشتراكات والرصيد",
   "admin_nav_system_tools": "أدوات النظام",
   "admin_nav_users": "المستخدمون",
+  "admin_region_gulf": "الخليج العربي",
+  "admin_region_scope_note": "أنت تدير هذه المنطقة فقط — المناطق الأخرى والأدوات المالية مخفية.",
   "admin_negative_price": "السعر لا يمكن أن يكون سالباً",
   "admin_no_features_added": "لم تتم إضافة ميزات",
   "admin_no_packs_found": "لم يتم العثور على حزم رصيد",

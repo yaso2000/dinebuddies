@@ -148,7 +148,7 @@ import GuestBlockedRoute from './components/GuestBlockedRoute';
 import BusinessBlockedRoute from './components/BusinessBlockedRoute';
 import AuthRoutingGate from './components/AuthRoutingGate';
 import AccountShellGate from './components/AccountShellGate';
-import AdminRoute from './components/AdminRoute';
+import AdminRoute, { AdminOwnerOnly } from './components/AdminRoute';
 import AppRouteLoading from './components/AppRouteLoading';
 import { registerLoginRouter, unregisterLoginRouter } from './utils/goToLogin';
 
@@ -406,11 +406,11 @@ function App() {
                                                         <Route path="users" element={<AdminUsersPage />} />
                                                         <Route path="businesses" element={<AdminBusinessesPage />} />
                                                         <Route path="posts" element={<AdminPostsPage />} />
-                                                        <Route path="credits" element={<AdminCreditsPage />} />
+                                                        <Route path="credits" element={<AdminOwnerOnly><AdminCreditsPage /></AdminOwnerOnly>} />
                                                         {isCashoutFeatureEnabled() ? (
-                                                          <Route path="cashouts" element={<AdminCashoutsPage />} />
+                                                          <Route path="cashouts" element={<AdminOwnerOnly><AdminCashoutsPage /></AdminOwnerOnly>} />
                                                         ) : null}
-                                                        <Route path="messaging" element={<AdminSmartSenderPage />} />
+                                                        <Route path="messaging" element={<AdminOwnerOnly><AdminSmartSenderPage /></AdminOwnerOnly>} />
                                                         <Route path="invitations" element={<AdminInvitationsPage />} />
                                                         <Route path="reports" element={<AdminReportsPage />} />
                                                         <Route path="support" element={<AdminSupportPage />} />

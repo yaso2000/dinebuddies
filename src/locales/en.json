@@ -514,6 +514,8 @@
   "admin_nav_subscriptions": "Subscriptions & credits",
   "admin_nav_system_tools": "System tools",
   "admin_nav_users": "Users",
+  "admin_region_gulf": "Arabian Gulf",
+  "admin_region_scope_note": "You manage this region only — other regions and financial tools are hidden.",
   "admin_negative_price": "Price cannot be negative",
   "admin_no_features_added": "No features added",
   "admin_no_packs_found": "No credit packs found",

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { isAdminIdentity } from '../utils/adminAccess';
+import { isAdminIdentity, isRegionalManager } from '../utils/adminAccess';
 import { auth } from '../firebase/config';
 import { AppText } from "./base";
 
@@ -56,7 +56,10 @@ function identityUser(contextUser) {
   return contextUser;
 }
 
-const AdminRoute = ({ children, allowedRoles = ['admin', 'moderator', 'support', 'staff'] }) => {
+const AdminRoute = ({
+  children,
+  allowedRoles = ['admin', 'moderator', 'support', 'staff', 'regional_manager'],
+}) => {
   const { currentUser, userProfile, loading } = useAuth();
   const [tokenHasAdminClaim, setTokenHasAdminClaim] = useState(false);
   const [tokenChecked, setTokenChecked] = useState(false);
@@ -139,5 +142,18 @@ const AdminRoute = ({ children, allowedRoles = ['admin', 'moderator', 'support',
 
   return children;
 };
+
+/**
+ * Wrap owner-only admin routes (money, global mass-messaging, deletion) so a
+ * scoped regional manager cannot reach them by URL — they bounce to the users
+ * page. Full admins pass through untouched.
+ */
+export function AdminOwnerOnly({ children }) {
+  const { userProfile } = useAuth();
+  if (isRegionalManager(userProfile)) {
+    return <Navigate to="/admin/users" replace />;
+  }
+  return children;
+}
 
 export default AdminRoute;
