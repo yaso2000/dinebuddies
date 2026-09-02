@@ -86,6 +86,45 @@ async function targetUserInRegion(db, targetUid, scope) {
     return snap.exists && docInRegionScope(snap.data(), scope);
 }
 
+/**
+ * Batch-resolve a set of user uids → their ISO country code. One `getAll`.
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string[]} uids
+ * @returns {Promise<Map<string, string|null>>}
+ */
+async function userCountryMap(db, uids) {
+    const unique = [...new Set((uids || []).filter(Boolean).map(String))];
+    const out = new Map();
+    if (!unique.length) return out;
+    const refs = unique.map((u) => db.collection('users').doc(u));
+    const snaps = await db.getAll(...refs);
+    for (const snap of snaps) {
+        out.set(snap.id, snap.exists ? docCountryCode(snap.data()) : null);
+    }
+    return out;
+}
+
+/**
+ * Filter rows to those whose owner user (by `getUid(row)`) is in the caller's
+ * region. Used for entities that carry no country of their own (posts, reports,
+ * support tickets) — the owner user's country is the scoping key. Unscoped
+ * callers keep all rows.
+ * @template T
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {T[]} rows
+ * @param {(row: T) => string} getUid
+ * @param {{ scoped: boolean, countries: string[] }} scope
+ * @returns {Promise<T[]>}
+ */
+async function filterByOwnerRegion(db, rows, getUid, scope) {
+    if (!scope || !scope.scoped) return rows || [];
+    const map = await userCountryMap(db, (rows || []).map(getUid));
+    return (rows || []).filter((row) => {
+        const cc = map.get(String(getUid(row) || ''));
+        return cc && scope.countries.includes(cc);
+    });
+}
+
 module.exports = {
     ADMIN_REGION_COUNTRIES,
     regionCountries,
@@ -93,4 +132,6 @@ module.exports = {
     resolveCallerRegionScope,
     docInRegionScope,
     targetUserInRegion,
+    userCountryMap,
+    filterByOwnerRegion,
 };

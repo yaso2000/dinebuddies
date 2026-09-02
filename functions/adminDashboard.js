@@ -2,7 +2,7 @@
  * Admin dashboard callables — moderation, credits, invitations (server-trusted).
  */
 const functions = require('firebase-functions');
-const { docInRegionScope, targetUserInRegion } = require('./_adminRegion');
+const { docInRegionScope, targetUserInRegion, filterByOwnerRegion } = require('./_adminRegion');
 const {
     grantAdminPaidCreditsInTransaction,
     creditBalanceResetPatch,
@@ -640,7 +640,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     }
 
     exportsObj.adminListPosts = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context);
         const pageSize = Math.min(Math.max(Number(data?.pageSize) || 25, 1), POSTS_PAGE_MAX);
         const startAfterId = asTrimmedString(data?.startAfterId) || null;
         const startAfterSource = asTrimmedString(data?.startAfterSource) || null;
@@ -671,7 +671,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         const featuredItems = featuredSnap.docs.map(mapFeaturedAdminPost);
         const motionItems = motionSnap.docs.map(mapMotionAdminPost);
 
-        const merged = [...communityItems, ...featuredItems, ...motionItems]
+        let merged = [...communityItems, ...featuredItems, ...motionItems]
             .filter((item) => isPostOlderThanCursor(item, cursor))
             .sort((a, b) => {
                 const aTs = new Date(a.createdAt || 0).getTime();
@@ -679,6 +679,9 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
                 if (bTs !== aTs) return bTs - aTs;
                 return String(b.id).localeCompare(String(a.id));
             });
+
+        // Region scope: keep only posts whose author is in the manager's region.
+        merged = await filterByOwnerRegion(db, merged, (p) => p.authorId, regionScope);
 
         const page = merged.slice(0, pageSize);
         const hasNext = merged.length > pageSize;
@@ -704,8 +707,26 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         };
     });
 
+    async function resolvePostAuthorUid(db, rawPostId, source) {
+        let id = asTrimmedString(rawPostId);
+        if (id.startsWith('motion_')) id = id.slice('motion_'.length);
+        const col =
+            source === 'featured' ? 'featured_posts'
+                : source === 'motion' ? 'business_motion_posts'
+                    : 'communityPosts';
+        const snap = await db.collection(col).doc(id).get();
+        if (!snap.exists) return null;
+        const p = snap.data() || {};
+        return (
+            String(
+                p.partnerId || p.authorId || p.userId || p.uid ||
+                p.ownerId || p.businessId || p.author?.id || ''
+            ) || null
+        );
+    }
+
     exportsObj.adminModeratePost = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context);
         const postId = asTrimmedString(data?.postId);
         const action = asTrimmedString(data?.action);
         const sourceRaw = asTrimmedString(data?.source) || 'community';
@@ -716,6 +737,15 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         }
         if (action !== 'delete') {
             throw new functions.https.HttpsError('invalid-argument', 'action must be delete.');
+        }
+
+        if (regionScope?.scoped) {
+            const authorUid = await resolvePostAuthorUid(db, postId, source);
+            // Deny only when we can confirm the author is outside the region; the
+            // list is already region-filtered, so unknown authors fall through.
+            if (authorUid && !(await targetUserInRegion(db, authorUid, regionScope))) {
+                throw new functions.https.HttpsError('permission-denied', 'Outside your region.');
+            }
         }
 
         await adminDeletePostAny(db, admin, postId, source);
@@ -931,7 +961,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminListReports = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context);
         const status = asTrimmedString(data?.status) || 'pending';
         const allowedStatus = new Set(['pending', 'resolved', 'dismissed', 'all']);
         if (!allowedStatus.has(status)) {
@@ -998,7 +1028,9 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
             };
         });
 
-        return { items, hasNext, lastId: items.length ? items[items.length - 1].id : null };
+        // Region scope: reports filed by users in the manager's region.
+        const scopedItems = await filterByOwnerRegion(db, items, (r) => r.reporterId, regionScope);
+        return { items: scopedItems, hasNext, lastId: scopedItems.length ? scopedItems[scopedItems.length - 1].id : null };
     });
 
     const demoUserFnOpts = { timeoutSeconds: 540, memory: '1GB' };
@@ -1269,7 +1301,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
 
     // ---- Support tickets (AI customer-service escalations) --------------------
     exportsObj.adminListSupportTickets = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context);
         const status = asTrimmedString(data?.status) || 'open';
         const allowed = new Set(['open', 'answered', 'resolved', 'all']);
         if (!allowed.has(status)) {
@@ -1302,11 +1334,13 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
                 updatedAt: r.updatedAt?.toDate?.()?.toISOString?.() || null,
             };
         });
-        return { items };
+        // Region scope: only tickets from users in the manager's region.
+        const scopedItems = await filterByOwnerRegion(db, items, (t) => t.userId, regionScope);
+        return { items: scopedItems };
     });
 
     exportsObj.adminReplySupportTicket = functions.https.onCall(async (data, context) => {
-        const { requesterUid } = await assertAdminContext(context);
+        const { requesterUid, regionScope } = await assertAdminContext(context);
         const ticketId = asTrimmedString(data?.ticketId);
         const message = asTrimmedString(data?.message).slice(0, 2000);
         if (!ticketId) throw new functions.https.HttpsError('invalid-argument', 'ticketId is required.');
@@ -1316,6 +1350,9 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
         const s = await ref.get();
         if (!s.exists) throw new functions.https.HttpsError('not-found', 'Ticket not found.');
         const ticket = s.data() || {};
+        if (!(await targetUserInRegion(db, ticket.userId, regionScope))) {
+            throw new functions.https.HttpsError('permission-denied', 'Outside your region.');
+        }
         const now = admin.firestore.FieldValue.serverTimestamp();
 
         if (ticket.userId) {
@@ -1345,12 +1382,19 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext }) {
     });
 
     exportsObj.adminSetSupportTicketStatus = functions.https.onCall(async (data, context) => {
-        await assertAdminContext(context);
+        const { regionScope } = await assertAdminContext(context);
         const ticketId = asTrimmedString(data?.ticketId);
         const status = asTrimmedString(data?.status);
         const allowed = new Set(['open', 'answered', 'resolved']);
         if (!ticketId) throw new functions.https.HttpsError('invalid-argument', 'ticketId is required.');
         if (!allowed.has(status)) throw new functions.https.HttpsError('invalid-argument', 'Invalid status.');
+        if (regionScope?.scoped) {
+            const s = await db.collection('support_tickets').doc(ticketId).get();
+            if (!s.exists) throw new functions.https.HttpsError('not-found', 'Ticket not found.');
+            if (!(await targetUserInRegion(db, (s.data() || {}).userId, regionScope))) {
+                throw new functions.https.HttpsError('permission-denied', 'Outside your region.');
+            }
+        }
         await db.collection('support_tickets').doc(ticketId).update({
             status,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),

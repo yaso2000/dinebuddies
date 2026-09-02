@@ -2921,12 +2921,19 @@ exports.adminGetDashboardStats = functions.https.onCall(async (_data, context) =
 
 // ─── Trusted admin callable: moderation report status ───────────────────────
 exports.adminSetReportStatus = functions.https.onCall(async (data, context) => {
-    await assertAdminContext(context);
+    const { regionScope } = await assertAdminContext(context);
     const reportId = asTrimmedString(data?.reportId);
     const status = asTrimmedString(data?.status);
     const allowed = new Set(['pending', 'resolved', 'dismissed']);
     if (!reportId || !allowed.has(status)) {
         throw new functions.https.HttpsError('invalid-argument', 'reportId and a valid status are required.');
+    }
+    if (regionScope?.scoped) {
+        const rs = await db.collection('reports').doc(reportId).get();
+        if (!rs.exists) throw new functions.https.HttpsError('not-found', 'Report not found.');
+        if (!(await targetUserInRegion(db, (rs.data() || {}).reporterId, regionScope))) {
+            throw new functions.https.HttpsError('permission-denied', 'Outside your region.');
+        }
     }
     await db.collection('reports').doc(reportId).set({
         status,
