@@ -3,7 +3,19 @@ const aiClaude = require('./aiClaude');
 const {
     resolveCallerRegionScope,
     targetUserInRegion,
+    docCountryCode,
+    regionForCountryCode,
 } = require('./_adminRegion');
+const { effectiveMode, getConfig, setHealth } = require('./aiMode');
+
+/** Errors that mean "Claude is unavailable" (vs a one-off bad response) → trip failover. */
+function isOutageError(err) {
+    const m = String(err?.message || err || '').toLowerCase();
+    const code = err?.status || err?.code;
+    if (err?.code === 'no_api_key') return true;
+    if (typeof code === 'number' && (code === 401 || code === 403 || code === 429 || code >= 500)) return true;
+    return /econn|network|timeout|fetch failed|overloaded|rate.?limit|unauthor|api key/.test(m);
+}
 
 /**
  * AI report triage — Claude.
@@ -131,6 +143,10 @@ function registerReportTriage(exports, { db, admin }) {
         } catch (err) {
             console.error('[reportTriage] claude failed', err?.message || err);
             await reportRef.update({ aiProcessed: false, aiError: String(err?.message || err).slice(0, 200) }).catch(() => {});
+            // Trip automatic failover so managers cover until Claude recovers.
+            if (isOutageError(err)) {
+                await setHealth(db, 'down', err?.message || err).catch(() => {});
+            }
             return;
         }
 
@@ -167,7 +183,19 @@ function registerReportTriage(exports, { db, admin }) {
         await reportRef.update(updates);
     }
 
-    // Auto-triage every new report.
+    /** Region key for a report, from the reporter's country (null if unknown). */
+    async function reportRegion(report) {
+        const reporterId = asTrimmed(report.reporterId);
+        if (!reporterId) return null;
+        try {
+            const s = await db.collection('users').doc(reporterId).get();
+            return regionForCountryCode(docCountryCode(s.data() || {}));
+        } catch {
+            return null;
+        }
+    }
+
+    // Auto-triage every new report — only when that region is in Claude ("auto") mode.
     exports.onReportCreated = functions.firestore
         .document('reports/{reportId}')
         .onCreate(async (snap) => {
@@ -178,6 +206,13 @@ function registerReportTriage(exports, { db, admin }) {
                 return null;
             }
             try {
+                const cfg = await getConfig(db);
+                const region = await reportRegion(report);
+                if (effectiveMode(cfg, region) !== 'auto') {
+                    // Manual coverage for this region — leave it for the human manager.
+                    await snap.ref.update({ aiSkipped: 'manual_mode' }).catch(() => {});
+                    return null;
+                }
                 await triage(snap.ref, report);
             } catch (err) {
                 console.error('[reportTriage] onCreate', err?.message || err);

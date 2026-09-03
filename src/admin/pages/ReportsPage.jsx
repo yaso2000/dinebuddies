@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { adminApi } from '../api';
 import { AppText } from '../../components/base';
 import { useConfirm } from '../../context/ConfirmContext';
+import AiModeControl from '../components/AiModeControl';
 
 const SECTIONS = [
   { id: 'accounts', types: new Set(['user', 'partner']), labelKey: 'admin_reports_accounts' },
@@ -93,6 +94,9 @@ export default function ReportsPage() {
     <>
       <AppText as="h1" className="db-h1">{t('admin_reports_title')}</AppText>
       <AppText as="p" className="db-lead">{t('admin_reports_lead')}</AppText>
+
+      <AiModeControl />
+
 
       <div className="db-tabs">
         {SECTIONS.map((s) => (

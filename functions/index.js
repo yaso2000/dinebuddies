@@ -3660,6 +3660,9 @@ exports.aiHealthCheck = functions.https.onCall(async (data, context) => {
         return { ok: false, reason: String(e?.message || e).slice(0, 300) };
     }
 });
+
+const { registerAiMode } = require('./aiMode');
+registerAiMode(exports, { db, admin, assertAdminContext, aiClaude, superOwnerUids: SUPER_OWNER_UIDS });
 const { registerSupportAgent } = require('./supportAgent');
 registerSupportAgent(exports, { db, admin, enforceCallableRateLimit });
 const { registerGroupGames } = require('./groupGames');

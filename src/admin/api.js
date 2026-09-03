@@ -66,4 +66,8 @@ export const adminApi = {
     // Access audit
     logAdminAccess: () => call('logAdminAccess', {}),
     listAccessLog: (limit = 50) => call('adminListAccessLog', { limit }),
+    // AI operating mode
+    getAiMode: () => call('getAiMode', {}),
+    setAiMode: (scope, mode, region = null) => call('setAiMode', { scope, mode, region }),
+    aiHealthCheck: () => call('aiHealthCheck', {}),
 };

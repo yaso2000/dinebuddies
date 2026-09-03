@@ -20,6 +20,21 @@ function regionCountries(regionKey) {
     return ADMIN_REGION_COUNTRIES[key] || null;
 }
 
+// Reverse lookup: ISO country code → region key.
+const COUNTRY_TO_REGION = (() => {
+    const map = {};
+    for (const [region, codes] of Object.entries(ADMIN_REGION_COUNTRIES)) {
+        for (const cc of codes) map[cc] = region;
+    }
+    return map;
+})();
+
+/** @param {string} cc ISO-2 country code @returns {string | null} region key */
+function regionForCountryCode(cc) {
+    if (!cc) return null;
+    return COUNTRY_TO_REGION[String(cc).trim().toUpperCase()] || null;
+}
+
 /**
  * Resolve a document's ISO-2 country code from the various shapes used across
  * users / businesses / invitations. Returns an upper-case 2-char code or null.
@@ -131,6 +146,7 @@ async function filterByOwnerRegion(db, rows, getUid, scope) {
 module.exports = {
     ADMIN_REGION_COUNTRIES,
     regionCountries,
+    regionForCountryCode,
     docCountryCode,
     resolveCallerRegionScope,
     docInRegionScope,
