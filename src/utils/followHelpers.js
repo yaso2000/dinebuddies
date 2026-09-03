@@ -146,6 +146,9 @@ function mapFollowCallableError(error) {
     if (reason === 'viewer_business') {
         return { success: false, message: 'viewer_business', reason: 'viewer_business' };
     }
+    if (reason === 'viewer_no_photo' || reason === 'target_no_photo') {
+        return { success: false, message: reason, reason };
+    }
     return {
         success: false,
         message: error?.message || 'follow_failed',
