@@ -3646,6 +3646,20 @@ registerCompatJourney(exports, { db, admin, enforceCallableRateLimit });
 
 const { registerReportTriage } = require('./reportTriage');
 registerReportTriage(exports, { db, admin });
+
+// AI engine health check (owner only) — verifies ANTHROPIC_API_KEY + model.
+const aiClaude = require('./aiClaude');
+exports.aiHealthCheck = functions.https.onCall(async (data, context) => {
+    const { isSuperOwner } = await assertAdminContext(context);
+    if (!isSuperOwner) throw new functions.https.HttpsError('permission-denied', 'Owner only.');
+    if (!aiClaude.hasApiKey()) return { ok: false, reason: 'ANTHROPIC_API_KEY is not set on the server (functions/.env).' };
+    try {
+        const r = await aiClaude.ping();
+        return { ok: true, model: r.model, reply: r.text };
+    } catch (e) {
+        return { ok: false, reason: String(e?.message || e).slice(0, 300) };
+    }
+});
 const { registerSupportAgent } = require('./supportAgent');
 registerSupportAgent(exports, { db, admin, enforceCallableRateLimit });
 const { registerGroupGames } = require('./groupGames');
