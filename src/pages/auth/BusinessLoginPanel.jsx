@@ -171,7 +171,22 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
     setError('');
     setAiUnclaimedHint(false);
     try {
-      const reset = await requestBusinessPasswordReset(loginId, countryCode);
+      const id = String(loginId || '').trim();
+      if (!id) {
+        setError(t('auth_enter_email_reset', 'Enter your email or phone above.'));
+        return;
+      }
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(id);
+      if (isEmail) {
+        // Email path: send directly via Resend. The server (sendPasswordResetEmailResend)
+        // safely handles unknown emails (anti-enumeration), so the phone→email resolver —
+        // which was returning "generic" and silently sending nothing — is bypassed.
+        await sendPasswordResetToEmail(id);
+        showToast(t('auth_reset_email_sent', 'Check your inbox for a password reset link.'), 'success');
+        return;
+      }
+      // Phone / other identifier: resolve to an email first, then send.
+      const reset = await requestBusinessPasswordReset(id, countryCode);
       if (reset.genericOnly || !reset.email) {
         showToast(
           reset.message ||
@@ -308,10 +323,7 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                     <HiBuildingStorefront aria-hidden />
                     <AppText as="span">{t('business_login', 'Business')}</AppText>
                 </div>
-                <div style={{ textAlign: 'center', marginBottom: embeddedInSingleCard ? '0.85rem' : '1.25rem' }}>
-                    <div style={iconBox}>
-                        <HiBuildingStorefront style={{ color: '#fff' }} />
-                    </div>
+                <div style={{ textAlign: 'center', marginBottom: embeddedInSingleCard ? '0.55rem' : '0.85rem' }}>
                     <AppText as="h2"
           style={{
             fontSize: embeddedInSingleCard ?
@@ -381,20 +393,20 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
             padding: '12px', borderRadius: '12px', border: '1px solid var(--border-color)',
             background: 'var(--bg-card)', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.95rem',
-            cursor: googleBusy ? 'not-allowed' : 'pointer', marginBottom: '1rem'
+            cursor: googleBusy ? 'not-allowed' : 'pointer', marginBottom: '0.7rem'
           }}>
                     <FcGoogle size={20} />
                     {googleBusy ? t('please_wait', 'Please wait…') : t('business_login_google', 'Sign in with Google')}
                 </button>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.7rem' }}>
                     <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
                     <AppText as="span" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('or', 'or')}</AppText>
                     <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
                 </div>
 
                 <form onSubmit={handleSubmit} className="business-auth-form">
-                    <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ marginBottom: '0.7rem' }}>
                         <label
               style={{
                 display: 'block',
