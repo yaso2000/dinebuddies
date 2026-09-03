@@ -307,13 +307,23 @@ export function getAvatarUrlOrNull(userData, opts = {}) {
 }
 
 /**
- * True when the user has a REAL profile photo (an uploaded image or an OAuth
- * account photo), not a generated initials/placeholder avatar. This is the
- * profile-photo soft-gate signal: discovery visibility + follow/greet/gift
- * buttons require it on both parties.
+ * True when the user has a REAL, USER-UPLOADED profile photo (an image they put
+ * into our Storage). OAuth account photos (Google/Facebook) do NOT count — they
+ * are often the provider's default letter/silhouette avatar and can't be told
+ * apart from a real one by URL. Generated/placeholder/stock avatars never count.
+ * This is the profile-photo soft-gate signal: discovery visibility +
+ * follow/greet/gift buttons require it on both parties.
  */
 export function hasRealProfilePhoto(userData) {
-    return !!getAvatarUrlOrNull(userData);
+    if (!userData || typeof userData !== 'object') return false;
+    const candidates = [
+        userData.photoURL,
+        userData.photo_url,
+        userData.avatar,
+        userData.avatarUrl,
+        userData.avatar_url,
+    ];
+    return candidates.some((url) => isUserUploadedPhotoUrl(url));
 }
 
 /** Normalize all common avatar field aliases from the best available URL. */
