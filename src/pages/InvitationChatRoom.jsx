@@ -691,14 +691,16 @@ const InvitationChatRoom = () => {
                 </div>
 
                 <button
+              type="button"
               className={`send-btn-circle chat-send-btn${isRecording ? ' chat-send-btn--recording' : ''}`}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                if (isRecording) handleStopRecording(true);else
-                handleSendMessage(e);
+              aria-label={isRecording ? t('chat_voice_stop', { defaultValue: 'Stop' }) : (newMessage.trim() ? t('send', { defaultValue: 'Send' }) : t('record_voice', { defaultValue: 'Record voice' }))}
+              onClick={(e) => {
+                if (isRecording) handleStopRecording(true);
+                else if (newMessage.trim()) handleSendMessage(e);
+                else handleStartRecording();
               }}>
-              
-                    {isRecording ? <FaPaperPlane /> : newMessage.trim() ? <FaPaperPlane /> : <FaMicrophone onMouseDown={(e) => {e.preventDefault();e.stopPropagation();handleStartRecording();}} />}
+
+                    {isRecording ? <FaPaperPlane /> : newMessage.trim() ? <FaPaperPlane /> : <FaMicrophone />}
                 </button>
             </div>
 
