@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
 import { FaComments, FaGift, FaHeart, FaMapMarkerAlt, FaRegHeart, FaUserCheck, FaUserPlus } from 'react-icons/fa';
 import { db } from '../../firebase/config';
-import { getSafeAvatar, mergeAvatarStyleWithGenderRing } from '../../utils/avatarUtils';
+import { getSafeAvatar, mergeAvatarStyleWithGenderRing, hasRealProfilePhoto } from '../../utils/avatarUtils';
 import { getPrivateInviteeDisplayName } from '../../utils/privateInviteAvailability';
 import { goToLogin } from '../../utils/goToLogin';
 import { useConfirm } from '../../context/ConfirmContext';
@@ -127,6 +127,12 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
     [currentUser, invitationUser, userProfile, viewerFollowing]
   );
   const showPrivateInviteBadge = !isSelf && isFollowingUser;
+
+  // Profile-photo soft gate: follow / greet / gift require a real photo on BOTH
+  // parties. Hide those buttons otherwise; nudge the viewer if it's their gap.
+  const viewerHasPhoto = hasRealProfilePhoto(userProfile || invitationUser || currentUser);
+  const targetHasPhoto = hasRealProfilePhoto(user);
+  const canContact = viewerHasPhoto && targetHasPhoto;
 
   const showUnlikeError = useCallback(
     (reason) => {
@@ -419,60 +425,68 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
 
         {!isSelf ? (
           <div className="user-directory-card__actions">
-            {useDatingLike ? (
-              <button
-                type="button"
-                className={`user-directory-card__action user-directory-card__action--like${liked ? ' user-directory-card__action--liked' : ' user-directory-card__action--like-idle'}`}
-                onClick={handleToggleLike}
-                disabled={likeBusy}
-                title={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
-                aria-label={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
-                aria-pressed={liked}
-              >
-                {liked ? (
-                  <FaHeart className="user-directory-card__action-icon" aria-hidden />
+            {canContact ? (
+              <>
+                {useDatingLike ? (
+                  <button
+                    type="button"
+                    className={`user-directory-card__action user-directory-card__action--like${liked ? ' user-directory-card__action--liked' : ' user-directory-card__action--like-idle'}`}
+                    onClick={handleToggleLike}
+                    disabled={likeBusy}
+                    title={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
+                    aria-label={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
+                    aria-pressed={liked}
+                  >
+                    {liked ? (
+                      <FaHeart className="user-directory-card__action-icon" aria-hidden />
+                    ) : (
+                      <FaRegHeart className="user-directory-card__action-icon" aria-hidden />
+                    )}
+                  </button>
                 ) : (
-                  <FaRegHeart className="user-directory-card__action-icon" aria-hidden />
+                  <button
+                    type="button"
+                    className={`user-directory-card__action user-directory-card__action--follow${isFollowingUser ? ' user-directory-card__action--following' : ''}`}
+                    onClick={handleFollow}
+                    disabled={followBusy}
+                    title={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
+                    aria-label={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
+                    aria-pressed={isFollowingUser}
+                  >
+                    {isFollowingUser ? (
+                      <FaUserCheck className="user-directory-card__action-icon" aria-hidden />
+                    ) : (
+                      <FaUserPlus className="user-directory-card__action-icon" aria-hidden />
+                    )}
+                  </button>
                 )}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className={`user-directory-card__action user-directory-card__action--follow${isFollowingUser ? ' user-directory-card__action--following' : ''}`}
-                onClick={handleFollow}
-                disabled={followBusy}
-                title={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
-                aria-label={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
-                aria-pressed={isFollowingUser}
-              >
-                {isFollowingUser ? (
-                  <FaUserCheck className="user-directory-card__action-icon" aria-hidden />
-                ) : (
-                  <FaUserPlus className="user-directory-card__action-icon" aria-hidden />
-                )}
-              </button>
-            )}
-            <button
-              type="button"
-              className={`user-directory-card__action user-directory-card__action--greeting${greetedToday ? ' user-directory-card__action--greeted' : ''}`}
-              onClick={handleGreeting}
-              disabled={greetingBusy || greetedToday}
-              title={t('user_directory_greeting', 'Wave hi')}
-              aria-label={t('user_directory_greeting', 'Wave hi')}
-            >
-              <AppText as="span" className="user-directory-card__wave" aria-hidden>
-                👋
+                <button
+                  type="button"
+                  className={`user-directory-card__action user-directory-card__action--greeting${greetedToday ? ' user-directory-card__action--greeted' : ''}`}
+                  onClick={handleGreeting}
+                  disabled={greetingBusy || greetedToday}
+                  title={t('user_directory_greeting', 'Wave hi')}
+                  aria-label={t('user_directory_greeting', 'Wave hi')}
+                >
+                  <AppText as="span" className="user-directory-card__wave" aria-hidden>
+                    👋
+                  </AppText>
+                </button>
+                <button
+                  type="button"
+                  className="user-directory-card__action user-directory-card__action--gift"
+                  onClick={handleGift}
+                  title={t('user_directory_send_gift', 'Send gift')}
+                  aria-label={t('user_directory_send_gift', 'Send gift')}
+                >
+                  <FaGift className="user-directory-card__action-icon" aria-hidden />
+                </button>
+              </>
+            ) : !viewerHasPhoto ? (
+              <AppText as="span" className="user-directory-card__photo-nudge" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                {t('photo_gate_nudge', 'أضف صورة لفتح التواصل')}
               </AppText>
-            </button>
-            <button
-              type="button"
-              className="user-directory-card__action user-directory-card__action--gift"
-              onClick={handleGift}
-              title={t('user_directory_send_gift', 'Send gift')}
-              aria-label={t('user_directory_send_gift', 'Send gift')}
-            >
-              <FaGift className="user-directory-card__action-icon" aria-hidden />
-            </button>
+            ) : null}
             {showPrivateInviteBadge ? (
               <PrivateInviteProfileBadge
                 user={user}
