@@ -42,9 +42,9 @@ export default function InviteCreateTypePicker({
   const hasActiveGame = Boolean(activeGameId);
   const hasActiveSuitabilityPost = Boolean(activeSuitabilityPostId);
 
-  // Live games and the match show are mobile-first experiences — they must not
-  // appear inside the desktop "create invitation" surface.
-  const includeLiveGames = !isDesktopShell;
+  // Live games + the match show are available on every viewport, including the
+  // desktop "create invitation" surface (they were previously mobile-only).
+  const includeLiveGames = true;
 
   const options = [
     {
