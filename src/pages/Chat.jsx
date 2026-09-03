@@ -19,7 +19,7 @@ import {
 import { FaLock, FaBan } from 'react-icons/fa6';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from '../components/UserAvatar';
-import { uploadImage, uploadVoiceMessage, formatFileSize, formatDuration } from '../utils/mediaUtils';
+import { uploadImage, uploadVoiceMessage, formatFileSize, formatDuration, pickAudioRecorderMimeType } from '../utils/mediaUtils';
 import { ImageUploadZone } from '../services/imageUploadZones';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import NewReportModal from '../components/NewReportModal';
@@ -745,15 +745,19 @@ const Chat = () => {
     if (composerBlocked) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      // Pick a mime type the platform can actually record + play (iOS WKWebView
+      // cannot record/play webm — it needs mp4/aac).
+      const mimeType = pickAudioRecorderMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       audioChunksRef.current = [];
 
       recorder.ondataavailable = (e) => {
-        audioChunksRef.current.push(e.data);
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
       };
 
       recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const blobType = recorder.mimeType || mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
         stream.getTracks().forEach((track) => track.stop());
 
         try {
@@ -776,7 +780,7 @@ const Chat = () => {
         }
       };
 
-      recorder.start();
+      recorder.start(250); // timeslice → dataavailable fires reliably across platforms
       setMediaRecorder(recorder);
       setIsRecording(true);
       setRecordingDuration(0);
@@ -1337,8 +1341,8 @@ const Chat = () => {
                 <button
               className={`chat-send-btn${isRecording ? ' chat-send-btn--recording' : ''}`}
               type="button"
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={newMessage.trim() ? handleSendMessage : startRecording}>
+              aria-label={isRecording ? t('chat_voice_stop', 'Stop') : (newMessage.trim() ? t('send', { defaultValue: 'Send' }) : t('record_voice', { defaultValue: 'Record voice' }))}
+              onClick={isRecording ? stopRecording : (newMessage.trim() ? handleSendMessage : startRecording)}>
               
                     {isRecording ? <FaPaperPlane /> : newMessage.trim() ? <FaPaperPlane /> : <FaMicrophone />}
                 </button>
