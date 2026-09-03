@@ -3,6 +3,7 @@
  */
 const functions = require('firebase-functions');
 const { FieldValue } = require('firebase-admin/firestore');
+const { docHasRealPhoto } = require('./_photoGate');
 
 const CONNECTION_REFOLLOW_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const COOLDOWN_COL = 'connection_action_cooldowns';
@@ -104,6 +105,14 @@ function registerSetUserFollow(exportsObj, { db, isBusinessUserDoc, enforceCalla
                 if (action === 'follow') {
                     if (alreadyFollowing) {
                         return { ok: true, already: true, following: true };
+                    }
+
+                    // Profile-photo soft gate: both parties must have a REAL photo.
+                    if (!docHasRealPhoto(viewerData)) {
+                        throw new functions.https.HttpsError('failed-precondition', 'Add a profile photo to follow.', { reason: 'viewer_no_photo' });
+                    }
+                    if (!docHasRealPhoto(targetData)) {
+                        throw new functions.https.HttpsError('failed-precondition', 'This account has no profile photo yet.', { reason: 'target_no_photo' });
                     }
 
                     const cancelledAtMs = timestampToMs(cooldownSnap.data()?.followCancelledAt);

@@ -91,10 +91,10 @@ export function isConsumerProfileComplete(profile) {
         profile.age_category ||
         (typeof profile.age === 'string' ? profile.age : '') ||
         (typeof profile.age === 'number' && profile.age > 0 ? String(profile.age) : '');
-    const hasPhoto = Boolean(
-        profile.photoURL || profile.photo_url || profile.avatar || profile.avatarUrl
-    );
-    return Boolean(name && profile.gender && age && hasPhoto);
+    // Photo is OPTIONAL — the profile is "complete" (can enter the app) without one.
+    // A missing photo is enforced as a soft gate (no discovery / no follow-greet-gift),
+    // not as a hard block on entry.
+    return Boolean(name && profile.gender && age);
 }
 
 export function mergeConsumerProfiles(prev, next) {

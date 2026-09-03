@@ -3,6 +3,13 @@ import {
     normalizePlaceLabel,
 } from './postsFeedScope';
 import { getUserDocLatLng } from './userDocCoords';
+import { hasRealProfilePhoto } from './avatarUtils';
+
+/** Photo soft-gate filter: 'with_photo' (only real photos) or 'all'. */
+export function memberMatchesPhotoFilter(user, photoFilter) {
+    if (photoFilter !== 'with_photo') return true;
+    return hasRealProfilePhoto(user);
+}
 
 /** @typedef {'all' | 'male' | 'female'} DirectoryGenderFilter */
 /** @typedef {'global' | 'country' | 'city'} DirectoryGeoScope */
@@ -197,6 +204,7 @@ export function memberMatchesGeoScope(user, geoScope, {
 export function filterDirectoryUsers(users, {
     genderFilter = 'all',
     ageCategoryFilter = 'all',
+    photoFilter = 'with_photo',
     geoScope = 'global',
     selectedPlace = null,
     userCityNorm = '',
@@ -205,6 +213,7 @@ export function filterDirectoryUsers(users, {
     userLocation = null,
 } = {}) {
     const filtered = (users || []).filter((user) => {
+        if (!memberMatchesPhotoFilter(user, photoFilter)) return false;
         if (!memberMatchesGenderFilter(user, genderFilter)) return false;
         if (!memberMatchesAgeCategory(user, ageCategoryFilter)) return false;
         if (selectedPlace) return memberMatchesSelectedPlace(user, selectedPlace);

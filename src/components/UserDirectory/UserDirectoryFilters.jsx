@@ -13,6 +13,8 @@ export default function UserDirectoryFilters({
   onGenderFilterChange,
   ageCategoryFilter = 'all',
   onAgeCategoryFilterChange,
+  photoFilter = 'with_photo',
+  onPhotoFilterChange,
 }) {
   const { t } = useTranslation();
 
@@ -66,6 +68,19 @@ export default function UserDirectoryFilters({
             </option>
           ))}
         </select>
+      )}
+
+      {onPhotoFilterChange && (
+        <button
+          type="button"
+          className={`home-geo-chip home-geo-chip--compact users-directory-filter-chip${photoFilter === 'with_photo' ? ' home-geo-chip--active' : ''}`}
+          onClick={() => onPhotoFilterChange(photoFilter === 'with_photo' ? 'all' : 'with_photo')}
+          aria-pressed={photoFilter === 'with_photo'}
+          title={t('user_directory_photo_filter_aria', 'Show only profiles with a photo')}>
+          <AppText as="span" className="home-geo-chip__label">
+            📷 {photoFilter === 'with_photo' ? t('filter_with_photo', 'With photo') : t('filter_all', 'All')}
+          </AppText>
+        </button>
       )}
     </div>
   );

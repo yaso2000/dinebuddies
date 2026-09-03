@@ -30,6 +30,7 @@ export default function UsersDirectory() {
 
   const [genderFilter, setGenderFilter] = useState('all');
   const [ageCategoryFilter, setAgeCategoryFilter] = useState('all');
+  const [photoFilter, setPhotoFilter] = useState('with_photo'); // 'with_photo' | 'all'
   const [deviceLocation, setDeviceLocation] = useState(null);
   const [placeQuery, setPlaceQuery] = useState('');
   const [selectedPlace, setSelectedPlace] = useState(null);
@@ -75,10 +76,11 @@ export default function UsersDirectory() {
       filterDirectoryUsers(users, {
         genderFilter,
         ageCategoryFilter,
+        photoFilter,
         selectedPlace,
         userLocation,
       }),
-    [users, genderFilter, ageCategoryFilter, selectedPlace, userLocation]
+    [users, genderFilter, ageCategoryFilter, photoFilter, selectedPlace, userLocation]
   );
 
   // When a place is selected, keep loading a few more pages (capped) until we have matches.
@@ -233,6 +235,8 @@ export default function UsersDirectory() {
               onGenderFilterChange={setGenderFilter}
               ageCategoryFilter={ageCategoryFilter}
               onAgeCategoryFilterChange={setAgeCategoryFilter}
+              photoFilter={photoFilter}
+              onPhotoFilterChange={setPhotoFilter}
             />
             <Link
               to="/search"

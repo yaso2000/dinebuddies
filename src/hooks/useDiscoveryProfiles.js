@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useUserDirectory } from './useUserDirectory';
 import { mapDirectoryUserToDiscoveryProfile } from '../utils/discoveryProfile';
 import { isDiscoverySwipeMatch } from '../utils/discoverySwipeMatch';
+import { hasRealProfilePhoto } from '../utils/avatarUtils';
 import { normalizeInvitePreference } from '../constants/privateProfileOptions';
 import { getUserDocLatLng } from '../utils/userDocCoords';
 import { sortDirectoryUsersByDistance } from '../utils/userDirectoryFilters';
@@ -72,7 +73,10 @@ export function useDiscoveryProfiles({ enabled = true } = {}) {
 
     const profiles = useMemo(() => {
         if (!viewer) return [];
-        const matched = directory.users.filter((user) => isDiscoverySwipeMatch(viewer, user));
+        // Swipe deck is face-based: only members with a real profile photo appear.
+        const matched = directory.users.filter(
+            (user) => hasRealProfilePhoto(user) && isDiscoverySwipeMatch(viewer, user)
+        );
         return sortDirectoryUsersByDistance(matched, userLocation)
             .map((user) => mapDirectoryUserToDiscoveryProfile(user, userLocation))
             .filter(Boolean);

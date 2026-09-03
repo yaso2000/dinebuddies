@@ -2,7 +2,7 @@ import { doc, getDoc, deleteDoc, serverTimestamp, setDoc, updateDoc } from 'fire
 
 import { db } from '../firebase/config';
 
-import { getSafeAvatar } from './avatarUtils';
+import { getSafeAvatar, hasRealProfilePhoto } from './avatarUtils';
 import { normalizeDiningPersona, normalizeJoinReasons } from '../constants/privateProfileOptions';
 import { normalizeLookingFor, getLookingForLabel } from '../constants/personalInviteCategories';
 import { resolveSwipeProfilePhotoUrl } from './profileGallery';
@@ -402,6 +402,9 @@ export async function sendDiscoveryGreeting(senderId, targetUser, senderProfile)
     if (!senderId || !targetId || senderId === targetId) {
         return { ok: false, reason: 'invalid' };
     }
+    // Profile-photo soft gate: both parties must have a real photo to greet.
+    if (!hasRealProfilePhoto(senderProfile)) return { ok: false, reason: 'sender_no_photo' };
+    if (!hasRealProfilePhoto(targetUser)) return { ok: false, reason: 'target_no_photo' };
 
     const dayKey = getUtcDayKey();
     const greetingRef = getDiscoveryGreetingRef(targetId, senderId, dayKey);

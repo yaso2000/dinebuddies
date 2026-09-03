@@ -8,6 +8,7 @@
 const crypto = require('crypto');
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const { docHasRealPhoto } = require('./_photoGate');
 const {
     spendCreditsInTransaction,
     grantSavedCreditsInTransaction,
@@ -209,6 +210,17 @@ function registerProfileGiftCallables(exportsObj) {
                 if (recipient.privacySettings?.allowGifts === false) {
                     const err = new Error('RECIPIENT_GIFTS_DISABLED');
                     err.code = 'RECIPIENT_GIFTS_DISABLED';
+                    throw err;
+                }
+                // Profile-photo soft gate: both parties must have a REAL photo.
+                if (!docHasRealPhoto(sender)) {
+                    const err = new Error('SENDER_NO_PHOTO');
+                    err.code = 'SENDER_NO_PHOTO';
+                    throw err;
+                }
+                if (!docHasRealPhoto(recipient)) {
+                    const err = new Error('RECIPIENT_NO_PHOTO');
+                    err.code = 'RECIPIENT_NO_PHOTO';
                     throw err;
                 }
 

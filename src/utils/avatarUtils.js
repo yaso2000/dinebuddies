@@ -306,6 +306,16 @@ export function getAvatarUrlOrNull(userData, opts = {}) {
     return pickPreferredAvatarUrl(userData, opts);
 }
 
+/**
+ * True when the user has a REAL profile photo (an uploaded image or an OAuth
+ * account photo), not a generated initials/placeholder avatar. This is the
+ * profile-photo soft-gate signal: discovery visibility + follow/greet/gift
+ * buttons require it on both parties.
+ */
+export function hasRealProfilePhoto(userData) {
+    return !!getAvatarUrlOrNull(userData);
+}
+
 /** Normalize all common avatar field aliases from the best available URL. */
 export function enrichUserWithAvatarFields(user = {}) {
     if (!user || typeof user !== 'object') return user;

@@ -78,10 +78,9 @@ const CompleteProfile = () => {
       showToast(t('fill_required_fields', 'Please fill in your name, age group, and gender.'), 'error');
       return;
     }
-    if (!formData.photoURL) {
-      showToast(t('profile_photo_required', 'Please add a profile photo to continue.'), 'error');
-      return;
-    }
+    // Profile photo is OPTIONAL at signup. Without a real photo the account is
+    // hidden from discovery and cannot follow/greet/gift (soft gate), which
+    // nudges users to add one — but they can finish signing up.
 
     if (!currentUser?.uid) {
       showToast("User authentication error. Please try logging in again.", 'error');
