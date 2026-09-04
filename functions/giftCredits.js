@@ -212,12 +212,7 @@ function registerProfileGiftCallables(exportsObj) {
                     err.code = 'RECIPIENT_GIFTS_DISABLED';
                     throw err;
                 }
-                // Profile-photo soft gate: both parties must have a REAL photo.
-                if (!docHasRealPhoto(sender)) {
-                    const err = new Error('SENDER_NO_PHOTO');
-                    err.code = 'SENDER_NO_PHOTO';
-                    throw err;
-                }
+                // Profile-photo soft gate (target-side): can't gift a photo-less account.
                 if (!docHasRealPhoto(recipient)) {
                     const err = new Error('RECIPIENT_NO_PHOTO');
                     err.code = 'RECIPIENT_NO_PHOTO';

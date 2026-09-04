@@ -402,8 +402,7 @@ export async function sendDiscoveryGreeting(senderId, targetUser, senderProfile)
     if (!senderId || !targetId || senderId === targetId) {
         return { ok: false, reason: 'invalid' };
     }
-    // Profile-photo soft gate: both parties must have a real photo to greet.
-    if (!hasRealProfilePhoto(senderProfile)) return { ok: false, reason: 'sender_no_photo' };
+    // Profile-photo soft gate (target-side): can't greet a photo-less account.
     if (!hasRealProfilePhoto(targetUser)) return { ok: false, reason: 'target_no_photo' };
 
     const dayKey = getUtcDayKey();

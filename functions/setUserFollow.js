@@ -107,10 +107,7 @@ function registerSetUserFollow(exportsObj, { db, isBusinessUserDoc, enforceCalla
                         return { ok: true, already: true, following: true };
                     }
 
-                    // Profile-photo soft gate: both parties must have a REAL photo.
-                    if (!docHasRealPhoto(viewerData)) {
-                        throw new functions.https.HttpsError('failed-precondition', 'Add a profile photo to follow.', { reason: 'viewer_no_photo' });
-                    }
+                    // Profile-photo soft gate (target-side): can't follow a photo-less account.
                     if (!docHasRealPhoto(targetData)) {
                         throw new functions.https.HttpsError('failed-precondition', 'This account has no profile photo yet.', { reason: 'target_no_photo' });
                     }

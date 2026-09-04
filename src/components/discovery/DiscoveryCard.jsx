@@ -72,9 +72,6 @@ export default function DiscoveryCard({
   const { toggleFollow, currentUser: invitationUser } = useInvitations();
   const { celebrateMatch } = useMatchCelebration();
   const targetUser = profile?.user || profile;
-  // Photo soft gate: the viewer needs a real photo to follow/greet/gift. Swipe
-  // targets are already photo-filtered, so only the viewer side is checked here.
-  const viewerHasPhoto = hasRealProfilePhoto(userProfile || currentUser);
   const isOnline = useUserPresence(profile?.id, { fallback: Boolean(targetUser?.isOnline) });
   const viewerProfile = userProfile || currentUser || invitationUser;
   const useDatingLike = profileShowsLikeButton(viewerProfile, targetUser);
@@ -460,7 +457,6 @@ export default function DiscoveryCard({
             <FaComments size={22} />
           </button>
 
-          {viewerHasPhoto && (
           <button
             type="button"
             className="discovery-card__action discovery-card__action--glass discovery-card__action--gift"
@@ -470,7 +466,6 @@ export default function DiscoveryCard({
           >
             <FaGift size={22} />
           </button>
-          )}
 
           {showPrivateInviteBadge ? (
             <PrivateInviteProfileBadge
@@ -481,7 +476,6 @@ export default function DiscoveryCard({
             />
           ) : null}
 
-          {viewerHasPhoto && (
           <button
             type="button"
             className={`discovery-card__action discovery-card__action--glass discovery-card__action--wave${
@@ -497,9 +491,8 @@ export default function DiscoveryCard({
               👋
             </AppText>
           </button>
-          )}
 
-          {viewerHasPhoto && (useDatingLike ? (
+          {useDatingLike ? (
             <button
               type="button"
               className={`discovery-card__action discovery-card__action--glass discovery-card__action--like${
@@ -529,7 +522,7 @@ export default function DiscoveryCard({
             >
               {isFollowingUser ? <FaUserCheck size={22} /> : <FaUserPlus size={22} />}
             </button>
-          ))}
+          )}
         </div>
       </div>
 

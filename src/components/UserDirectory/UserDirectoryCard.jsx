@@ -128,11 +128,9 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
   );
   const showPrivateInviteBadge = !isSelf && isFollowingUser;
 
-  // Profile-photo soft gate: follow / greet / gift require a real photo on BOTH
-  // parties. Hide those buttons otherwise; nudge the viewer if it's their gap.
-  const viewerHasPhoto = hasRealProfilePhoto(userProfile || invitationUser || currentUser);
-  const targetHasPhoto = hasRealProfilePhoto(user);
-  const canContact = viewerHasPhoto && targetHasPhoto;
+  // Profile-photo soft gate (target-side): follow / greet / gift show only when
+  // the TARGET has a real uploaded photo. The viewer's own photo does not matter.
+  const canContact = hasRealProfilePhoto(user);
 
   const showUnlikeError = useCallback(
     (reason) => {
@@ -482,10 +480,6 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
                   <FaGift className="user-directory-card__action-icon" aria-hidden />
                 </button>
               </>
-            ) : !viewerHasPhoto ? (
-              <AppText as="span" className="user-directory-card__photo-nudge" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {t('photo_gate_nudge', 'أضف صورة لفتح التواصل')}
-              </AppText>
             ) : null}
             {showPrivateInviteBadge ? (
               <PrivateInviteProfileBadge
