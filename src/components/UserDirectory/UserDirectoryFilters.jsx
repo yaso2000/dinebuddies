@@ -1,11 +1,14 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { FaMars, FaVenus, FaCamera } from 'react-icons/fa';
 import { DATING_AGE_CATEGORIES } from '../../constants/datingProfile';
 
 /**
- * Compact filter dropdowns for the Connect member list — gender, age category,
- * and photo, each a small pill <select>. Age uses categories only (privacy:
- * never an exact age).
+ * Compact icon-toggle filters for the Connect member list:
+ *  - Gender: two toggles ♂ ♀ (both on = All; at least one always on).
+ *  - Age: one pill that cycles All → each category → back to All.
+ *  - Photo: a camera icon; tap adds a "no" slash = show all (no photo filter).
+ * Age uses categories only (privacy: never an exact age).
  */
 export default function UserDirectoryFilters({
   id,
@@ -18,30 +21,39 @@ export default function UserDirectoryFilters({
 }) {
   const { t } = useTranslation();
 
-  const genderOptions = useMemo(
-    () => [
-      { id: 'all', label: t('filter_all', 'All') },
-      { id: 'male', label: t('gender_male', 'Male') },
-      { id: 'female', label: t('gender_female', 'Female') },
-    ],
-    [t]
-  );
+  const ageOrder = useMemo(() => ['all', ...DATING_AGE_CATEGORIES.map((c) => c.id)], []);
+  const ageLabels = useMemo(() => {
+    const m = { all: t('user_directory_age_all', 'All ages') };
+    DATING_AGE_CATEGORIES.forEach((c) => { m[c.id] = c.label; });
+    return m;
+  }, [t]);
 
-  const ageOptions = useMemo(
-    () => [{ id: 'all', label: t('user_directory_age_all', 'All ages') }, ...DATING_AGE_CATEGORIES],
-    [t]
-  );
+  const maleOn = genderFilter === 'all' || genderFilter === 'male';
+  const femaleOn = genderFilter === 'all' || genderFilter === 'female';
+  const setGender = (m, f) => {
+    if (!m && !f) return; // at least one gender stays on
+    onGenderFilterChange(m && f ? 'all' : m ? 'male' : 'female');
+  };
 
-  const pill = (active) => ({
-    padding: '6px 10px',
+  const cycleAge = () => {
+    const i = Math.max(0, ageOrder.indexOf(ageCategoryFilter));
+    onAgeCategoryFilterChange(ageOrder[(i + 1) % ageOrder.length]);
+  };
+
+  const iconBtn = (active, activeColor) => ({
+    width: '36px',
+    height: '32px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: '999px',
-    fontSize: '0.82rem',
-    fontWeight: 600,
-    height: '30px',
     cursor: 'pointer',
-    background: active ? 'var(--primary)' : 'var(--bg-elevated, var(--bg-card))',
-    color: active ? '#fff' : 'var(--text-main)',
-    border: '1px solid var(--border-color)',
+    fontSize: '1rem',
+    padding: 0,
+    background: active ? (activeColor || 'var(--primary)') : 'var(--bg-elevated, var(--bg-card))',
+    color: active ? '#fff' : 'var(--text-muted)',
+    border: `1px solid ${active ? (activeColor || 'var(--primary)') : 'var(--border-color)'}`,
+    transition: 'all 0.15s',
   });
 
   return (
@@ -50,42 +62,81 @@ export default function UserDirectoryFilters({
       className="users-directory-filters users-directory-filters--toolbar"
       role="group"
       aria-label={t('user_directory_filters_aria', 'Filters')}
-      style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+      style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
 
-      <select
-        className="users-directory-filter-select"
-        value={genderFilter}
-        onChange={(e) => onGenderFilterChange(e.target.value)}
-        aria-label={t('user_directory_gender_filter_aria', 'Gender filter')}
-        style={pill(genderFilter && genderFilter !== 'all')}>
-        {genderOptions.map((o) => (
-          <option key={o.id} value={o.id}>{o.label}</option>
-        ))}
-      </select>
+      {/* Gender: two independent toggles */}
+      <div style={{ display: 'inline-flex', gap: '4px' }}>
+        <button
+          type="button"
+          onClick={() => setGender(!maleOn, femaleOn)}
+          aria-pressed={maleOn}
+          aria-label={t('gender_male', 'Male')}
+          title={t('gender_male', 'Male')}
+          style={iconBtn(maleOn, '#3b82f6')}>
+          <FaMars />
+        </button>
+        <button
+          type="button"
+          onClick={() => setGender(maleOn, !femaleOn)}
+          aria-pressed={femaleOn}
+          aria-label={t('gender_female', 'Female')}
+          title={t('gender_female', 'Female')}
+          style={iconBtn(femaleOn, '#ec4899')}>
+          <FaVenus />
+        </button>
+      </div>
 
+      {/* Age: single cycling pill */}
       {onAgeCategoryFilterChange && (
-        <select
-          className="users-directory-filter-select users-directory-age-select"
-          value={ageCategoryFilter}
-          onChange={(e) => onAgeCategoryFilterChange(e.target.value)}
+        <button
+          type="button"
+          onClick={cycleAge}
           aria-label={t('user_directory_age_filter_aria', 'Age category filter')}
-          style={pill(ageCategoryFilter !== 'all')}>
-          {ageOptions.map((f) => (
-            <option key={f.id} value={f.id}>{f.label}</option>
-          ))}
-        </select>
+          title={t('user_directory_age_filter_aria', 'Age category filter')}
+          style={{
+            height: '32px',
+            padding: '0 14px',
+            borderRadius: '999px',
+            fontSize: '0.82rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            background: ageCategoryFilter !== 'all' ? 'var(--primary)' : 'var(--bg-elevated, var(--bg-card))',
+            color: ageCategoryFilter !== 'all' ? '#fff' : 'var(--text-main)',
+            border: `1px solid ${ageCategoryFilter !== 'all' ? 'var(--primary)' : 'var(--border-color)'}`,
+          }}>
+          {ageLabels[ageCategoryFilter] || ageLabels.all}
+        </button>
       )}
 
+      {/* Photo: camera icon; slashed = show all (no photo filter) */}
       {onPhotoFilterChange && (
-        <select
-          className="users-directory-filter-select"
-          value={photoFilter}
-          onChange={(e) => onPhotoFilterChange(e.target.value)}
+        <button
+          type="button"
+          onClick={() => onPhotoFilterChange(photoFilter === 'with_photo' ? 'all' : 'with_photo')}
+          aria-pressed={photoFilter === 'with_photo'}
           aria-label={t('user_directory_photo_filter_aria', 'Show only profiles with a photo')}
-          style={pill(photoFilter === 'with_photo')}>
-          <option value="with_photo">📷 {t('filter_with_photo', 'With photo')}</option>
-          <option value="all">{t('filter_all', 'All')}</option>
-        </select>
+          title={t('user_directory_photo_filter_aria', 'Show only profiles with a photo')}
+          style={iconBtn(photoFilter === 'with_photo')}>
+          <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+            <FaCamera />
+            {photoFilter !== 'with_photo' && (
+              <span
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  left: '-3px',
+                  right: '-3px',
+                  top: '50%',
+                  height: '2px',
+                  background: '#ef4444',
+                  transform: 'rotate(-45deg)',
+                  borderRadius: '2px',
+                  boxShadow: '0 0 0 1px rgba(0,0,0,0.15)',
+                }}
+              />
+            )}
+          </span>
+        </button>
       )}
     </div>
   );
