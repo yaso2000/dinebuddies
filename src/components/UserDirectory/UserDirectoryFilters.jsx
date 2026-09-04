@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DATING_AGE_CATEGORIES } from '../../constants/datingProfile';
-import { AppText } from '../base';
 
 /**
- * Gender + age-category filter chips for the Connect member card list — always
- * visible in the toolbar. Age uses categories only (privacy: never an exact age).
+ * Compact filter dropdowns for the Connect member list — gender, age category,
+ * and photo, each a small pill <select>. Age uses categories only (privacy:
+ * never an exact age).
  */
 export default function UserDirectoryFilters({
   id,
@@ -18,7 +18,7 @@ export default function UserDirectoryFilters({
 }) {
   const { t } = useTranslation();
 
-  const genderFilters = useMemo(
+  const genderOptions = useMemo(
     () => [
       { id: 'all', label: t('filter_all', 'All') },
       { id: 'male', label: t('gender_male', 'Male') },
@@ -27,60 +27,65 @@ export default function UserDirectoryFilters({
     [t]
   );
 
-  const ageFilters = useMemo(
-    () => [{ id: 'all', label: t('filter_all', 'All') }, ...DATING_AGE_CATEGORIES],
+  const ageOptions = useMemo(
+    () => [{ id: 'all', label: t('user_directory_age_all', 'All ages') }, ...DATING_AGE_CATEGORIES],
     [t]
   );
+
+  const pill = (active) => ({
+    padding: '6px 10px',
+    borderRadius: '999px',
+    fontSize: '0.82rem',
+    fontWeight: 600,
+    height: '30px',
+    cursor: 'pointer',
+    background: active ? 'var(--primary)' : 'var(--bg-elevated, var(--bg-card))',
+    color: active ? '#fff' : 'var(--text-main)',
+    border: '1px solid var(--border-color)',
+  });
 
   return (
     <div
       id={id}
       className="users-directory-filters users-directory-filters--toolbar"
       role="group"
-      aria-label={t('user_directory_gender_filter_aria', 'Gender filter')}
+      aria-label={t('user_directory_filters_aria', 'Filters')}
       style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-      {genderFilters.map((f) => (
-        <button
-          key={f.id}
-          type="button"
-          className={`home-geo-chip home-geo-chip--compact users-directory-filter-chip${genderFilter === f.id ? ' home-geo-chip--active' : ''}`}
-          onClick={() => onGenderFilterChange(f.id)}
-          aria-pressed={genderFilter === f.id}>
-          <AppText as="span" className="home-geo-chip__label">{f.label}</AppText>
-        </button>
-      ))}
+
+      <select
+        className="users-directory-filter-select"
+        value={genderFilter}
+        onChange={(e) => onGenderFilterChange(e.target.value)}
+        aria-label={t('user_directory_gender_filter_aria', 'Gender filter')}
+        style={pill(genderFilter && genderFilter !== 'all')}>
+        {genderOptions.map((o) => (
+          <option key={o.id} value={o.id}>{o.label}</option>
+        ))}
+      </select>
 
       {onAgeCategoryFilterChange && (
         <select
-          className={`users-directory-age-select${ageCategoryFilter !== 'all' ? ' users-directory-age-select--active' : ''}`}
+          className="users-directory-filter-select users-directory-age-select"
           value={ageCategoryFilter}
           onChange={(e) => onAgeCategoryFilterChange(e.target.value)}
           aria-label={t('user_directory_age_filter_aria', 'Age category filter')}
-          style={{
-            padding: '6px 8px', borderRadius: '999px', fontSize: '0.82rem', fontWeight: 600,
-            cursor: 'pointer', background: ageCategoryFilter !== 'all' ? 'var(--primary)' : 'var(--bg-elevated, var(--bg-card))',
-            color: ageCategoryFilter !== 'all' ? '#fff' : 'var(--text-main)',
-            border: '1px solid var(--border-color)', minWidth: '84px', height: '30px',
-          }}>
-          {ageFilters.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.id === 'all' ? t('user_directory_age_all', 'All ages') : f.label}
-            </option>
+          style={pill(ageCategoryFilter !== 'all')}>
+          {ageOptions.map((f) => (
+            <option key={f.id} value={f.id}>{f.label}</option>
           ))}
         </select>
       )}
 
       {onPhotoFilterChange && (
-        <button
-          type="button"
-          className={`home-geo-chip home-geo-chip--compact users-directory-filter-chip${photoFilter === 'with_photo' ? ' home-geo-chip--active' : ''}`}
-          onClick={() => onPhotoFilterChange(photoFilter === 'with_photo' ? 'all' : 'with_photo')}
-          aria-pressed={photoFilter === 'with_photo'}
-          title={t('user_directory_photo_filter_aria', 'Show only profiles with a photo')}>
-          <AppText as="span" className="home-geo-chip__label">
-            📷 {photoFilter === 'with_photo' ? t('filter_with_photo', 'With photo') : t('filter_all', 'All')}
-          </AppText>
-        </button>
+        <select
+          className="users-directory-filter-select"
+          value={photoFilter}
+          onChange={(e) => onPhotoFilterChange(e.target.value)}
+          aria-label={t('user_directory_photo_filter_aria', 'Show only profiles with a photo')}
+          style={pill(photoFilter === 'with_photo')}>
+          <option value="with_photo">📷 {t('filter_with_photo', 'With photo')}</option>
+          <option value="all">{t('filter_all', 'All')}</option>
+        </select>
       )}
     </div>
   );
