@@ -10,6 +10,7 @@ const { registerAdminBrowseUsers } = require('./adminBrowseUsers');
 const { registerAdminSearchUsers } = require('./adminSearchUsers');
 const { registerAdminDashboard } = require('./adminDashboard');
 const { registerProfileGiftCallables } = require('./giftCredits');
+const { resolveAvatarIsReal } = require('./_photoGate');
 const { registerAdminMassMessaging } = require('./adminMassMessaging');
 const { registerDirectorySearch } = require('./directorySearch');
 const { registerConsumerAccountSearch } = require('./consumerAccountSearch');
@@ -504,6 +505,9 @@ const { registerStageRooms } = require('./stageRooms');
 registerStageRooms(exports, { db, admin, enforceCallableRateLimit });
 const { registerAccountDeletion } = require('./accountDeletion');
 registerAccountDeletion(exports, { admin, enforceCallableRateLimit });
+
+const { registerAccountLifecycle } = require('./accountLifecycle');
+registerAccountLifecycle(exports, { admin });
 const { registerCommunityChatDisplay } = require('./communityChatDisplay');
 registerCommunityChatDisplay(exports, { db, admin, enforceCallableRateLimit });
 const { registerConnectMatchNotifications } = require('./connectMatchNotifications');
@@ -892,7 +896,41 @@ async function syncPublicProfileFromUserDoc(uid, afterData) {
         return { skipped: true };
     }
 
+    // Profile-photo soft gate: stamp whether the avatar is a REAL photo (a face).
+    // Uploaded Storage photos resolve without a fetch; Google/Facebook OAuth photos
+    // are fetched + classified once (real JPEG/large vs default monogram PNG) and
+    // cached by URL on the user doc so we never re-fetch an unchanged avatar.
+    let avatarIsRealPhoto = false;
+    try {
+        avatarIsRealPhoto = await resolveAvatarIsReal(
+            mapped.avatarUrl,
+            afterData.avatarClassifiedUrl,
+            afterData.avatarIsRealPhoto
+        );
+    } catch (err) {
+        functions.logger.warn('avatar classify failed', { uid, err: String(err) });
+    }
+    mapped.avatarIsRealPhoto = avatarIsRealPhoto;
+
     await publicRef.set(mapped, { merge: false });
+
+    // Cache the flag back on the user doc (the follow/gift gate reads users/{uid}).
+    // Guarded so the resulting re-trigger sees no change and stops (no write loop).
+    const nextClassifiedUrl = mapped.avatarUrl || null;
+    if (
+        afterData.avatarIsRealPhoto !== avatarIsRealPhoto ||
+        (afterData.avatarClassifiedUrl || null) !== nextClassifiedUrl
+    ) {
+        await db
+            .collection('users')
+            .doc(uid)
+            .set(
+                { avatarIsRealPhoto, avatarClassifiedUrl: nextClassifiedUrl },
+                { merge: true }
+            )
+            .catch(() => {});
+    }
+
     return {
         synced: true,
         profileType: mapped.profileType,

@@ -37,6 +37,9 @@ function isConsumerHiddenUserDoc(userData, uid) {
     if (!userData) return false;
     if (userData.isGuest === true) return true;
     if (userData.banned === true) return true;
+    // Self-service lifecycle: a frozen (deactivated) or pending-deletion account
+    // must vanish from discovery / search / social everywhere until reactivated.
+    if (userData.accountState === 'deactivated' || userData.accountState === 'pending_deletion') return true;
     if (isConsumerHiddenRole(userData.role)) return true;
     if (isConsumerHiddenEmail(userData.email)) return true;
     return false;

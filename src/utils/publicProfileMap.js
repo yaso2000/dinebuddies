@@ -15,6 +15,8 @@ export function mapPublicProfileDocToUserShape(p) {
         photoURL: av,
         avatarUrl: av,
         avatar: av,
+        // Server-verified real-photo flag for the photo soft-gate (see _photoGate.js).
+        avatarIsRealPhoto: p.avatarIsRealPhoto === true,
         role: isBiz ? 'business' : 'user',
         isBusiness: isBiz,
         gender: !isBiz ? p.gender || null : null,

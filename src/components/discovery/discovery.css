@@ -48,9 +48,21 @@
  */
 .app-main.app-main--fullscreen.app-main--connect {
     background: #07070c !important;
-    padding-bottom: calc(var(--nav-height, 65px) + env(safe-area-inset-bottom, 0px) + 10px) !important;
+    /* Reserve nav + raised FAB clearance. iOS gets this from safe-area-inset-bottom;
+       Android's inset is 0, so floor it with max() so the card never sits under the
+       tab bar on either platform (unified look). */
+    padding-bottom: calc(var(--nav-height, 65px) + max(env(safe-area-inset-bottom, 0px), 22px) + 12px) !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
+}
+
+/*
+ * Fullscreen swipe (/search): the bottom nav is hidden (app-main--nonav), so there
+ * is no tab bar to clear — the card fills the screen down to the safe-area edge.
+ * (Invitations / restaurants keep the nav, so they don't get --nonav.)
+ */
+.app-main.app-main--fullscreen.app-main--connect.app-main--nonav {
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
 }
 
 [data-theme='light'] .app-main.app-main--fullscreen.app-main--connect {
@@ -747,6 +759,26 @@
         var(--bg-primary, #f8fafc);
 }
 
+/*
+ * Fullscreen swipe (/search): the card fills the screen edge-to-edge — no feed
+ * padding, no card inset margins, no rounded corners or frame border/shadow.
+ * Scoped to --connect so Invitations/Restaurants keep their inset card look.
+ */
+.discovery-shell--connect .discovery-feed {
+    padding: 0;
+}
+.discovery-shell--connect .discovery-card,
+.discovery-shell--connect .discovery-feed__next-bg {
+    inset: 0;
+    border-radius: 0;
+}
+.discovery-shell--connect .discovery-card__frame,
+.discovery-shell--connect .discovery-feed__next-bg {
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+}
+
 .discovery-card--connect .discovery-card__glow {
     background:
         radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--personal-accent-1, #ff4d9a) 35%, transparent), transparent 45%),
@@ -990,8 +1022,8 @@
 
 @media (max-width: 1023px) {
     .app-main.app-main--fullscreen.app-main--connect {
-        /* Match mobile tab bar: nav height + safe area (+ small gap) */
-        padding-bottom: calc(var(--nav-height, 65px) + env(safe-area-inset-bottom, 0px) + 12px) !important;
+        /* Match mobile tab bar: nav height + safe area, floored for Android (inset 0). */
+        padding-bottom: calc(var(--nav-height, 65px) + max(env(safe-area-inset-bottom, 0px), 22px) + 12px) !important;
     }
 }
 

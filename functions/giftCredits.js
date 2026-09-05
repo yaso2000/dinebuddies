@@ -8,6 +8,8 @@
 const crypto = require('crypto');
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+// Photo soft-gate: docHasRealPhoto reads the server-verified avatarIsRealPhoto flag
+// (real face vs Google/Facebook default monogram). Redeploy pin: 2026-09-04.
 const { docHasRealPhoto } = require('./_photoGate');
 const {
     spendCreditsInTransaction,

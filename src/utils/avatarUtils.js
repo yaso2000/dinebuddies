@@ -53,6 +53,16 @@ export function isProviderAccountPhotoUrl(url) {
 }
 
 /**
+ * Google's no-photo *default* monogram avatar (a colored circle with an initial,
+ * not a real face). Its URL carries an explicit `/a/default…` marker. Facebook's
+ * default silhouette is NOT detectable from the URL, so it is accepted as a photo.
+ */
+export function isDefaultProviderAvatarUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    return /googleusercontent\.com\/a[-/]default/i.test(url.trim());
+}
+
+/**
  * Photo the user uploaded into our Storage (priority tier 1).
  * Final moderated URLs live under Firebase Storage — never treat OAuth CDNs as uploads.
  */
@@ -307,12 +317,15 @@ export function getAvatarUrlOrNull(userData, opts = {}) {
 }
 
 /**
- * True when the user has a REAL, USER-UPLOADED profile photo (an image they put
- * into our Storage). OAuth account photos (Google/Facebook) do NOT count — they
- * are often the provider's default letter/silhouette avatar and can't be told
- * apart from a real one by URL. Generated/placeholder/stock avatars never count.
- * This is the profile-photo soft-gate signal: discovery visibility +
- * follow/greet/gift buttons require it on both parties.
+ * True when the user has a REAL profile photo (a face) — the profile-photo
+ * soft-gate signal (discovery visibility + follow/greet/gift require the TARGET
+ * to have one). A photo counts when it is either:
+ *  - an image uploaded into our Storage (always a real photo), OR
+ *  - a Google/Facebook OAuth account photo THAT THE SERVER VERIFIED is an actual
+ *    photo, not the provider's default monogram/silhouette. Google serves both
+ *    at the same `/a/ACg8oc…` URL, so they can't be told apart by URL — the
+ *    server fetches the image once and stamps `avatarIsRealPhoto` on the doc.
+ * Generated initials, stock defaults, and Google's no-photo default never count.
  */
 export function hasRealProfilePhoto(userData) {
     if (!userData || typeof userData !== 'object') return false;
@@ -323,7 +336,14 @@ export function hasRealProfilePhoto(userData) {
         userData.avatarUrl,
         userData.avatar_url,
     ];
-    return candidates.some((url) => isUserUploadedPhotoUrl(url));
+    // An uploaded Storage photo is always a real photo.
+    if (candidates.some((url) => isUserUploadedPhotoUrl(url))) return true;
+    // An OAuth photo counts only if the server classified it as a real face.
+    const hasProviderPhoto = candidates.some(
+        (url) => isProviderAccountPhotoUrl(url) && !isDefaultProviderAvatarUrl(url)
+    );
+    if (hasProviderPhoto) return userData.avatarIsRealPhoto === true;
+    return false;
 }
 
 /** Normalize all common avatar field aliases from the best available URL. */

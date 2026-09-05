@@ -28,7 +28,7 @@ const BUSINESS_PAID_MONTHLY_USD = Number(String(BUSINESS_PAID_PLAN_DISPLAY.price
 const Settings = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentUser, userProfile, deleteUserAccount, isBusiness, signOut } = useAuth();
+  const { currentUser, userProfile, deactivateMyAccount, requestAccountDeletion, isBusiness, signOut } = useAuth();
   const { showToast } = useToast();
   const confirm = useConfirm();
   const { t, i18n } = useTranslation();
@@ -37,10 +37,8 @@ const Settings = () => {
   const currentLanguageFlag = getLanguageFlag(currentLanguageCode);
   const currentLanguageLabel = getLanguageNativeLabel(currentLanguageCode, t);
 
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [deletePassword, setDeletePassword] = useState('');
+  const [freezing, setFreezing] = useState(false);
 
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -85,39 +83,62 @@ const Settings = () => {
     }
   };
 
-  const handleDeleteAccount = async (password) => {
-    if (!showDeleteConfirm && !password) {
-      setShowDeleteConfirm(true);
-      return;
-    }
-
+  // Freeze (deactivate): hide the account entirely; data + credits preserved.
+  const handleFreezeAccount = async () => {
+    const ok = await confirm({
+      title: t('freeze_account_title', 'Freeze account'),
+      message: t(
+        'freeze_account_message',
+        'Your profile will be hidden from everyone. Your data and credits stay safe — log back in any time to reactivate.'
+      ),
+      confirmLabel: t('freeze_account_cta', 'Freeze account'),
+      cancelLabel: t('cancel', 'Cancel'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
-      setDeleting(true);
-      await deleteUserAccount(password ? { password } : undefined);
-      goToLogin();
+      setFreezing(true);
+      await deactivateMyAccount();
+      await signOut('/login');
     } catch (error) {
-      const needsPassword = error?.code === 'auth/requires-recent-login' && error?.requirePassword;
-      if (needsPassword) {
-        setShowPasswordModal(true);
-        setDeleting(false);
-        return;
-      }
-      if (error?.code === 'auth/wrong-password' || error?.code === 'auth/invalid-credential') {
-        showToast(t('incorrect_password', 'Incorrect password. Please try again.'), 'error');
-      } else {
-        showToast(t('failed_delete_account', 'Failed to delete account. Please try again.'), 'error');
-      }
-      setDeleting(false);
-      setShowDeleteConfirm(false);
+      console.error('[freezeAccount]', error);
+      showToast(t('freeze_account_failed', 'Could not freeze account. Please try again.'), 'error');
+      setFreezing(false);
     }
   };
 
-  const handleDeleteWithPassword = () => {
-    if (!deletePassword.trim()) return;
-    const pwd = deletePassword;
-    setShowPasswordModal(false);
-    setDeletePassword('');
-    handleDeleteAccount(pwd);
+  // Delete: 30-day grace (hidden now, purged after 30 days unless the user logs back in).
+  const handleDeleteAccount = async () => {
+    const credits = getSpendableCredits(userProfile);
+    const creditsWarn =
+      credits > 0
+        ? '\n\n' +
+          t('delete_credits_warning', {
+            defaultValue: '⚠️ You have {{n}} credits that will be permanently lost.',
+            n: credits,
+          })
+        : '';
+    const ok = await confirm({
+      title: t('delete_account_confirm', 'Delete Account'),
+      message:
+        t(
+          'delete_account_soft_message',
+          'Your account will be hidden now and permanently deleted after 30 days. Log in any time within 30 days to cancel and restore everything.'
+        ) + creditsWarn,
+      confirmLabel: t('delete_account_confirm', 'Delete Account'),
+      cancelLabel: t('cancel', 'Cancel'),
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      setDeleting(true);
+      await requestAccountDeletion();
+      await signOut('/login');
+    } catch (error) {
+      console.error('[requestAccountDeletion]', error);
+      showToast(t('failed_delete_account', 'Failed to delete account. Please try again.'), 'error');
+      setDeleting(false);
+    }
   };
 
   const settingsSections = [
@@ -602,9 +623,41 @@ const Settings = () => {
                         <FaChevronRight className="settings-row-chevron settings-row-chevron--danger" />
                     </div>
 
-                    {/* Delete Account */}
+                    {/* Freeze (deactivate) account — reversible, hides everything */}
                     <div
-              onClick={() => handleDeleteAccount()}
+              onClick={() => { if (!freezing && !deleting) handleFreezeAccount(); }}
+              className="settings-row settings-row--danger">
+
+                        <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(234, 179, 8, 0.12)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.1rem',
+                color: '#eab308'
+              }}>
+                            <FaUserClock />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: '700', color: '#eab308', marginBottom: '2px' }}>
+                                {t('freeze_account_title', 'Freeze account')}
+                            </div>
+                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                {t('freeze_account_row_desc', 'Hide your profile temporarily — reactivate any time.')}
+                            </div>
+                        </div>
+                        {freezing ?
+              <div style={{ width: '20px', height: '20px', border: '2px solid #eab308', borderTop: '2px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} /> :
+              <FaChevronRight className="settings-row-chevron" />
+              }
+                    </div>
+
+                    {/* Delete Account — 30-day scheduled deletion */}
+                    <div
+              onClick={() => { if (!deleting && !freezing) handleDeleteAccount(); }}
               className="settings-row settings-row--danger">
 
                         <div style={{
@@ -622,13 +675,11 @@ const Settings = () => {
                         </div>
                         <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: '700', color: '#ef4444', marginBottom: '2px' }}>
-                                {showDeleteConfirm ? t('tap_again_confirm', 'Tap again to confirm') : t('delete_account_confirm', 'Delete Account')}
+                                {t('delete_account_confirm', 'Delete Account')}
                             </div>
-                            {showDeleteConfirm &&
-                <div style={{ fontSize: '0.85rem', color: '#ef4444' }}>
-                                    {t('action_cannot_undone', 'This action cannot be undone')}
-                                </div>
-                }
+                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                {t('delete_account_row_desc', 'Scheduled after 30 days — cancel by logging back in.')}
+                            </div>
                         </div>
                         {deleting ?
               <div style={{
@@ -645,89 +696,6 @@ const Settings = () => {
                     </div>
                 </div>
             </div>
-
-            {/* Password modal for delete (when re-auth required) */}
-            {showPasswordModal &&
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '1rem'
-          }}
-          onClick={() => {setShowPasswordModal(false);setDeletePassword('');}}>
-
-                    <div
-            style={{
-              background: 'var(--bg-card)',
-              borderRadius: '16px',
-              padding: '1.5rem',
-              maxWidth: '360px',
-              width: '100%',
-              border: '1px solid var(--border-color)',
-              boxShadow: 'var(--shadow-premium)',
-              color: 'var(--text-main)'
-            }}
-            onClick={(e) => e.stopPropagation()}>
-
-                        <div style={{ marginBottom: '1rem', fontWeight: 700, fontSize: '1.1rem' }}>
-                            {t('re_enter_password', 'Re-enter password')}
-                        </div>
-                        <AppText as="p" style={{ marginBottom: '1rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                            {t('security_confirm_deletion', 'For your security, please enter your password to confirm account deletion.')}
-                        </AppText>
-                        <AppTextInput
-              type="password"
-              value={deletePassword}
-              onChange={(e) => setDeletePassword(e.target.value)}
-              placeholder="Password"
-              autoFocus
-              style={{
-                width: '100%',
-                padding: '0.75rem 1rem',
-                borderRadius: '10px',
-                border: '1px solid var(--border-color)',
-                marginBottom: '1rem',
-                fontSize: '1rem',
-                background: 'var(--bg-input)',
-                color: 'var(--text-main)'
-              }}
-              onKeyDown={(e) => e.key === 'Enter' && handleDeleteWithPassword()} />
-
-                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                            <button
-                onClick={() => {setShowPasswordModal(false);setDeletePassword('');}}
-                style={{
-                  padding: '0.6rem 1.2rem',
-                  borderRadius: '10px',
-                  border: '1px solid var(--border-color)',
-                  background: 'var(--bg-input)',
-                  color: 'var(--text-main)'
-                }}>
-
-                                {t('cancel')}
-                            </button>
-                            <button
-                onClick={handleDeleteWithPassword}
-                disabled={!deletePassword.trim() || deleting}
-                style={{
-                  padding: '0.6rem 1.2rem',
-                  borderRadius: '10px',
-                  background: '#ef4444',
-                  color: '#fff',
-                  border: 'none'
-                }}>
-
-                                {deleting ? t('deleting', 'Deleting...') : t('delete_account_confirm', 'Delete Account')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-        }
 
             {/* App Version */}
             <div className="settings-version">{t('app_version', 'DineBuddies v1.0.0')}</div>

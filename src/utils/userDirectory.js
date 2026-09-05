@@ -40,6 +40,9 @@ export function mapDirectoryUser(publicDoc, userDoc = null) {
     return {
         id: uid,
         ...base,
+        // Server-verified "real photo" flag (photo soft-gate): true when the avatar
+        // is an uploaded photo or a Google/Facebook photo the server confirmed is a face.
+        avatarIsRealPhoto: u.avatarIsRealPhoto === true || publicDoc.avatarIsRealPhoto === true,
         email: u.email || null,
         coverPhotoUrl:
             resolveProfileCoverUrl(u) || USER_DIRECTORY_DEFAULT_COVER,

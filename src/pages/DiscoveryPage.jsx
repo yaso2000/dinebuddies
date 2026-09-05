@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import DiscoveryFeed from '../components/discovery/DiscoveryFeed';
+import UserDirectoryFilters from '../components/UserDirectory/UserDirectoryFilters';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useDiscoveryProfiles } from '../hooks/useDiscoveryProfiles';
@@ -22,7 +23,14 @@ export default function DiscoveryPage() {
   const { currentUser, userProfile, isGuest, isBusiness } = useAuth();
 
   const viewerUid = currentUser?.uid || currentUser?.id;
-  const { profiles, loading, loadingMore, hasMore, loadMore, canLoad } = useDiscoveryProfiles();
+  const [genderFilter, setGenderFilter] = useState('all');
+  const [ageCategoryFilter, setAgeCategoryFilter] = useState('all');
+  const [photoFilter, setPhotoFilter] = useState('with_photo');
+  const { profiles, loading, loadingMore, hasMore, loadMore, canLoad } = useDiscoveryProfiles({
+    genderFilter,
+    ageCategoryFilter,
+    photoFilter,
+  });
   const { openGiftPicker, giftModal } = useProfileGiftPicker();
 
   useEffect(() => {
@@ -122,6 +130,50 @@ export default function DiscoveryPage() {
 
   return (
     <div className="discovery-shell discovery-shell--in-layout discovery-shell--connect">
+      {/* Filter toolbar replaces the app top bar in the swipe view */}
+      <div
+        className="discovery-filters-topbar"
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: 8,
+          /* .app-layout already reserves env(safe-area-inset-top) on mobile — don't
+             add it again here or the notch inset is double-counted (empty band). */
+          padding: '8px 10px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 6,
+        }}>
+        <UserDirectoryFilters
+          id="discovery-swipe-filters"
+          genderFilter={genderFilter}
+          onGenderFilterChange={setGenderFilter}
+          ageCategoryFilter={ageCategoryFilter}
+          onAgeCategoryFilterChange={setAgeCategoryFilter}
+          photoFilter={photoFilter}
+          onPhotoFilterChange={setPhotoFilter}
+        />
+        <Link
+          to="/search/list"
+          className="discovery-feed__replay-btn"
+          style={{
+            margin: 0, // override .discovery-feed__replay-btn margin-top that dropped it below the row
+            height: 32,
+            padding: '0 14px',
+            fontSize: '0.8rem',
+            fontWeight: 700,
+            textDecoration: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxSizing: 'border-box',
+            lineHeight: 1,
+          }}>
+          {t('list_view', 'List')}
+        </Link>
+      </div>
+
       {!canLoad ? (
         <div className="discovery-feed discovery-feed__empty">
           <AppText as="p">{t('user_directory_login_required', 'Sign in to browse members.')}</AppText>

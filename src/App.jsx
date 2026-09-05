@@ -137,6 +137,7 @@ import { ConfirmProvider } from './context/ConfirmContext';
 import GlobalImageUploadIndicator from './components/GlobalImageUploadIndicator';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
+import AccountReactivateGate from './components/AccountReactivateGate';
 import { ExternalLinkGuardProvider } from './context/ExternalLinkGuardContext';
 import { InvitationProvider } from './context/InvitationContext';
 import { MatchCelebrationProvider } from './context/MatchCelebrationContext';
@@ -209,6 +210,7 @@ function App() {
                             <NotificationProvider>
                                 <ChatProvider>
                                     <StripeProvider>
+                                        <AccountReactivateGate />
                                         <Routes>
                                             {/* Auth routes outside of nested Layout wrappers for maximum reliability */}
                                             <Route path="/login" element={<LoginHub />} />

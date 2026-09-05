@@ -1708,6 +1708,28 @@ export const AuthProvider = ({ children }) => {
         syncBusinessNavHint(null, null);
     };
 
+    // ── Account lifecycle (freeze / soft-delete / restore) ──
+    const callAccountLifecycle = (name) =>
+        httpsCallable(getFunctions(app, 'us-central1'), name, { timeout: 60000 });
+
+    /** Freeze (deactivate): hide the account; data + credits preserved. Caller signs out after. */
+    const deactivateMyAccount = async () => {
+        const res = await callAccountLifecycle('deactivateMyAccount')({});
+        return res.data;
+    };
+
+    /** Request soft-delete: 30-day grace, hidden now, credits preserved until purge. Caller signs out after. */
+    const requestAccountDeletion = async () => {
+        const res = await callAccountLifecycle('requestAccountDeletion')({});
+        return res.data;
+    };
+
+    /** Reactivate / cancel a pending deletion (on the user's return). */
+    const restoreMyAccount = async () => {
+        const res = await callAccountLifecycle('restoreMyAccount')({});
+        return res.data;
+    };
+
     const value = {
         currentUser: toSessionAuthUser(currentUser),
         userProfile,
@@ -1730,6 +1752,10 @@ export const AuthProvider = ({ children }) => {
         signOut,
         updateUserProfile,
         deleteUserAccount,
+        deactivateMyAccount,
+        requestAccountDeletion,
+        restoreMyAccount,
+        accountState: userProfile?.accountState || 'active',
         updateProfile: updateUserProfile,
         continueAsGuest,
         exitGuestMode,

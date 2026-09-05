@@ -5469,5 +5469,22 @@
   "stage_chat_community_only": "Community members only",
   "stage_chat_community_only_hint": "Join this business community first, then you can enter the Stage.",
   "user_directory_age_filter_aria": "Age category filter",
-  "user_directory_age_all": "All ages"
+  "user_directory_age_all": "All ages",
+  "freeze_account_title": "Freeze account",
+  "freeze_account_cta": "Freeze account",
+  "freeze_account_message": "Your profile will be hidden from everyone. Your data and credits stay safe — log back in any time to reactivate.",
+  "freeze_account_row_desc": "Hide your profile temporarily — reactivate any time.",
+  "freeze_account_failed": "Could not freeze account. Please try again.",
+  "delete_account_soft_message": "Your account will be hidden now and permanently deleted after 30 days. Log in any time within 30 days to cancel and restore everything.",
+  "delete_account_row_desc": "Scheduled after 30 days — cancel by logging back in.",
+  "delete_credits_warning": "⚠️ You have {{n}} credits that will be permanently lost.",
+  "account_reactivated": "Welcome back — your account is active again.",
+  "account_reactivate_failed": "Could not reactivate. Please try again.",
+  "account_pending_deletion_title": "Your account is scheduled for deletion",
+  "account_deactivated_title": "Your account is deactivated",
+  "account_pending_deletion_desc_date": "It will be permanently deleted on {{date}}, along with your credits. Reactivate now to cancel and restore everything.",
+  "account_pending_deletion_desc": "It will be permanently deleted after the grace period, along with your credits. Reactivate now to cancel and restore everything.",
+  "account_deactivated_desc": "Your profile is hidden from everyone. Reactivate to make it visible again — your data and credits are safe.",
+  "account_cancel_deletion_cta": "Cancel deletion & reactivate",
+  "account_reactivate_cta": "Reactivate my account"
 }

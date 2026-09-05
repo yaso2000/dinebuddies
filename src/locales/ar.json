@@ -5671,5 +5671,22 @@
   "stage_chat_community_only": "لأعضاء المجتمع فقط",
   "stage_chat_community_only_hint": "انضم إلى مجتمع هذا البزنس أولاً، ثم يمكنك دخول المسرح.",
   "user_directory_age_filter_aria": "فلتر الفئة العمرية",
-  "user_directory_age_all": "كل الأعمار"
+  "user_directory_age_all": "كل الأعمار",
+  "freeze_account_title": "تجميد الحساب",
+  "freeze_account_cta": "تجميد الحساب",
+  "freeze_account_message": "سيُخفى ملفك عن الجميع تماماً. بياناتك ورصيدك من الكريدت تبقى في أمان — سجّل الدخول في أي وقت لإعادة التنشيط.",
+  "freeze_account_row_desc": "إخفاء ملفك مؤقتاً — يمكنك إعادة التنشيط في أي وقت.",
+  "freeze_account_failed": "تعذّر تجميد الحساب. حاول مرة أخرى.",
+  "delete_account_soft_message": "سيُخفى حسابك الآن ويُحذف نهائياً بعد 30 يوماً. سجّل الدخول في أي وقت خلال 30 يوماً لإلغاء الحذف واستعادة كل شيء.",
+  "delete_account_row_desc": "يُحذف بعد 30 يوماً — يمكنك الإلغاء بتسجيل الدخول.",
+  "delete_credits_warning": "⚠️ لديك {{n}} كريدت ستُفقد نهائياً.",
+  "account_reactivated": "مرحباً بعودتك — حسابك فعّال من جديد.",
+  "account_reactivate_failed": "تعذّرت إعادة التنشيط. حاول مرة أخرى.",
+  "account_pending_deletion_title": "حسابك مجدوَل للحذف",
+  "account_deactivated_title": "حسابك مجمّد",
+  "account_pending_deletion_desc_date": "سيُحذف نهائياً في {{date}}، مع رصيدك من الكريدت. أعد التنشيط الآن لإلغاء الحذف واستعادة كل شيء.",
+  "account_pending_deletion_desc": "سيُحذف نهائياً بعد انتهاء المهلة، مع رصيدك من الكريدت. أعد التنشيط الآن لإلغاء الحذف واستعادة كل شيء.",
+  "account_deactivated_desc": "ملفك مخفيّ عن الجميع. أعد التنشيط ليظهر مجدداً — بياناتك ورصيدك في أمان.",
+  "account_cancel_deletion_cta": "إلغاء الحذف وإعادة التنشيط",
+  "account_reactivate_cta": "إعادة تنشيط حسابي"
 }

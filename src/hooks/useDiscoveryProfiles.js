@@ -3,10 +3,14 @@ import { useAuth } from '../context/AuthContext';
 import { useUserDirectory } from './useUserDirectory';
 import { mapDirectoryUserToDiscoveryProfile } from '../utils/discoveryProfile';
 import { isDiscoverySwipeMatch } from '../utils/discoverySwipeMatch';
-import { hasRealProfilePhoto } from '../utils/avatarUtils';
 import { normalizeInvitePreference } from '../constants/privateProfileOptions';
 import { getUserDocLatLng } from '../utils/userDocCoords';
-import { sortDirectoryUsersByDistance } from '../utils/userDirectoryFilters';
+import {
+    sortDirectoryUsersByDistance,
+    memberMatchesPhotoFilter,
+    memberMatchesGenderFilter,
+    memberMatchesAgeCategory,
+} from '../utils/userDirectoryFilters';
 
 const MIN_SWIPE_DECK_SIZE = 8;
 /** Larger pages = fewer round-trips when many members are filtered out client-side. */
@@ -28,7 +32,12 @@ function buildSwipeViewer(userProfile, currentUser) {
  * Discovery swipe — mutual gender comfort from both members' invite preferences.
  * Shows the deck immediately; re-sorts by distance when location becomes available.
  */
-export function useDiscoveryProfiles({ enabled = true } = {}) {
+export function useDiscoveryProfiles({
+    enabled = true,
+    genderFilter = 'all',
+    ageCategoryFilter = 'all',
+    photoFilter = 'with_photo',
+} = {}) {
     const { currentUser, userProfile, isGuest } = useAuth();
     const viewerUid = currentUser?.uid || currentUser?.id;
     const canLoad = Boolean(enabled && viewerUid && !isGuest);
@@ -73,14 +82,19 @@ export function useDiscoveryProfiles({ enabled = true } = {}) {
 
     const profiles = useMemo(() => {
         if (!viewer) return [];
-        // Swipe deck is face-based: only members with a real profile photo appear.
+        // Apply the same toolbar filters as the list (photo default = with_photo),
+        // on top of the swipe gender-comfort match.
         const matched = directory.users.filter(
-            (user) => hasRealProfilePhoto(user) && isDiscoverySwipeMatch(viewer, user)
+            (user) =>
+                memberMatchesPhotoFilter(user, photoFilter) &&
+                memberMatchesGenderFilter(user, genderFilter) &&
+                memberMatchesAgeCategory(user, ageCategoryFilter) &&
+                isDiscoverySwipeMatch(viewer, user)
         );
         return sortDirectoryUsersByDistance(matched, userLocation)
             .map((user) => mapDirectoryUserToDiscoveryProfile(user, userLocation))
             .filter(Boolean);
-    }, [directory.users, userLocation, viewer]);
+    }, [directory.users, userLocation, viewer, photoFilter, genderFilter, ageCategoryFilter]);
 
     useEffect(() => {
         if (!canLoad || directory.loading || directory.loadingMore || !directory.hasMore) return;

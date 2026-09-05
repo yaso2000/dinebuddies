@@ -767,7 +767,7 @@ const Layout = ({ children }) => {
 
                 {/* Column 2 — Main content */}
                 <main
-                  className={`app-main${useChatMainLayout ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute || isStudioRoute || isConnectMagneticRoute ? ' app-main--fullscreen' : ''}${isCommunityFullscreen ? ' app-main--community-fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}${isDashboardRoute ? ' app-main--dashboard' : ''}${isConnectMagneticRoute ? ' app-main--connect' : ''}`}>
+                  className={`app-main${useChatMainLayout ? ' app-main--chat' : ''}${isMessagesIndex ? ' app-main--messages-index' : ''}${isStoryRoute || isStudioRoute || isConnectMagneticRoute ? ' app-main--fullscreen' : ''}${isCommunityFullscreen ? ' app-main--community-fullscreen' : ''}${isAdminRoute ? ' app-main--admin' : ''}${isDashboardRoute ? ' app-main--dashboard' : ''}${isConnectMagneticRoute ? ' app-main--connect' : ''}${hideBottomNav ? ' app-main--nonav' : ''}`}>
                     {!isSearchListRoute && !isConnectMagneticRoute && !isCommunityFullscreen && <EmailVerificationBusinessBanner />}
                     {!isSearchListRoute && !isConnectMagneticRoute && !isCommunityFullscreen && <UnpublishedBusinessReminder />}
                     {!isSearchListRoute && !isConnectMagneticRoute && !isCommunityFullscreen && <InstallAppBanner />}

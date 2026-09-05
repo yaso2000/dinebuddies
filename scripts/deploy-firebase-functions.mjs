@@ -30,11 +30,29 @@ const filterArg = argv.find((a) => !a.startsWith('--'));
 const projectId =
     process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'dinebuddies';
 
+/**
+ * Normalize a comma-separated functions filter so EVERY function name carries the
+ * `functions:` prefix. Firebase's `--only functions:a,b,c` honors only the first
+ * target (`functions:a`) and silently treats `b`/`c` as unknown top-level targets,
+ * so bare names after the first were never deployed. Prefix each bare segment.
+ */
+function normalizeOnlyFilter(only) {
+    if (!only || only === 'functions') return only;
+    return only
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((seg) => (seg.includes(':') ? seg : `functions:${seg}`))
+        .join(',');
+}
+
 const onlyArg =
     filterArg === 'all'
         ? 'functions'
-        : filterArg ||
-          'functions:publishPrivateInvitationDraft,functions:ensurePrivateInvitationShareToken,functions:getPrivateInvitationSharePreview,functions:claimPrivateInvitationShare';
+        : normalizeOnlyFilter(
+              filterArg ||
+                  'functions:publishPrivateInvitationDraft,functions:ensurePrivateInvitationShareToken,functions:getPrivateInvitationSharePreview,functions:claimPrivateInvitationShare'
+          );
 
 /**
  * Build ADC env from .env, and isolate Firebase CLI from stale user tokens.

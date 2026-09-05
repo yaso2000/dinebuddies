@@ -32,6 +32,13 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
   const isSuitabilityDeckRoute = path === '/suitability' || path === '/realornai' || path === '/zodiac';
 
   /**
+   * Connect swipe deck (/search) — its own filter toolbar replaces the app top
+   * header, but the bottom tab bar stays. The list view (/search/list) keeps
+   * the normal header.
+   */
+  const isDiscoverySwipeRoute = path === '/search' || path === '/search/';
+
+  /**
    * "Camera or AI?" create screen — has its own header and opens a fullscreen
    * camera, so it must hide the bottom tab bar (otherwise the capture/record
    * button sits behind it).
@@ -64,9 +71,9 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
     showConversationSidebar,
     isNotificationsRoute,
     /** Hide mobile app header (conversation / deck has its own bar). */
-    hideMobileAppHeader: (isConversationScreen && !isCommunityFullscreen) || isSuitabilityDeckRoute || isRealOrAiCreateRoute,
-    /** Hide bottom tab bar — chat rooms + suitability deck, not /messages hub. */
-    hideBottomNav: isConversationScreen || isSuitabilityDeckRoute || isRealOrAiCreateRoute,
+    hideMobileAppHeader: (isConversationScreen && !isCommunityFullscreen) || isSuitabilityDeckRoute || isRealOrAiCreateRoute || isDiscoverySwipeRoute,
+    /** Hide bottom tab bar — chat rooms + suitability deck + fullscreen swipe, not /messages hub. */
+    hideBottomNav: isConversationScreen || isSuitabilityDeckRoute || isRealOrAiCreateRoute || isDiscoverySwipeRoute,
     /** app-main--chat: fixed height / no outer scroll for threads + deck. */
     useChatMainLayout: isConversationScreen || isSuitabilityDeckRoute,
   };
