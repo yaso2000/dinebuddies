@@ -146,7 +146,7 @@
   "account_banned": "Your account has been banned from creating invitations.",
   "account_deleted": "Account deleted",
   "account_deletion_intro": "You can request permanent deletion of your DineBuddies account at any time. This page explains what is removed and how to proceed.",
-  "account_deletion_irreversible": "Account deletion is permanent and cannot be undone.",
+  "account_deletion_irreversible": "When you request deletion, your account is hidden immediately and permanently deleted after a 30-day grace period. You can cancel any time within those 30 days by signing back in. After 30 days, deletion is permanent and cannot be undone.",
   "account_deletion_request": "Account Deletion Request",
   "account_long_banned": "Your account has been banned from creating invitations for an extended period.",
   "account_responsibility": "You are responsible for maintaining the confidentiality of your account information.",

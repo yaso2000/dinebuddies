@@ -68,7 +68,7 @@ const AccountDeletionRequest = () => {
                         {t('account_deletion_request', 'Account Deletion Request')}
                     </AppText>
                     <AppText as="p" style={{ margin: '0.25rem 0 0', opacity: 0.6 }}>
-                        {t('last_updated', 'Last Updated')}: March 8, 2025
+                        {t('last_updated', 'Last Updated')}: September 6, 2026
                     </AppText>
                 </div>
             </div>
@@ -171,7 +171,7 @@ const AccountDeletionRequest = () => {
         }}>
         
                 <AppText as="p" style={{ margin: 0, fontSize: '0.85rem', opacity: 0.8 }}>
-                    {t('last_updated', 'Last Updated')}: March 8, 2025
+                    {t('last_updated', 'Last Updated')}: September 6, 2026
                 </AppText>
             </div>
         </div>);
