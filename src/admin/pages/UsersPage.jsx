@@ -266,13 +266,17 @@ export default function UsersPage() {
             type="button"
             className="db-btn db-btn--lime"
             disabled={acting === u.id}
-            onClick={() =>
-            act(u.id, () =>
-            adminApi.setUserSubscriptionTier(u.id, 'paid', true)
-            )
-            }>
+            onClick={() => {
+              const input = window.prompt(
+                t('admin_business_grant_months_prompt', 'Grant Paid plan for how many months? Enter 0 for permanent.'),
+                '6'
+              );
+              if (input === null) return;
+              const months = Math.max(0, Math.min(60, Math.floor(Number(input) || 0)));
+              act(u.id, () => adminApi.setUserSubscriptionTier(u.id, 'paid', true, months));
+            }}>
 
-                                {t('admin_business_plan_paid', 'Paid plan')}
+                                {t('admin_business_plan_grant', 'Grant plan')}
                             </button>
                             <button
             type="button"

@@ -2558,10 +2558,14 @@ exports.adminSetUserRole = functions.https.onCall(async (data, context) => {
 
 // ─── Trusted admin callable: subscription tier changes ──────────────────────
 exports.adminSetUserSubscriptionTier = functions.https.onCall(async (data, context) => {
-    denyRegionalManager(await assertAdminContext(context));
+    const adminCtx = await assertAdminContext(context);
+    denyRegionalManager(adminCtx);
     const targetUid = data?.targetUid;
     const subscriptionTier = data?.subscriptionTier;
     const isBusinessUser = data?.isBusinessUser === true;
+    // Optional grant duration in months (0 / omitted = permanent). Only meaningful
+    // for a business 'paid' grant — the comp auto-expires and reverts to free.
+    const months = Math.max(0, Math.min(60, Math.floor(Number(data?.months) || 0)));
     const allowedUserTiers = ['free', 'pro', 'vip'];
     const allowedBusinessTiers = ['free', 'paid'];
 
@@ -2573,14 +2577,81 @@ exports.adminSetUserSubscriptionTier = functions.https.onCall(async (data, conte
         throw new functions.https.HttpsError('invalid-argument', 'Invalid subscription tier.');
     }
 
+    const FieldValue = admin.firestore.FieldValue;
     const updates = { subscriptionTier };
     if (isBusinessUser) {
         updates.weeklyPrivateQuota = USER_WEEKLY_PRIVATE_QUOTAS[subscriptionTier] ?? 0;
         updates.usedPrivateCreditsThisWeek = 0;
     }
 
+    if (isBusinessUser && subscriptionTier === 'paid') {
+        // Tag this as an admin comp so the daily expiry job can revert it (and never
+        // a real Stripe/PayPal/App Store subscription, which carry a different source).
+        updates.subscriptionSource = 'admin_comp';
+        updates.compPlanGrantedAt = FieldValue.serverTimestamp();
+        updates.compPlanGrantedBy = adminCtx.requesterUid || null;
+        if (months > 0) {
+            const expires = new Date();
+            expires.setMonth(expires.getMonth() + months);
+            updates.compPlanMonths = months;
+            updates.compPlanExpiresAt = admin.firestore.Timestamp.fromDate(expires);
+        } else {
+            // Permanent comp — no expiry.
+            updates.compPlanMonths = FieldValue.delete();
+            updates.compPlanExpiresAt = FieldValue.delete();
+        }
+    } else if (subscriptionTier === 'free') {
+        // Clearing a plan wipes any comp bookkeeping.
+        updates.subscriptionSource = FieldValue.delete();
+        updates.compPlanExpiresAt = FieldValue.delete();
+        updates.compPlanMonths = FieldValue.delete();
+        updates.compPlanGrantedAt = FieldValue.delete();
+        updates.compPlanGrantedBy = FieldValue.delete();
+    }
+
     await db.collection('users').doc(targetUid).set(updates, { merge: true });
-    return { success: true, targetUid, updates };
+    return { success: true, targetUid, subscriptionTier, months };
+});
+
+/**
+ * Daily: revert admin comp business plans whose term has elapsed back to Free.
+ * Only touches accounts still marked `subscriptionSource: 'admin_comp'` — a real
+ * paid subscription (Stripe/PayPal/App Store) overwrites that source and is never
+ * reverted here. Single-field range filter → auto-indexed (no composite index).
+ */
+exports.expireCompBusinessPlans = functions.pubsub.schedule('every 24 hours').onRun(async () => {
+    const now = admin.firestore.Timestamp.now();
+    const FieldValue = admin.firestore.FieldValue;
+    const snap = await db
+        .collection('users')
+        .where('compPlanExpiresAt', '<=', now)
+        .limit(300)
+        .get();
+
+    let reverted = 0;
+    for (const d of snap.docs) {
+        const u = d.data() || {};
+        if (u.subscriptionSource !== 'admin_comp') continue; // protect real subscriptions
+        try {
+            await d.ref.set(
+                {
+                    subscriptionTier: 'free',
+                    weeklyPrivateQuota: USER_WEEKLY_PRIVATE_QUOTAS.free ?? 0,
+                    usedPrivateCreditsThisWeek: 0,
+                    subscriptionSource: FieldValue.delete(),
+                    compPlanExpiresAt: FieldValue.delete(),
+                    compPlanMonths: FieldValue.delete(),
+                    compPlanExpiredAt: FieldValue.serverTimestamp(),
+                },
+                { merge: true }
+            );
+            reverted += 1;
+        } catch (err) {
+            functions.logger.error('expireCompBusinessPlans revert failed', { uid: d.id, message: err.message });
+        }
+    }
+    functions.logger.info('expireCompBusinessPlans', { candidates: snap.size, reverted });
+    return null;
 });
 
 // ─── Trusted admin callable: cancel user subscription ───────────────────────

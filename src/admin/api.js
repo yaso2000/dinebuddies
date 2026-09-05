@@ -26,8 +26,8 @@ export const adminApi = {
         call('adminGrantFreeCredits', { targetUid, amount, note }),
     resetAllCredits: (confirmPhrase, dryRun = false) =>
         call('adminResetAllCredits', { confirmPhrase, dryRun }),
-    setUserSubscriptionTier: (targetUid, subscriptionTier, isBusinessUser = false) =>
-        call('adminSetUserSubscriptionTier', { targetUid, subscriptionTier, isBusinessUser }),
+    setUserSubscriptionTier: (targetUid, subscriptionTier, isBusinessUser = false, months = 0) =>
+        call('adminSetUserSubscriptionTier', { targetUid, subscriptionTier, isBusinessUser, months }),
     deletePartner: (targetUid) => call('adminDeletePartner', { targetUid }),
     listInvitations: (opts = {}) => call('adminListInvitations', opts),
     moderateInvitation: (invitationId, action, inviteType = 'public') =>

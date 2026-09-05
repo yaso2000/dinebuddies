@@ -166,7 +166,11 @@ async function handleCheckoutComplete(session) {
             weeklyPrivateQuota: weeklyQuota,
             usedPrivateCreditsThisWeek: 0,
             subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
-            stripeCustomerId: session.customer || admin.firestore.FieldValue.delete()
+            stripeCustomerId: session.customer || admin.firestore.FieldValue.delete(),
+            // A real subscription overrides any admin comp so the comp-expiry job never reverts it.
+            subscriptionSource: 'stripe',
+            compPlanExpiresAt: admin.firestore.FieldValue.delete(),
+            compPlanMonths: admin.firestore.FieldValue.delete()
         });
 
         console.log(`✅ User ${userId} → plan: ${planId}, tier: ${tier}, quota: ${weeklyQuota}`);
@@ -216,7 +220,15 @@ async function handleSubscriptionUpdate(subscription) {
         subscriptionStatus: subscription.status,
         subscriptionTier: tier,
         weeklyPrivateQuota: weeklyQuota,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        // A real active subscription overrides any admin comp (never auto-reverted).
+        ...(tier === 'paid'
+            ? {
+                subscriptionSource: 'stripe',
+                compPlanExpiresAt: admin.firestore.FieldValue.delete(),
+                compPlanMonths: admin.firestore.FieldValue.delete()
+            }
+            : {})
     });
 
     console.log(`✅ User ${userId} updated → tier: ${tier}, quota: ${weeklyQuota}, status: ${subscription.status}`);
