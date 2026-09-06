@@ -347,6 +347,22 @@
     padding: 4px 16px;
 }
 
+/*
+ * Lift the interactive rows onto their own compositing layer so a composited
+ * cross-origin embed (the YouTube iframe in .post-media-container, which is
+ * force-composited via translateZ(0)/contain:paint to stop scroll "shake")
+ * cannot capture their taps on native WebViews. Plain z-index does not win
+ * against an iOS/Android composited iframe layer — translateZ(0) does.
+ */
+.post-actions,
+.post-engagement-row,
+.post-comments-preview-fb,
+.comments-section {
+    position: relative;
+    z-index: 1;
+    transform: translateZ(0);
+}
+
 .action-item {
     flex: 1;
     display: flex;
