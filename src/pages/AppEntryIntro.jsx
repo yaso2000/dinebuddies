@@ -7,7 +7,7 @@ import './AppEntryIntro.css';
 
 const INTRO_DONE_KEY = 'dineb_entry_intro_done';
 /** How long the animated logo splash shows before the brand/join screen. */
-const LOGO_INTRO_MS = 2800;
+const LOGO_INTRO_MS = 2000;
 
 /**
  * App entry: animated logo splash (brand + bilingual tagline) → brand screen with
@@ -78,18 +78,9 @@ export default function AppEntryIntro() {
             src="/db-logo.svg"
             alt="DineBuddies"
             className="app-entry-intro__logo app-entry-intro__logo--intro"
-            width={132}
-            height={132}
+            width={150}
+            height={150}
           />
-          <span className="app-entry-intro__title app-entry-intro__title--intro">
-            DineBuddies
-          </span>
-          <span className="app-entry-intro__tag app-entry-intro__tag--en">
-            Never Dine Alone
-          </span>
-          <span className="app-entry-intro__tag app-entry-intro__tag--ar" dir="rtl" lang="ar">
-            ما تاكلش لوحدك
-          </span>
         </button>
       ) : (
         <div className="app-entry-intro__brand">
