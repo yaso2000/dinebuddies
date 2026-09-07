@@ -5,6 +5,7 @@ import {
     detachLeafletMap,
     ensureLeafletMapDetachedIfOrphan,
 } from '../utils/leafletMapLifecycle';
+import { addBaseTileLayer } from '../utils/mapTiles';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -42,10 +43,7 @@ const SimpleMap = ({ lat, lng, businessName, address, readOnly = false }) => {
                 tap: !readOnly,
             });
 
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
-                maxZoom: 19,
-            }).addTo(map);
+            addBaseTileLayer(L, map, false);
 
             mapInstanceRef.current = map;
         } else {

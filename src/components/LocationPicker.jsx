@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { geocode, reverseGeocode } from '../utils/locationUtils';
+import { addBaseTileLayer } from '../utils/mapTiles';
 
 // Fix default marker icons
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -111,10 +112,7 @@ const LocationPicker = ({ onLocationSelect, initialLat, initialLng, onAddressCha
         scrollWheelZoom: true
       });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
-        maxZoom: 19
-      }).addTo(map);
+      addBaseTileLayer(L, map, false);
 
       // Handle map clicks
       map.on('click', async (e) => {

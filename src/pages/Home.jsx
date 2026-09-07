@@ -14,6 +14,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import '../components/MapStyles.css';
 import './HomeMobileFeed.css';
+import { addBaseTileLayer } from '../utils/mapTiles';
 import {
   detachLeafletMap,
   ensureLeafletMapDetachedIfOrphan } from
@@ -363,11 +364,7 @@ const Home = () => {
         if (layer instanceof L.TileLayer) mapInstance.current.removeLayer(layer);
       });
 
-      const tileUrl = isDark ?
-      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' :
-      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-
-      L.tileLayer(tileUrl).addTo(mapInstance.current);
+      addBaseTileLayer(L, mapInstance.current, isDark);
 
       // Cleanup previous markers
       mapInstance.current.eachLayer((layer) => {

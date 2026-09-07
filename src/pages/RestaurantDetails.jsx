@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { addBaseTileLayer } from '../utils/mapTiles';
 import { FaArrowRight, FaStar, FaMapMarkerAlt, FaPhone, FaClock, FaGlobe, FaArrowLeft, FaComments, FaUserPlus } from 'react-icons/fa';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
@@ -43,7 +44,7 @@ const RestaurantDetails = () => {
           attributionControl: false
         }).setView([restaurant.lat || -33.8688, restaurant.lng || 151.2093], 15);
 
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(mapInstance.current);
+        addBaseTileLayer(L, mapInstance.current, true);
 
         L.marker([restaurant.lat || -33.8688, restaurant.lng || 151.2093]).addTo(mapInstance.current);
       } catch (err) {
