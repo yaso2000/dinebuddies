@@ -16,6 +16,23 @@ export const SOCIAL_INVITE_TYPES = [
 
 export const DEFAULT_SOCIAL_INVITE_TYPE_LABEL = 'Social';
 
+/**
+ * Occasion types that are strictly one-on-one: تعارف (Getting acquainted) and
+ * علاقة جدية (Serious relationship) — these invite exactly ONE person.
+ * Matched by both stored label and category id for safety.
+ */
+export const SINGLE_INVITEE_OCCASIONS = new Set([
+    'Serious relationship', 'Getting acquainted', 'serious', 'acquaintance',
+]);
+
+/** Upper bound on invitees for a normal (multi-guest) social invitation. */
+export const SOCIAL_MAX_INVITEES = 100;
+
+/** Max invitees allowed for a given occasionType label/id (1 for تعارف/علاقة جدية). */
+export function maxInviteesForOccasion(occasionType) {
+    return SINGLE_INVITEE_OCCASIONS.has(occasionType) ? 1 : SOCIAL_MAX_INVITEES;
+}
+
 const BY_LABEL = new Map(SOCIAL_INVITE_TYPES.map((tpe) => [tpe.label, tpe]));
 
 /** @param {string} label @param {(key: string, fallback?: string) => string} t */

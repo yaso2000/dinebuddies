@@ -294,10 +294,10 @@ export default function AdminPlacesGeoFilter({ onFilterChange }) {
   );
 
   const hasStates = states.length > 0;
-  const stateStepDone = !hasStates || Boolean(stateIso);
-  const cityStepEnabled = Boolean(countryIso) && stateStepDone;
+  // State/province is an OPTIONAL refinement: country → city is enough to search.
+  const cityStepEnabled = Boolean(countryIso);
   const readyForBusinessSearch =
-  Boolean(countryIso) && stateStepDone && String(cityResolved || '').trim().length >= 2;
+  Boolean(countryIso) && String(cityResolved || '').trim().length >= 2;
 
   useEffect(() => {
     onFilterChange({
@@ -384,8 +384,6 @@ export default function AdminPlacesGeoFilter({ onFilterChange }) {
           placeholder={
           !countryIso ?
           t('admin_geo_city_select_country') :
-          hasStates && !stateIso ?
-          t('admin_geo_city_select_state') :
           t('admin_geo_city_placeholder')
           }
           onSelect={handleCitySelect} />

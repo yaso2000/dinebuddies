@@ -114,6 +114,7 @@ function buildRestaurantDocFromGoogleDetails(details, opts = {}) {
     const address = String(details.address || '').trim();
     const city = String(details.city || '').trim();
     const country = String(details.country || '').trim();
+    const countryCode = String(details.countryCode || '').trim().toUpperCase().slice(0, 2) || null;
     const standardizedPhone = compactE164FromGoogleInternational(phone) || null;
     const adminOwnerUid = getAdminOwnerUid();
     const { lat, lng } = normalizeCoordinates(details.coordinates);
@@ -146,6 +147,8 @@ function buildRestaurantDocFromGoogleDetails(details, opts = {}) {
         standardized_phone: standardizedPhone,
         website,
         address,
+        city,
+        countryCode,
         coordinates: { lat, lng },
         openingHours,
         openNow: details.openNow === true ? true : details.openNow === false ? false : null,
@@ -165,6 +168,7 @@ function buildRestaurantDocFromGoogleDetails(details, opts = {}) {
             address,
             city,
             country,
+            countryCode,
             lat,
             lng,
             hours,

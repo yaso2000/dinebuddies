@@ -4,23 +4,31 @@ import { PUBLIC_INVITE_GEOFENCE_RADIUS_KM } from './invitationRules';
 export const NEARBY_RADIUS_KM = 10;
 
 export function parseBusinessLatLng(business) {
-    // Avoid Number(null) === 0 (Null Island). Prefer nested coordinate shapes.
-    if (business?.lat == null || business?.lng == null || business?.lat === '' || business?.lng === '') {
-        const nested = business?.coordinates || business?.location;
-        if (nested && typeof nested === 'object') {
-            const lat = Number(nested.lat ?? nested.latitude);
-            const lng = Number(nested.lng ?? nested.longitude);
-            if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
-                return { lat, lng };
-            }
+    if (!business || typeof business !== 'object') return null;
+    // Coordinates live under several shapes across the data set. Check them all
+    // (top-level, nested coordinate objects, and the businessInfo sub-doc) so the
+    // list view sorts nearest-first exactly like the swipe deck — which also reads
+    // businessInfo.lat/lng. Missing that branch left many businesses with a null
+    // distance, so the list fell back to raw Firestore order ("erratic").
+    const info = business.businessInfo;
+    const candidates = [
+        business,
+        business.coordinates,
+        business.location,
+        info,
+        info?.coordinates,
+        info?.location,
+    ];
+    for (const c of candidates) {
+        if (!c || typeof c !== 'object') continue;
+        const lat = Number(c.lat ?? c.latitude);
+        const lng = Number(c.lng ?? c.longitude);
+        // Avoid Number(null) === 0 (Null Island) and unset fields.
+        if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+            return { lat, lng };
         }
-        return null;
     }
-    const lat = Number(business.lat);
-    const lng = Number(business.lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    if (lat === 0 && lng === 0) return null;
-    return { lat, lng };
+    return null;
 }
 
 /** Merge GPS, reverse-geocode, and profile fields into one viewer scope. */

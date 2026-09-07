@@ -20,8 +20,9 @@ import {
 import { useToast } from '../../../context/ToastContext';
 import { AppText } from "../../base";
 import SocialInvitationInviteeAllSheet from './SocialInvitationInviteeAllSheet';
+import { SINGLE_INVITEE_OCCASIONS, SOCIAL_MAX_INVITEES } from '../../../constants/socialInviteTypes';
 
-const SOCIAL_MAX_GUESTS = 30;
+const SOCIAL_MAX_GUESTS = SOCIAL_MAX_INVITEES; // up to 100 invitees for normal social invites
 const PRIVATE_MAX_GUESTS = 1;
 const INLINE_INVITEE_PREVIEW_LIMIT = 6;
 
@@ -31,6 +32,8 @@ const INLINE_INVITEE_PREVIEW_LIMIT = 6;
 export default function SocialInvitationInviteePanel({
   invitationId,
   mode = 'private',
+  /** Social occasion label — تعارف/علاقة جدية cap invitees at 1. */
+  occasionType = '',
   invitedFriendIds = [],
   readOnly = false,
   /** `'create'` on the editor form; `'preview'` on the send step (default). */
@@ -43,7 +46,9 @@ export default function SocialInvitationInviteePanel({
   const { currentUser: authUser, userProfile } = useAuth();
   const { currentUser } = useInvitations();
 
-  const maxGuests = mode === 'dating' ? PRIVATE_MAX_GUESTS : SOCIAL_MAX_GUESTS;
+  // Single-invitee when it's a 1-on-1 dating flow OR a تعارف/علاقة جدية occasion.
+  const isSingleInvitee = mode === 'dating' || SINGLE_INVITEE_OCCASIONS.has(occasionType);
+  const maxGuests = isSingleInvitee ? PRIVATE_MAX_GUESTS : SOCIAL_MAX_GUESTS;
   const selectedIds = Array.isArray(invitedFriendIds) ? invitedFriendIds : [];
 
   const [mutualFriends, setMutualFriends] = useState([]);
@@ -315,7 +320,8 @@ export default function SocialInvitationInviteePanel({
       persistInvitees(current.filter((id) => id !== friendId));
       return;
     }
-    if (mode === 'dating') {
+    if (isSingleInvitee) {
+      // One-on-one (dating / تعارف / علاقة جدية): selecting replaces the pick.
       persistInvitees([friendId]);
       if (closeSheetOnSelect) setAllSheetOpen(false);
       return;
@@ -334,7 +340,7 @@ export default function SocialInvitationInviteePanel({
         className={`private-friend-chip${isSelected ? ' private-friend-chip--selected' : ''}${isDisabled ? ' private-friend-chip--disabled' : ''}`}
         onClick={() =>
           !isDisabled &&
-          toggleFriend(friend.id, { closeSheetOnSelect: fromSheet && mode === 'dating' })
+          toggleFriend(friend.id, { closeSheetOnSelect: fromSheet && isSingleInvitee })
         }
         disabled={isDisabled}>
         {isSelected ?

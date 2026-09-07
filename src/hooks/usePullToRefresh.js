@@ -9,6 +9,27 @@ function getScrollTop(root) {
 }
 
 /**
+ * True when the touch started inside an element that scrolls horizontally
+ * (filter chips, category rows, carousels). Dragging those sideways must never
+ * be read as a pull-down — on iOS the sideways fling drifts a few px vertically,
+ * which used to trigger a full refresh once the row hit its end.
+ */
+function startsInHorizontalScroller(target, boundary) {
+  let el = target instanceof Element ? target : null;
+  while (el && el !== boundary && el !== document.body) {
+    if (el.scrollWidth > el.clientWidth + 1) {
+      const ox = getComputedStyle(el).overflowX;
+      if (ox === 'auto' || ox === 'scroll') return true;
+    }
+    el = el.parentElement;
+  }
+  return false;
+}
+
+/** Gesture direction lock: undecided → 'vertical' | 'horizontal'. */
+const DIRECTION_LOCK_PX = 8;
+
+/**
  * Touch pull-to-refresh without native rubber-band overscroll.
  * Pulls the page content via translateY; calls onRefresh when threshold is met.
  */
@@ -23,6 +44,8 @@ export function usePullToRefresh({
   const pullRef = useRef(0);
   const pullingRef = useRef(false);
   const startYRef = useRef(0);
+  const startXRef = useRef(0);
+  const directionRef = useRef(null);
   const refreshingRef = useRef(false);
   const onRefreshRef = useRef(onRefresh);
   const pageRef = useRef(null);
@@ -51,13 +74,27 @@ export function usePullToRefresh({
       if (!pageEl.contains(e.target)) return;
       const root = getScrollRoot();
       if (getScrollTop(root) > 4) return;
+      if (startsInHorizontalScroller(e.target, pageEl)) return;
       pullingRef.current = true;
+      directionRef.current = null;
       startYRef.current = e.touches[0].clientY;
+      startXRef.current = e.touches[0].clientX;
     };
 
     const onTouchMove = (e) => {
       if (!pullingRef.current || refreshingRef.current) return;
       const dy = e.touches[0].clientY - startYRef.current;
+      const dx = e.touches[0].clientX - startXRef.current;
+      if (directionRef.current === null) {
+        if (Math.abs(dx) < DIRECTION_LOCK_PX && Math.abs(dy) < DIRECTION_LOCK_PX) return;
+        directionRef.current = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
+      }
+      if (directionRef.current === 'horizontal') {
+        // Sideways gesture: hand it to the browser, never pull.
+        pullingRef.current = false;
+        resetPull();
+        return;
+      }
       if (dy <= 0) {
         resetPull();
         return;

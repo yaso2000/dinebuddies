@@ -477,6 +477,7 @@ const SocialInvitationPreview = () => {
                 <SocialInvitationInviteePanel
           invitationId={draftId}
           mode={inviteMode}
+          occasionType={invitation.occasionType || ''}
           step="preview"
           invitedFriendIds={invitation.invitedFriends || []}
           onInvitedFriendsChange={handleInvitedFriendsChange} />

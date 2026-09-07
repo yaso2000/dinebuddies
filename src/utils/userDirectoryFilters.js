@@ -205,6 +205,7 @@ export function filterDirectoryUsers(users, {
     genderFilter = 'all',
     ageCategoryFilter = 'all',
     photoFilter = 'with_photo',
+    onlineOnly = false,
     geoScope = 'global',
     selectedPlace = null,
     userCityNorm = '',
@@ -214,6 +215,7 @@ export function filterDirectoryUsers(users, {
 } = {}) {
     const filtered = (users || []).filter((user) => {
         if (!memberMatchesPhotoFilter(user, photoFilter)) return false;
+        if (onlineOnly && !user?.isOnline) return false;
         if (!memberMatchesGenderFilter(user, genderFilter)) return false;
         if (!memberMatchesAgeCategory(user, ageCategoryFilter)) return false;
         if (selectedPlace) return memberMatchesSelectedPlace(user, selectedPlace);

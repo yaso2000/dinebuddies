@@ -90,10 +90,11 @@ export function mapGoogleTypesToBusinessType(types) {
     if (!Array.isArray(types) || types.length === 0) return 'Restaurant';
     const lower = new Set(types.map((x) => String(x).toLowerCase()));
     if (lower.has('night_club')) return 'Night Club';
+    if (lower.has('lodging') || lower.has('hotel') || lower.has('resort_hotel')) return 'Hotel';
     if (lower.has('bar')) return 'Bar';
     if (lower.has('cafe') || lower.has('bakery')) return 'Cafe';
     if (lower.has('restaurant') || lower.has('meal_takeaway') || lower.has('meal_delivery')) return 'Restaurant';
-    if (lower.has('fast_food')) return 'Fast Food';
-    if (lower.has('food_truck')) return 'Food Truck';
+    // Fast food / food trucks are listed under Restaurants in the app (no separate type).
+    if (lower.has('fast_food') || lower.has('food_truck')) return 'Restaurant';
     return 'Restaurant';
 }

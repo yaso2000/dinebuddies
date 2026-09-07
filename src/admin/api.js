@@ -36,6 +36,7 @@ export const adminApi = {
     moderatePost: (postId, action = 'delete', source = 'community') =>
         call('adminModeratePost', { postId, action, source }),
     listBusinesses: (opts = {}) => call('adminListBusinesses', opts),
+    listBusinessLocations: () => call('adminListBusinessLocations', {}),
     deleteBusiness: (businessId) => call('adminDeleteBusiness', { businessId }),
     sendMassMessage: (payload) => call('adminSendMassMessage', payload),
     listAnnouncements: (opts = {}) => call('adminListAnnouncements', opts),

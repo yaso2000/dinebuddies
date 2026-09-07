@@ -545,6 +545,84 @@
                     "order": "DESCENDING"
                 }
             ]
+        },
+        {
+            "collectionGroup": "restaurants",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "countryCode",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "name",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "restaurants",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "businessInfo.city",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "name",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "restaurants",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "countryCode",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "businessInfo.city",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "name",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "restaurants",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "businessInfo.country",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "name",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "restaurants",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "businessInfo.country",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "businessInfo.city",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "name",
+                    "order": "ASCENDING"
+                }
+            ]
         }
     ],
     "fieldOverrides": [
@@ -552,14 +630,20 @@
             "collectionGroup": "votes",
             "fieldPath": "uid",
             "indexes": [
-                { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+                {
+                    "order": "ASCENDING",
+                    "queryScope": "COLLECTION_GROUP"
+                }
             ]
         },
         {
             "collectionGroup": "answers",
             "fieldPath": "uid",
             "indexes": [
-                { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+                {
+                    "order": "ASCENDING",
+                    "queryScope": "COLLECTION_GROUP"
+                }
             ]
         }
     ]

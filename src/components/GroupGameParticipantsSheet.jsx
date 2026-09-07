@@ -25,7 +25,7 @@ function SheetAvatar({ src, name, size = 44 }) {
  *
  * @param {{ players: Array<{uid:string,name:string,avatar?:string}>, hostId?: string, onClose: () => void }} props
  */
-export default function GroupGameParticipantsSheet({ players = [], hostId, onClose, title }) {
+export default function GroupGameParticipantsSheet({ players = [], hostId, currentUid, isHost = false, onKick, onClose, title }) {
     const { t } = useTranslation();
     const { openGiftPicker, giftModal } = useProfileGiftPicker();
     const heading = title || t('group_game_players', 'Players');
@@ -57,6 +57,13 @@ export default function GroupGameParticipantsSheet({ players = [], hostId, onClo
                                         {hostId && p.uid === hostId ? <FaCrown size={12} color="var(--primary)" title={t('group_game_host', 'Host')} /> : null}
                                     </AppText>
                                     <StageParticipantActions member={member} onGift={openGiftPicker} />
+                                    {isHost && onKick && p.uid !== currentUid && p.uid !== hostId ? (
+                                        <button type="button" onClick={() => onKick(p.uid)}
+                                            aria-label={t('group_game_kick', 'Remove player')} title={t('group_game_kick', 'Remove player')}
+                                            style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--border-color)', background: 'var(--bg-elevated)', color: '#ef4444', cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                                            <FaTimes size={13} />
+                                        </button>
+                                    ) : null}
                                 </div>
                             );
                         })}

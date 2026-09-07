@@ -66,3 +66,6 @@ functions/.env
 .agent/backups/
 functions/logs.txt
 debug-friends.html
+
+# Claude Code personal settings (do not commit)
+.claude/settings.local.json

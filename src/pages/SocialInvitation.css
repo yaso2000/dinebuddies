@@ -1250,13 +1250,45 @@
     flex-wrap: nowrap;
     gap: 8px;
     align-items: center;
+    width: 100%;
+    max-width: 100%;
 }
 
 .private-invite-page .private-datetime-inline__input {
     flex: 1 1 0;
     min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
     padding: 7px 10px;
     font-size: 0.78rem;
+}
+
+/* Keep the native date/time value inside its (cramped, side-by-side) box on iOS. */
+.private-invite-page .private-datetime-inline__input::-webkit-date-and-time-value {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: start;
+    margin: 0;
+}
+
+/* iOS/WebKit: 16px prevents focus-zoom and the value-text clipping that made the
+   two native pickers overlap and spill off-screen. */
+@supports (-webkit-touch-callout: none) {
+    .private-invite-page .private-datetime-inline__input {
+        font-size: 16px;
+        padding: 0.6rem 0.5rem;
+    }
+}
+
+/* On phones, stack date over time so the native pickers can never overlap. */
+@media (max-width: 430px) {
+    .private-invite-page .private-datetime-inline__row {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }
 
 .private-invite-page .venue-search-segment--compact {

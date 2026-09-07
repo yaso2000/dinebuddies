@@ -14,6 +14,7 @@ const { resolveAvatarIsReal } = require('./_photoGate');
 const { registerAdminMassMessaging } = require('./adminMassMessaging');
 const { registerDirectorySearch } = require('./directorySearch');
 const { registerConsumerAccountSearch } = require('./consumerAccountSearch');
+const { registerPublicStats } = require('./publicStats');
 const {
     isConsumerHiddenPublicProfile,
     isConsumerHiddenUserDoc,
@@ -46,7 +47,12 @@ const { onCall: onCallV2, HttpsError: HttpsErrorV2 } = require('firebase-functio
 const crypto = require('crypto');
 const db = admin.firestore();
 
-const SOCIAL_INVITATION_MAX_GUESTS = 30;
+const SOCIAL_INVITATION_MAX_GUESTS = 100;
+// تعارف/علاقة جدية are one-on-one; every other social occasion allows up to 100.
+const SINGLE_INVITEE_OCCASION_LABELS = ['Serious relationship', 'Getting acquainted', 'serious', 'acquaintance'];
+function maxInviteesForOccasion(occasionType) {
+    return SINGLE_INVITEE_OCCASION_LABELS.includes(String(occasionType || '')) ? 1 : SOCIAL_INVITATION_MAX_GUESTS;
+}
 
 /** Resolve hosted invite doc — `social_invitations` (current) or legacy `private_invitations`. */
 async function resolveHostedInvitationRef(invitationId) {
@@ -508,6 +514,9 @@ registerAccountDeletion(exports, { admin, enforceCallableRateLimit });
 
 const { registerAccountLifecycle } = require('./accountLifecycle');
 registerAccountLifecycle(exports, { admin });
+
+// Public marketing stats for the /company corporate page.
+registerPublicStats(exports, { admin, assertAdminContext });
 const { registerCommunityChatDisplay } = require('./communityChatDisplay');
 registerCommunityChatDisplay(exports, { db, admin, enforceCallableRateLimit });
 const { registerConnectMatchNotifications } = require('./connectMatchNotifications');
@@ -1280,6 +1289,18 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
             );
         }
 
+        // Authoritative invitee cap: تعارف/علاقة جدية (Getting acquainted / Serious
+        // relationship) are one-on-one → exactly 1; every other social invite → 100.
+        const inviteeLimit = maxInviteesForOccasion(invPre.occasionType);
+        if (filteredFriends.length > inviteeLimit) {
+            throw new functions.https.HttpsError(
+                'failed-precondition',
+                inviteeLimit === 1
+                    ? 'This invitation type can be sent to only one person.'
+                    : `You can invite up to ${inviteeLimit} people to a social invitation.`
+            );
+        }
+
         // Already published: no re-charge; still deliver any missing invitee notifications.
         if (invPre.publishedAt) {
             let existingToken = invPre.shareToken || null;
@@ -1585,7 +1606,7 @@ exports.claimPrivateInvitationShare = functions.https.onCall(async (data, contex
         return { invitationId, alreadyInvited: true, claimed: false };
     }
 
-    if (invitedFriends.length >= SOCIAL_INVITATION_MAX_GUESTS) {
+    if (invitedFriends.length >= maxInviteesForOccasion(inv.occasionType)) {
         throw new functions.https.HttpsError(
             'resource-exhausted',
             'This invitation has reached the maximum number of guests.'

@@ -21,6 +21,17 @@ service cloud.firestore {
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
     }
 
+    // Safe owner check for feed content (posts/stories). Owner fields may be absent
+    // on a given doc, and accessing a MISSING property in rules THROWS — which denies
+    // the whole request (this is what silently broke non-owners' like/comment on normal
+    // posts that have no partnerId/author). .get() with a default never throws.
+    function ownsFeedContent(d) {
+      return d.get('authorId', '') == request.auth.uid ||
+             d.get('userId', '') == request.auth.uid ||
+             d.get('partnerId', '') == request.auth.uid ||
+             d.get('author', {}).get('id', '') == request.auth.uid;
+    }
+
     // Matches client AdminRoute + adminAccess: panel roles OR known admin emails/UID (Firestore role may still be "user").
     function isAdminOrPanelStaff() {
       return isSignedIn() && (
@@ -702,6 +713,14 @@ service cloud.firestore {
     // Legacy docs may still exist in private_invitations above.
     // ============================================
 
+    // Invitee cap (defense-in-depth; server function is authoritative):
+    // تعارف/علاقة جدية → 1 invitee, every other social occasion → up to 100.
+    // .get() with defaults so a missing field never throws (which would deny writes).
+    function socialInviteWithinCap(d) {
+      return d.get('invitedFriends', []).size() <=
+        (d.get('occasionType', '') in ['Serious relationship', 'Getting acquainted', 'serious', 'acquaintance'] ? 1 : 100);
+    }
+
     match /social_invitations/{invitationId} {
       allow get: if isSignedIn() && canReadPrivateInvitationDoc(resource.data);
       allow list: if isSignedIn() && (
@@ -712,10 +731,12 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
                        (request.resource.data.authorId == request.auth.uid ||
                         (request.resource.data.author is map &&
-                         request.resource.data.author.get('id', '') == request.auth.uid));
+                         request.resource.data.author.get('id', '') == request.auth.uid)) &&
+                       socialInviteWithinCap(request.resource.data);
 
       allow update: if isSignedIn() &&
-                       (isPrivateInvitationHost(resource.data) ||
+                       ((isPrivateInvitationHost(resource.data) &&
+                         socialInviteWithinCap(request.resource.data)) ||
                         (isUidInPrivateInviteList(resource.data.get('invitedFriends', [])) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['rsvps', 'updatedAt']) &&
@@ -799,8 +820,13 @@ service cloud.firestore {
     // no auth session, so they can't open chats anyway; the callable is the
     // primary enforcement, this is defense-in-depth for real business accounts.)
     function convoDocIsBusiness(d) {
-      return d.role == 'business' || d.accountType == 'business' ||
-             d.accountRole == 'business' || d.role == 'partner' || d.isBusiness == true;
+      // .get() with defaults — a normal user doc often has none of these fields,
+      // and accessing a missing property throws (which denied all like/comment).
+      return d.get('role', '') == 'business' ||
+             d.get('accountType', '') == 'business' ||
+             d.get('accountRole', '') == 'business' ||
+             d.get('role', '') == 'partner' ||
+             d.get('isBusiness', false) == true;
     }
     function convoParticipantIsBusiness(uid) {
       return exists(/databases/$(database)/documents/users/$(uid)) &&
@@ -899,22 +925,9 @@ service cloud.firestore {
       // Anyone can read posts
       allow read: if true;
       // Any signed in user can create a post
-      allow create: if isSignedIn() &&
-        (
-          request.resource.data.userId == request.auth.uid ||
-          request.resource.data.authorId == request.auth.uid ||
-          request.resource.data.partnerId == request.auth.uid ||
-          (request.resource.data.author != null &&
-           request.resource.data.author.id == request.auth.uid)
-        );
+      allow create: if isSignedIn() && ownsFeedContent(request.resource.data);
       // Only the author or an admin can update/delete their post
-      allow update, delete: if isSignedIn() && (
-        resource.data.authorId == request.auth.uid || 
-        resource.data.userId == request.auth.uid ||
-        resource.data.partnerId == request.auth.uid ||
-        (resource.data.author != null && resource.data.author.id == request.auth.uid) ||
-        isAdmin()
-      );
+      allow update, delete: if isSignedIn() && (ownsFeedContent(resource.data) || isAdmin());
       // Any signed-in user can like, repost, or comment (social interactions only).
       // Businesses do no social interaction with the feed.
       allow update: if isSignedIn() && !convoParticipantIsBusiness(request.auth.uid) &&
@@ -926,20 +939,9 @@ service cloud.firestore {
       // Anyone can read stories
       allow read: if true;
       // Security: enforce ownership on story creation (prevent impersonation)
-      allow create: if isSignedIn() && (
-        request.resource.data.userId == request.auth.uid || 
-        request.resource.data.authorId == request.auth.uid ||
-        request.resource.data.partnerId == request.auth.uid ||
-        (request.resource.data.author != null && request.resource.data.author.id == request.auth.uid)
-      );
+      allow create: if isSignedIn() && ownsFeedContent(request.resource.data);
       // Only the author or an admin can fully update/delete their story
-      allow update, delete: if isSignedIn() && (
-        resource.data.userId == request.auth.uid || 
-        resource.data.authorId == request.auth.uid ||
-        resource.data.partnerId == request.auth.uid ||
-        (resource.data.author != null && resource.data.author.id == request.auth.uid) ||
-        isAdmin()
-      );
+      allow update, delete: if isSignedIn() && (ownsFeedContent(resource.data) || isAdmin());
       // Any signed-in user may add/remove exactly their own entry in `views`/`likes`
       // (maps: {uid: value}) — cannot touch another user's entry or any other field.
       allow update: if isSignedIn() &&
@@ -1008,6 +1010,13 @@ service cloud.firestore {
     match /creditPacks/{docId} {
       allow read: if true;
       allow write: if isAdminOrPanelStaff();
+    }
+
+    // Public marketing stats for the corporate page (stats/public). Read-only to
+    // everyone (even signed-out); only Cloud Functions (Admin SDK) may write.
+    match /stats/{docId} {
+      allow read: if true;
+      allow write: if false;
     }
 
     // ============================================
@@ -1172,9 +1181,9 @@ service cloud.firestore {
 
       // Only the owning partner can create/update/delete their own posts
       allow create: if isSignedIn() &&
-                       request.resource.data.partnerId == request.auth.uid;
+                       request.resource.data.get('partnerId', '') == request.auth.uid;
       allow update, delete: if isSignedIn() &&
-                               (resource.data.partnerId == request.auth.uid || isAdmin());
+                               (resource.data.get('partnerId', '') == request.auth.uid || isAdmin());
 
       // Any signed-in user can like, comment, or repost (social interactions only).
       // Businesses do no social interaction with the feed.

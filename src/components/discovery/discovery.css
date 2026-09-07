@@ -398,7 +398,7 @@
 }
 
 .discovery-card--entity .discovery-card__name-line {
-    font-size: clamp(1.2rem, 4.4vw, 1.55rem);
+    font-size: clamp(1.02rem, 3.6vw, 1.3rem);
 }
 
 .discovery-card__host,
@@ -1024,6 +1024,29 @@
     .app-main.app-main--fullscreen.app-main--connect {
         /* Match mobile tab bar: nav height + safe area, floored for Android (inset 0). */
         padding-bottom: calc(var(--nav-height, 65px) + max(env(safe-area-inset-bottom, 0px), 22px) + 12px) !important;
+    }
+}
+
+/* Small / short phones: tighten the entity + partner card so the whole card
+   fits — the stacked offer/name/address/bio/chips/actions used to overflow the
+   card top on narrow or low-height screens. */
+@media (max-width: 380px), (max-height: 700px) {
+    .discovery-card__body {
+        gap: 0.4rem;
+        padding: 0.9rem 0.8rem 0.8rem;
+    }
+
+    .discovery-card--entity .discovery-card__name-line {
+        font-size: clamp(0.98rem, 3.4vw, 1.18rem);
+    }
+
+    .discovery-card__bio--entity {
+        -webkit-line-clamp: 2;
+        max-height: 2.8em;
+    }
+
+    .discovery-card__address {
+        font-size: 0.76rem;
     }
 }
 

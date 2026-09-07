@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pre-Android-12 launch window background: white with the DineBuddies logo
+  centered at a modest size (matching the iOS LaunchScreen and the Android-12
+  splash icon). Replaces the old full-bleed, edge-to-edge splash.png.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splashBackground" />
+    <item
+        android:width="180dp"
+        android:height="180dp"
+        android:gravity="center"
+        android:drawable="@drawable/splash_logo" />
+</layer-list>

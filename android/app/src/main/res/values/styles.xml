@@ -17,6 +17,15 @@
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <!-- White launch window with the logo centered (NOT the old full-bleed,
+             edge-to-edge splash.png). Shown on any brief pre-WebView frame and as
+             the pre-Android-12 window background. -->
+        <item name="android:windowBackground">@drawable/splash_screen_bg</item>
+        <!-- Android 12+ / AndroidX backport (installSplashScreen in MainActivity):
+             centered orange logo on white — matches the iOS LaunchScreen, replaces
+             the default teal launcher icon shown big with no margins. -->
+        <item name="windowSplashScreenBackground">@color/splashBackground</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>

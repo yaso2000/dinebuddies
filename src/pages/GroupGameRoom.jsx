@@ -280,14 +280,27 @@ export default function GroupGameRoom() {
               <OverlappingAvatars people={players.map((p) => ({ avatar: p.avatar, name: p.name }))} total={players.length}
                 onClick={() => setShowParticipants(true)} label={t('group_game_tap_people', 'greet · gift · follow')} />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+            {/* Avatars only (no names) to avoid clutter — tap any face to open the
+                participants sheet (names + greet · gift · follow, and host kick). */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
               {players.map((p) => (
-                <div key={p.uid} className="gg-card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px' }}>
-                  <Avatar src={p.avatar} name={p.name} />
-                  <AppText as="span" style={{ flex: 1, fontWeight: 700 }}>{p.name}{p.uid === game.hostId ? <span style={{ color: 'var(--primary)', marginInlineStart: 6, fontSize: '0.78rem' }}>👑 {t('group_game_host', 'Host')}</span> : null}</AppText>
-                  {needsSubmission && p.ready ? <FaCheck size={12} color="#16a34a" /> : null}
-                  {isHost && p.uid !== uid ? <button type="button" onClick={wrap('kick', () => kick(p.uid))} aria-label="kick" className="gg-icon gg-icon--danger"><FaTimes /></button> : null}
-                </div>
+                <button
+                  key={p.uid}
+                  type="button"
+                  onClick={() => setShowParticipants(true)}
+                  title={t('group_game_tap_people', 'greet · gift · follow')}
+                  aria-label={p.name}
+                  style={{ position: 'relative', border: 0, background: 'transparent', padding: 0, cursor: 'pointer', lineHeight: 0 }}>
+                  <Avatar
+                    src={p.avatar}
+                    name={p.name}
+                    size={52}
+                    ring={needsSubmission && p.ready ? '#16a34a' : (p.uid === game.hostId ? 'var(--primary)' : undefined)} />
+                  {p.uid === game.hostId ? (
+                    <span style={{ position: 'absolute', top: -6, insetInlineEnd: -4, fontSize: '0.95rem' }}>👑</span>
+                  ) : null}
+                  {needsSubmission && p.ready ? <span className="gg-tick"><FaCheck size={8} /></span> : null}
+                </button>
               ))}
             </div>
 
@@ -455,7 +468,13 @@ export default function GroupGameRoom() {
       </div>
 
       {showParticipants ? (
-        <GroupGameParticipantsSheet players={players} hostId={game.hostId} onClose={() => setShowParticipants(false)} />
+        <GroupGameParticipantsSheet
+          players={players}
+          hostId={game.hostId}
+          currentUid={uid}
+          isHost={isHost}
+          onKick={(targetUid) => wrap('kick', () => kick(targetUid))()}
+          onClose={() => setShowParticipants(false)} />
       ) : null}
     </div>
   );

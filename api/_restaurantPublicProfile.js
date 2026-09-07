@@ -69,8 +69,9 @@ export function buildPublicProfileFromRestaurant(restaurantId, data) {
         businessPublic: {
             isPublished,
             businessType: String(bi.businessType || 'Restaurant').trim() || 'Restaurant',
-            city: bi.city || null,
+            city: bi.city || data?.city || null,
             country: bi.country || null,
+            countryCode: bi.countryCode || data?.countryCode || null,
             address: bi.address || data?.address || null,
             categories: Array.isArray(data?.categories)
                 ? data.categories

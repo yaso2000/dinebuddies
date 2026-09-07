@@ -8,6 +8,7 @@ import { DATING_AGE_CATEGORIES } from '../../constants/datingProfile';
  *  - Gender: two toggles ♂ ♀ (both on = All; at least one always on).
  *  - Age: one pill that cycles All → each category → back to All.
  *  - Photo: a camera icon; tap adds a "no" slash = show all (no photo filter).
+ *  - Online: a small switch; on = only members online right now.
  * Age uses categories only (privacy: never an exact age).
  */
 export default function UserDirectoryFilters({
@@ -18,6 +19,8 @@ export default function UserDirectoryFilters({
   onAgeCategoryFilterChange,
   photoFilter = 'with_photo',
   onPhotoFilterChange,
+  onlineOnly = false,
+  onOnlineOnlyChange,
 }) {
   const { t } = useTranslation();
 
@@ -136,6 +139,59 @@ export default function UserDirectoryFilters({
               />
             )}
           </span>
+        </button>
+      )}
+
+      {/* Online now: switch */}
+      {onOnlineOnlyChange && (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={onlineOnly}
+          onClick={() => onOnlineOnlyChange(!onlineOnly)}
+          aria-label={t('user_directory_online_filter_aria', 'Show only members online now')}
+          title={t('user_directory_online_filter_aria', 'Show only members online now')}
+          style={{
+            height: '32px',
+            padding: '0 8px 0 6px',
+            borderRadius: '999px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            cursor: 'pointer',
+            fontSize: '0.78rem',
+            fontWeight: 700,
+            background: onlineOnly ? 'rgba(34, 197, 94, 0.14)' : 'var(--bg-elevated, var(--bg-card))',
+            color: onlineOnly ? '#16a34a' : 'var(--text-muted)',
+            border: `1px solid ${onlineOnly ? '#22c55e' : 'var(--border-color)'}`,
+            transition: 'all 0.15s',
+          }}>
+          <span
+            aria-hidden
+            style={{
+              position: 'relative',
+              width: '30px',
+              height: '18px',
+              borderRadius: '999px',
+              background: onlineOnly ? '#22c55e' : 'var(--border-color)',
+              transition: 'background 0.15s',
+              flexShrink: 0,
+            }}>
+            <span
+              style={{
+                position: 'absolute',
+                top: '2px',
+                left: onlineOnly ? '14px' : '2px',
+                width: '14px',
+                height: '14px',
+                borderRadius: '50%',
+                background: '#fff',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+                transition: 'left 0.15s',
+              }}
+            />
+          </span>
+          <span>{t('user_directory_online_now', 'Online')}</span>
         </button>
       )}
     </div>

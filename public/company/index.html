@@ -400,6 +400,114 @@
     }
     .site-footer a:hover { color: #FFCDB0; }
 
+    /* ── Live stats ── */
+    .stats-band {
+      background:
+        radial-gradient(ellipse 70% 60% at 0% 0%, rgba(232,106,45,0.08), transparent 55%),
+        #fff;
+      border-bottom: 1px solid #E7E5E0;
+    }
+    .stats-grid {
+      margin-top: 2.25rem;
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: 1fr 1fr;
+    }
+    @media (min-width: 768px) {
+      .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+    }
+    .stat-tile {
+      background: #fff;
+      border: 1px solid #E7E5E0;
+      border-radius: 1.1rem;
+      padding: 1.6rem 1.1rem;
+      text-align: center;
+      box-shadow: 0 1px 2px rgba(26,23,21,0.04);
+    }
+    .stat-icon {
+      display: block;
+      font-size: 1.5rem;
+      line-height: 1;
+      margin-bottom: 0.6rem;
+    }
+    .stat-num {
+      font-family: Fraunces, Georgia, serif;
+      font-size: clamp(2.1rem, 6vw, 3.1rem);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: #E86A2D;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-label {
+      margin-top: 0.6rem;
+      font-size: 0.74rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #3F3A36;
+      opacity: 0.8;
+    }
+    .stats-note {
+      margin: 1.4rem 0 0;
+      font-size: 0.82rem;
+      color: #3F3A36;
+      opacity: 0.78;
+      display: inline-flex;
+      align-items: center;
+    }
+    .live-dot {
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 999px;
+      background: #22c55e;
+      margin-inline-end: 0.5rem;
+      animation: live-pulse 2s ease-in-out infinite;
+    }
+    @keyframes live-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+      70% { box-shadow: 0 0 0 7px rgba(34,197,94,0); }
+      100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+    }
+
+    /* ── Services ── */
+    .services-grid {
+      margin-top: 2.25rem;
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 640px) { .services-grid { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1024px) { .services-grid { grid-template-columns: repeat(3, 1fr); } }
+    .service-card {
+      background: #fff;
+      border: 1px solid #E7E5E0;
+      border-radius: 1.1rem;
+      padding: 1.5rem;
+    }
+    .service-card__icon {
+      font-size: 1.6rem;
+      line-height: 1;
+    }
+    .service-card h3 {
+      margin: 0.85rem 0 0.4rem;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.18rem;
+      font-weight: 600;
+      color: #1A1715;
+    }
+    .service-card p {
+      margin: 0;
+      font-size: 0.96rem;
+      line-height: 1.6;
+      color: #3F3A36;
+    }
+
+    @keyframes count-fade {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
     @keyframes hero-drift {
       from { transform: scale(1.04) translate3d(0, 0, 0); }
       to { transform: scale(1.08) translate3d(-1.2%, -0.8%, 0); }
@@ -464,6 +572,7 @@
           <span>DineBuddies</span>
         </a>
         <div class="company-nav__links">
+          <a href="/company/advertise/" class="company-nav__ghost">Advertise</a>
           <a href="#contact" class="company-nav__ghost">Contact</a>
           <a href="https://www.dinebuddies.com/" class="company-nav__cta">Open App</a>
         </div>
@@ -496,12 +605,96 @@
             <dt>Jurisdiction</dt>
             <dd>Australia</dd>
           </div>
-          <div>
-            <dt>Registered office</dt>
-            <dd>46 Stewart Street, Bundaberg North QLD</dd>
-          </div>
-          <!-- Add ACN later when ready -->
+          <!-- Registered office lives in the Contact section only. Add ACN later when ready. -->
         </dl>
+      </div>
+    </section>
+
+    <section id="stats" class="stats-band scroll-mt-8" aria-labelledby="stats-heading">
+      <div class="section">
+        <h2 id="stats-heading">A community that keeps growing</h2>
+        <p class="section__lead">
+          Real numbers from the DineBuddies platform — members, partner venues, and
+          activity across Australia and beyond, updated live.
+        </p>
+        <div class="stats-grid">
+          <div class="stat-tile">
+            <span class="stat-icon" aria-hidden="true">👥</span>
+            <div class="stat-num" data-stat="usersCount">0</div>
+            <div class="stat-label">Members</div>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-icon" aria-hidden="true">🍴</span>
+            <div class="stat-num" data-stat="restaurantsCount">0</div>
+            <div class="stat-label">Restaurants</div>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-icon" aria-hidden="true">☕</span>
+            <div class="stat-num" data-stat="cafesCount">0</div>
+            <div class="stat-label">Cafés</div>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-icon" aria-hidden="true">🍸</span>
+            <div class="stat-num" data-stat="barsCount">0</div>
+            <div class="stat-label">Bars</div>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-icon" aria-hidden="true">🏨</span>
+            <div class="stat-num" data-stat="hotelsCount">0</div>
+            <div class="stat-label">Hotels</div>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-icon" aria-hidden="true">✉️</span>
+            <div class="stat-num" data-stat="publicInvitationsCount">0</div>
+            <div class="stat-label">Public invitations</div>
+          </div>
+        </div>
+        <p class="stats-note">
+          <span class="live-dot" aria-hidden="true"></span>
+          Live — the numbers update as new members and venues join.
+        </p>
+      </div>
+    </section>
+
+    <section id="services" class="scroll-mt-8" aria-labelledby="services-heading">
+      <div class="section">
+        <h2 id="services-heading">What we build</h2>
+        <p class="section__lead">
+          DineBuddies is a social dining platform that connects people, meals, and the
+          local venues worth gathering around.
+        </p>
+        <div class="services-grid">
+          <div class="service-card">
+            <div class="service-card__icon" aria-hidden="true">🍽️</div>
+            <h3>Social dining invitations</h3>
+            <p>Host or join a meal — find good company for lunch, dinner, or coffee near you.</p>
+          </div>
+          <div class="service-card">
+            <div class="service-card__icon" aria-hidden="true">🧭</div>
+            <h3>Discovery &amp; matching</h3>
+            <p>Meet compatible dining buddies nearby through privacy-first profiles and smart discovery.</p>
+          </div>
+          <div class="service-card">
+            <div class="service-card__icon" aria-hidden="true">🏪</div>
+            <h3>Venue partnerships</h3>
+            <p>Restaurants, cafés, bars and hotels get a profile, offers, and a direct line to diners.</p>
+          </div>
+          <div class="service-card">
+            <div class="service-card__icon" aria-hidden="true">💬</div>
+            <h3>Community &amp; live rooms</h3>
+            <p>Community chat and live Stage rooms bring people together around shared tables.</p>
+          </div>
+          <div class="service-card">
+            <div class="service-card__icon" aria-hidden="true">🎮</div>
+            <h3>Social games</h3>
+            <p>Playful compatibility games help break the ice before you ever sit down.</p>
+          </div>
+          <div class="service-card">
+            <div class="service-card__icon" aria-hidden="true">🔒</div>
+            <h3>Safety &amp; privacy</h3>
+            <p>Photo verification and a privacy-first design keep the community trusted and respectful.</p>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -570,6 +763,7 @@
     <div class="site-footer__inner">
       <p>Copyright © 2026 DineBuddies PTY LTD</p>
       <nav aria-label="Legal">
+        <a href="/company/advertise/">Advertise</a>
         <a href="/privacy">Privacy Policy</a>
         <a href="/terms">Terms of Service</a>
       </nav>
@@ -605,6 +799,86 @@
         }
         window.location.href = mailto;
       });
+    })();
+  </script>
+
+  <!-- Live platform stats (public read of stats/public) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script>
+    (function () {
+      var firebaseConfig = {
+        apiKey: 'AIzaSyAK3IC3LrrbBBcDahT3hGlhVQ6oHhf289g',
+        authDomain: 'dinebuddies.firebaseapp.com',
+        projectId: 'dinebuddies',
+        appId: '1:686703042572:web:065789445262a44642ce29',
+      };
+
+      var els = [].slice.call(document.querySelectorAll('[data-stat]'));
+      if (!els.length) return;
+      var prefersReduced =
+        window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var shown = {}; // last displayed value per key
+      var lastData = null;
+
+      function fmt(n) {
+        return (Number(n) || 0).toLocaleString('en-US');
+      }
+
+      function animate(el, key, to) {
+        to = Number(to) || 0;
+        var from = shown[key] || 0;
+        shown[key] = to;
+        // requestAnimationFrame is paused while the tab is hidden — set the real
+        // value directly so the number is always correct even without animation.
+        if (prefersReduced || document.hidden || from === to) {
+          el.textContent = fmt(to);
+          return;
+        }
+        var duration = 1200;
+        var start = null;
+        function step(ts) {
+          if (!start) start = ts;
+          var p = Math.min((ts - start) / duration, 1);
+          var eased = 1 - Math.pow(1 - p, 3);
+          el.textContent = fmt(Math.round(from + (to - from) * eased));
+          if (p < 1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+      }
+
+      function render(data) {
+        lastData = data;
+        els.forEach(function (el) {
+          animate(el, el.getAttribute('data-stat'), data[el.getAttribute('data-stat')]);
+        });
+      }
+
+      // If the page was loaded in a background tab, replay the count-up when it
+      // first becomes visible.
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && lastData) {
+          els.forEach(function (el) { shown[el.getAttribute('data-stat')] = 0; });
+          render(lastData);
+        }
+      });
+
+      try {
+        firebase.initializeApp(firebaseConfig);
+        firebase
+          .firestore()
+          .doc('stats/public')
+          .onSnapshot(
+            function (snap) {
+              if (snap && snap.exists) render(snap.data() || {});
+            },
+            function () {
+              /* read failed — tiles simply stay at 0 */
+            }
+          );
+      } catch (e) {
+        /* SDK unavailable — tiles stay at 0 */
+      }
     })();
   </script>
 </body>

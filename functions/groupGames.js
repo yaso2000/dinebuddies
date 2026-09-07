@@ -21,6 +21,8 @@ const MAX_ROUNDS = 12;
 const MAX_INVITEES = 30;
 const ROUND_MS = 10000;   // 10s per question (two options — plenty)
 const GRACE_MS = 1500;    // network latency grace before the server rejects a late answer
+// Games auto-delete 24h after creation — same lifetime as stories and Stage rooms.
+const GAME_TTL_MS = 24 * 60 * 60 * 1000;
 // Per game-type behaviour. Lobby / visibility / invites / discovery / spectator
 // are shared; only the content source, option count, timer and scoring differ.
 // Per game-type behaviour. Each game defines its OWN player bounds (minPlayers /
@@ -240,6 +242,7 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             result: null,
             createdAt: now,
             updatedAt: now,
+            expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + GAME_TTL_MS),
         });
         await db.collection('users').doc(uid).set({ hostActiveGameId: ref.id }, { merge: true });
         for (const inviteeId of validInvitees) await notifyGameInvite(inviteeId, uid, host.name, ref.id);
@@ -759,9 +762,54 @@ function registerGroupGames(exports, { db, admin, enforceCallableRateLimit }) {
             reveal: {},
             result: null,
             updatedAt: FieldValue.serverTimestamp(),
+            // A restart is fresh activity — reset the 24h auto-delete clock.
+            expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + GAME_TTL_MS),
         });
         return { ok: true };
     });
+
+    // ---- Scheduled cleanup: delete games 24h after creation (like stories/Stage) ----
+    // Every write is Admin-SDK, so createdAt/expiresAt can't be forged by clients.
+    exports.deleteExpiredGroupGames = functions
+        .runWith({ timeoutSeconds: 300, memory: '512MB' })
+        .pubsub.schedule('every 1 hours')
+        .onRun(async () => {
+            const now = admin.firestore.Timestamp.now();
+            const nowMs = now.toMillis();
+
+            // Primary: games with an explicit expiresAt in the past.
+            const expiredSnap = await db.collection('group_games')
+                .where('expiresAt', '<=', now)
+                .limit(100)
+                .get();
+
+            // Legacy: games created before expiresAt existed (older than 24h).
+            const legacyCutoff = admin.firestore.Timestamp.fromMillis(nowMs - GAME_TTL_MS);
+            const legacySnap = await db.collection('group_games')
+                .where('createdAt', '<=', legacyCutoff)
+                .limit(100)
+                .get();
+
+            const byId = new Map();
+            expiredSnap.docs.forEach((d) => byId.set(d.id, d));
+            legacySnap.docs.forEach((d) => { if (!d.data()?.expiresAt) byId.set(d.id, d); });
+
+            let deleted = 0;
+            for (const docSnap of byId.values()) {
+                const ref = docSnap.ref;
+                try {
+                    // Recursive delete cascades answers/statements/whosaid_* subcollections.
+                    if (typeof db.recursiveDelete === 'function') await db.recursiveDelete(ref);
+                    else await ref.delete();
+                    await clearHostPointer(docSnap.data()?.hostId, docSnap.id);
+                    deleted += 1;
+                } catch (err) {
+                    console.error('[groupGames] deleteExpiredGroupGames failed', docSnap.id, err?.message || err);
+                }
+            }
+            console.log('deleteExpiredGroupGames', { deleted, scanned: byId.size });
+            return null;
+        });
 }
 
 module.exports = { registerGroupGames };

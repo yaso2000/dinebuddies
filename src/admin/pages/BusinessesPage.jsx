@@ -6,7 +6,7 @@ import { AppText } from '../../components/base';
 import { useConfirm } from '../../context/ConfirmContext';
 
 export default function BusinessesPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const confirm = useConfirm();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,11 +14,38 @@ export default function BusinessesPage() {
   const [hasNext, setHasNext] = useState(false);
   const [acting, setActing] = useState(null);
 
+  // Location filter bar (server-side, exact match on stored country code / city).
+  const [filterCountry, setFilterCountry] = useState('');
+  const [filterCity, setFilterCity] = useState('');
+  const [locations, setLocations] = useState({ countries: [], citiesByCountry: {} });
+
+  useEffect(() => {
+    let cancelled = false;
+    adminApi
+      .listBusinessLocations()
+      .then((res) => {
+        if (!cancelled && res) setLocations({ countries: res.countries || [], citiesByCountry: res.citiesByCountry || {} });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const cityChoices = filterCountry
+    ? locations.citiesByCountry[filterCountry] || []
+    : [...new Set(Object.values(locations.citiesByCountry).flat())].sort((a, b) => a.localeCompare(b));
+
   const load = useCallback(
     async (startAfterId = null) => {
       setLoading(true);
       try {
-        const res = await adminApi.listBusinesses({ startAfterId, pageSize: 25 });
+        const res = await adminApi.listBusinesses({
+          startAfterId,
+          pageSize: 25,
+          ...(filterCountry ? { countryCode: filterCountry } : {}),
+          ...(filterCity ? { city: filterCity } : {}),
+        });
         setItems(res.items || []);
         setHasNext(!!res.hasNext);
         setCursor(res.lastId);
@@ -28,12 +55,22 @@ export default function BusinessesPage() {
         setLoading(false);
       }
     },
-    [t]
+    [t, filterCountry, filterCity]
   );
 
   useEffect(() => {
     load(null);
   }, [load]);
+
+  const countryLabel = (code) => {
+    if (!/^[A-Z]{2}$/.test(code)) return code;
+    try {
+      const name = new Intl.DisplayNames([i18n.language || 'en'], { type: 'region' }).of(code);
+      return name ? `${name} (${code})` : code;
+    } catch {
+      return code;
+    }
+  };
 
   const remove = async (biz) => {
     if (!(await confirm({ message: t('admin_businesses_confirm_delete', { name: biz.name }), tone: 'danger' }))) return;
@@ -52,6 +89,48 @@ export default function BusinessesPage() {
     <>
       <AppText as="h1" className="db-h1">{t('admin_businesses_title')}</AppText>
       <AppText as="p" className="db-lead">{t('admin_businesses_lead')}</AppText>
+
+      {/* Location filter bar */}
+      <div className="db-toolbar" role="search" aria-label={t('admin_businesses_filter_aria', 'Filter businesses by location')}>
+        <select
+          className="db-select"
+          value={filterCountry}
+          onChange={(e) => {
+            setFilterCountry(e.target.value);
+            setFilterCity('');
+          }}
+          aria-label={t('admin_businesses_filter_country', 'Country')}
+        >
+          <option value="">{t('admin_businesses_filter_all_countries', 'All countries')}</option>
+          {locations.countries.map((c) => (
+            <option key={c} value={c}>{countryLabel(c)}</option>
+          ))}
+        </select>
+        <select
+          className="db-select"
+          value={filterCity}
+          onChange={(e) => setFilterCity(e.target.value)}
+          disabled={cityChoices.length === 0}
+          aria-label={t('admin_businesses_filter_city', 'City')}
+        >
+          <option value="">{t('admin_businesses_filter_all_cities', 'All cities')}</option>
+          {cityChoices.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        {(filterCountry || filterCity) && (
+          <button
+            type="button"
+            className="db-btn"
+            onClick={() => {
+              setFilterCountry('');
+              setFilterCity('');
+            }}
+          >
+            {t('admin_businesses_filter_clear', 'Clear filter')}
+          </button>
+        )}
+      </div>
 
       <div className="db-panel">
         {loading ? (

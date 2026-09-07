@@ -1,11 +1,15 @@
 package com.dinebuddies.app;
 
+import androidx.core.splashscreen.SplashScreen;
 import androidx.core.view.WindowCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(android.os.Bundle savedInstanceState) {
+        // Apply the Android 12+ system splash (white bg + small centered logo) and
+        // hand off to the app theme afterwards. Must run before super.onCreate().
+        SplashScreen.installSplashScreen(this);
         registerPlugin(GooglePlayBillingPlugin.class);
         registerPlugin(AppSigningInfoPlugin.class);
         super.onCreate(savedInstanceState);

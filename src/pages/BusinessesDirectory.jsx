@@ -5,7 +5,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaTrophy, FaBuilding, FaPlus } from 'react-icons/fa';
+import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaTrophy, FaBuilding, FaPlus, FaGlobe, FaTimes } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -38,7 +38,7 @@ import {
   detachLeafletMap,
   ensureLeafletMapDetachedIfOrphan } from
 '../utils/leafletMapLifecycle';
-import { detectUserLocationContext } from '../utils/locationUtils';
+import { detectUserLocationContext, fetchIpLocation } from '../utils/locationUtils';
 import {
   buildViewerGeoContext,
   canApplyBusinessLocationFilter,
@@ -678,12 +678,18 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
                         </span>
             ) : null}
                         <AppText as="h2" style={{
-              fontSize: '1.8rem',
+              // Responsive: shrinks on small phones so a long name can't cover
+              // the whole card, but stays bold and readable on larger screens.
+              fontSize: 'clamp(1.2rem, 5vw, 1.6rem)',
               fontWeight: '900',
               color: 'white',
               marginBottom: '4px',
               textShadow: '0 2px 4px rgba(0,0,0,0.5)',
-              lineHeight: '1.1'
+              lineHeight: '1.15',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden'
             }}>
                             {res.name}
                         </AppText>
@@ -798,6 +804,153 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
 
 });
 
+// Legacy sub-types folded into "Restaurant" for filtering (no separate chips).
+const RESTAURANT_LIKE_TYPES = new Set(['Restaurant', 'Fast Food', 'Food Truck']);
+
+/**
+ * Unified place filter as a type-ahead box: type one or two letters to list the
+ * matching countries AND cities (derived from the loaded venues). Pick one to
+ * filter by that country or city; clear to reset.
+ *
+ * `value`   — the selected option object { id, type: 'country'|'city', value, label, sublabel } or null.
+ * `options` — array of those option objects.
+ */
+function PlaceTypeahead({ value, options, onChange, placeholder, clearLabel }) {
+  const [text, setText] = useState(value?.label || '');
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    setText(value?.label || '');
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+    };
+  }, [open]);
+
+  const q = text.trim().toLocaleLowerCase();
+  const matches = (q ?
+  options.filter((o) => {
+    const hay = `${o.label} ${o.sublabel || ''}`.toLocaleLowerCase();
+    return hay.startsWith(q) || hay.split(/\s+/).some((w) => w.startsWith(q)) || hay.includes(q);
+  }) :
+  options).slice(0, 10);
+
+  const pick = (o) => {
+    onChange(o);
+    setText(o.label);
+    setOpen(false);
+  };
+  const clear = () => {
+    onChange(null);
+    setText('');
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', flex: '0 0 auto', width: '170px' }}>
+      <FaGlobe style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.8rem', pointerEvents: 'none' }} />
+      <AppTextInput
+        type="text"
+        value={text}
+        placeholder={placeholder}
+        autoComplete="off"
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          setText(e.target.value);
+          setOpen(true);
+          if (!e.target.value.trim() && value) onChange(null);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && matches.length > 0) {
+            e.preventDefault();
+            pick(matches[0]);
+          }
+          if (e.key === 'Escape') setOpen(false);
+        }}
+        aria-label={placeholder}
+        style={{
+          width: '100%',
+          height: '38px',
+          padding: '10px 28px 10px 30px',
+          border: '1px solid var(--border-color)',
+          borderRadius: '12px',
+          background: 'var(--bg-card)',
+          color: 'var(--text-main)',
+          fontSize: '0.85rem'
+        }} />
+      {value &&
+      <button
+        type="button"
+        onClick={clear}
+        aria-label={clearLabel}
+        style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', display: 'flex' }}>
+        <FaTimes />
+      </button>
+      }
+      {open &&
+      <div
+        role="listbox"
+        style={{
+          position: 'absolute',
+          top: 'calc(100% + 4px)',
+          left: 0,
+          minWidth: '100%',
+          maxWidth: '260px',
+          zIndex: 60,
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '12px',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+          overflow: 'hidden'
+        }}>
+        {matches.length === 0 ?
+        <div style={{ padding: '8px 12px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>—</div> :
+        matches.map((o) =>
+        <button
+          key={o.id}
+          type="button"
+          role="option"
+          aria-selected={value?.id === o.id}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => pick(o)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            width: '100%',
+            textAlign: 'start',
+            padding: '9px 12px',
+            border: 'none',
+            background: value?.id === o.id ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
+            color: 'var(--text-main)',
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap'
+          }}>
+          <span style={{ fontSize: '0.9rem', flex: '0 0 auto' }}>{o.type === 'city' ? '🏙️' : '🌍'}</span>
+          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {o.label}
+            {o.type === 'city' && o.sublabel ?
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}> · {o.sublabel}</span> :
+            null}
+          </span>
+        </button>
+        )}
+      </div>
+      }
+    </div>);
+}
+
 const BusinessesDirectory = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -812,9 +965,8 @@ const BusinessesDirectory = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('All');
-  const [countryFilter, setCountryFilter] = useState('All');
+  const [placeFilter, setPlaceFilter] = useState(null); // { id, type:'country'|'city', value, label, sublabel } | null
   const [activeFilter, setActiveFilter] = useState(() => searchParams.get('category') || 'All'); // Category filter
-  const [showFilters, setShowFilters] = useState(false); // Controls filter visibility
   const [viewMode, setViewMode] = useState('list');
   const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode for map
   const [userLocation, setUserLocation] = useState(null);
@@ -868,16 +1020,37 @@ const BusinessesDirectory = () => {
     const category = searchParams.get('category');
     if (category) {
       setActiveFilter(category);
-      setShowFilters(true); // Show filter bar when landing with category
     }
   }, [searchParams]);
 
-  // GPS coordinates for map centering and distance-based filters
+  // GPS coordinates for map centering and distance-based filters.
+  // Mirror the swipe deck's resilient chain: GPS → IP fallback, so the list can
+  // still sort nearest-first when GPS is denied and the profile has no saved
+  // coordinates (otherwise detectUserLocationContext short-circuits at the
+  // profile branch with null lat/lng and the list loses its distance sort).
   useEffect(() => {
-    if (!navigator.geolocation) return undefined;
+    let cancelled = false;
+
+    const applyIpFallback = async () => {
+      try {
+        const ip = await fetchIpLocation();
+        if (cancelled) return;
+        if (ip?.latitude != null && ip?.longitude != null) {
+          setUserLocation({ lat: Number(ip.latitude), lng: Number(ip.longitude) });
+        }
+      } catch {
+        /* ignore — profile coordinates (in buildViewerGeoContext) still apply */
+      }
+    };
+
+    if (!navigator.geolocation) {
+      void applyIpFallback();
+      return () => { cancelled = true; };
+    }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (cancelled) return;
         setUserLocation({
           lat: position.coords.latitude,
           lng: position.coords.longitude
@@ -885,11 +1058,12 @@ const BusinessesDirectory = () => {
       },
       (error) => {
         console.log('Location access denied:', error);
+        void applyIpFallback();
       },
       { enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 }
     );
 
-    return undefined;
+    return () => { cancelled = true; };
   }, []);
 
   // City/country context: GPS reverse-geocode, then profile, then IP
@@ -930,24 +1104,40 @@ const BusinessesDirectory = () => {
   { id: 'country', label: t('my_country', 'My country'), icon: '🗺️' }];
 
 
+  // Venue-type filter row (always visible): the five main types first, then the rest.
   const categories = [
   { id: 'All', label: t('filter_all'), icon: null },
   { id: 'Restaurant', label: t('type_restaurant'), icon: '🍴' },
   { id: 'Cafe', label: t('type_cafe'), icon: '☕' },
   { id: 'Bar', label: t('type_bar', 'Bar'), icon: '🍺' },
   { id: 'Night Club', label: t('type_nightclub', 'Night Club'), icon: '🎵' },
-  { id: 'Hotel', label: t('type_hotel', 'Hotel'), icon: '🏨' },
-  { id: 'Food Truck', label: t('type_foodtruck', 'Food Truck'), icon: '🚚' },
-  { id: 'Fast Food', label: t('type_fastfood', 'Fast Food'), icon: '🍟' }];
+  { id: 'Hotel', label: t('type_hotel', 'Hotel'), icon: '🏨' }];
 
 
-  const availableCountries = useMemo(() => {
-    const set = new Set();
+
+  // Unified place suggestions: every country AND city that actually has venues,
+  // so picking any suggestion always returns results. Free — derived from data.
+  const placeOptions = useMemo(() => {
+    const countrySet = new Set();
+    const cityMap = new Map(); // key `city|country` -> { city, country }
     for (const res of restaurants) {
       const country = String(res?.country || res?.businessInfo?.country || '').trim();
-      if (country) set.add(country);
+      const city = getBusinessCardCity(res);
+      if (country) countrySet.add(country);
+      if (city) {
+        const key = `${city.toLocaleLowerCase()}|${country.toLocaleLowerCase()}`;
+        if (!cityMap.has(key)) cityMap.set(key, { city, country });
+      }
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
+    const opts = [];
+    for (const c of countrySet) {
+      opts.push({ id: `country:${c}`, type: 'country', value: c, label: c, sublabel: '' });
+    }
+    for (const { city, country } of cityMap.values()) {
+      opts.push({ id: `city:${city}|${country}`, type: 'city', value: city, label: city, sublabel: country });
+    }
+    opts.sort((a, b) => a.label.localeCompare(b.label));
+    return opts;
   }, [restaurants]);
 
   const filteredRestaurants = useMemo(() => {
@@ -960,14 +1150,23 @@ const BusinessesDirectory = () => {
       res.type?.toLowerCase().includes(searchQuery.toLowerCase());
 
       // Category filter
-      const matchesCategory = activeFilter === 'All' || res.type === activeFilter;
+      const matchesCategory =
+      activeFilter === 'All' ||
+      (activeFilter === 'Restaurant' ? RESTAURANT_LIKE_TYPES.has(res.type) : res.type === activeFilter);
 
-      // Country filter
-      const matchesCountry =
-      countryFilter === 'All' ||
-      String(res.country || res.businessInfo?.country || '').trim() === countryFilter;
+      // Place filter — by country or by city (case-insensitive)
+      let matchesPlace = true;
+      if (placeFilter) {
+        const wanted = String(placeFilter.value || '').trim().toLocaleLowerCase();
+        if (placeFilter.type === 'city') {
+          matchesPlace = getBusinessCardCity(res).toLocaleLowerCase() === wanted;
+        } else {
+          matchesPlace =
+          String(res.country || res.businessInfo?.country || '').trim().toLocaleLowerCase() === wanted;
+        }
+      }
 
-      return matchesSearch && matchesCategory && matchesCountry;
+      return matchesSearch && matchesCategory && matchesPlace;
     });
 
     const isStaff = ['admin', 'moderator', 'support'].includes(userProfile?.role);
@@ -1014,7 +1213,7 @@ const BusinessesDirectory = () => {
     });
 
     return filtered;
-  }, [restaurants, searchQuery, locationFilter, countryFilter, activeFilter, viewerGeoContext, userProfile?.role]);
+  }, [restaurants, searchQuery, locationFilter, placeFilter, activeFilter, viewerGeoContext, userProfile?.role]);
 
   const restaurantsWithCoords = useMemo(() => {
     return filteredRestaurants.filter((res) => {
@@ -1445,7 +1644,6 @@ const BusinessesDirectory = () => {
                 placeholder={t('search_venues')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => setShowFilters(true)}
                 style={{
                   width: '100%',
                   padding: '10px 10px 10px 36px',
@@ -1481,42 +1679,24 @@ const BusinessesDirectory = () => {
                             </select>
                         </div>
 
-                        {/* Country Filter */}
-                        {availableCountries.length > 1 &&
-            <div style={{ flex: '0 0 auto' }}>
-                                <select
-                value={countryFilter}
-                onChange={(e) => setCountryFilter(e.target.value)}
-                className="filter-select"
-                style={{
-                  width: 'auto',
-                  minWidth: '110px',
-                  padding: '10px 28px 10px 10px',
-                  height: '38px',
-                  background: 'var(--bg-card)',
-                  color: 'var(--text-main)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '12px'
-                }}>
-
-                                    <option value="All">🌐 {t('all_countries', 'All countries')}</option>
-                                    {availableCountries.map((c) =>
-                <option key={c} value={c}>{c}</option>
-                )}
-                                </select>
-                            </div>
+                        {/* Place Filter — type-ahead: letters show matching countries & cities */}
+                        {placeOptions.length > 1 &&
+            <PlaceTypeahead
+              value={placeFilter}
+              options={placeOptions}
+              onChange={setPlaceFilter}
+              placeholder={t('country_or_city', 'Country or city')}
+              clearLabel={t('all_countries', 'All countries')} />
             }
                     </div>
 
-                    {/* Row 2: Category Icons - Show when search is focused */}
-                    {showFilters &&
-          <div style={{
+                    {/* Row 2: Venue-type filter — always visible */}
+                    <div style={{
             display: 'flex',
             gap: '6px',
             width: '100%',
             overflowX: 'auto',
-            paddingBottom: '4px',
-            animation: 'slideDown 0.2s ease-out'
+            paddingBottom: '4px'
           }}
           className="category-icons-scroll">
             
@@ -1570,7 +1750,6 @@ const BusinessesDirectory = () => {
                                 </button>
             )}
                         </div>
-          }
                 </div>
             </div>
 

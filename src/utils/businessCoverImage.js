@@ -6,6 +6,24 @@ export const DEFAULT_BUSINESS_COVER =
     'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=80';
 
 /**
+ * True for the stock/placeholder cover (the Unsplash neutral, any width, or a
+ * via.placeholder fallback). At Google import time, when the real photo fetch
+ * failed, this placeholder was persisted into `coverImage` — so we must NOT treat
+ * it as a real photo, or the proxy that serves the actual Firebase Storage image
+ * is never tried (and onError never fires because the placeholder loads fine).
+ * @param {unknown} url
+ */
+export function isStockPlaceholderCover(url) {
+    const s = String(url || '');
+    if (!s) return false;
+    return (
+        s.includes('photo-1517248135467-4c7edcad34c4') || // the Unsplash neutral cover
+        s.includes('via.placeholder.com') ||
+        s.includes('placehold.co')
+    );
+}
+
+/**
  * Stable server proxy for Google-imported business covers (reads Firebase Storage by placeId).
  * @param {string} placeId
  */
@@ -43,8 +61,12 @@ export function resolveBusinessCoverImageUrl(business, opts = {}) {
         bi.photo_url,
     );
 
-    if (direct) return direct;
+    // A real, non-placeholder direct URL wins outright.
+    if (direct && !isStockPlaceholderCover(direct)) return direct;
 
+    // Otherwise, if this is an imported business (or has a Storage path), the real
+    // photo lives in Firebase Storage — serve it via the proxy instead of showing
+    // the baked-in placeholder that `direct` may be holding.
     if (opts.preferProxy && placeId) {
         const hasStoragePath = Boolean(
             String(business.coverImageStoragePath || bi.coverImageStoragePath || '').trim(),
@@ -60,7 +82,9 @@ export function resolveBusinessCoverImageUrl(business, opts = {}) {
         }
     }
 
-    return null;
+    // No real photo and no proxy available: fall back to the placeholder we found
+    // (if any), else null so the caller applies DEFAULT_BUSINESS_COVER.
+    return direct || null;
 }
 
 /**

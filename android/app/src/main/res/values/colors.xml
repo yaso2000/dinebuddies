@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash background: white, matching the iOS LaunchScreen. -->
+    <color name="splashBackground">#FFFFFF</color>
+</resources>

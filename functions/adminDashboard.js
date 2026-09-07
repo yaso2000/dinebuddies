@@ -824,12 +824,56 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext, den
         };
     }
 
+    /**
+     * Distinct countries → cities among `restaurants` for the admin location filter bar.
+     * One bounded scan; regional managers only see their own countries.
+     */
+    exportsObj.adminListBusinessLocations = functions.https.onCall(async (data, context) => {
+        const { regionScope } = await assertAdminContext(context, data);
+        const snap = await db.collection('restaurants')
+            .select('city', 'countryCode', 'country', 'businessInfo.city', 'businessInfo.countryCode', 'businessInfo.country')
+            .limit(5000)
+            .get();
+        const byCountry = new Map();
+        for (const docSnap of snap.docs) {
+            const r = docSnap.data() || {};
+            if (!docInRegionScope(r, regionScope)) continue;
+            const bi = r.businessInfo && typeof r.businessInfo === 'object' ? r.businessInfo : {};
+            const cc = asTrimmedString(r.countryCode || bi.countryCode).toUpperCase().slice(0, 2);
+            const key = cc || asTrimmedString(r.country || bi.country) || '';
+            if (!key) continue;
+            const city = asTrimmedString(r.city || bi.city);
+            if (!byCountry.has(key)) byCountry.set(key, new Set());
+            if (city) byCountry.get(key).add(city);
+        }
+        const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
+        const countries = [...byCountry.keys()].sort(collator.compare);
+        const citiesByCountry = {};
+        for (const c of countries) citiesByCountry[c] = [...byCountry.get(c)].sort(collator.compare);
+        return { countries, citiesByCountry };
+    });
+
     exportsObj.adminListBusinesses = functions.https.onCall(async (data, context) => {
         const { regionScope } = await assertAdminContext(context, data);
         const startAfterId = asTrimmedString(data?.startAfterId) || null;
         const pageSize = Math.min(Math.max(Number(data?.pageSize) || 25, 1), BUSINESSES_PAGE_MAX);
+        // Optional location filter (exact match on the stored values).
+        const filterCountry = asTrimmedString(data?.countryCode).slice(0, 80);
+        const filterCity = asTrimmedString(data?.city).slice(0, 80);
+        const hasLocationFilter = Boolean(filterCountry || filterCity);
 
-        let q = db.collection('restaurants').orderBy('name').limit(pageSize + 1);
+        const applyLocationWhere = (base) => {
+            let out = base;
+            if (filterCountry) {
+                out = /^[A-Za-z]{2}$/.test(filterCountry)
+                    ? out.where('countryCode', '==', filterCountry.toUpperCase())
+                    : out.where('businessInfo.country', '==', filterCountry);
+            }
+            if (filterCity) out = out.where('businessInfo.city', '==', filterCity);
+            return out;
+        };
+
+        let q = applyLocationWhere(db.collection('restaurants')).orderBy('name').limit(pageSize + 1);
         if (startAfterId) {
             const cursor = await db.collection('restaurants').doc(startAfterId).get();
             if (cursor.exists) q = q.startAfter(cursor);
@@ -838,8 +882,11 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext, den
         let snap;
         try {
             snap = await q.get();
-        } catch {
-            q = db.collection('restaurants').limit(pageSize + 1);
+        } catch (err) {
+            if (hasLocationFilter) {
+                functions.logger.warn('[adminListBusinesses] filtered query failed (missing index?), falling back', err?.message || err);
+            }
+            q = applyLocationWhere(db.collection('restaurants')).limit(pageSize + 1);
             if (startAfterId) {
                 const cursor = await db.collection('restaurants').doc(startAfterId).get();
                 if (cursor.exists) q = q.startAfter(cursor);
@@ -871,6 +918,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext, den
 
         const listedIds = new Set(items.map((item) => item.id));
         try {
+            if (hasLocationFilter) throw Object.assign(new Error('skip-orphans'), { skipOrphans: true });
             const orphanSnap = await db.collection('public_profiles')
                 .where('profileType', '==', 'business')
                 .where('businessPublic.isPublished', '==', true)
@@ -887,7 +935,9 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext, den
                 listedIds.add(docSnap.id);
             }
         } catch (err) {
-            functions.logger.warn('[adminListBusinesses] orphan scan failed', err?.message || err);
+            if (!err?.skipOrphans) {
+                functions.logger.warn('[adminListBusinesses] orphan scan failed', err?.message || err);
+            }
         }
 
         return { items, hasNext, lastId: items.length ? items[items.length - 1].id : null };

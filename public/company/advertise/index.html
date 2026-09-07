@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Advertise with DineBuddies — reach an engaged local audience. Independent local advertising for retail, services, and brands, managed by DineBuddies PTY LTD." />
+  <meta name="theme-color" content="#E86A2D" />
+  <title>Advertise with DineBuddies | DineBuddies PTY LTD</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#FFF7F2', 100: '#FFE8DA', 200: '#FFCDB0', 500: '#E86A2D', 600: '#D4551A', 700: '#B34414' },
+            ink: { 700: '#3F3A36', 800: '#2A2623', 900: '#1A1715' },
+            mist: { 50: '#FAFAF8', 100: '#F3F2EF', 200: '#E7E5E0' },
+          },
+          fontFamily: {
+            sans: ['"DM Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            display: ['Fraunces', 'Georgia', 'serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { margin: 0; font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif; color: #2A2623; background: #FAFAF8; -webkit-font-smoothing: antialiased; }
+    :focus-visible { outline: 2px solid #E86A2D; outline-offset: 2px; }
+
+    .company-hero { position: relative; min-height: min(68vh, 520px); display: flex; flex-direction: column; justify-content: flex-end; color: #fff; overflow: hidden; isolation: isolate; }
+    .company-hero__media { position: absolute; inset: 0; z-index: -2; }
+    .company-hero__media img { width: 100%; height: 100%; object-fit: cover; object-position: center 42%; transform: scale(1.04); }
+    .company-hero__shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(26,23,21,0.30) 0%, rgba(26,23,21,0.20) 38%, rgba(26,23,21,0.80) 100%), linear-gradient(90deg, rgba(26,23,21,0.45) 0%, rgba(26,23,21,0.08) 55%, transparent 100%); }
+    .company-hero__content { width: 100%; max-width: 64rem; margin: 0 auto; padding: 7rem 1.25rem 3rem; animation: hero-rise 0.8s ease-out both; }
+    @media (min-width: 640px) { .company-hero__content { padding: 8rem 1.5rem 3.5rem; } }
+
+    .company-nav { position: absolute; top: 0; left: 0; right: 0; z-index: 20; background: linear-gradient(180deg, rgba(26,23,21,0.55), transparent); }
+    .company-nav__inner { max-width: 64rem; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; }
+    @media (min-width: 640px) { .company-nav__inner { padding: 1.15rem 1.5rem; } }
+    .company-nav a { color: #fff; text-decoration: none; }
+    .company-nav__brand { display: inline-flex; align-items: center; gap: 0.7rem; font-weight: 700; letter-spacing: -0.02em; }
+    .company-nav__mark { width: 2.35rem; height: 2.35rem; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.28); display: grid; place-items: center; }
+    .company-nav__mark img { width: 1.55rem; height: 1.55rem; object-fit: contain; }
+    .company-nav__links { display: flex; align-items: center; gap: 0.5rem; }
+    .company-nav__ghost { padding: 0.55rem 0.9rem; border-radius: 0.7rem; font-size: 0.9rem; font-weight: 600; color: rgba(255,255,255,0.92); }
+    .company-nav__ghost:hover { background: rgba(255,255,255,0.12); }
+    .company-nav__cta { padding: 0.55rem 1rem; border-radius: 0.7rem; font-size: 0.9rem; font-weight: 700; background: #E86A2D; color: #fff !important; transition: background 0.2s ease, transform 0.2s ease; }
+    .company-nav__cta:hover { background: #D4551A; }
+
+    .company-hero__brand { font-family: Fraunces, Georgia, serif; font-size: clamp(2.2rem, 6vw, 3.6rem); line-height: 1.06; font-weight: 700; letter-spacing: -0.03em; margin: 0; text-shadow: 0 2px 24px rgba(0,0,0,0.28); }
+    .company-hero__line { margin: 1rem 0 0; max-width: 32rem; font-size: clamp(1.05rem, 2.4vw, 1.28rem); line-height: 1.5; color: rgba(255,255,255,0.92); }
+    .company-hero__actions { margin-top: 1.6rem; display: flex; flex-wrap: wrap; gap: 0.75rem; }
+    .btn-primary, .btn-secondary { display: inline-flex; align-items: center; justify-content: center; min-height: 2.85rem; padding: 0.7rem 1.2rem; border-radius: 0.85rem; font-size: 0.95rem; font-weight: 700; text-decoration: none; transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease; }
+    .btn-primary { background: #E86A2D; color: #fff; }
+    .btn-primary:hover { background: #D4551A; }
+    .btn-secondary { background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.35); backdrop-filter: blur(8px); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.2); }
+
+    .section { max-width: 64rem; margin: 0 auto; padding: 4rem 1.25rem; }
+    @media (min-width: 640px) { .section { padding: 5rem 1.5rem; } }
+    .section h2 { font-family: Fraunces, Georgia, serif; font-size: clamp(1.75rem, 3.5vw, 2.25rem); line-height: 1.15; letter-spacing: -0.02em; color: #1A1715; margin: 0; }
+    .section__lead { margin: 1rem 0 0; max-width: 42rem; font-size: 1.08rem; line-height: 1.7; color: #3F3A36; }
+
+    .why-band { background: radial-gradient(ellipse 70% 60% at 100% 0%, rgba(232,106,45,0.08), transparent 55%), #fff; border-bottom: 1px solid #E7E5E0; }
+    .feature-grid { margin-top: 2.25rem; display: grid; gap: 1rem; grid-template-columns: 1fr; }
+    @media (min-width: 640px) { .feature-grid { grid-template-columns: 1fr 1fr; } }
+    .feature-card { background: #fff; border: 1px solid #E7E5E0; border-radius: 1.1rem; padding: 1.5rem; }
+    .feature-card__icon { font-size: 1.6rem; line-height: 1; }
+    .feature-card h3 { margin: 0.8rem 0 0.4rem; font-family: Fraunces, Georgia, serif; font-size: 1.18rem; font-weight: 600; color: #1A1715; }
+    .feature-card p { margin: 0; font-size: 0.96rem; line-height: 1.6; color: #3F3A36; }
+
+    .steps-band { background: linear-gradient(180deg, #FAFAF8 0%, #F3F2EF 100%); border-bottom: 1px solid #E7E5E0; }
+    .steps { margin-top: 2.25rem; display: grid; gap: 1rem; grid-template-columns: 1fr; counter-reset: step; }
+    @media (min-width: 768px) { .steps { grid-template-columns: repeat(3, 1fr); } }
+    .step { background: #fff; border: 1px solid #E7E5E0; border-radius: 1.1rem; padding: 1.4rem 1.35rem; position: relative; }
+    .step__num { font-family: Fraunces, Georgia, serif; font-size: 1.6rem; font-weight: 700; color: #E86A2D; line-height: 1; }
+    .step h3 { margin: 0.5rem 0 0.35rem; font-size: 1.02rem; font-weight: 700; color: #1A1715; }
+    .step p { margin: 0; font-size: 0.94rem; line-height: 1.55; color: #3F3A36; }
+    .steps-note { margin: 1.5rem 0 0; font-size: 0.95rem; color: #3F3A36; background: #FFF7F2; border: 1px solid #FFCDB0; border-radius: 0.85rem; padding: 0.9rem 1.1rem; }
+    .steps-note strong { color: #B34414; }
+
+    .contact-band { background: #fff; }
+    .contact-grid { margin-top: 2.25rem; display: grid; gap: 2.5rem; }
+    @media (min-width: 1024px) { .contact-grid { grid-template-columns: 1.35fr 0.9fr; gap: 3.5rem; align-items: start; } }
+    .field { margin-bottom: 1.1rem; }
+    .field label { display: block; margin-bottom: 0.4rem; font-size: 0.9rem; font-weight: 600; color: #2A2623; }
+    .field input, .field textarea, .field select { width: 100%; box-sizing: border-box; border: 1px solid #E7E5E0; background: #fff; border-radius: 0.85rem; padding: 0.85rem 1rem; font: inherit; color: #1A1715; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+    .field input:focus, .field textarea:focus, .field select:focus { outline: none; border-color: #E86A2D; box-shadow: 0 0 0 3px rgba(232,106,45,0.18); }
+    .form-note { margin: 0 0 1rem; font-size: 0.9rem; color: #3F3A36; }
+    .form-note a { color: #D4551A; font-weight: 600; }
+    .submit-btn { border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; min-height: 2.9rem; padding: 0.75rem 1.35rem; border-radius: 0.85rem; background: #E86A2D; color: #fff; font: inherit; font-weight: 700; transition: background 0.2s ease; }
+    .submit-btn:hover { background: #D4551A; }
+
+    .direct-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.35rem; }
+    .direct-list li { padding-bottom: 1.35rem; border-bottom: 1px solid #E7E5E0; }
+    .direct-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+    .direct-list .label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #3F3A36; opacity: 0.7; margin: 0 0 0.4rem; }
+    .direct-list a, .direct-list address { color: #1A1715; font-size: 1.05rem; font-weight: 600; line-height: 1.55; text-decoration: none; font-style: normal; }
+    .direct-list a:hover { color: #D4551A; }
+
+    .site-footer { background: #1A1715; color: rgba(255,255,255,0.78); }
+    .site-footer__inner { max-width: 64rem; margin: 0 auto; padding: 1.75rem 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+    @media (min-width: 640px) { .site-footer__inner { flex-direction: row; align-items: center; justify-content: space-between; padding: 1.75rem 1.5rem; } }
+    .site-footer p { margin: 0; font-size: 0.9rem; }
+    .site-footer nav { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+    .site-footer a { color: rgba(255,255,255,0.88); text-decoration: none; font-size: 0.9rem; font-weight: 600; }
+    .site-footer a:hover { color: #FFCDB0; }
+
+    @keyframes hero-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+    @media (prefers-reduced-motion: reduce) { .company-hero__content { animation: none; } }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  </style>
+</head>
+<body>
+  <header class="company-hero" aria-labelledby="hero-heading">
+    <div class="company-hero__media" aria-hidden="true">
+      <img src="/company/advertise/hero.jpg" alt="" width="1920" height="1080" fetchpriority="high" />
+    </div>
+    <div class="company-hero__shade" aria-hidden="true"></div>
+
+    <nav class="company-nav" aria-label="Primary">
+      <div class="company-nav__inner">
+        <a href="/company/" class="company-nav__brand" aria-label="DineBuddies Corporate home">
+          <span class="company-nav__mark"><img src="/db-logo-white.svg" alt="" width="24" height="24" /></span>
+          <span>DineBuddies</span>
+        </a>
+        <div class="company-nav__links">
+          <a href="/company/" class="company-nav__ghost">Company</a>
+          <a href="#inquire" class="company-nav__cta">Get in touch</a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="company-hero__content">
+      <h1 id="hero-heading" class="company-hero__brand">Advertise with DineBuddies</h1>
+      <p class="company-hero__line">
+        Put your brand in front of an engaged local audience — reach people who are actively going out in your area.
+      </p>
+      <div class="company-hero__actions">
+        <a href="#inquire" class="btn-primary">Start a campaign</a>
+        <a href="#how" class="btn-secondary">How it works</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section id="why" class="why-band scroll-mt-8" aria-labelledby="why-heading">
+      <div class="section">
+        <h2 id="why-heading">Local advertising, beyond the plate</h2>
+        <p class="section__lead">
+          DineBuddies reaches a growing community of people planning where to go and who to meet. Advertising is open to
+          <strong>any local business</strong> — retail, salons, services, events, and brands — not only the restaurants and cafés on the app.
+        </p>
+        <div class="feature-grid">
+          <div class="feature-card">
+            <div class="feature-card__icon" aria-hidden="true">📍</div>
+            <h3>Local &amp; relevant</h3>
+            <p>Reach active users in your city and neighbourhood, where buying decisions actually happen.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-card__icon" aria-hidden="true">🎨</div>
+            <h3>Image or video</h3>
+            <p>Run image or video creatives. We'll share the exact formats, sizes, and specs during setup.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-card__icon" aria-hidden="true">📈</div>
+            <h3>Measurable</h3>
+            <p>Campaigns are measured by reach, impressions, and clicks — so you see what you're paying for.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-card__icon" aria-hidden="true">🤝</div>
+            <h3>Managed by the company</h3>
+            <p>Advertising is handled directly by DineBuddies PTY LTD — a simple, personal setup while our self-serve portal is built.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="how" class="steps-band scroll-mt-8" aria-labelledby="how-heading">
+      <div class="section">
+        <h2 id="how-heading">How it works</h2>
+        <p class="section__lead">A straightforward path from idea to a live local campaign.</p>
+        <div class="steps">
+          <div class="step">
+            <div class="step__num">1</div>
+            <h3>Tell us about your campaign</h3>
+            <p>Share your business, your goal, and the area you want to reach.</p>
+          </div>
+          <div class="step">
+            <div class="step__num">2</div>
+            <h3>Choose placement &amp; creative</h3>
+            <p>Pick where your ad appears and send your image or video to our specs.</p>
+          </div>
+          <div class="step">
+            <div class="step__num">3</div>
+            <h3>Launch &amp; track</h3>
+            <p>We review, launch your campaign, and report impressions and clicks.</p>
+          </div>
+        </div>
+        <p class="steps-note">
+          <strong>Coming soon:</strong> a self-serve advertiser portal where you answer a few questions, upload your ad,
+          and track performance yourself. For now, get in touch and our team will set everything up for you.
+        </p>
+      </div>
+    </section>
+
+    <section id="inquire" class="contact-band scroll-mt-8" aria-labelledby="inquire-heading">
+      <div class="section">
+        <h2 id="inquire-heading">Get in touch</h2>
+        <p class="section__lead">
+          Tell us a little about your business and campaign. Advertising inquiries are handled by the company —
+          <strong>not through the app</strong> — and we'll get back to you promptly.
+        </p>
+
+        <div class="contact-grid">
+          <div>
+            <form id="ad-form" novalidate aria-describedby="ad-form-note">
+              <div class="field">
+                <label for="business">Business name</label>
+                <input type="text" id="business" name="business" required placeholder="Your company or brand" />
+              </div>
+              <div class="field">
+                <label for="name">Contact name</label>
+                <input type="text" id="name" name="name" autocomplete="name" required placeholder="Your full name" />
+              </div>
+              <div class="field">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" autocomplete="email" required placeholder="you@example.com" />
+              </div>
+              <div class="field">
+                <label for="adtype">Ad type</label>
+                <select id="adtype" name="adtype">
+                  <option value="Image">Image</option>
+                  <option value="Video">Video</option>
+                  <option value="Image + Video">Image + Video</option>
+                  <option value="Not sure yet">Not sure yet</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="message">About your campaign</label>
+                <textarea id="message" name="message" rows="5" required placeholder="What are you promoting, and which area do you want to reach?"></textarea>
+              </div>
+              <p id="ad-form-note" class="form-note">
+                Submitting opens your email client addressed to
+                <a href="mailto:hello@dinebuddies.com">hello@dinebuddies.com</a>.
+              </p>
+              <button type="submit" class="submit-btn">Send inquiry</button>
+              <p id="ad-form-status" class="sr-only" role="status" aria-live="polite"></p>
+            </form>
+          </div>
+
+          <aside aria-labelledby="direct-contact-heading">
+            <h3 id="direct-contact-heading" class="sr-only">Direct contact</h3>
+            <ul class="direct-list">
+              <li>
+                <p class="label">Advertising email</p>
+                <a href="mailto:hello@dinebuddies.com">hello@dinebuddies.com</a>
+              </li>
+              <li>
+                <p class="label">Phone</p>
+                <a href="tel:+61476799444">0476 799 444</a>
+              </li>
+              <li>
+                <p class="label">Company</p>
+                <address>
+                  DineBuddies PTY LTD<br />
+                  46 Stewart Street<br />
+                  Bundaberg North QLD, Australia
+                </address>
+              </li>
+            </ul>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>Copyright © 2026 DineBuddies PTY LTD</p>
+      <nav aria-label="Legal">
+        <a href="/company/">Company</a>
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms">Terms of Service</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var form = document.getElementById('ad-form');
+      var statusEl = document.getElementById('ad-form-status');
+      if (!form) return;
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!form.checkValidity()) { form.reportValidity(); return; }
+        var business = form.business.value.trim();
+        var name = form.name.value.trim();
+        var email = form.email.value.trim();
+        var adtype = form.adtype.value;
+        var message = form.message.value.trim();
+        var subject = 'Advertising inquiry — ' + business;
+        var body =
+          'Business: ' + business + '\n' +
+          'Contact: ' + name + '\n' +
+          'Email: ' + email + '\n' +
+          'Ad type: ' + adtype + '\n\n' +
+          message;
+        var mailto = 'mailto:hello@dinebuddies.com?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+        if (statusEl) { statusEl.textContent = 'Opening your email client…'; statusEl.classList.remove('sr-only'); }
+        window.location.href = mailto;
+      });
+    })();
+  </script>
+</body>
+</html>
