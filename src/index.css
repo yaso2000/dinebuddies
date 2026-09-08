@@ -525,6 +525,9 @@ body {
   color: var(--text-main, #f8fafc);
   background-attachment: fixed;
   height: 100%;
+  /* Never let the browser's own pull-to-refresh fire — it reloads the SPA and
+     lands on Home. The in-app PullToRefresh handles refresh where wanted. */
+  overscroll-behavior-y: contain;
 }
 
 /*
