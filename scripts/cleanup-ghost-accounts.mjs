@@ -10,7 +10,7 @@
  */
 import dotenv from 'dotenv';
 import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, '../.env') });
@@ -18,7 +18,7 @@ dotenv.config({ path: resolve(__dirname, '../.env') });
 const APPLY = process.argv.includes('--apply');
 const blank = (v) => !v || String(v).trim() === '';
 
-const { ensureFirebaseAdmin } = await import(resolve(__dirname, '../api/_firebaseAdmin.js'));
+const { ensureFirebaseAdmin } = await import(pathToFileURL(resolve(__dirname, '../api/_firebaseAdmin.js')).href);
 const { getFirestore } = await import('firebase-admin/firestore');
 const { getAuth } = await import('firebase-admin/auth');
 ensureFirebaseAdmin();
