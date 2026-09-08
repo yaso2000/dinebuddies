@@ -809,21 +809,17 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
 const RESTAURANT_LIKE_TYPES = new Set(['Restaurant', 'Fast Food', 'Food Truck']);
 
 /**
- * Unified place filter as a type-ahead box: type one or two letters to list the
- * matching countries AND cities (derived from the loaded venues). Pick one to
- * filter by that country or city; clear to reset.
+ * Unified search box: one field that finds a specific venue by name AND filters
+ * by city or country — all from the loaded venues (free, no external API).
  *
- * `value`   — the selected option object { id, type: 'country'|'city', value, label, sublabel } or null.
- * `options` — array of those option objects.
+ * - `text` / `onTextChange`  — the free-text venue-name query (drives the list).
+ * - `place` / `onPlaceChange` — the selected { id, type:'country'|'city', value, label, sublabel } or null.
+ * - `venues` — [{ id, name, city }] for name suggestions.
+ * - `places` — place options [{ id, type, value, label, sublabel }].
  */
-function PlaceTypeahead({ value, options, onChange, placeholder, clearLabel }) {
-  const [text, setText] = useState(value?.label || '');
+function UnifiedVenueSearch({ text, onTextChange, place, onPlaceChange, venues, places, placeholder, clearLabel }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
-
-  useEffect(() => {
-    setText(value?.label || '');
-  }, [value]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -838,43 +834,62 @@ function PlaceTypeahead({ value, options, onChange, placeholder, clearLabel }) {
     };
   }, [open]);
 
-  const q = text.trim().toLocaleLowerCase();
-  const matches = (q ?
-  options.filter((o) => {
+  // When a place is selected the box shows its label; otherwise the typed text.
+  const display = place ? place.label : text;
+  const q = (place ? '' : text).trim().toLocaleLowerCase();
+
+  const venueMatches = q ?
+  venues.filter((v) => `${v.name} ${v.city || ''}`.toLocaleLowerCase().includes(q)).slice(0, 6) :
+  [];
+  const placeMatches = (q ?
+  places.filter((o) => {
     const hay = `${o.label} ${o.sublabel || ''}`.toLocaleLowerCase();
     return hay.startsWith(q) || hay.split(/\s+/).some((w) => w.startsWith(q)) || hay.includes(q);
   }) :
-  options).slice(0, 10);
+  places).slice(0, 6);
 
-  const pick = (o) => {
-    onChange(o);
-    setText(o.label);
+  const suggestions = [
+  ...venueMatches.map((v) => ({ kind: 'venue', id: `v:${v.id}`, label: v.name, sublabel: v.city, name: v.name })),
+  ...placeMatches.map((p) => ({ kind: 'place', id: `p:${p.id}`, label: p.label, sublabel: p.sublabel, type: p.type, place: p }))].
+  slice(0, 10);
+
+  const pick = (item) => {
+    if (item.kind === 'venue') {
+      onPlaceChange(null);
+      onTextChange(item.name);
+    } else {
+      onTextChange('');
+      onPlaceChange(item.place);
+    }
     setOpen(false);
   };
   const clear = () => {
-    onChange(null);
-    setText('');
+    onTextChange('');
+    onPlaceChange(null);
     setOpen(false);
   };
 
+  const iconFor = (item) => item.kind === 'venue' ? '🍴' : item.type === 'city' ? '🏙️' : '🌍';
+
   return (
-    <div ref={wrapRef} style={{ position: 'relative', flex: '0 0 auto', width: '170px' }}>
-      <FaGlobe style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.8rem', pointerEvents: 'none' }} />
+    <div ref={wrapRef} style={{ position: 'relative', flex: '1 1 auto', minWidth: '200px' }}>
+      <FaSearch style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.85rem', pointerEvents: 'none' }} />
       <AppTextInput
         type="text"
-        value={text}
+        value={display}
         placeholder={placeholder}
         autoComplete="off"
         onFocus={() => setOpen(true)}
         onChange={(e) => {
-          setText(e.target.value);
+          const v = e.target.value;
+          if (place) onPlaceChange(null);
+          onTextChange(v);
           setOpen(true);
-          if (!e.target.value.trim() && value) onChange(null);
         }}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && matches.length > 0) {
+          if (e.key === 'Enter' && suggestions.length > 0) {
             e.preventDefault();
-            pick(matches[0]);
+            pick(suggestions[0]);
           }
           if (e.key === 'Escape') setOpen(false);
         }}
@@ -882,14 +897,14 @@ function PlaceTypeahead({ value, options, onChange, placeholder, clearLabel }) {
         style={{
           width: '100%',
           height: '38px',
-          padding: '10px 28px 10px 30px',
+          padding: '10px 30px 10px 36px',
           border: '1px solid var(--border-color)',
           borderRadius: '12px',
-          background: 'var(--bg-card)',
+          background: 'var(--bg-main)',
           color: 'var(--text-main)',
           fontSize: '0.85rem'
         }} />
-      {value &&
+      {(place || text) &&
       <button
         type="button"
         onClick={clear}
@@ -898,7 +913,7 @@ function PlaceTypeahead({ value, options, onChange, placeholder, clearLabel }) {
         <FaTimes />
       </button>
       }
-      {open &&
+      {open && suggestions.length > 0 &&
       <div
         role="listbox"
         style={{
@@ -906,7 +921,7 @@ function PlaceTypeahead({ value, options, onChange, placeholder, clearLabel }) {
           top: 'calc(100% + 4px)',
           left: 0,
           minWidth: '100%',
-          maxWidth: '260px',
+          maxWidth: '300px',
           zIndex: 60,
           background: 'var(--bg-card)',
           border: '1px solid var(--border-color)',
@@ -914,16 +929,13 @@ function PlaceTypeahead({ value, options, onChange, placeholder, clearLabel }) {
           boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
           overflow: 'hidden'
         }}>
-        {matches.length === 0 ?
-        <div style={{ padding: '8px 12px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>—</div> :
-        matches.map((o) =>
+        {suggestions.map((item) =>
         <button
-          key={o.id}
+          key={item.id}
           type="button"
           role="option"
-          aria-selected={value?.id === o.id}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => pick(o)}
+          onClick={() => pick(item)}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -932,17 +944,17 @@ function PlaceTypeahead({ value, options, onChange, placeholder, clearLabel }) {
             textAlign: 'start',
             padding: '9px 12px',
             border: 'none',
-            background: value?.id === o.id ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
+            background: 'transparent',
             color: 'var(--text-main)',
             fontSize: '0.85rem',
             cursor: 'pointer',
             whiteSpace: 'nowrap'
           }}>
-          <span style={{ fontSize: '0.9rem', flex: '0 0 auto' }}>{o.type === 'city' ? '🏙️' : '🌍'}</span>
+          <span style={{ fontSize: '0.9rem', flex: '0 0 auto' }}>{iconFor(item)}</span>
           <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {o.label}
-            {o.type === 'city' && o.sublabel ?
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}> · {o.sublabel}</span> :
+            {item.label}
+            {item.sublabel ?
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}> · {item.sublabel}</span> :
             null}
           </span>
         </button>
@@ -1138,6 +1150,19 @@ const BusinessesDirectory = () => {
       opts.push({ id: `city:${city}|${country}`, type: 'city', value: city, label: city, sublabel: country });
     }
     opts.sort((a, b) => a.label.localeCompare(b.label));
+    return opts;
+  }, [restaurants]);
+
+  // Venue name suggestions for the unified search box.
+  const venueOptions = useMemo(() => {
+    const seen = new Set();
+    const opts = [];
+    for (const res of restaurants) {
+      const name = String(res?.name || '').trim();
+      if (!name || seen.has(res.id)) continue;
+      seen.add(res.id);
+      opts.push({ id: res.id, name, city: getBusinessCardCity(res) });
+    }
     return opts;
   }, [restaurants]);
 
@@ -1633,58 +1658,16 @@ const BusinessesDirectory = () => {
                     <div
             className="category-icons-scroll"
             style={{ display: 'flex', gap: '8px', alignItems: 'center', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-                        {/* Search Input */}
-                        <div style={{ position: 'relative', flex: '0 0 auto', width: '190px' }}>
-                            <FaSearch style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.85rem' }} />
-                            <AppTextInput
-                type="text"
-                placeholder={t('search_venues')}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 10px 10px 36px',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '12px',
-                  fontSize: '0.85rem',
-                  background: 'var(--bg-main)',
-                  color: 'var(--text-main)'
-                }} />
-              
-                        </div>
-
-                        {/* Location Filter - Next to Search */}
-                        <div style={{ flex: '0 0 auto' }}>
-                            <select
-                value={locationFilter}
-                onChange={(e) => setLocationFilter(e.target.value)}
-                className="filter-select"
-                style={{
-                  width: 'auto',
-                  minWidth: '110px',
-                  padding: '10px 28px 10px 10px',
-                  height: '38px',
-                  background: 'var(--bg-card)',
-                  color: 'var(--text-main)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '12px'
-                }}>
-                
-                                {locationFilters.map((f) =>
-                <option key={f.id} value={f.id}>{f.icon} {f.label}</option>
-                )}
-                            </select>
-                        </div>
-
-                        {/* Place Filter — type-ahead: letters show matching countries & cities */}
-                        {placeOptions.length > 1 &&
-            <PlaceTypeahead
-              value={placeFilter}
-              options={placeOptions}
-              onChange={setPlaceFilter}
-              placeholder={t('country_or_city', 'Country or city')}
-              clearLabel={t('all_countries', 'All countries')} />
-            }
+                        {/* Unified search — one box: venue name + city + country */}
+                        <UnifiedVenueSearch
+              text={searchQuery}
+              onTextChange={setSearchQuery}
+              place={placeFilter}
+              onPlaceChange={setPlaceFilter}
+              venues={venueOptions}
+              places={placeOptions}
+              placeholder={t('search_venue_or_place', 'Search a venue, city or country…')}
+              clearLabel={t('clear', 'Clear')} />
                     </div>
 
                     {/* Row 2: Venue-type filter — always visible */}

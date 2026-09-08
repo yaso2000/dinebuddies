@@ -39,6 +39,16 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
   const isDiscoverySwipeRoute = path === '/search' || path === '/search/';
 
   /**
+   * Browse screens whose own filter toolbars replace the app top header, while
+   * the bottom tab bar stays visible: Invitations, Businesses (swipe + list),
+   * and Members/Connect (swipe + list).
+   */
+  const isBrowseHeaderlessRoute =
+    path === '/invitations' || path.startsWith('/invitations/') ||
+    path === '/restaurants' || path.startsWith('/restaurants/') ||
+    path === '/search' || path.startsWith('/search/');
+
+  /**
    * "Camera or AI?" create screen — has its own header and opens a fullscreen
    * camera, so it must hide the bottom tab bar (otherwise the capture/record
    * button sits behind it).
@@ -70,10 +80,10 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
     isConversationScreen,
     showConversationSidebar,
     isNotificationsRoute,
-    /** Hide mobile app header (conversation / deck has its own bar). */
-    hideMobileAppHeader: (isConversationScreen && !isCommunityFullscreen) || isSuitabilityDeckRoute || isRealOrAiCreateRoute || isDiscoverySwipeRoute,
-    /** Hide bottom tab bar — chat rooms + suitability deck + fullscreen swipe, not /messages hub. */
-    hideBottomNav: isConversationScreen || isSuitabilityDeckRoute || isRealOrAiCreateRoute || isDiscoverySwipeRoute,
+    /** Hide mobile app header (conversation / deck / browse screens have their own bar). */
+    hideMobileAppHeader: (isConversationScreen && !isCommunityFullscreen) || isSuitabilityDeckRoute || isRealOrAiCreateRoute || isBrowseHeaderlessRoute,
+    /** Hide bottom tab bar — chat rooms + suitability deck only; browse screens keep it. */
+    hideBottomNav: isConversationScreen || isSuitabilityDeckRoute || isRealOrAiCreateRoute,
     /** app-main--chat: fixed height / no outer scroll for threads + deck. */
     useChatMainLayout: isConversationScreen || isSuitabilityDeckRoute,
   };

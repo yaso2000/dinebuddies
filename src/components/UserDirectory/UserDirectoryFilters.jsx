@@ -153,11 +153,11 @@ export default function UserDirectoryFilters({
           title={t('user_directory_online_filter_aria', 'Show only members online now')}
           style={{
             height: '32px',
-            padding: '0 8px 0 6px',
+            padding: '0 6px',
             borderRadius: '999px',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '0',
             cursor: 'pointer',
             fontSize: '0.78rem',
             fontWeight: 700,
@@ -191,7 +191,6 @@ export default function UserDirectoryFilters({
               }}
             />
           </span>
-          <span>{t('user_directory_online_now', 'Online')}</span>
         </button>
       )}
     </div>
