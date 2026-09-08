@@ -112,19 +112,23 @@ export function mapGoogleTypesToBusinessType(types) {
  */
 export function resolveAllowedVenueCategory(types) {
     if (!Array.isArray(types) || types.length === 0) return null;
-    const lower = new Set(types.map((x) => String(x).toLowerCase()));
-    if (lower.has('night_club')) return 'Night Club';
-    if (lower.has('lodging') || lower.has('hotel') || lower.has('resort_hotel')) return 'Hotel';
-    if (lower.has('bar')) return 'Bar';
-    if (lower.has('cafe') || lower.has('coffee_shop') || lower.has('bakery')) return 'Cafe';
-    if (
-        lower.has('restaurant') ||
-        lower.has('meal_takeaway') ||
-        lower.has('meal_delivery') ||
-        lower.has('fast_food') ||
-        lower.has('food_truck')
-    ) {
+    const lower = types.map((x) => String(x).toLowerCase());
+    const has = (t) => lower.includes(t);
+    // Any *_restaurant type (fast_food_restaurant, hamburger_restaurant, …) — safe
+    // substring: no non-food Google type contains "restaurant".
+    const anyRestaurant = lower.some((x) => x.includes('restaurant'));
+
+    if (has('night_club')) return 'Night Club';
+    if (has('lodging') || has('hotel') || has('resort_hotel') || has('motel') || has('guest_house') || has('bed_and_breakfast')) {
+        return 'Hotel';
+    }
+    // Restaurant family BEFORE cafe/bar so fast-food chains (which Google also
+    // tags "cafe") classify as Restaurant, not Cafe.
+    if (anyRestaurant || has('meal_takeaway') || has('meal_delivery') || has('fast_food') || has('food_truck')) {
         return 'Restaurant';
     }
+    // Exact matches only for bar — never substring (avoid "barber_shop" → Bar).
+    if (has('bar') || has('pub') || has('wine_bar') || has('cocktail_bar') || has('brewery')) return 'Bar';
+    if (has('cafe') || has('coffee_shop') || has('cafeteria') || has('bakery')) return 'Cafe';
     return null;
 }

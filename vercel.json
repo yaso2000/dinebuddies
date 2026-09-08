@@ -86,5 +86,16 @@
         "env": {
             "NODE_OPTIONS": "--max_old_space_size=4096"
         }
-    }
+    },
+    "functions": {
+        "api/cron/ingest-pending-venues.js": {
+            "maxDuration": 60
+        }
+    },
+    "crons": [
+        {
+            "path": "/api/cron/ingest-pending-venues",
+            "schedule": "*/5 * * * *"
+        }
+    ]
 }
