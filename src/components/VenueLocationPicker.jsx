@@ -142,7 +142,10 @@ const VenueLocationPicker = ({
         ).slice(0, 10);
         setDbResults(ranked);
 
-        if (ranked.length === 0) {
+        // Supplement with Google whenever local matches are few, so new venues
+        // (not yet on DineBuddies) always appear — not only when there are zero
+        // local results. DineBuddies listings still rank first in the dropdown.
+        if (ranked.length < 5) {
           try {
             const google = await fetchGoogleVenuePredictions({
               input: trimmed,
@@ -158,7 +161,7 @@ const VenueLocationPicker = ({
             });
             if (isStale()) return;
             setGoogleResults(google);
-            if (!google.length) {
+            if (!google.length && ranked.length === 0) {
               setSearchError(
                 city
                   ? t('venue_no_results_in_city', {
@@ -172,9 +175,12 @@ const VenueLocationPicker = ({
             if (isStale()) return;
             console.error('[VenueLocationPicker] Google search failed:', err);
             setGoogleResults([]);
-            setSearchError(
-              err instanceof Error ? err.message : t('location_search_failed', 'Search failed')
-            );
+            // Only surface an error when there are no local results to show.
+            if (ranked.length === 0) {
+              setSearchError(
+                err instanceof Error ? err.message : t('location_search_failed', 'Search failed')
+              );
+            }
           }
         } else {
           setGoogleResults([]);

@@ -1503,7 +1503,7 @@ const BusinessesDirectory = () => {
                     }
                 `}</style>
 
-                {/* Filter Bar - New Layout */}
+                {/* Filter Bar - New Layout — pinned to the top while scrolling */}
                 <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -1512,7 +1512,10 @@ const BusinessesDirectory = () => {
           padding: '8px 12px',
           borderRadius: '16px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-          marginBottom: '0.75rem'
+          marginBottom: '0.75rem',
+          position: 'sticky',
+          top: 0,
+          zIndex: 30
         }}>
                     {/* Row 1: Search + Filters — one horizontally-scrollable row so filters
                         never overlap/truncate on narrow screens. */}
