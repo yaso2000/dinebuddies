@@ -964,6 +964,7 @@
   "all_rights_reserved": "© 2026 All Rights Reserved",
   "all_countries": "All Countries",
   "country_or_city": "Country or city",
+  "no_venues_in_category": "No venues in this category.",
   "search_venue_or_place": "Search a venue, city or country…",
   "all_types": "All Types",
   "allow_following": "Allow Following",

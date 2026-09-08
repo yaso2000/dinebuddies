@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import MagneticDeck from '../components/discovery/MagneticDeck';
@@ -7,10 +7,33 @@ import { useBusinessSwipeDeck } from '../hooks/useBusinessSwipeDeck';
 import '../components/discovery/discovery.css';
 import { AppText } from '../components/base';
 
+/** Legacy sub-types folded into "Restaurant" (same grouping as the list view). */
+const RESTAURANT_LIKE_TYPES = new Set(['Restaurant', 'Fast Food', 'Food Truck']);
+
 /** Partners / restaurants — magnetic swipe deck (default /restaurants). Close → list. */
 export default function BusinessesSwipePage() {
   const { t } = useTranslation();
   const { items, loading } = useBusinessSwipeDeck();
+  const [activeFilter, setActiveFilter] = useState('All');
+
+  const categories = [
+    { id: 'All', label: t('filter_all'), icon: null },
+    { id: 'Restaurant', label: t('type_restaurant'), icon: '🍴' },
+    { id: 'Cafe', label: t('type_cafe'), icon: '☕' },
+    { id: 'Bar', label: t('type_bar', 'Bar'), icon: '🍺' },
+    { id: 'Night Club', label: t('type_nightclub', 'Night Club'), icon: '🎵' },
+    { id: 'Hotel', label: t('type_hotel', 'Hotel'), icon: '🏨' },
+  ];
+
+  const filteredItems = useMemo(() => {
+    if (activeFilter === 'All') return items;
+    return items.filter((it) => {
+      const type = it?.raw?.type;
+      return activeFilter === 'Restaurant'
+        ? RESTAURANT_LIKE_TYPES.has(type)
+        : type === activeFilter;
+    });
+  }, [items, activeFilter]);
 
   const renderCard = useCallback(
     ({ item, isTop, onSkip }) => (
@@ -19,8 +42,55 @@ export default function BusinessesSwipePage() {
     []
   );
 
+  const showChips = !(loading && items.length === 0) && items.length > 0;
+
   return (
     <div className="discovery-shell discovery-shell--in-layout discovery-shell--partners">
+      {showChips ? (
+        <div
+          className="category-icons-scroll"
+          style={{
+            display: 'flex',
+            gap: '8px',
+            overflowX: 'auto',
+            padding: '8px 12px',
+            width: '100%',
+            flex: '0 0 auto',
+          }}>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setActiveFilter(cat.id)}
+              style={{
+                flex: '0 0 auto',
+                padding: '8px 12px',
+                borderRadius: '10px',
+                border:
+                  activeFilter === cat.id
+                    ? '2px solid var(--primary)'
+                    : '1px solid var(--border-color)',
+                background:
+                  activeFilter === cat.id
+                    ? 'rgba(139, 92, 246, 0.1)'
+                    : 'var(--bg-card)',
+                color: activeFilter === cat.id ? 'var(--primary)' : 'var(--text-main)',
+                fontSize: '0.8rem',
+                fontWeight: activeFilter === cat.id ? 700 : 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                whiteSpace: 'nowrap',
+              }}>
+              {cat.icon ? <span aria-hidden>{cat.icon}</span> : null}
+              {cat.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       {loading && items.length === 0 ? (
         <div className="discovery-feed discovery-feed__empty">
           <AppText as="p">{t('loading', 'Loading…')}</AppText>
@@ -28,10 +98,12 @@ export default function BusinessesSwipePage() {
             {t('list_view', 'List')}
           </Link>
         </div>
-      ) : items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="discovery-feed discovery-feed__empty">
           <AppText as="h2" className="discovery-feed__empty-title">
-            {t('no_restaurants_found', 'No partners to show yet.')}
+            {items.length === 0
+              ? t('no_restaurants_found', 'No partners to show yet.')
+              : t('no_venues_in_category', 'No venues in this category.')}
           </AppText>
           <AppText as="p" className="discovery-feed__empty-sub">
             {t('partners_swipe_empty_sub', 'Published businesses will appear here as cards.')}
@@ -42,7 +114,8 @@ export default function BusinessesSwipePage() {
         </div>
       ) : (
         <MagneticDeck
-          items={items}
+          key={activeFilter}
+          items={filteredItems}
           renderCard={renderCard}
           listPath="/restaurants/list"
           emptyTitle={t('no_restaurants_found', 'No partners to show yet.')}
