@@ -905,6 +905,17 @@ async function syncPublicProfileFromUserDoc(uid, afterData) {
         return { skipped: true };
     }
 
+    // Never project a nameless consumer profile: ghost/residual user docs (e.g. a
+    // deleted account re-created by a stray write-back) have no name and would
+    // otherwise show up in listings as a blank avatar with no initials.
+    const projectedName = String(
+        mapped.displayName || mapped.name || afterData.name || afterData.displayName || ''
+    ).trim();
+    if (mapped.profileType === 'user' && !projectedName) {
+        await publicRef.delete().catch(() => {});
+        return { deleted: true, reason: 'no_name' };
+    }
+
     // Profile-photo soft gate: stamp whether the avatar is a REAL photo (a face).
     // Uploaded Storage photos resolve without a fetch; Google/Facebook OAuth photos
     // are fetched + classified once (real JPEG/large vs default monogram PNG) and
@@ -930,13 +941,13 @@ async function syncPublicProfileFromUserDoc(uid, afterData) {
         afterData.avatarIsRealPhoto !== avatarIsRealPhoto ||
         (afterData.avatarClassifiedUrl || null) !== nextClassifiedUrl
     ) {
+        // update() (not set+merge) so a users doc deleted in the meantime is NOT
+        // re-created as a ghost with only these two fields — the root cause of
+        // blank, auth-less "accounts" leaking into listings.
         await db
             .collection('users')
             .doc(uid)
-            .set(
-                { avatarIsRealPhoto, avatarClassifiedUrl: nextClassifiedUrl },
-                { merge: true }
-            )
+            .update({ avatarIsRealPhoto, avatarClassifiedUrl: nextClassifiedUrl })
             .catch(() => {});
     }
 
