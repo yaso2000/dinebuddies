@@ -19,9 +19,7 @@ export const PUBLIC_VENUE_TYPES = [
     'Cafe',
     'Bar',
     'Night Club',
-    'Cinema',
-    'Concert',
-    'Sports Match',
+    'Hotel',
 ];
 
 export function publicVenueTypeI18nKey(type) {
@@ -65,6 +63,10 @@ export function normalizePublicVenueType(type) {
     const legacy = {
         'Food Truck': 'Restaurant',
         'Fast Food': 'Restaurant',
+        // Retired categories fold into the closest of the five (old invitations).
+        Cinema: 'Restaurant',
+        Concert: 'Night Club',
+        'Sports Match': 'Bar',
     };
     return legacy[t] || 'Restaurant';
 }

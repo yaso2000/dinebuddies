@@ -1,9 +1,7 @@
 import {
     FaBeer,
     FaCoffee,
-    FaFilm,
-    FaFutbol,
-    FaMicrophone,
+    FaHotel,
     FaMusic,
     FaUtensils,
 } from 'react-icons/fa';
@@ -14,9 +12,7 @@ const VENUE_ICON_BY_TYPE = {
     Cafe: FaCoffee,
     Bar: FaBeer,
     'Night Club': FaMusic,
-    Cinema: FaFilm,
-    Concert: FaMicrophone,
-    'Sports Match': FaFutbol,
+    Hotel: FaHotel,
 };
 
 /** Venue categories for public invitation create (type + monochrome icon). */

@@ -161,9 +161,7 @@ const Home = () => {
   { id: 'Cafe', label: t('type_cafe'), icon: '☕' },
   { id: 'Bar', label: t('type_bar', 'Bar'), icon: '🍺' },
   { id: 'Night Club', label: t('type_nightclub', 'Night Club'), icon: '🎵' },
-  { id: 'Cinema', label: t('type_cinema', 'Cinema'), icon: '🎬' },
-  { id: 'Concert', label: t('type_concert', 'Concert'), icon: '🎤' },
-  { id: 'Sports Match', label: t('type_sportsmatch', 'Sports match'), icon: '⚽' },
+  { id: 'Hotel', label: t('type_hotel', 'Hotel'), icon: '🏨' },
   { id: 'Directory', label: t('directory'), icon: '📖' }];
 
 
