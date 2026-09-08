@@ -48,10 +48,10 @@
  */
 .app-main.app-main--fullscreen.app-main--connect {
     background: #07070c !important;
-    /* Reserve nav + raised FAB clearance. iOS gets this from safe-area-inset-bottom;
-       Android's inset is 0, so floor it with max() so the card never sits under the
-       tab bar on either platform (unified look). */
-    padding-bottom: calc(var(--nav-height, 65px) + max(env(safe-area-inset-bottom, 0px), 22px) + 12px) !important;
+    /* Reserve exactly the tab-bar height (+ iOS home-indicator inset) so the card
+       sits right above the nav with no empty gap. Android inset is 0 → just the
+       nav height; iOS adds its safe-area inset. */
+    padding-bottom: calc(var(--nav-height, 65px) + env(safe-area-inset-bottom, 0px)) !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
 }
