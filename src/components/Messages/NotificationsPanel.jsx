@@ -290,22 +290,29 @@ const NotificationsPanel = () => {
       markAsRead(notification.id, notification._collection || 'notifications');
     }
 
-    // Special routing: business/community messages → chat
+    // Special routing: message notifications → their chat.
+    // actionUrl is the authoritative destination and is always stored correctly:
+    // private DM → /chat/<uid>, invitation group chat → /invitation/<id>/chat,
+    // community → /community/<id>, stage → /stage/<id>. The Cloud Function stamps
+    // fromUserId (the message SENDER) on EVERY notification, so keying off it forced
+    // every message notification — invitation/community/stage group chats included —
+    // into a private 1:1 chat. Honor actionUrl first; only derive a private-chat
+    // route from the sender when no actionUrl was stored (legacy docs).
     if (
       notification.type === 'business_message' ||
       notification.type === 'message' ||
       notification.type === 'community_message'
     ) {
+      if (notification.actionUrl) {
+        navigate(notification.actionUrl);
+        return;
+      }
       const senderId =
         notification.fromUserId ||
         notification.metadata?.senderId ||
         notification.metadata?.partnerId;
       if (senderId) {
         navigate(`/chat/${senderId}`);
-        return;
-      }
-      if (notification.actionUrl) {
-        navigate(notification.actionUrl);
         return;
       }
     }
