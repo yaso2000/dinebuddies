@@ -38,7 +38,7 @@ export function useDiscoveryProfiles({
     ageCategoryFilter = 'all',
     photoFilter = 'with_photo',
 } = {}) {
-    const { currentUser, userProfile, isGuest } = useAuth();
+    const { currentUser, userProfile, isGuest, loading: authLoading } = useAuth();
     const viewerUid = currentUser?.uid || currentUser?.id;
     const canLoad = Boolean(enabled && viewerUid && !isGuest);
     const [deviceLocation, setDeviceLocation] = useState(null);
@@ -97,11 +97,17 @@ export function useDiscoveryProfiles({
     }, [directory.users, userLocation, viewer, photoFilter, genderFilter, ageCategoryFilter]);
 
     useEffect(() => {
-        if (!canLoad || directory.loading || directory.loadingMore || !directory.hasMore) return;
+        // Wait until the viewer profile is ready (gender loaded) before auto-paging —
+        // otherwise the gender-comfort filter drops everyone and we'd burn through
+        // every page while the deck still looks empty on first load.
+        if (!canLoad || authLoading || !viewer?.gender) return;
+        if (directory.loading || directory.loadingMore || !directory.hasMore) return;
         if (profiles.length >= MIN_SWIPE_DECK_SIZE) return;
         directory.loadMore();
     }, [
         canLoad,
+        authLoading,
+        viewer,
         directory.hasMore,
         directory.loadMore,
         directory.loading,
@@ -111,7 +117,9 @@ export function useDiscoveryProfiles({
 
     return {
         profiles,
-        loading: directory.loading && profiles.length === 0,
+        // Keep showing the loading state (not the empty "no members" deck) while
+        // auth/profile is still resolving on first load.
+        loading: (authLoading || directory.loading) && profiles.length === 0,
         loadingMore: directory.loadingMore,
         error: directory.error,
         hasMore: directory.hasMore,

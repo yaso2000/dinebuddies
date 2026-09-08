@@ -1945,7 +1945,8 @@ exports.createOrGetConversation = functions.https.onCall(async (data, context) =
 });
 
 // ─── Trusted callable: community membership (join/leave) ───────────────────
-exports.setCommunityMembership = functions.https.onCall(async (data, context) => {
+// Keep one warm instance so joining a community is instant (no cold start).
+exports.setCommunityMembership = functions.runWith({ minInstances: 1 }).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
     }

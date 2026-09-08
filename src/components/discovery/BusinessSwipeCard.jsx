@@ -307,7 +307,7 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
                   onClick={handleJoin}
                 >
                   <FaComments size={14} aria-hidden />
-                  <AppText as="span">{joinLabel}</AppText>
+                  <AppText as="span">{joinInProgress ? t('joining', 'Joining…') : joinLabel}</AppText>
                 </button>
                 <button
                   type="button"
