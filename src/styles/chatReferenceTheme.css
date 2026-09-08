@@ -16,8 +16,12 @@
   --chat-ref-overlay: rgba(7, 12, 23, 0.74);
 }
 
-/* Stage / community: bubble colors come from data-cchat-zone-theme, not the 1:1 chat gradient. */
-:where(.community-chat-root.chat-room-container, .community-chat-fullscreen.community-chat-root) {
+/* Stage / community: bubble colors come from data-cchat-zone-theme, not the 1:1 chat gradient.
+   The invitation group chat (.invitation-chat-root.chat-screen.community-chat-root) renders the
+   SAME community bubble markup, so it must map the incoming-bubble tokens here too — otherwise
+   --chat-ref-incoming-bg/text stay undefined, the !important incoming rule below falls back to a
+   transparent fill with inherited (theme-dark) text, and received messages become unreadable. */
+:where(.community-chat-root.chat-room-container, .community-chat-fullscreen.community-chat-root, .invitation-chat-root.chat-screen.community-chat-root) {
   --chat-ref-outgoing-bg: var(--cchat-zone-outgoing-bg);
   --chat-ref-outgoing-shadow: var(--cchat-zone-outgoing-shadow);
   --chat-ref-host-bg: var(--cchat-zone-host-bg, var(--cchat-zone-outgoing-bg));

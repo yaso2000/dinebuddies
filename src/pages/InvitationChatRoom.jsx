@@ -385,12 +385,20 @@ const InvitationChatRoom = () => {
   const handleSendMessage = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!newMessage.trim()) return;
-    // Sending must not switch the composer's input mode: if the emoji picker
-    // was open, it stays open (and visually unchanged) after send — the user
-    // returns to the OS keyboard only by explicitly tapping the keyboard icon.
-    const wasEmojiPickerOpen = emojiPickerOpen;
 
     const text = newMessage.trim();
+
+    // Optimistic clear: empty the field synchronously and keep the input focused
+    // in the same tick. Because the Send/emoji/image buttons no longer blur the
+    // input (onMouseDown preventDefault), the OS keyboard never closes, so there
+    // is no viewport resize round-trip and no "jumping" on each send. We must NOT
+    // await before clearing — an async gap lets the keyboard collapse/reopen.
+    setNewMessage('');
+    // If the emoji picker is open it stays open (do not force the OS keyboard);
+    // otherwise keep the text field focused so the keyboard stays put.
+    if (!emojiPickerOpen) {
+      inputRef.current?.focus();
+    }
 
     try {
       await addDoc(collection(db, collectionName, invitationId, 'messages'), {
@@ -404,10 +412,6 @@ const InvitationChatRoom = () => {
         deliveredTo: [],
         readBy: []
       });
-      setNewMessage('');
-      if (!wasEmojiPickerOpen) {
-        setTimeout(() => inputRef.current?.focus(), 10);
-      }
 
       // Notify all participants (host + joined members) except the sender
       const hostId = invitation?.authorId || invitation?.author?.id;
@@ -694,6 +698,9 @@ const InvitationChatRoom = () => {
               type="button"
               className={`send-btn-circle chat-send-btn${isRecording ? ' chat-send-btn--recording' : ''}`}
               aria-label={isRecording ? t('chat_voice_stop', { defaultValue: 'Stop' }) : (newMessage.trim() ? t('send', { defaultValue: 'Send' }) : t('record_voice', { defaultValue: 'Record voice' }))}
+              // Keep the text field focused: tapping Send must NOT blur the input,
+              // or the OS keyboard closes+reopens and the viewport jumps each send.
+              onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => {
                 if (isRecording) handleStopRecording(true);
                 else if (newMessage.trim()) handleSendMessage(e);
