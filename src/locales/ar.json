@@ -4226,6 +4226,7 @@
   "payment_type_guest_pays": "الضيف يدفع",
   "payment_type_host_pays": "المضيف يدفع",
   "payment_type_split": "مناصفة",
+  "media_helper_text_photo": "اختر صورة لدعوتك",
   "pending": "قيد الانتظار",
   "pending_requests": "الطلبات المعلقة ({{count}})",
   "people": "أشخاص",

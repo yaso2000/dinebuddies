@@ -28,7 +28,7 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { input, countryCode, sessionToken, languageCode, minLat, minLon, maxLat, maxLon, lat, lng, radiusKm, businessOnly } =
+    const { input, countryCode, sessionToken, languageCode, minLat, minLon, maxLat, maxLon, lat, lng, radiusKm, businessOnly, restrict } =
         req.query;
 
     if (!input || typeof input !== 'string' || input.trim().length < 2 || !sessionToken) {
@@ -49,6 +49,7 @@ export default async function handler(req, res) {
             centerLng: lng,
             radiusMeters: radiusKm != null ? Number(radiusKm) * 1000 : undefined,
             businessOnly: businessOnly === '1' || businessOnly === 'true',
+            restrict: restrict === '1' || restrict === 'true',
         });
 
         res.setHeader('Access-Control-Allow-Origin', '*');

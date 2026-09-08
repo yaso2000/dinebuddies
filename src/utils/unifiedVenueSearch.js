@@ -81,13 +81,17 @@ export async function fetchGoogleVenuePredictions({
   // Restrict venue suggestions to the app's five categories (restaurant, cafe,
   // bar, night club, hotel) — never surface a barber shop, gym, etc.
   params.set('businessOnly', '1');
+  // Keep venue search local: hard-restrict results to a circle around the user
+  // (applied server-side when GPS is available) so far / other-country venues
+  // never appear and can't be used to host an invitation.
+  params.set('restrict', '1');
   if (countryIsoResolved) params.set('countryCode', countryIsoResolved);
   const latNum = userLat != null ? Number(userLat) : NaN;
   const lngNum = userLng != null ? Number(userLng) : NaN;
   if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
     params.set('lat', String(latNum));
     params.set('lng', String(lngNum));
-    params.set('radiusKm', '30');
+    params.set('radiusKm', '50');
   }
   if (
     bbox?.minLat != null &&

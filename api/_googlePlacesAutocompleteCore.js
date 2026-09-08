@@ -96,6 +96,33 @@ export function buildAutocompletePayloadVariants(opts) {
           }
         : {};
 
+    // Hard local restriction (venue search for invitations): only return places
+    // inside the circle — no cross-country / far broadening fallbacks. Prevents
+    // hosting an invitation at a venue far from the user.
+    if (opts.restrict && hasCircle) {
+        const circleRestriction = {
+            locationRestriction: {
+                circle: {
+                    center: { latitude: cLat, longitude: cLng },
+                    radius: Math.min(radiusM, 50000),
+                },
+            },
+        };
+        const restricted = opts.businessOnly
+            ? [
+                  { ...base, ...circleRestriction, includedPrimaryTypes: [...BUSINESS_PRIMARY_TYPES] },
+                  { ...base, ...circleRestriction },
+              ]
+            : [{ ...base, ...circleRestriction }];
+        const seenR = new Set();
+        return restricted.filter((v) => {
+            const k = JSON.stringify(v);
+            if (seenR.has(k)) return false;
+            seenR.add(k);
+            return true;
+        });
+    }
+
     const localBias = hasCircle ? circleBias : bboxBias;
 
     const variants = [];
