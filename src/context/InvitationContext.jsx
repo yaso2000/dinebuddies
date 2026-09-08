@@ -1158,6 +1158,24 @@ export const InvitationProvider = ({ children }) => {
         }
     };
 
+    /**
+     * Growth loop: after a public invitation is published, if it is hosted at a
+     * Google venue not yet in DineBuddies (has placeId, no restaurantId), ingest
+     * that venue into the directory in the background. Best-effort.
+     */
+    const maybeIngestPublishedVenue = async (invitationId) => {
+        try {
+            const snap = await getDoc(doc(db, 'invitations', invitationId));
+            if (!snap.exists()) return;
+            const inv = snap.data() || {};
+            if (inv.placeId && !inv.restaurantId) {
+                void requestVenueIngestFromInvitation({ invitationId, placeId: inv.placeId });
+            }
+        } catch (err) {
+            console.warn('[maybeIngestPublishedVenue] skipped', err?.message || err);
+        }
+    };
+
     const publishPublicInvitationDraft = async (invitationId) => {
         const uid = currentUser?.uid || currentUser?.id;
         if (!invitationId || !currentUser || uid === 'guest') {
@@ -1253,6 +1271,7 @@ export const InvitationProvider = ({ children }) => {
                 templateType: 'classic',
             });
             await refreshLocal();
+            void maybeIngestPublishedVenue(invitationId);
             return { success: true, alreadyPublished: false };
         };
 
@@ -1266,6 +1285,7 @@ export const InvitationProvider = ({ children }) => {
             try {
                 const result = await publishPublicInvitationCallable({ invitationId });
                 await refreshLocal();
+                void maybeIngestPublishedVenue(invitationId);
                 return {
                     success: true,
                     alreadyPublished: result?.data?.alreadyPublished === true,
