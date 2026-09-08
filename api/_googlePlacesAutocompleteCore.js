@@ -1,7 +1,11 @@
 const AUTOCOMPLETE_URL = 'https://places.googleapis.com/v1/places:autocomplete';
 
-/** Google allows max 5 values for includedPrimaryTypes. */
-export const BUSINESS_PRIMARY_TYPES = ['restaurant', 'cafe', 'bar', 'bakery', 'meal_takeaway'];
+/**
+ * The app's five canonical venue categories, mapped to Google primary types.
+ * Google allows max 5 values for includedPrimaryTypes — this is exactly five,
+ * so a barber shop / hair salon / etc. never appears in venue suggestions.
+ */
+export const BUSINESS_PRIMARY_TYPES = ['restaurant', 'cafe', 'bar', 'night_club', 'lodging'];
 
 const FIELD_MASK =
     'suggestions.placePrediction.placeId,suggestions.placePrediction.text.text,suggestions.placePrediction.structuredFormat.mainText.text,suggestions.placePrediction.structuredFormat.secondaryText.text';

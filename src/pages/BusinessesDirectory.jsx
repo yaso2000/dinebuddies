@@ -28,6 +28,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import '../components/MapStyles.css';
 import { addBaseTileLayer } from '../utils/mapTiles';
+import DirectorySearchBar from '../components/DirectorySearchBar';
+import { matchesAllTokens } from '../utils/searchNormalize';
 import { goToLogin } from '../utils/goToLogin';
 import {
   handleBusinessCommunityJoinClick,
@@ -808,161 +810,6 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
 // Legacy sub-types folded into "Restaurant" for filtering (no separate chips).
 const RESTAURANT_LIKE_TYPES = new Set(['Restaurant', 'Fast Food', 'Food Truck']);
 
-/**
- * Unified search box: one field that finds a specific venue by name AND filters
- * by city or country — all from the loaded venues (free, no external API).
- *
- * - `text` / `onTextChange`  — the free-text venue-name query (drives the list).
- * - `place` / `onPlaceChange` — the selected { id, type:'country'|'city', value, label, sublabel } or null.
- * - `venues` — [{ id, name, city }] for name suggestions.
- * - `places` — place options [{ id, type, value, label, sublabel }].
- */
-function UnifiedVenueSearch({ text, onTextChange, place, onPlaceChange, venues, places, placeholder, clearLabel }) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDown = (e) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('touchstart', onDown, { passive: true });
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('touchstart', onDown);
-    };
-  }, [open]);
-
-  // When a place is selected the box shows its label; otherwise the typed text.
-  const display = place ? place.label : text;
-  const q = (place ? '' : text).trim().toLocaleLowerCase();
-
-  const venueMatches = q ?
-  venues.filter((v) => `${v.name} ${v.city || ''}`.toLocaleLowerCase().includes(q)).slice(0, 6) :
-  [];
-  const placeMatches = (q ?
-  places.filter((o) => {
-    const hay = `${o.label} ${o.sublabel || ''}`.toLocaleLowerCase();
-    return hay.startsWith(q) || hay.split(/\s+/).some((w) => w.startsWith(q)) || hay.includes(q);
-  }) :
-  places).slice(0, 6);
-
-  const suggestions = [
-  ...venueMatches.map((v) => ({ kind: 'venue', id: `v:${v.id}`, label: v.name, sublabel: v.city, name: v.name })),
-  ...placeMatches.map((p) => ({ kind: 'place', id: `p:${p.id}`, label: p.label, sublabel: p.sublabel, type: p.type, place: p }))].
-  slice(0, 10);
-
-  const pick = (item) => {
-    if (item.kind === 'venue') {
-      onPlaceChange(null);
-      onTextChange(item.name);
-    } else {
-      onTextChange('');
-      onPlaceChange(item.place);
-    }
-    setOpen(false);
-  };
-  const clear = () => {
-    onTextChange('');
-    onPlaceChange(null);
-    setOpen(false);
-  };
-
-  const iconFor = (item) => item.kind === 'venue' ? '🍴' : item.type === 'city' ? '🏙️' : '🌍';
-
-  return (
-    <div ref={wrapRef} style={{ position: 'relative', flex: '1 1 auto', minWidth: '200px' }}>
-      <FaSearch style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.85rem', pointerEvents: 'none' }} />
-      <AppTextInput
-        type="text"
-        value={display}
-        placeholder={placeholder}
-        autoComplete="off"
-        onFocus={() => setOpen(true)}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (place) onPlaceChange(null);
-          onTextChange(v);
-          setOpen(true);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && suggestions.length > 0) {
-            e.preventDefault();
-            pick(suggestions[0]);
-          }
-          if (e.key === 'Escape') setOpen(false);
-        }}
-        aria-label={placeholder}
-        style={{
-          width: '100%',
-          height: '38px',
-          padding: '10px 30px 10px 36px',
-          border: '1px solid var(--border-color)',
-          borderRadius: '12px',
-          background: 'var(--bg-main)',
-          color: 'var(--text-main)',
-          fontSize: '0.85rem'
-        }} />
-      {(place || text) &&
-      <button
-        type="button"
-        onClick={clear}
-        aria-label={clearLabel}
-        style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', display: 'flex' }}>
-        <FaTimes />
-      </button>
-      }
-      {open && suggestions.length > 0 &&
-      <div
-        role="listbox"
-        style={{
-          position: 'absolute',
-          top: 'calc(100% + 4px)',
-          left: 0,
-          minWidth: '100%',
-          maxWidth: '300px',
-          zIndex: 60,
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-color)',
-          borderRadius: '12px',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-          overflow: 'hidden'
-        }}>
-        {suggestions.map((item) =>
-        <button
-          key={item.id}
-          type="button"
-          role="option"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => pick(item)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            width: '100%',
-            textAlign: 'start',
-            padding: '9px 12px',
-            border: 'none',
-            background: 'transparent',
-            color: 'var(--text-main)',
-            fontSize: '0.85rem',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap'
-          }}>
-          <span style={{ fontSize: '0.9rem', flex: '0 0 auto' }}>{iconFor(item)}</span>
-          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {item.label}
-            {item.sublabel ?
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}> · {item.sublabel}</span> :
-            null}
-          </span>
-        </button>
-        )}
-      </div>
-      }
-    </div>);
-}
 
 const BusinessesDirectory = () => {
   const { t, i18n } = useTranslation();
@@ -1170,10 +1017,24 @@ const BusinessesDirectory = () => {
     let filtered = restaurants.filter((res) => {
       if (!res) return false;
 
-      // Search filter
-      const matchesSearch = !searchQuery ||
-      res.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      res.type?.toLowerCase().includes(searchQuery.toLowerCase());
+      // Search filter — lenient (hamza/tashkeel-insensitive), across
+      // name + type + city + region/area + country.
+      const searchHaystack = [
+      res.name,
+      res.type,
+      res.city,
+      res.businessInfo?.city,
+      res.region,
+      res.state,
+      res.businessInfo?.region,
+      res.businessInfo?.state,
+      res.address,
+      res.businessInfo?.address,
+      res.country,
+      res.businessInfo?.country,
+      res.countryCode].
+      filter(Boolean).join(' ');
+      const matchesSearch = matchesAllTokens(searchHaystack, searchQuery);
 
       // Category filter
       const matchesCategory =
@@ -1659,13 +1520,14 @@ const BusinessesDirectory = () => {
             className="category-icons-scroll"
             style={{ display: 'flex', gap: '8px', alignItems: 'center', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                         {/* Unified search — one box: venue name + city + country */}
-                        <UnifiedVenueSearch
+                        <DirectorySearchBar
               text={searchQuery}
               onTextChange={setSearchQuery}
               place={placeFilter}
               onPlaceChange={setPlaceFilter}
-              venues={venueOptions}
+              items={venueOptions}
               places={placeOptions}
+              itemIcon="🍴"
               placeholder={t('search_venue_or_place', 'Search a venue, city or country…')}
               clearLabel={t('clear', 'Clear')} />
                     </div>

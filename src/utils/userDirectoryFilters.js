@@ -4,6 +4,40 @@ import {
 } from './postsFeedScope';
 import { getUserDocLatLng } from './userDocCoords';
 import { hasRealProfilePhoto } from './avatarUtils';
+import { matchesAllTokens, normalizeSearchText } from './searchNormalize';
+
+/** Match a member against a data-derived place chip ({ type:'city'|'country', value }). */
+export function memberMatchesPlaceFilter(user, placeFilter) {
+    if (!placeFilter) return true;
+    const val = normalizeSearchText(placeFilter.value);
+    if (!val) return true;
+    if (placeFilter.type === 'city') {
+        const c = normalizeSearchText(user?.city);
+        return Boolean(c) && (c === val || c.includes(val) || val.includes(c));
+    }
+    // country
+    const country = normalizeSearchText(user?.country);
+    const code = String(user?.countryCode || user?.country_code || '').trim().toLowerCase();
+    const wantCode = String(placeFilter.countryCode || '').trim().toLowerCase();
+    return (Boolean(country) && country === val) || (Boolean(wantCode) && code === wantCode);
+}
+
+/** Lenient free-text match across a member's name + city + region + country. */
+export function memberMatchesSearchText(user, searchText) {
+    if (!searchText || !searchText.trim()) return true;
+    const haystack = [
+        user?.name,
+        user?.displayName,
+        user?.username,
+        user?.fullName,
+        user?.city,
+        user?.region,
+        user?.state,
+        user?.principalSubdivision,
+        user?.country,
+    ].filter(Boolean).join(' ');
+    return matchesAllTokens(haystack, searchText);
+}
 
 /** Photo soft-gate filter: 'with_photo' (only real photos) or 'all'. */
 export function memberMatchesPhotoFilter(user, photoFilter) {
@@ -208,6 +242,8 @@ export function filterDirectoryUsers(users, {
     onlineOnly = false,
     geoScope = 'global',
     selectedPlace = null,
+    searchText = '',
+    placeFilter = null,
     userCityNorm = '',
     userCountryNorm = '',
     userCountryCode = '',
@@ -218,6 +254,9 @@ export function filterDirectoryUsers(users, {
         if (onlineOnly && !user?.isOnline) return false;
         if (!memberMatchesGenderFilter(user, genderFilter)) return false;
         if (!memberMatchesAgeCategory(user, ageCategoryFilter)) return false;
+        // Free unified search: name + city + region + country, and a place chip.
+        if (!memberMatchesPlaceFilter(user, placeFilter)) return false;
+        if (!memberMatchesSearchText(user, searchText)) return false;
         if (selectedPlace) return memberMatchesSelectedPlace(user, selectedPlace);
         return memberMatchesGeoScope(user, geoScope, {
             userCityNorm,

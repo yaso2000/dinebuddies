@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import app, { auth, db } from '../firebase/config';
+import { requestVenueIngestFromInvitation } from '../services/venueIngestApi';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const FUNCTIONS_REGION = 'us-central1';
@@ -708,6 +709,15 @@ export const InvitationProvider = ({ children }) => {
             // Only notify if it's not a draft
             if (inviteData.status !== 'draft') {
                 addNotification('Published!', 'Your invitation is now available to everyone.', 'success');
+
+                // Growth loop: venue picked from Google (has placeId) but not yet a
+                // DineBuddies venue → ingest it into the directory in the background.
+                if (inviteData.placeId && !inviteData.restaurantId) {
+                    void requestVenueIngestFromInvitation({
+                        invitationId: docRef.id,
+                        placeId: inviteData.placeId,
+                    });
+                }
 
                 if (newInvite.restaurantId) {
                     const restaurant = restaurants.find(r => r.id === newInvite.restaurantId);

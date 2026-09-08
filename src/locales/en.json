@@ -5285,6 +5285,7 @@
   "profile_directory_card_style_saved": "Card style saved",
   "user_directory_search_error": "Search failed. Try again.",
   "user_directory_search_placeholder": "Search city, region, or country…",
+  "user_directory_search_placeholder_v2": "Search a member, city or country…",
   "user_directory_send_dating_invite": "Private invite",
   "user_directory_send_gift": "Gift",
   "gift_picker_title": "Gifts",

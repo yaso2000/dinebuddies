@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaMapMarkerAlt, FaTimes } from 'react-icons/fa';
 import { LuSparkles } from 'react-icons/lu';
 import InboxHubLink from '../components/discovery/InboxHubLink';
-import LocationAutocomplete from '../components/LocationAutocomplete';
+import DirectorySearchBar from '../components/DirectorySearchBar';
+import { getPrivateInviteeDisplayName } from '../utils/privateInviteAvailability';
 import { useAuth } from '../context/AuthContext';
 import { useUserDirectory } from '../hooks/useUserDirectory';
 import { useProfileGiftPicker } from '../hooks/useProfileGiftPicker';
@@ -12,10 +12,8 @@ import UserDirectoryCard from '../components/UserDirectory/UserDirectoryCard';
 import UserDirectoryFilters from '../components/UserDirectory/UserDirectoryFilters';
 import {
   filterDirectoryUsers,
-  inferDirectoryPlaceScope,
 } from '../utils/userDirectoryFilters';
 import { getUserDocLatLng } from '../utils/userDocCoords';
-import { parseGoogleAddressComponents } from '../utils/googlePlacesBusiness';
 import { goToLogin } from '../utils/goToLogin';
 import './UsersDirectory.css';
 import '../components/venue-search.css';
@@ -33,8 +31,9 @@ export default function UsersDirectory() {
   const [photoFilter, setPhotoFilter] = useState('with_photo'); // 'with_photo' | 'all'
   const [onlineOnly, setOnlineOnly] = useState(false); // online-now switch
   const [deviceLocation, setDeviceLocation] = useState(null);
-  const [placeQuery, setPlaceQuery] = useState('');
-  const [selectedPlace, setSelectedPlace] = useState(null);
+  // Unified free search (name) + data-derived place chip (city/country).
+  const [searchText, setSearchText] = useState('');
+  const [placeFilter, setPlaceFilter] = useState(null);
 
   const viewerUid = currentUser?.uid || currentUser?.id;
   const canBrowse = Boolean(viewerUid && !isGuest);
@@ -79,20 +78,62 @@ export default function UsersDirectory() {
         ageCategoryFilter,
         photoFilter,
         onlineOnly,
-        selectedPlace,
+        searchText,
+        placeFilter,
         userLocation,
       }),
-    [users, genderFilter, ageCategoryFilter, photoFilter, onlineOnly, selectedPlace, userLocation]
+    [users, genderFilter, ageCategoryFilter, photoFilter, onlineOnly, searchText, placeFilter, userLocation]
   );
+
+  // Member-name suggestions for the unified search box.
+  const memberItems = useMemo(() => {
+    const seen = new Set();
+    const opts = [];
+    for (const u of users || []) {
+      const id = u?.uid || u?.id;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      const name = getPrivateInviteeDisplayName(u) || '';
+      if (!name) continue;
+      opts.push({ id, name, city: String(u?.city || '').trim() });
+    }
+    return opts;
+  }, [users]);
+
+  // City + country suggestions derived from loaded members (free, no API).
+  const placeOptions = useMemo(() => {
+    const countrySet = new Set();
+    const cityMap = new Map();
+    for (const u of users || []) {
+      const country = String(u?.country || '').trim();
+      const city = String(u?.city || '').trim();
+      if (country) countrySet.add(country);
+      if (city) {
+        const key = `${city.toLocaleLowerCase()}|${country.toLocaleLowerCase()}`;
+        if (!cityMap.has(key)) cityMap.set(key, { city, country });
+      }
+    }
+    const opts = [];
+    for (const c of countrySet) {
+      opts.push({ id: `country:${c}`, type: 'country', value: c, label: c, sublabel: '' });
+    }
+    for (const { city, country } of cityMap.values()) {
+      opts.push({ id: `city:${city}|${country}`, type: 'city', value: city, label: city, sublabel: country });
+    }
+    opts.sort((a, b) => a.label.localeCompare(b.label));
+    return opts;
+  }, [users]);
 
   // When a place is selected, keep loading a few more pages (capped) until we have matches.
   useEffect(() => {
-    if (!selectedPlace || loading || loadingMore || !hasMore) return;
+    const hasQuery = Boolean(placeFilter) || Boolean(searchText.trim());
+    if (!hasQuery || loading || loadingMore || !hasMore) return;
     if (filteredUsers.length >= 8) return;
     if (users.length >= 120) return;
     loadMore();
   }, [
-    selectedPlace,
+    placeFilter,
+    searchText,
     filteredUsers.length,
     users.length,
     hasMore,
@@ -116,40 +157,6 @@ export default function UsersDirectory() {
     observer.observe(node);
     return () => observer.disconnect();
   }, [hasMore, loadMore, loading, loadingMore]);
-
-  const handlePlaceSelect = useCallback((place) => {
-    const parsed = place.addressComponents
-      ? parseGoogleAddressComponents(place.addressComponents)
-      : { city: '', country: '', countryCode: '' };
-    const city = String(place.city || parsed.city || '').trim();
-    const country = String(place.country || parsed.country || '').trim();
-    const countryCode = String(place.countryCode || parsed.countryCode || '')
-      .trim()
-      .toUpperCase();
-    const label =
-      String(place.fullAddress || place.name || '').trim() ||
-      [city, country].filter(Boolean).join(', ');
-
-    const next = {
-      label,
-      city,
-      country,
-      countryCode,
-      lat: place.lat ?? null,
-      lng: place.lng ?? null,
-      addressComponents: place.addressComponents || [],
-      types: place.types || [],
-    };
-    next.scope = inferDirectoryPlaceScope(next);
-
-    setSelectedPlace(next);
-    setPlaceQuery(label);
-  }, []);
-
-  const clearPlace = useCallback(() => {
-    setSelectedPlace(null);
-    setPlaceQuery('');
-  }, []);
 
   const handleRefresh = useCallback(async () => {
     document.querySelector('.app-main')?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -187,47 +194,20 @@ export default function UsersDirectory() {
       <div className="users-directory-page" dir={rtl ? 'rtl' : 'ltr'}>
         <div className="users-directory-toolbar">
           <div className="users-directory-field users-directory-field--place">
-            <FaMapMarkerAlt className="users-directory-field-icon" aria-hidden />
-            <LocationAutocomplete
-              value={placeQuery}
-              onChange={(e) => {
-                setPlaceQuery(e.target.value);
-                if (selectedPlace) setSelectedPlace(null);
-              }}
-              onSelect={handlePlaceSelect}
-              useGooglePlacesMinimal
-              required={false}
-              userLat={userLocation?.lat}
-              userLng={userLocation?.lng}
-              className="users-directory-place-autocomplete"
-              inputStyle={{
-                width: '100%',
-                border: 'none',
-                background: 'transparent',
-                boxShadow: 'none',
-                padding: '0',
-                height: '38px',
-                fontSize: '0.95rem',
-                color: 'var(--text-main)',
-              }}
+            <DirectorySearchBar
+              text={searchText}
+              onTextChange={setSearchText}
+              place={placeFilter}
+              onPlaceChange={setPlaceFilter}
+              items={memberItems}
+              places={placeOptions}
+              itemIcon="👤"
               placeholder={t(
-                'user_directory_search_placeholder',
-                'Search city, region, or country…'
+                'user_directory_search_placeholder_v2',
+                'Search a member, city or country…'
               )}
-              aria-label={t(
-                'user_directory_geo_search_aria',
-                'Search members by city, region, or country'
-              )}
+              clearLabel={t('clear', 'Clear')}
             />
-            {placeQuery || selectedPlace ? (
-              <button
-                type="button"
-                className="users-directory-field-clear"
-                onClick={clearPlace}
-                aria-label={t('clear', 'Clear')}>
-                <FaTimes />
-              </button>
-            ) : null}
           </div>
 
           <div className="users-directory-toolbar__actions">

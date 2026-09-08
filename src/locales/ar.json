@@ -5487,6 +5487,7 @@
   "profile_directory_card_style_saved": "تم حفظ شكل الكارت",
   "user_directory_search_error": "فشل البحث. حاول مرة أخرى.",
   "user_directory_search_placeholder": "ابحث عن مدينة أو منطقة أو بلد…",
+  "user_directory_search_placeholder_v2": "ابحث عن عضو أو مدينة أو دولة…",
   "user_directory_send_dating_invite": "دعوة خاصة",
   "user_directory_send_gift": "هدية",
   "gift_picker_title": "الهدايا",

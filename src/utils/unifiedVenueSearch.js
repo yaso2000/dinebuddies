@@ -78,6 +78,9 @@ export async function fetchGoogleVenuePredictions({
     sessionToken: sessionToken || newPlacesSessionToken(),
     languageCode: lang,
   });
+  // Restrict venue suggestions to the app's five categories (restaurant, cafe,
+  // bar, night club, hotel) — never surface a barber shop, gym, etc.
+  params.set('businessOnly', '1');
   if (countryIsoResolved) params.set('countryCode', countryIsoResolved);
   const latNum = userLat != null ? Number(userLat) : NaN;
   const lngNum = userLng != null ? Number(userLng) : NaN;

@@ -98,3 +98,33 @@ export function mapGoogleTypesToBusinessType(types) {
     if (lower.has('fast_food') || lower.has('food_truck')) return 'Restaurant';
     return 'Restaurant';
 }
+
+/**
+ * Strict allow-list gate: resolve a Google place to ONE of the app's five venue
+ * categories, or null if it is none of them. Unlike mapGoogleTypesToBusinessType
+ * (which defaults everything to "Restaurant"), this returns null for unsupported
+ * places (e.g. a barber shop) so callers can refuse to ingest them.
+ *
+ * "Flexible" matching: a place qualifies if ANY of its Google types maps to one
+ * of the five categories.
+ * @param {string[]|null|undefined} types
+ * @returns {'Restaurant'|'Cafe'|'Bar'|'Night Club'|'Hotel'|null}
+ */
+export function resolveAllowedVenueCategory(types) {
+    if (!Array.isArray(types) || types.length === 0) return null;
+    const lower = new Set(types.map((x) => String(x).toLowerCase()));
+    if (lower.has('night_club')) return 'Night Club';
+    if (lower.has('lodging') || lower.has('hotel') || lower.has('resort_hotel')) return 'Hotel';
+    if (lower.has('bar')) return 'Bar';
+    if (lower.has('cafe') || lower.has('coffee_shop') || lower.has('bakery')) return 'Cafe';
+    if (
+        lower.has('restaurant') ||
+        lower.has('meal_takeaway') ||
+        lower.has('meal_delivery') ||
+        lower.has('fast_food') ||
+        lower.has('food_truck')
+    ) {
+        return 'Restaurant';
+    }
+    return null;
+}
