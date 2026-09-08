@@ -17,6 +17,8 @@ import { resolveInviteCategory } from '../utils/inviteCategory';
 import { readPrivateInvitationShareToken } from '../utils/privateInvitationShare';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
+import { publishContentAsStory } from '../utils/publishAutoStory';
 import './SocialInvitation.css';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import SocialInvitationCardPreview from '../components/Invitations/socialCard/SocialInvitationCardPreview';
@@ -33,8 +35,9 @@ import { clearPrivateInvitationEditorSession } from '../utils/editorSessionDraft
 import { scheduleScrollPageToTop } from '../utils/scrollPageToTop';
 
 const SocialInvitationPreview = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { showToast } = useToast();
+  const { currentUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { id: draftId } = useParams();
@@ -55,6 +58,7 @@ const SocialInvitationPreview = () => {
 
   const [loadError, setLoadError] = useState(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [alsoPublishStory, setAlsoPublishStory] = useState(false);
   const [hasSentToMembers, setHasSentToMembers] = useState(false);
   const [postPublishShareToken, setPostPublishShareToken] = useState(null);
   postPublishShareTokenRef.current = postPublishShareToken;
@@ -331,6 +335,28 @@ const SocialInvitationPreview = () => {
         return;
       }
 
+      // Optional: also publish a 24h story (opt-in). Best-effort — never blocks.
+      if (alsoPublishStory) {
+        const inv = invitationRef.current || invitation || {};
+        const formattedDate = inv.date
+          ? new Date(inv.date).toLocaleDateString(i18n.language === 'ar' ? 'ar-u-nu-latn' : undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+          : null;
+        publishContentAsStory({
+          currentUser,
+          title: inv.title,
+          image: cardHeroCover,
+          description: inv.description,
+          date: formattedDate,
+          time: inv.time,
+          location: inv.location,
+          maxGuests: inv.guestsNeeded,
+          paymentLine: inv.paymentType
+            ? t(`payment_type_${String(inv.paymentType).toLowerCase().replace(/ /g, '_')}`, { defaultValue: inv.paymentType })
+            : null,
+          sourceType: 'invitation',
+        }).catch((err) => console.error('[SocialInvitationPreview] auto-story', err));
+      }
+
       if (publishResult.shareToken) {
         setPostPublishShareToken(publishResult.shareToken);
       }
@@ -482,6 +508,15 @@ const SocialInvitationPreview = () => {
           invitedFriendIds={invitation.invitedFriends || []}
           onInvitedFriendsChange={handleInvitedFriendsChange} />
         
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 10px', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                    <input
+              type="checkbox"
+              checked={alsoPublishStory}
+              disabled={isPublishing || hasSentToMembers}
+              onChange={(e) => setAlsoPublishStory(e.target.checked)} />
+                    📷 {t('also_publish_as_story', { defaultValue: 'Also publish as a Story' })}
+                </label>
 
                 <div className="private-preview-stack__action-row">
                     <button

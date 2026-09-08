@@ -80,7 +80,9 @@ export async function publishContentAsStory({
   paymentLine,
   sourceType = 'post',
 }) {
-  if (!currentUser?.uid || !image) return;
+  // Image is optional — generateStoryCard falls back to a branded gradient
+  // background, so an invitation without a photo still produces a valid story.
+  if (!currentUser?.uid) return;
 
   const { userName, userPhoto } = await resolveStoryAuthor(currentUser);
 
