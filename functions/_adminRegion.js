@@ -61,6 +61,44 @@ function docCountryCode(data) {
     return null;
 }
 
+const isoCountries = require('i18n-iso-countries');
+
+/**
+ * Canonical ISO-2 country code for a business/user doc. Unlike docCountryCode
+ * (which only accepts a field that is already 2 chars), this also maps a full
+ * country NAME (e.g. "Australia", "المملكة العربية السعودية") and 3-letter codes
+ * to ISO-2, so businesses that stored the country inconsistently still collapse
+ * to one country. Returns an upper-case 2-char code or null.
+ * @param {any} data
+ */
+function resolveBusinessIso(data) {
+    const direct = docCountryCode(data);
+    if (direct) return direct;
+    if (!data || typeof data !== 'object') return null;
+    const candidates = [
+        data.country,
+        data.countryName,
+        data.businessInfo?.country,
+        data.businessPublic?.country,
+        data.location?.country,
+    ];
+    for (const raw of candidates) {
+        if (raw == null || raw === '') continue;
+        const s = String(raw).trim();
+        if (!s) continue;
+        if (s.length === 3) {
+            const a2 = isoCountries.alpha3ToAlpha2(s.toUpperCase());
+            if (a2) return a2;
+        }
+        // Name → ISO (try a few languages the app ships in).
+        for (const lang of ['en', 'ar', 'fr', 'es', 'de']) {
+            const code = isoCountries.getAlpha2Code(s, lang);
+            if (code) return code;
+        }
+    }
+    return null;
+}
+
 /**
  * Scope for the calling admin.
  * @param {string} role
@@ -148,6 +186,7 @@ module.exports = {
     regionCountries,
     regionForCountryCode,
     docCountryCode,
+    resolveBusinessIso,
     resolveCallerRegionScope,
     docInRegionScope,
     targetUserInRegion,

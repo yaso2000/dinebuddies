@@ -85,6 +85,40 @@ export default function BusinessesPage() {
     }
   };
 
+  // Grant / ban act on the business ACCOUNT, so they only apply to a claimed
+  // business (its id is the owner uid). Virtual / directory-only entries have no
+  // account — only delete applies there.
+  const grantPlan = async (biz) => {
+    const input = window.prompt(
+      t('admin_business_grant_months_prompt', 'Grant Paid plan for how many months? Enter 0 for permanent.'),
+      '0'
+    );
+    if (input === null) return;
+    const months = Math.max(0, Math.min(60, Math.floor(Number(input) || 0)));
+    setActing(biz.id);
+    try {
+      await adminApi.setUserSubscriptionTier(biz.id, 'paid', true, months);
+      alert(t('admin_business_plan_granted', 'Paid plan granted.'));
+    } catch (e) {
+      alert(e.message || t('admin_failed'));
+    } finally {
+      setActing(null);
+    }
+  };
+
+  const ban = async (biz) => {
+    if (!(await confirm({ message: t('admin_businesses_confirm_ban', { name: biz.name }), tone: 'danger' }))) return;
+    setActing(biz.id);
+    try {
+      await adminApi.setUserBanStatus(biz.id, true);
+      alert(t('admin_business_banned', 'Business account banned.'));
+    } catch (e) {
+      alert(e.message || t('admin_failed'));
+    } finally {
+      setActing(null);
+    }
+  };
+
   return (
     <>
       <AppText as="h1" className="db-h1">{t('admin_businesses_title')}</AppText>
@@ -185,6 +219,26 @@ export default function BusinessesPage() {
                       <Link to={`/business/${biz.id}`} className="db-btn" target="_blank" rel="noopener noreferrer">
                         {t('admin_businesses_view')}
                       </Link>
+                      {biz.isClaimed && (
+                        <>
+                          <button
+                            type="button"
+                            className="db-btn"
+                            disabled={acting === biz.id}
+                            onClick={() => grantPlan(biz)}
+                          >
+                            {t('admin_business_plan_grant', 'Grant plan')}
+                          </button>
+                          <button
+                            type="button"
+                            className="db-btn db-btn--danger"
+                            disabled={acting === biz.id}
+                            onClick={() => ban(biz)}
+                          >
+                            {t('admin_businesses_ban', 'Ban')}
+                          </button>
+                        </>
+                      )}
                       <button
                         type="button"
                         className="db-btn db-btn--danger"

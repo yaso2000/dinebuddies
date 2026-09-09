@@ -2,7 +2,7 @@
  * Admin dashboard callables — moderation, credits, invitations (server-trusted).
  */
 const functions = require('firebase-functions');
-const { docInRegionScope, targetUserInRegion, filterByOwnerRegion } = require('./_adminRegion');
+const { docInRegionScope, targetUserInRegion, filterByOwnerRegion, resolveBusinessIso } = require('./_adminRegion');
 const {
     grantAdminPaidCreditsInTransaction,
     creditBalanceResetPatch,
@@ -839,8 +839,9 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext, den
             const r = docSnap.data() || {};
             if (!docInRegionScope(r, regionScope)) continue;
             const bi = r.businessInfo && typeof r.businessInfo === 'object' ? r.businessInfo : {};
-            const cc = asTrimmedString(r.countryCode || bi.countryCode).toUpperCase().slice(0, 2);
-            const key = cc || asTrimmedString(r.country || bi.country) || '';
+            // One canonical ISO-2 key per country so "AU" and "Australia" (and other
+            // shapes) collapse into a single entry instead of appearing twice.
+            const key = resolveBusinessIso(r);
             if (!key) continue;
             const city = asTrimmedString(r.city || bi.city);
             if (!byCountry.has(key)) byCountry.set(key, new Set());
@@ -862,44 +863,7 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext, den
         const filterCity = asTrimmedString(data?.city).slice(0, 80);
         const hasLocationFilter = Boolean(filterCountry || filterCity);
 
-        const applyLocationWhere = (base) => {
-            let out = base;
-            if (filterCountry) {
-                out = /^[A-Za-z]{2}$/.test(filterCountry)
-                    ? out.where('countryCode', '==', filterCountry.toUpperCase())
-                    : out.where('businessInfo.country', '==', filterCountry);
-            }
-            if (filterCity) out = out.where('businessInfo.city', '==', filterCity);
-            return out;
-        };
-
-        let q = applyLocationWhere(db.collection('restaurants')).orderBy('name').limit(pageSize + 1);
-        if (startAfterId) {
-            const cursor = await db.collection('restaurants').doc(startAfterId).get();
-            if (cursor.exists) q = q.startAfter(cursor);
-        }
-
-        let snap;
-        try {
-            snap = await q.get();
-        } catch (err) {
-            if (hasLocationFilter) {
-                functions.logger.warn('[adminListBusinesses] filtered query failed (missing index?), falling back', err?.message || err);
-            }
-            q = applyLocationWhere(db.collection('restaurants')).limit(pageSize + 1);
-            if (startAfterId) {
-                const cursor = await db.collection('restaurants').doc(startAfterId).get();
-                if (cursor.exists) q = q.startAfter(cursor);
-            }
-            snap = await q.get();
-        }
-
-        const hasNext = snap.size > pageSize;
-        const docs = snap.docs.slice(0, pageSize);
-
-        const items = docs
-            .filter((docSnap) => docInRegionScope(docSnap.data(), regionScope))
-            .map((docSnap) => {
+        const mapRestaurantRow = (docSnap) => {
             const r = docSnap.data() || {};
             const bi = r.businessInfo && typeof r.businessInfo === 'object' ? r.businessInfo : {};
             const name = r.name || bi.businessName || bi.name || docSnap.id;
@@ -914,7 +878,101 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext, den
                 googlePlaceId: r.googlePlaceId || r.placeId || docSnap.id,
                 isOrphan: false,
             };
-        });
+        };
+
+        // ── Country filter: normalize each business's country to ISO in memory ──
+        // A single Firestore where() only matched one field (countryCode OR
+        // businessInfo.country), so businesses that stored the country in another
+        // shape — or that live only as a public_profiles directory entry — were
+        // dropped (the "only 3 in Australia" bug). Here we scan and match on the
+        // resolved ISO code across BOTH collections so every business shows once.
+        if (filterCountry) {
+            const wantIso =
+                (/^[A-Za-z]{2}$/.test(filterCountry) ? filterCountry.toUpperCase() : null) ||
+                resolveBusinessIso({ country: filterCountry });
+            const wantCity = filterCity.toLowerCase();
+            const cityMatches = (city) => !filterCity || String(city || '').toLowerCase() === wantCity;
+
+            const matched = [];
+            const listedIds = new Set();
+
+            const restSnap = await db.collection('restaurants').limit(6000).get();
+            for (const docSnap of restSnap.docs) {
+                const r = docSnap.data() || {};
+                if (!docInRegionScope(r, regionScope)) continue;
+                if (resolveBusinessIso(r) !== wantIso) continue;
+                const bi = r.businessInfo && typeof r.businessInfo === 'object' ? r.businessInfo : {};
+                if (!cityMatches(r.city || bi.city || r.address?.city)) continue;
+                matched.push(mapRestaurantRow(docSnap));
+                listedIds.add(docSnap.id);
+            }
+
+            try {
+                const orphanSnap = await db.collection('public_profiles')
+                    .where('profileType', '==', 'business')
+                    .where('businessPublic.isPublished', '==', true)
+                    .limit(2000)
+                    .get();
+                for (const docSnap of orphanSnap.docs) {
+                    if (listedIds.has(docSnap.id)) continue;
+                    const p = docSnap.data() || {};
+                    if (!docInRegionScope(p, regionScope)) continue;
+                    if (p.sourceCollection && p.sourceCollection !== 'restaurants') continue;
+                    if (resolveBusinessIso(p) !== wantIso) continue;
+                    const info = p.businessPublic && typeof p.businessPublic === 'object' ? p.businessPublic : {};
+                    if (!cityMatches(p.city || info.city)) continue;
+                    const restDoc = await db.collection('restaurants').doc(docSnap.id).get();
+                    if (restDoc.exists) continue;
+                    matched.push(mapPublicProfileAdminBusiness(docSnap));
+                    listedIds.add(docSnap.id);
+                }
+            } catch (err) {
+                functions.logger.warn('[adminListBusinesses] orphan scan failed', err?.message || err);
+            }
+
+            matched.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+            let startIdx = 0;
+            if (startAfterId) {
+                const idx = matched.findIndex((m) => m.id === startAfterId);
+                startIdx = idx >= 0 ? idx + 1 : 0;
+            }
+            const pageItems = matched.slice(startIdx, startIdx + pageSize);
+            const hasNext = startIdx + pageSize < matched.length;
+            return { items: pageItems, hasNext, lastId: pageItems.length ? pageItems[pageItems.length - 1].id : null };
+        }
+
+        // ── No country filter: efficient paginated query (optional city where) ──
+        let q = db.collection('restaurants');
+        if (filterCity) q = q.where('businessInfo.city', '==', filterCity);
+        q = q.orderBy('name').limit(pageSize + 1);
+        if (startAfterId) {
+            const cursor = await db.collection('restaurants').doc(startAfterId).get();
+            if (cursor.exists) q = q.startAfter(cursor);
+        }
+
+        let snap;
+        try {
+            snap = await q.get();
+        } catch (err) {
+            if (hasLocationFilter) {
+                functions.logger.warn('[adminListBusinesses] filtered query failed (missing index?), falling back', err?.message || err);
+            }
+            let fb = db.collection('restaurants');
+            if (filterCity) fb = fb.where('businessInfo.city', '==', filterCity);
+            fb = fb.limit(pageSize + 1);
+            if (startAfterId) {
+                const cursor = await db.collection('restaurants').doc(startAfterId).get();
+                if (cursor.exists) fb = fb.startAfter(cursor);
+            }
+            snap = await fb.get();
+        }
+
+        const hasNext = snap.size > pageSize;
+        const docs = snap.docs.slice(0, pageSize);
+
+        const items = docs
+            .filter((docSnap) => docInRegionScope(docSnap.data(), regionScope))
+            .map(mapRestaurantRow);
 
         const listedIds = new Set(items.map((item) => item.id));
         try {
