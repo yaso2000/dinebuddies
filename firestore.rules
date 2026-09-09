@@ -906,6 +906,18 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Community membership records (stable member number + QR token). Written only
+    // by the setCommunityMembership Cloud Function (Admin SDK bypasses rules); the
+    // member reads their own card, the business owner reads its members. The QR
+    // token is verified server-side, so exposing it to these parties is fine.
+    match /community_memberships/{membershipId} {
+      allow read: if isSignedIn() &&
+                    (resource.data.userId == request.auth.uid ||
+                     resource.data.partnerId == request.auth.uid ||
+                     isAdmin());
+      allow write: if false;
+    }
+
     match /partner_notifications/{notifId} {
       allow read: if isSignedIn() && (resource.data.restaurantId == request.auth.uid || isAdmin());
       // Client-side create is self-only; cross-user partner notifications (incl.

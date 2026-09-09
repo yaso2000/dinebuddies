@@ -1996,12 +1996,21 @@ exports.setCommunityMembership = functions.runWith({ minInstances: 1 }).https.on
     // business must still accept joins — we confirm it is a business here.
     const publicProfilePartnerRef = db.collection('public_profiles').doc(partnerId);
 
+    // Per-(business, member) membership record holding the stable member number +
+    // QR token. Kept in a dedicated collection (not the arrays) so it survives
+    // leave/rejoin and is independent of where the owner doc lives. The counter is
+    // its own doc so numbering works even for orphan (owner-doc-less) businesses.
+    const membershipRef = db.collection('community_memberships').doc(`${partnerId}__${targetUserId}`);
+    const memberCounterRef = db.collection('community_member_counters').doc(partnerId);
+
     const membership = await db.runTransaction(async (tx) => {
-        const [userSnap, userPartnerSnap, restaurantPartnerSnap, publicProfilePartnerSnap] = await Promise.all([
+        const [userSnap, userPartnerSnap, restaurantPartnerSnap, publicProfilePartnerSnap, membershipSnap, memberCounterSnap] = await Promise.all([
             tx.get(userRef),
             tx.get(userPartnerRef),
             tx.get(restaurantPartnerRef),
             tx.get(publicProfilePartnerRef),
+            tx.get(membershipRef),
+            tx.get(memberCounterRef),
         ]);
 
         // Prefer a real business owner doc (users business OR restaurants listing).
@@ -2094,17 +2103,46 @@ exports.setCommunityMembership = functions.runWith({ minInstances: 1 }).https.on
             muted.splice(0, muted.length, ...mu);
         };
 
+        // Stable member number + QR token. Assigned once on first join; reused on
+        // rejoin (never renumbered). status tracks active/left/removed. membershipWrite
+        // / counterWrite are applied after the array writes below.
+        const existingMembership = membershipSnap.exists ? (membershipSnap.data() || {}) : null;
+        const nowTs = admin.firestore.FieldValue.serverTimestamp();
+        let assignedMemberNumber = existingMembership?.memberNumber ?? null;
+        let membershipWrite = null;
+        let counterWrite = null;
+
         if (action === 'join') {
             if (blocked.includes(targetUserId)) {
                 throw new functions.https.HttpsError('permission-denied', 'You are blocked from joining this community.');
             }
             if (!joined.includes(partnerId)) joined.push(partnerId);
             if (!members.includes(targetUserId)) members.push(targetUserId);
+
+            if (existingMembership && existingMembership.memberNumber) {
+                assignedMemberNumber = existingMembership.memberNumber;
+                membershipWrite = { status: 'active', updatedAt: nowTs };
+            } else {
+                const nextNumber = (memberCounterSnap.data()?.count || 0) + 1;
+                assignedMemberNumber = nextNumber;
+                membershipWrite = {
+                    partnerId,
+                    userId: targetUserId,
+                    memberNumber: nextNumber,
+                    qrToken: crypto.randomBytes(20).toString('hex'),
+                    status: 'active',
+                    joinedAt: nowTs,
+                    updatedAt: nowTs,
+                };
+                counterWrite = { count: nextNumber, partnerId, updatedAt: nowTs };
+            }
         } else if (action === 'leave') {
             removeFromMembership();
+            if (existingMembership) membershipWrite = { status: 'left', updatedAt: nowTs };
         } else if (action === 'removeMember' || action === 'blockMember') {
             removeFromMembership();
             if (!blocked.includes(targetUserId)) blocked.push(targetUserId);
+            if (existingMembership) membershipWrite = { status: 'removed', updatedAt: nowTs };
         } else if (action === 'unblockMember') {
             const b = blocked.filter((id) => id !== targetUserId);
             blocked.splice(0, blocked.length, ...b);
@@ -2135,10 +2173,18 @@ exports.setCommunityMembership = functions.runWith({ minInstances: 1 }).https.on
             tx.update(partnerRef, partnerUpdates);
         }
 
+        if (membershipWrite) {
+            tx.set(membershipRef, membershipWrite, { merge: true });
+        }
+        if (counterWrite) {
+            tx.set(memberCounterRef, counterWrite, { merge: true });
+        }
+
         return {
             isMember: joined.includes(partnerId),
             joinedCommunities: joined,
             targetUserId,
+            memberNumber: assignedMemberNumber,
             isMuted: muted.includes(targetUserId),
             isBlocked: blocked.includes(targetUserId)
         };
