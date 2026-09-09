@@ -507,6 +507,9 @@ registerDirectorySearch(exports, { db, admin });
 registerConsumerAccountSearch(exports, { db });
 const { registerBusinessPostNotify } = require('./businessPostNotify');
 registerBusinessPostNotify(exports, { db, admin, enforceCallableRateLimit });
+
+const { registerCommunityOffers } = require('./communityOffers');
+registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit });
 const { registerStageRooms } = require('./stageRooms');
 registerStageRooms(exports, { db, admin, enforceCallableRateLimit });
 const { registerAccountDeletion } = require('./accountDeletion');

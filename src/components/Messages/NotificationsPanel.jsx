@@ -51,6 +51,7 @@ const getNotifTitle = (notif, t) => {
     case 'booking_cancelled':return t('notif_title_booking_cancelled', 'Booking Cancelled');
     case 'invitation_completed':return t('notif_title_completed', 'Invitation Completed! 🎉');
     case 'invitation_ended':return t('notif_title_ended', 'Invitation ended');
+    case 'community_offer':return t('notif_title_community_offer', 'Member offer 🎁');
     case 'invitation_updated':return t('notif_title_updated', 'Invitation Time Updated');
     case 'social_invitation':return t('notification_private_invitation_title', 'New private invitation');
     case 'social_invitation_response':
@@ -113,6 +114,17 @@ const getNotifMessage = (notif, t) => {
       return title
         ? t('notif_msg_ended_named', '"{{title}}" has ended. Thanks for joining!', { title })
         : t('notif_msg_ended', 'Your invitation has ended. Thanks for joining!');
+    case 'community_offer': {
+      const offerTitle = notif.metadata?.offerTitle || '';
+      const offerDesc = notif.metadata?.offerDescription || '';
+      const biz = notif.senderName || notif.fromUserName || t('someone', 'Someone');
+      if (offerTitle) {
+        return offerDesc
+          ? `${biz}: ${offerTitle} — ${offerDesc}`
+          : t('notif_msg_community_offer_named', '{{business}}: {{offer}}', { business: biz, offer: offerTitle });
+      }
+      return notif.message || t('notif_msg_community_offer', 'A new offer for community members');
+    }
     case 'invitation_updated':
       return notif.message || t('notif_msg_updated', 'The invitation time has been updated. Please confirm your attendance.');
     case 'social_invitation':{

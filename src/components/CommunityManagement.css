@@ -175,3 +175,85 @@
 .cm-verify-member-btn:hover {
     opacity: 0.92;
 }
+
+.cm-offer-box {
+    margin: 1rem 0 1.25rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--bg-card);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.cm-offer-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 0.98rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.cm-offer-input,
+.cm-offer-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+.cm-offer-send-btn {
+    align-self: flex-start;
+    padding: 0.6rem 1.2rem;
+    border-radius: 12px;
+    border: none;
+    background: var(--primary, #8b5cf6);
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.cm-offer-send-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.cm-offer-hint {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.cm-offer-locked {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.cm-offer-locked-icon {
+    font-size: 1.4rem;
+    color: var(--text-muted);
+}
+
+.cm-offer-locked-text {
+    margin: 0;
+    font-size: 0.86rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+
+.cm-offer-upgrade-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.55rem 1.1rem;
+    border-radius: 12px;
+    background: var(--primary, #8b5cf6);
+    color: #fff;
+    font-weight: 700;
+    text-decoration: none;
+}

@@ -30,3 +30,15 @@ export async function verifyCommunityMember({ partnerId, qrToken }) {
   const { data } = await fn({ partnerId, qrToken });
   return data || { ok: false, reason: 'error' };
 }
+
+/**
+ * Broadcast a discount offer to the business's community members (paid feature —
+ * the server also enforces the paid gate).
+ * @param {{ title: string, description?: string }} args
+ * @returns {Promise<{ success: boolean, sent: number }>}
+ */
+export async function sendCommunityOffer({ title, description }) {
+  const fn = httpsCallable(getFunctions(app, REGION), 'sendCommunityOffer');
+  const { data } = await fn({ title, description });
+  return data || { success: false, sent: 0 };
+}
