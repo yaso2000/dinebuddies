@@ -237,6 +237,63 @@ async function writeUserArchiveEntries(db, { invitationId, hostId, guestIds, bas
 }
 
 /**
+ * Gentle "your invitation ended" notice to host + confirmed guests, written just
+ * before the live doc is removed so the group chat does not simply vanish. The
+ * client localizes title/message by `type` and injects `metadata.invitationTitle`
+ * (see getNotifTitle/getNotifMessage in NotificationsPanel.jsx); the English text
+ * here is only a fallback. onNotificationCreated delivers the push.
+ */
+async function notifyInvitationEnded(db, { invitationId, hostId, guestIds, invData }) {
+    const title = (invData && invData.title) || '';
+    const recipients = [hostId, ...(guestIds || [])].filter(Boolean);
+    const seen = new Set();
+    let batch = db.batch();
+    let ops = 0;
+    for (const uid of recipients) {
+        if (!uid || seen.has(uid)) continue;
+        seen.add(uid);
+        const ref = db.collection('notifications').doc();
+        batch.set(ref, {
+            userId: uid,
+            type: 'invitation_ended',
+            title: 'Invitation ended',
+            message: title
+                ? `"${title}" has ended. Thanks for joining!`
+                : 'Your invitation has ended. Thanks for joining!',
+            invitationId,
+            invitationTitle: title || null,
+            metadata: { invitationTitle: title || null },
+            actionUrl: null,
+            fromUserId: null,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            read: false,
+        });
+        ops += 1;
+        if (ops >= 400) {
+            await batch.commit();
+            batch = db.batch();
+            ops = 0;
+        }
+    }
+    if (ops > 0) await batch.commit();
+}
+
+/**
+ * Hard-delete an invitation's group-chat `messages` subcollection. The archive
+ * keeps a read-only snapshot of the event, not the chat transcript, so once the
+ * live doc is gone these message docs are pure orphans — delete them to stop
+ * unbounded Firestore accumulation. Heavy media was already removed from Storage.
+ */
+async function deleteMessageDocs(db, messageDocs) {
+    if (!messageDocs || messageDocs.length === 0) return;
+    for (let i = 0; i < messageDocs.length; i += 400) {
+        const batch = db.batch();
+        messageDocs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+    }
+}
+
+/**
  * @param {FirebaseFirestore.Firestore} db
  * @param {import('@google-cloud/storage').Bucket} bucket
  * @param {FirebaseFirestore.QueryDocumentSnapshot} invDoc
@@ -260,6 +317,7 @@ async function archiveExpiredInvitation(db, bucket, invDoc, opts) {
         .collection('invitation_archives')
         .doc(invId);
     const existingUserArchive = await userArchiveRef.get();
+    const isFirstArchive = !existingUserArchive.exists;
 
     const messagesSnap = await db.collection(collectionName).doc(invId).collection('messages').get();
     const { thumbnailUrl, storagePathsToDelete } = await resolveArchiveThumbnail(bucket, invId, invData);
@@ -326,10 +384,25 @@ async function archiveExpiredInvitation(db, bucket, invDoc, opts) {
         }
     }
 
-    // Message TEXT is cheap to keep and preserved for the archived chat view —
-    // only the invitation doc itself is removed. Heavy media (images/voice
-    // attachments) was already queued for Storage deletion above.
+    // Gentle end-of-invitation notice (only on the first archive pass so a retry
+    // that already wrote the archive entries does not re-notify).
+    if (isFirstArchive) {
+        try {
+            await notifyInvitationEnded(db, { invitationId: invId, hostId, guestIds, invData });
+        } catch (err) {
+            console.warn('notifyInvitationEnded failed:', invId, err.message);
+        }
+    }
+
+    // Remove the live invitation doc, then hard-delete its group-chat messages so
+    // they don't linger as orphans in Firestore (the archive keeps an event
+    // snapshot, not the chat transcript). Media was already deleted from Storage.
     await invDoc.ref.delete();
+    try {
+        await deleteMessageDocs(db, messagesSnap.docs);
+    } catch (err) {
+        console.warn('deleteMessageDocs failed:', invId, err.message);
+    }
     return true;
 }
 
@@ -400,8 +473,72 @@ async function runArchiveExpiredSocialInvitations(db) {
     return count;
 }
 
+const ABANDONED_DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+/**
+ * Delete abandoned hosted invitation DRAFTS — social/private docs that were
+ * created but never published (no `publishedAt` and status not 'published') and
+ * are older than 30 days. These never enter the archive path (which only handles
+ * published invites), so without this they accumulate forever. Removes the doc,
+ * its group-chat messages, and any Storage media.
+ */
+async function runDeleteAbandonedHostedDrafts(db, { maxAgeMs = ABANDONED_DRAFT_MAX_AGE_MS } = {}) {
+    const bucket = admin.storage().bucket();
+    const cutoffTs = admin.firestore.Timestamp.fromMillis(Date.now() - maxAgeMs);
+    let count = 0;
+
+    for (const collectionName of ['social_invitations', 'private_invitations']) {
+        let snap;
+        try {
+            snap = await db
+                .collection(collectionName)
+                .where('createdAt', '<=', cutoffTs)
+                .limit(100)
+                .get();
+        } catch (err) {
+            console.warn(`runDeleteAbandonedHostedDrafts scan failed (${collectionName})`, err.message);
+            continue;
+        }
+
+        for (const invDoc of snap.docs) {
+            const invData = invDoc.data() || {};
+            // Published invites are handled by the archive path — never touch them here.
+            if (invData.status === 'published' || invData.publishedAt) continue;
+
+            try {
+                const messagesSnap = await db
+                    .collection(collectionName)
+                    .doc(invDoc.id)
+                    .collection('messages')
+                    .get();
+
+                const deleteUrls = collectDeletableMediaUrls(invData, null);
+                messagesSnap.docs.forEach((m) => deleteUrls.push(...getMessageMediaUrls(m.data())));
+                const paths = [...new Set(deleteUrls.map(extractStoragePath).filter(Boolean))];
+                for (const path of paths) {
+                    try {
+                        await bucket.file(path).delete();
+                    } catch (err) {
+                        if (err.code !== 404) console.warn('Draft storage delete failed:', path, err.message);
+                    }
+                }
+
+                await invDoc.ref.delete();
+                await deleteMessageDocs(db, messagesSnap.docs);
+                count += 1;
+            } catch (err) {
+                console.warn('runDeleteAbandonedHostedDrafts delete failed:', invDoc.id, err.message);
+            }
+        }
+    }
+
+    console.log(`runDeleteAbandonedHostedDrafts: deleted ${count} abandoned draft(s).`);
+    return count;
+}
+
 module.exports = {
     ARCHIVE_GRACE_MS,
+    runDeleteAbandonedHostedDrafts,
     computeEventEndDate,
     computeArchiveAfterDate,
     computeArchiveAfterFirestoreTimestamp,

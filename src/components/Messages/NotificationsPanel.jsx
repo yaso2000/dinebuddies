@@ -50,6 +50,7 @@ const getNotifTitle = (notif, t) => {
     case 'invitation_cancelled':return t('notif_title_cancelled', 'Invitation Cancelled');
     case 'booking_cancelled':return t('notif_title_booking_cancelled', 'Booking Cancelled');
     case 'invitation_completed':return t('notif_title_completed', 'Invitation Completed! 🎉');
+    case 'invitation_ended':return t('notif_title_ended', 'Invitation ended');
     case 'invitation_updated':return t('notif_title_updated', 'Invitation Time Updated');
     case 'social_invitation':return t('notification_private_invitation_title', 'New private invitation');
     case 'social_invitation_response':
@@ -108,6 +109,10 @@ const getNotifMessage = (notif, t) => {
       return notif.message || t('notif_msg_booking_cancelled', 'A booking at your venue has been cancelled.');
     case 'invitation_completed':
       return t('notif_msg_completed', 'The invitation has been completed. Hope you had a great time!');
+    case 'invitation_ended':
+      return title
+        ? t('notif_msg_ended_named', '"{{title}}" has ended. Thanks for joining!', { title })
+        : t('notif_msg_ended', 'Your invitation has ended. Thanks for joining!');
     case 'invitation_updated':
       return notif.message || t('notif_msg_updated', 'The invitation time has been updated. Please confirm your attendance.');
     case 'social_invitation':{

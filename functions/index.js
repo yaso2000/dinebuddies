@@ -3408,6 +3408,22 @@ exports.archiveExpiredPublicInvitations = functions.pubsub
         return null;
     });
 
+// ─── Scheduled: Delete abandoned hosted invitation drafts (never published, >30 days) ───
+// Published invites are removed by the archive jobs above; unpublished drafts never
+// enter that path, so this daily sweep stops them accumulating forever.
+exports.deleteAbandonedInvitationDrafts = functions.pubsub
+    .schedule('every 24 hours')
+    .timeZone('UTC')
+    .onRun(async () => {
+        const { runDeleteAbandonedHostedDrafts } = require('./invitationArchiveCore');
+        try {
+            await runDeleteAbandonedHostedDrafts(db);
+        } catch (error) {
+            console.error('deleteAbandonedInvitationDrafts error:', error);
+        }
+        return null;
+    });
+
 // ─── Scheduled: Delete inactive private conversations (30 days no activity) ───
 // Runs daily at 04:00 UTC.
 exports.deleteInactivePrivateConversations = functions.pubsub
