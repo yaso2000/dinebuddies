@@ -3,7 +3,10 @@
  * GET /api/place-autocomplete?input=...&sessionToken=...&countryCode=au&minLat=...&businessOnly=1
  */
 import { takeRateLimit } from './_rateLimit.js';
-import { fetchPlaceAutocompleteWithFallback } from './_googlePlacesAutocompleteCore.js';
+import {
+    fetchPlaceAutocompleteWithFallback,
+    BUSINESS_PRIMARY_TYPES,
+} from './_googlePlacesAutocompleteCore.js';
 
 export default async function handler(req, res) {
     const rl = takeRateLimit(req, {
@@ -28,12 +31,19 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { input, countryCode, sessionToken, languageCode, minLat, minLon, maxLat, maxLon, lat, lng, radiusKm, businessOnly, restrict } =
+    const { input, countryCode, sessionToken, languageCode, minLat, minLon, maxLat, maxLon, lat, lng, radiusKm, businessOnly, restrict, venueType } =
         req.query;
 
     if (!input || typeof input !== 'string' || input.trim().length < 2 || !sessionToken) {
         return res.status(400).json({ error: 'Missing input (min 2 chars) or sessionToken' });
     }
+
+    // Optional single-category narrowing: when the caller picked one of the five
+    // venue categories, direct the search to just that Google primary type.
+    const requestedVenueType = typeof venueType === 'string' ? venueType.trim().toLowerCase() : '';
+    const primaryTypes = BUSINESS_PRIMARY_TYPES.includes(requestedVenueType)
+        ? [requestedVenueType]
+        : undefined;
 
     try {
         const result = await fetchPlaceAutocompleteWithFallback({
@@ -50,6 +60,7 @@ export default async function handler(req, res) {
             radiusMeters: radiusKm != null ? Number(radiusKm) * 1000 : undefined,
             businessOnly: businessOnly === '1' || businessOnly === 'true',
             restrict: restrict === '1' || restrict === 'true',
+            primaryTypes,
         });
 
         res.setHeader('Access-Control-Allow-Origin', '*');

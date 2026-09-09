@@ -58,6 +58,7 @@ export const FavoritePlaces = ({ userId, readOnly = false, syncedPlaces = null }
   const [venueResults, setVenueResults] = useState([]);
   const [venueSearchLoading, setVenueSearchLoading] = useState(false);
   const [savingVenueId, setSavingVenueId] = useState(null);
+  const [showAllPlaces, setShowAllPlaces] = useState(false);
 
   const [searchData, setSearchData] = useState({
     city: '',
@@ -262,6 +263,35 @@ export const FavoritePlaces = ({ userId, readOnly = false, syncedPlaces = null }
     return <div className="favorite-places loading">Loading...</div>;
   }
 
+  const PREVIEW_COUNT = 3;
+  const previewPlaces = places.slice(0, PREVIEW_COUNT);
+  const hasMorePlaces = places.length > PREVIEW_COUNT;
+
+  const renderPlaceItem = (place, idx) => (
+    <div key={place.id || place.businessId || idx} className="place-item">
+            <FavoritePlaceThumb image={place.image} name={place.name} />
+            <div className="place-info">
+                <div className="place-name">{place.name}</div>
+                {place.address &&
+        <div className="place-address">{place.address}</div>
+        }
+                {place.source === 'business' &&
+        <AppText as="span" className="place-partner-badge">PARTNER</AppText>
+        }
+            </div>
+            {!readOnly &&
+      <button
+        type="button"
+        className="remove-place-btn"
+        onClick={() => handleRemovePlace(place.id)}
+        title={t('remove', 'Remove')}>
+
+                <FaTrash />
+            </button>
+      }
+        </div>
+  );
+
   return (
     <div className="favorite-places-section">
             <div className="section-header">
@@ -399,32 +429,51 @@ export const FavoritePlaces = ({ userId, readOnly = false, syncedPlaces = null }
                         <AppText as="p">{t('no_favorite_places', 'No favorite places yet')}</AppText>
                     </div> :
 
-        places.map((place, idx) =>
-        <div key={place.id || place.businessId || idx} className="place-item">
-                            <FavoritePlaceThumb image={place.image} name={place.name} />
-                            <div className="place-info">
-                                <div className="place-name">{place.name}</div>
-                                {place.address &&
-            <div className="place-address">{place.address}</div>
-            }
-                                {place.source === 'business' &&
-            <AppText as="span" className="place-partner-badge">PARTNER</AppText>
-            }
-                            </div>
-                            {!readOnly &&
-          <button
-            type="button"
-            className="remove-place-btn"
-            onClick={() => handleRemovePlace(place.id)}
-            title={t('remove', 'Remove')}>
-            
-                                    <FaTrash />
-                                </button>
-          }
-                        </div>
-        )
+        previewPlaces.map(renderPlaceItem)
         }
             </div>
+
+            {hasMorePlaces &&
+      <button
+        type="button"
+        className="favorite-places-show-all"
+        onClick={() => setShowAllPlaces(true)}>
+
+                {t('show_all_count', 'Show all ({{count}})', { count: places.length })}
+            </button>
+      }
+
+            {showAllPlaces &&
+      <div
+        className="favorite-places-modal-overlay"
+        role="dialog"
+        aria-modal="true"
+        onClick={() => setShowAllPlaces(false)}>
+
+                <div
+          className="favorite-places-modal"
+          onClick={(e) => e.stopPropagation()}>
+
+                    <div className="favorite-places-modal__header">
+                        <AppText as="h3" className="favorite-places-modal__title">
+                            <FaMapMarkerAlt style={{ color: 'var(--secondary)', marginRight: '0.5rem' }} />
+                            {t('favorite_places', 'Favorite Places')}
+                        </AppText>
+                        <button
+              type="button"
+              className="favorite-places-modal__close"
+              onClick={() => setShowAllPlaces(false)}
+              aria-label={t('close', 'Close')}>
+
+                            <FaTimes />
+                        </button>
+                    </div>
+                    <div className="favorite-places-modal__list">
+                        {places.map(renderPlaceItem)}
+                    </div>
+                </div>
+            </div>
+      }
         </div>);
 
 };

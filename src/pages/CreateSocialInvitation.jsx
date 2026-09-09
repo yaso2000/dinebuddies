@@ -6,8 +6,10 @@ import {
   FaMoneyBillWave, FaUsers, FaBriefcase,
   FaBirthdayCake, FaMoon, FaUtensils, FaCoffee, FaGamepad,
   FaStar, FaHome, FaFilm, FaFutbol, FaMicrophone, FaHandshake,
-  FaUpload, FaMagic, FaImages } from
+  FaUpload, FaMagic, FaImages, FaCheckCircle } from
 'react-icons/fa';
+import { PUBLIC_VENUE_CATEGORIES } from '../constants/publicVenueCategories';
+import { PUBLIC_VENUE_TYPES, publicVenueTypeI18nKey } from '../utils/publicInvitationVibes';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -186,7 +188,13 @@ const CreateSocialInvitation = () => {
     lng: restaurantData?.lng || restaurantData?.coordinates?.lng,
     userLat: null,
     userLng: null,
-    occasionType: editInvitation?.occasionType || DEFAULT_PRIVATE_OCCASION_LABEL
+    occasionType: editInvitation?.occasionType || DEFAULT_PRIVATE_OCCASION_LABEL,
+    // Establishment type (one of the five) picked BEFORE searching, so the venue
+    // search is directed to that category (café, bar, hotel…). Separate from the
+    // social occasion; drives only the venue search, not the card theme.
+    venueCategory: PUBLIC_VENUE_TYPES.includes(editInvitation?.venueCategory)
+      ? editInvitation.venueCategory
+      : 'Restaurant'
   });
 
   const privateCoverDraftsRef = useRef({ template: null, upload: null, camera: null, ai: null });
@@ -284,7 +292,10 @@ const CreateSocialInvitation = () => {
         lng: editInvitation.lng || null,
         userLat: editInvitation.userLat || null,
         userLng: editInvitation.userLng || null,
-        occasionType: editInvitation.occasionType || DEFAULT_PRIVATE_OCCASION_LABEL
+        occasionType: editInvitation.occasionType || DEFAULT_PRIVATE_OCCASION_LABEL,
+        venueCategory: PUBLIC_VENUE_TYPES.includes(editInvitation.venueCategory)
+          ? editInvitation.venueCategory
+          : 'Restaurant'
       });
 
       setPrivateCardShowHostAndMessage(editInvitation.socialCardShowHostAndMessage !== false);
@@ -1304,6 +1315,47 @@ const CreateSocialInvitation = () => {
                         </div>
                     </div>
 
+                    <div className="form-group public-invite-prefs" style={{ marginBottom: '1rem' }}>
+                        <label style={{ fontSize: '0.9rem', marginBottom: '8px', display: 'block' }}>
+                            {t('venue_category_label', { defaultValue: 'Venue category' })}
+                        </label>
+                        <div
+              className="public-invite-pref-grid public-invite-pref-grid--venue"
+              role="radiogroup"
+              aria-label={t('venue_category_label', { defaultValue: 'Venue category' })}>
+
+                            {PUBLIC_VENUE_CATEGORIES.map(({ type, Icon }) => {
+                const selected = formData.venueCategory === type;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    className={`public-invite-pref-chip public-invite-pref-chip--venue${selected ? ' is-selected' : ''}`}
+                    onClick={() => setFormData((prev) => ({ ...prev, venueCategory: type }))}>
+
+                                        {selected ?
+                    <AppText as="span" className="public-invite-pref-chip__check" aria-hidden>
+                                                <FaCheckCircle />
+                                            </AppText> :
+                    null}
+                                        <Icon
+                      className="public-invite-pref-chip__icon public-invite-pref-chip__icon--venue"
+                      aria-hidden />
+
+                                        <AppText as="span" className="public-invite-pref-chip__label">
+                                            {t(publicVenueTypeI18nKey(type), { defaultValue: type })}
+                                        </AppText>
+                                    </button>);
+
+              })}
+                        </div>
+                        <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '6px' }}>
+                            {t('invitation_type_venue_search_hint', 'Choose the venue type first so search suggests matching places (café, bar, etc.).')}
+                        </small>
+                    </div>
+
                     <InvitationVenueLocationSection
               value={formData.location}
               onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
@@ -1312,6 +1364,7 @@ const CreateSocialInvitation = () => {
               countryCode={resolveVenueCountryIso(formData, userProfile)}
               userLat={formData.userLat ?? userProfile?.coordinates?.lat}
               userLng={formData.userLng ?? userProfile?.coordinates?.lng}
+              invitationType={formData.venueCategory}
               className="elegant-input"
             />
 

@@ -1539,6 +1539,7 @@
   "click_edit_to_add": "انقر على تعديل لإضافته",
   "clipboard_error": "تعذر قراءة الحافظة. يرجى اللصق يدوياً.",
   "close": "إغلاق",
+  "show_all_count": "عرض الكل ({{count}})",
   "close_editor": "إغلاق",
   "close_form": "إغلاق النموذج",
   "close_search": "إغلاق البحث",

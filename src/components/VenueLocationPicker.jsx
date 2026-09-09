@@ -6,11 +6,13 @@ import { sortDineBuddiesVenues } from '../utils/invitationVenueSearch';
 import { extractCityTokenFromAddress } from '../utils/locationUtils';
 import { resolveAppVenueFromGoogleSelection } from '../utils/resolveAppVenueFromGoogleSelection';
 import {
+  appVenueTypeToGooglePrimary,
   fetchGooglePlaceDetails,
   fetchGoogleVenuePredictions,
   newPlacesSessionToken,
   resolveCitySearchBbox,
 } from '../utils/unifiedVenueSearch';
+import { normalizePublicVenueType } from '../utils/publicInvitationVibes';
 import { PLACES_AUTOCOMPLETE_DEBOUNCE_MS } from '../utils/placesCostControl';
 import { useToast } from '../context/ToastContext';
 import { useInvitations } from '../context/InvitationContext';
@@ -133,8 +135,22 @@ const VenueLocationPicker = ({
           if (!row?.id) continue;
           if (!byId.has(row.id)) byId.set(row.id, row);
         }
+        // Direct the in-app search to the chosen establishment type: keep only
+        // venues whose (normalized) category matches the selected one. Normalizing
+        // via normalizePublicVenueType folds legacy sub-types (Fast Food → Restaurant)
+        // so real listings are not wrongly dropped.
+        const selectedGooglePrimary = appVenueTypeToGooglePrimary(invitationType);
+        const merged = [...byId.values()];
+        const categoryFiltered = selectedGooglePrimary
+          ? merged.filter(
+              (v) =>
+                appVenueTypeToGooglePrimary(
+                  normalizePublicVenueType(v.businessType || v.type || v.category)
+                ) === selectedGooglePrimary
+            )
+          : merged;
         const ranked = sortDineBuddiesVenues(
-          [...byId.values()],
+          categoryFiltered,
           city,
           invitationType,
           userLat,

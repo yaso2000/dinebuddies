@@ -1535,6 +1535,7 @@
   "click_edit_to_add": "Click Edit to add one",
   "clipboard_error": "Cannot read clipboard. Please paste manually.",
   "close": "Close",
+  "show_all_count": "Show all ({{count}})",
   "close_editor": "Close",
   "close_form": "Close form",
   "close_search": "Close search",

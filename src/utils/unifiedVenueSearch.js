@@ -4,6 +4,28 @@ import { bboxFromCoords } from './locationUtils';
 import { fetchCityBoundingBox } from './osmPhotonSearch';
 import { sortAutocompletePredictionsForInvitation } from './invitationVenueSearch';
 
+/**
+ * Map an app venue category label (or its Google type) to the Google primary type
+ * used to narrow venue autocomplete. Accepts labels like 'Night Club' and already-
+ * mapped values like 'night_club'; returns null for unknown / non-venue values.
+ */
+export function appVenueTypeToGooglePrimary(type) {
+  const key = String(type || '').trim().toLowerCase();
+  if (!key) return null;
+  const map = {
+    restaurant: 'restaurant',
+    cafe: 'cafe',
+    'café': 'cafe',
+    bar: 'bar',
+    'night club': 'night_club',
+    nightclub: 'night_club',
+    night_club: 'night_club',
+    hotel: 'lodging',
+    lodging: 'lodging',
+  };
+  return map[key] || null;
+}
+
 export function newPlacesSessionToken() {
   const bytes = new Uint8Array(18);
   if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
@@ -81,6 +103,10 @@ export async function fetchGoogleVenuePredictions({
   // Restrict venue suggestions to the app's five categories (restaurant, cafe,
   // bar, night club, hotel) — never surface a barber shop, gym, etc.
   params.set('businessOnly', '1');
+  // Direct the search to the chosen establishment type when one was picked, so a
+  // "Cafe" invitation suggests cafés first, a "Bar" suggests bars, etc.
+  const googleVenueType = appVenueTypeToGooglePrimary(invitationType);
+  if (googleVenueType) params.set('venueType', googleVenueType);
   // Keep venue search local: hard-restrict results to a circle around the user
   // (applied server-side when GPS is available) so far / other-country venues
   // never appear and can't be used to host an invitation.

@@ -51,6 +51,16 @@ export function buildAutocompletePayloadVariants(opts) {
         includeQueryPredictions: false,
     };
 
+    // When the caller picked ONE of the five venue categories, narrow the primary
+    // attempts to just that Google type (e.g. 'cafe') so the search is directed to
+    // that establishment type; otherwise fall back to all five. The un-typed
+    // broadening variants below are unchanged, so a query still returns something
+    // when the narrowed type finds nothing.
+    const resolvedPrimaryTypes =
+        Array.isArray(opts.primaryTypes) && opts.primaryTypes.length
+            ? opts.primaryTypes.slice(0, 5)
+            : BUSINESS_PRIMARY_TYPES;
+
     if (opts.countryCode) {
         base.includedRegionCodes = [String(opts.countryCode).toLowerCase().slice(0, 2)];
     }
@@ -110,7 +120,7 @@ export function buildAutocompletePayloadVariants(opts) {
         };
         const restricted = opts.businessOnly
             ? [
-                  { ...base, ...circleRestriction, includedPrimaryTypes: [...BUSINESS_PRIMARY_TYPES] },
+                  { ...base, ...circleRestriction, includedPrimaryTypes: [...resolvedPrimaryTypes] },
                   { ...base, ...circleRestriction },
               ]
             : [{ ...base, ...circleRestriction }];
@@ -131,7 +141,7 @@ export function buildAutocompletePayloadVariants(opts) {
         variants.push({
             ...base,
             ...localBias,
-            includedPrimaryTypes: [...BUSINESS_PRIMARY_TYPES],
+            includedPrimaryTypes: [...resolvedPrimaryTypes],
         });
         variants.push({
             ...base,
@@ -148,14 +158,14 @@ export function buildAutocompletePayloadVariants(opts) {
         variants.push({
             ...base,
             ...bboxBias,
-            ...(opts.businessOnly ? { includedPrimaryTypes: [...BUSINESS_PRIMARY_TYPES] } : {}),
+            ...(opts.businessOnly ? { includedPrimaryTypes: [...resolvedPrimaryTypes] } : {}),
         });
     }
 
     if (hasBbox || hasCircle) {
         variants.push({
             ...base,
-            ...(opts.businessOnly ? { includedPrimaryTypes: [...BUSINESS_PRIMARY_TYPES] } : {}),
+            ...(opts.businessOnly ? { includedPrimaryTypes: [...resolvedPrimaryTypes] } : {}),
         });
         variants.push({ ...base });
     }
