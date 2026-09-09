@@ -453,23 +453,21 @@ const BusinessDashboard = () => {
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                             <AppText as="span" style={{
                 padding: '4px 10px',
-                background: userProfile?.subscriptionTier === 'elite' ?
-                'linear-gradient(135deg, #fbbf24, #d97706)' :
-                userProfile?.subscriptionTier === 'professional' ?
+                background: tierAccess.isPaid ?
                 'linear-gradient(135deg, #8b5cf6, #d946ef)' :
-                'rgba(156, 163, 175, 0.2)',
+                'rgba(148, 163, 184, 0.22)',
                 borderRadius: '12px',
                 fontSize: '0.75rem',
                 fontWeight: '700',
-                color: 'white'
+                // Readable in both themes: white on the paid gradient, main text
+                // colour on the light grey free badge (was white-on-light = invisible).
+                color: tierAccess.isPaid ? '#ffffff' : 'var(--text-main)'
               }}>
-                                {userProfile?.subscriptionTier === 'elite' ?
-                t('elite_partner', 'Elite Partner') :
-                userProfile?.subscriptionTier === 'professional' ?
-                t('professional_tier', 'Professional') :
+                                {tierAccess.isPaid ?
+                t('paid_plan', 'Paid Plan') :
                 t('free_plan', 'Free Plan')}
                             </AppText>
-                            {(!userProfile?.subscriptionTier || userProfile?.subscriptionTier === 'free') &&
+                            {!tierAccess.isPaid &&
               <button
                 onClick={() => navigate('/settings/subscription')}
                 style={{
@@ -499,7 +497,7 @@ const BusinessDashboard = () => {
                 </div>
 
                 {/* Trial Promo Banner */}
-                {(!userProfile?.subscriptionTier || userProfile?.subscriptionTier === 'free') &&
+                {!tierAccess.isPaid &&
         <div
           onClick={() => navigate('/settings/subscription')}
           style={{
