@@ -2193,6 +2193,81 @@ exports.setCommunityMembership = functions.runWith({ minInstances: 1 }).https.on
     return { success: true, ...membership };
 });
 
+// ─── Trusted callable: verify a community member from a scanned QR token ──────
+// The business owner scans a member's QR (payload DBM1:<partnerId>:<qrToken>) and
+// this confirms the token belongs to an active member of THEIR community, so an
+// offer/discount can be applied. Only the community owner may call it.
+exports.verifyCommunityMember = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+    const uid = context.auth.uid;
+    const partnerId = String(data?.partnerId || '').trim();
+    const qrToken = String(data?.qrToken || '').trim();
+    if (!partnerId || !qrToken) {
+        throw new functions.https.HttpsError('invalid-argument', 'partnerId and qrToken are required.');
+    }
+    if (!/^[a-f0-9]{20,64}$/.test(qrToken)) {
+        throw new functions.https.HttpsError('invalid-argument', 'Malformed membership token.');
+    }
+
+    await enforceCallableRateLimit(uid, 'verify_community_member', {
+        perMinute: 60,
+        perHour: 600,
+        perDay: 3000,
+        cooldownMs: 0,
+    });
+
+    // Only the community owner may verify members of that community.
+    const owner = await resolveCommunityOwner(db, partnerId);
+    if (!owner) {
+        throw new functions.https.HttpsError('not-found', 'Community owner not found.');
+    }
+    if (!isCommunityOwnerRequester(owner, uid)) {
+        throw new functions.https.HttpsError('permission-denied', 'Only the community owner can verify members.');
+    }
+
+    // qrToken is a globally-unique random token, so a single-field lookup is enough.
+    const snap = await db
+        .collection('community_memberships')
+        .where('qrToken', '==', qrToken)
+        .limit(1)
+        .get();
+    if (snap.empty) {
+        return { ok: false, reason: 'not_found' };
+    }
+    const m = snap.docs[0].data() || {};
+    if (m.partnerId !== partnerId) {
+        return { ok: false, reason: 'wrong_community' };
+    }
+    if (m.status !== 'active') {
+        return { ok: false, reason: m.status || 'inactive', memberNumber: m.memberNumber || null };
+    }
+
+    let memberName = null;
+    let memberAvatar = null;
+    try {
+        const profiles = await getPublicProfilesByIds([m.userId]);
+        const pub = Array.isArray(profiles) ? profiles[0] : null;
+        if (pub) {
+            memberName = pub.displayName || pub.name || null;
+            memberAvatar = pub.avatar || pub.photo_url || pub.photoURL || null;
+        }
+    } catch (e) {
+        console.warn('verifyCommunityMember profile lookup failed:', e?.message || e);
+    }
+
+    return {
+        ok: true,
+        memberNumber: m.memberNumber || null,
+        memberId: m.userId || null,
+        memberName,
+        memberAvatar,
+        joinedAt: m.joinedAt?.toMillis ? m.joinedAt.toMillis() : null,
+        status: m.status,
+    };
+});
+
 // ─── Trusted callable: list community members (public projection) ────────────
 exports.listCommunityMembers = functions.https.onCall(async (data, context) => {
     if (!context.auth) {

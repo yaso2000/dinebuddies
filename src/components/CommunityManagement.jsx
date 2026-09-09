@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FaUsers, FaBan, FaUserShield, FaVolumeMute, FaVolumeUp, FaUnlock } from 'react-icons/fa';
+import { FaUsers, FaBan, FaUserShield, FaVolumeMute, FaVolumeUp, FaUnlock, FaQrcode } from 'react-icons/fa';
+import CommunityMemberScanner from './business/CommunityMemberScanner';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 import { useTranslation } from 'react-i18next';
@@ -31,6 +32,7 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
   const [blockedMembers, setBlockedMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [moderatingId, setModeratingId] = useState(null);
+  const [scanOpen, setScanOpen] = useState(false);
 
   useEffect(() => {
     loadMembers();
@@ -175,7 +177,19 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
                 <AppText as="p" style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
                     {members.length} {t('members_count', 'members')}
                 </AppText>
+
+                <button
+          type="button"
+          className="cm-verify-member-btn"
+          onClick={() => setScanOpen(true)}>
+                    <FaQrcode aria-hidden />
+                    {t('verify_member_scan', 'Verify member (scan QR)')}
+                </button>
             </div>
+
+            {scanOpen &&
+      <CommunityMemberScanner partnerId={profileId} onClose={() => setScanOpen(false)} />
+      }
 
             {members.length === 0 ?
       <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>

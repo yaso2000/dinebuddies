@@ -155,3 +155,23 @@
     font-size: 0.78rem;
     color: var(--text-muted);
 }
+
+.cm-verify-member-btn {
+    margin-top: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.6rem 1rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--primary, #8b5cf6);
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.cm-verify-member-btn:hover {
+    opacity: 0.92;
+}
