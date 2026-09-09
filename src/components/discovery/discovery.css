@@ -1020,12 +1020,13 @@
     }
 }
 
-@media (max-width: 1023px) {
-    .app-main.app-main--fullscreen.app-main--connect {
-        /* Match mobile tab bar: nav height + safe area, floored for Android (inset 0). */
-        padding-bottom: calc(var(--nav-height, 65px) + max(env(safe-area-inset-bottom, 0px), 22px) + 12px) !important;
-    }
-}
+/* NOTE: the base .app-main--fullscreen.app-main--connect rule above already reserves
+   exactly var(--nav-height) + env(safe-area-inset-bottom) on every viewport — which
+   is the real height the fixed .bottom-nav occupies (65px tab bar, no safe-area padding
+   of its own). A former mobile override here added max(safe,22px)+12px on top, so on
+   Android (inset 0) it reserved ~34px MORE than the nav, leaving a dead dark strip
+   between the card and the tab bar and stopping the card from filling the height.
+   Removed — let the card extend right down to the tab bar. */
 
 /* Small / short phones: tighten the entity + partner card so the whole card
    fits — the stacked offer/name/address/bio/chips/actions used to overflow the
