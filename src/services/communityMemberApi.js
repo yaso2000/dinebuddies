@@ -37,8 +37,22 @@ export async function verifyCommunityMember({ partnerId, qrToken }) {
  * @param {{ title: string, description?: string }} args
  * @returns {Promise<{ success: boolean, sent: number }>}
  */
-export async function sendCommunityOffer({ title, description }) {
+export async function sendCommunityOffer({ title, description, oncePerMember, expiresAt }) {
   const fn = httpsCallable(getFunctions(app, REGION), 'sendCommunityOffer');
-  const { data } = await fn({ title, description });
+  const { data } = await fn({ title, description, oncePerMember, expiresAt });
   return data || { success: false, sent: 0 };
+}
+
+/** List the business's own community offers (with redemption counts). */
+export async function listCommunityOffers({ activeOnly = false } = {}) {
+  const fn = httpsCallable(getFunctions(app, REGION), 'listCommunityOffers');
+  const { data } = await fn({ activeOnly });
+  return Array.isArray(data?.offers) ? data.offers : [];
+}
+
+/** Redeem an offer for the scanned member (one-per-member enforced server-side). */
+export async function redeemCommunityOffer({ qrToken, offerId }) {
+  const fn = httpsCallable(getFunctions(app, REGION), 'redeemCommunityOffer');
+  const { data } = await fn({ qrToken, offerId });
+  return data || { ok: false, reason: 'error' };
 }

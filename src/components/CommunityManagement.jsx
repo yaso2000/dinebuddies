@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FaUsers, FaBan, FaUserShield, FaVolumeMute, FaVolumeUp, FaUnlock, FaQrcode, FaBullhorn, FaLock } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
 import CommunityMemberScanner from './business/CommunityMemberScanner';
 import { useAuth } from '../context/AuthContext';
 import { getBusinessPlanAccess } from '../config/businessPlanFeatures';
-import { sendCommunityOffer } from '../services/communityMemberApi';
+import { sendCommunityOffer, listCommunityOffers } from '../services/communityMemberApi';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 import { useTranslation } from 'react-i18next';
@@ -42,7 +42,23 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
   const canSendOffers = planAccess.canUseMemberNotifications === true;
   const [offerTitle, setOfferTitle] = useState('');
   const [offerDesc, setOfferDesc] = useState('');
+  const [offerOnce, setOfferOnce] = useState(true);
+  const [offerExpiry, setOfferExpiry] = useState('');
   const [sendingOffer, setSendingOffer] = useState(false);
+  const [offers, setOffers] = useState([]);
+
+  const loadOffers = useCallback(async () => {
+    if (!canSendOffers) return;
+    try {
+      setOffers(await listCommunityOffers({}));
+    } catch {
+      setOffers([]);
+    }
+  }, [canSendOffers]);
+
+  useEffect(() => {
+    loadOffers();
+  }, [loadOffers]);
 
   const handleSendOffer = async () => {
     const title = offerTitle.trim();
@@ -52,13 +68,21 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
     }
     setSendingOffer(true);
     try {
-      const res = await sendCommunityOffer({ title, description: offerDesc.trim() });
+      const expiresAt = offerExpiry ? new Date(`${offerExpiry}T23:59:59`).getTime() : undefined;
+      const res = await sendCommunityOffer({
+        title,
+        description: offerDesc.trim(),
+        oncePerMember: offerOnce,
+        expiresAt,
+      });
       showToast(
         t('offer_sent_count', 'Offer sent to {{count}} members', { count: res?.sent || 0 }),
         'success'
       );
       setOfferTitle('');
       setOfferDesc('');
+      setOfferExpiry('');
+      loadOffers();
     } catch (e) {
       const reason = getCallableErrorReason(e);
       showToast(
@@ -251,6 +275,23 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
                     maxLength={500}
                     rows={2}
                     placeholder={t('offer_desc_placeholder', 'Optional details (validity, conditions)…')} />
+                        <div className="cm-offer-options">
+                            <label className="cm-offer-once">
+                                <input
+                        type="checkbox"
+                        checked={offerOnce}
+                        onChange={(e) => setOfferOnce(e.target.checked)} />
+                                {t('offer_once_per_member', 'One redemption per member')}
+                            </label>
+                            <label className="cm-offer-expiry">
+                                <span>{t('offer_valid_until', 'Valid until (optional)')}</span>
+                                <input
+                        type="date"
+                        className="ui-form-field"
+                        value={offerExpiry}
+                        onChange={(e) => setOfferExpiry(e.target.value)} />
+                            </label>
+                        </div>
                         <button
                     type="button"
                     className="cm-offer-send-btn"
@@ -261,6 +302,25 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
                         <AppText as="p" className="cm-offer-hint">
                             {t('offer_verify_hint', 'Members redeem by showing their QR — scan it above to confirm before applying the discount.')}
                         </AppText>
+
+                        {offers.length > 0 && (
+                          <div className="cm-offer-list">
+                                <AppText as="p" className="cm-offer-list-title">
+                                    {t('offer_your_offers', 'Your offers')}
+                                </AppText>
+                                {offers.map((o) => (
+                                  <div key={o.id} className="cm-offer-list-row">
+                                        <span className="cm-offer-list-name">
+                                            {o.title}
+                                            {!o.active ? ` · ${t('offer_expired', 'expired')}` : ''}
+                                        </span>
+                                        <span className="cm-offer-list-count">
+                                            {t('offer_redeemed_count', '{{count}} redeemed', { count: o.redemptionCount })}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </>
                 ) : (
                   <div className="cm-offer-locked">
