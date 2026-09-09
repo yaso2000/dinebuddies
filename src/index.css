@@ -2625,13 +2625,13 @@ select.input-field {
   cursor: pointer;
   background: #0b1220;
   border: 1px solid var(--rlc-border);
-  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.35);
+  box-shadow: 0 8px 22px rgba(2, 6, 23, 0.22);
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
 }
 
 .directory-page .restaurant-list-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.42);
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.28);
   border-color: rgba(232, 110, 46, 0.35);
 }
 
@@ -2705,8 +2705,10 @@ select.input-field {
   inset: 0;
   z-index: 1;
   pointer-events: none;
+  /* Lightened overall (was .94/.55/.12/.28) while keeping the bottom stop strong
+     enough to keep the name/address readable over any photo. */
   background:
-    linear-gradient(to top, rgba(2, 6, 23, 0.94) 0%, rgba(2, 6, 23, 0.55) 42%, rgba(2, 6, 23, 0.12) 72%, rgba(2, 6, 23, 0.28) 100%);
+    linear-gradient(to top, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.4) 42%, rgba(2, 6, 23, 0.06) 72%, rgba(2, 6, 23, 0.16) 100%);
 }
 
 .directory-page .restaurant-list-card__top {

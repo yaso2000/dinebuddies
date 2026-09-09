@@ -118,6 +118,9 @@ export function buildPartnerCardAccentVars(brandKit) {
   if (!glow1 || !glow2) return undefined;
   return {
     '--partner-accent-ring': hexToRgba(primaryHex, 0.22),
+    // Soft, brand-tinted drop shadow so the card's shadow tracks the business
+    // theme colour (falls back to a light neutral in CSS when no brand colour).
+    '--partner-accent-shadow': hexToRgba(primaryHex, 0.3),
     '--partner-accent-glow-1': glow1,
     '--partner-accent-glow-2': glow2,
     '--partner-accent-chip-border': hexToRgba(primaryHex, 0.35),
