@@ -437,7 +437,15 @@ export const AuthProvider = ({ children }) => {
                     merged = mergeProfileSnapshot(merged, prev);
                 }
                 userProfileRef.current = merged;
-                if (!fromCache && canConsumerEnterApp(merged)) markConsumerEntryOk(uid);
+                // Trust a COMPLETE profile even from cache: canConsumerEnterApp is only
+                // ever true for a genuinely enterable account, so marking entry-ok here
+                // can never wrongly skip the completion form for an incomplete user — it
+                // only removes the window where a returning, already-complete user is
+                // momentarily treated as incomplete before the server read lands, which
+                // was the root cause of the /complete-profile flash on login. (The old
+                // !fromCache guard was meant to avoid trusting cache-only INCOMPLETE OAuth
+                // docs — that concern does not apply to the complete case.)
+                if (canConsumerEnterApp(merged)) markConsumerEntryOk(uid);
                 return merged;
             });
         };
