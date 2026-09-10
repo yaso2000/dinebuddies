@@ -149,11 +149,10 @@ const BusinessDashboard = () => {
   const hasBusinessAccess =
     isBusiness || (currentUser?.uid && hasBusinessSessionHint(currentUser.uid));
 
-  // Compact community summary (new feature at a glance). Members come from the
-  // business doc (no fetch); offers-redeemed is a single guarded callable.
-  const communityMemberCount = Array.isArray(userProfile?.communityMembers)
-    ? userProfile.communityMembers.length
-    : 0;
+  // Compact community summary (new feature at a glance). Member count reuses the
+  // authoritative filtered count in stats.memberCount (same source as everywhere
+  // else) — NOT the raw communityMembers array, which can include stale/ghost uids
+  // and disagreed with the rest of the app. offers-redeemed is a guarded callable.
   const [offersRedeemed, setOffersRedeemed] = useState(null);
   useEffect(() => {
     let cancelled = false;
@@ -682,7 +681,7 @@ const BusinessDashboard = () => {
                 {tierAccess.isPaid &&
         <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 140px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '14px', padding: '0.9rem 1rem' }}>
-                        <AppText as="div" style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--primary)' }}>{communityMemberCount}</AppText>
+                        <AppText as="div" style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--primary)' }}>{Number(stats.memberCount || 0)}</AppText>
                         <AppText as="div" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>{t('community_members', 'Community members')}</AppText>
                     </div>
                     <div style={{ flex: '1 1 140px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '14px', padding: '0.9rem 1rem' }}>
