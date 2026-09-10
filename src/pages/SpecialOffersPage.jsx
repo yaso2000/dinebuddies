@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle } from 'react-icons/fa';
 import { AppText } from '../components/base';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { haversineKm } from '../utils/postsFeedScope';
 import { listActiveCommunityOffers, takeCommunityOffer } from '../services/communityMemberApi';
 import { isBusinessUser } from '../utils/accountRole';
@@ -20,6 +21,7 @@ export default function SpecialOffersPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { userProfile } = useAuth();
+  const { showToast } = useToast();
   // Business accounts browse offers but cannot take them (feed & stories only).
   const isBusiness = isBusinessUser(userProfile);
   const BackIcon = i18n.dir() === 'rtl' ? FaArrowRight : FaArrowLeft;
@@ -83,14 +85,21 @@ export default function SpecialOffersPage() {
         setTakenById((prev) => ({ ...prev, [offer.id]: res }));
         if (!res.ok && res.reason === 'not_member') {
           setJoinPrompt({ partnerId: offer.partnerId, businessName: offer.businessName });
+        } else if (!res.ok && res.reason === 'business_forbidden') {
+          showToast(t('offer_business_forbidden', "Business accounts can't take offers."), 'info');
+        } else if (!res.ok && (res.reason === 'offer_inactive' || res.reason === 'offer_not_found')) {
+          showToast(t('offer_unavailable', 'This offer is no longer available.'), 'info');
+        } else if (!res.ok && res.reason !== 'already_taken') {
+          showToast(t('offer_take_failed', 'Could not take the offer. Please try again.'), 'error');
         }
       } catch {
         setTakenById((prev) => ({ ...prev, [offer.id]: { ok: false, reason: 'error' } }));
+        showToast(t('offer_take_failed', 'Could not take the offer. Please try again.'), 'error');
       } finally {
         setTakingId('');
       }
     },
-    [takingId]
+    [takingId, showToast, t]
   );
 
   const takeState = (offer) => {

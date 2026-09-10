@@ -92,11 +92,15 @@ export default function OffersFeedStrip() {
             'info'
           );
           if (offer.partnerId) navigate(`/business/${offer.partnerId}`);
+        } else if (res.reason === 'business_forbidden') {
+          showToast(t('offer_business_forbidden', "Business accounts can't take offers."), 'info');
+        } else if (res.reason === 'offer_inactive' || res.reason === 'offer_not_found') {
+          showToast(t('offer_unavailable', 'This offer is no longer available.'), 'info');
         } else {
-          showToast(t('offer_send_failed', 'Could not complete. Please try again.'), 'error');
+          showToast(t('offer_take_failed', 'Could not take the offer. Please try again.'), 'error');
         }
       } catch {
-        showToast(t('offer_send_failed', 'Could not complete. Please try again.'), 'error');
+        showToast(t('offer_take_failed', 'Could not take the offer. Please try again.'), 'error');
       } finally {
         setTakingId('');
       }
