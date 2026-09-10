@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import jsQR from 'jsqr';
 import { FaTimes, FaCheckCircle, FaExclamationTriangle, FaCamera } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
@@ -169,7 +170,7 @@ export default function CommunityMemberScanner({ partnerId, onClose }) {
 
   const memberBadge = (n) => `#${String(n || 0).padStart(4, '0')}`;
 
-  return (
+  return createPortal(
     <div className="member-scanner-overlay" role="dialog" aria-modal="true">
       <div className="member-scanner">
         <div className="member-scanner__header">
@@ -296,6 +297,7 @@ export default function CommunityMemberScanner({ partnerId, onClose }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

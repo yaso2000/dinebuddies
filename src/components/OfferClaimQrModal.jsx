@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import { useTranslation } from 'react-i18next';
 import { FaTimes, FaCheckCircle } from 'react-icons/fa';
@@ -39,7 +40,9 @@ export default function OfferClaimQrModal({ claim, onClose }) {
 
   if (!claim) return null;
 
-  return (
+  // Portal to <body>: the feed wrapper uses `will-change: transform`, which makes
+  // it the containing block for position:fixed, trapping the modal off-screen.
+  return createPortal(
     <div className="offer-claim-qr-overlay" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="offer-claim-qr" onClick={(e) => e.stopPropagation()}>
         <button
@@ -76,6 +79,7 @@ export default function OfferClaimQrModal({ claim, onClose }) {
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
