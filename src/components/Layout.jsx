@@ -674,6 +674,9 @@ const Layout = ({ children }) => {
           </DesktopNavGroup>
           }
 
+                        {/* "Discover" is consumer browsing — a business account gets its own
+                            Business group instead of Invitations/Businesses/Connect. */}
+                        {!isBusinessAccount &&
                         <DesktopNavGroup title={t('nav_group_discover', 'Discover')} variant="discover">
                         <Link to="/invitations" className={`ds-nav-item ${isInvitationsNavActive ? 'active' : ''}`}>
                             <FaEnvelope /><AppText as="span">{t('nav_invitations', 'Invitations')}</AppText>
@@ -681,12 +684,13 @@ const Layout = ({ children }) => {
                         <Link to="/restaurants" className={`ds-nav-item ${isRestaurantsNavActive ? 'active' : ''}`}>
                             <FaStore /><AppText as="span">{t('nav_partners', 'Businesses')}</AppText>
                         </Link>
-                        {!isBusinessAccount && !isGuest && userProfile?.role !== 'guest' &&
+                        {!isGuest && userProfile?.role !== 'guest' &&
           <Link to="/search" className={`ds-nav-item ${isDirectoryNavActive ? 'active' : ''}`}>
                                 <FaUsers /><AppText as="span">{t('user_directory_nav', 'Connect')}</AppText>
                             </Link>
           }
                         </DesktopNavGroup>
+                        }
 
                         {!isGuest &&
           <DesktopNavGroup title={t('nav_group_inbox', 'Inbox')} variant="inbox">
@@ -788,10 +792,18 @@ const Layout = ({ children }) => {
                         <FaHome className="nav-icon" />
                         <AppText as="span">{t('nav_home')}</AppText>
                     </Link>
-                    <Link to="/invitations" className={`nav-item ${isInvitationsNavActive ? 'active' : ''}`}>
+                    {!isBusinessAccount &&
+        <Link to="/invitations" className={`nav-item ${isInvitationsNavActive ? 'active' : ''}`}>
                         <FaEnvelope className="nav-icon" />
                         <AppText as="span">{t('nav_invitations', 'Invitations')}</AppText>
                     </Link>
+        }
+                    {isBusinessAccount &&
+        <Link to="/business-dashboard/inbox" className={`nav-item ${location.pathname.startsWith('/business-dashboard/inbox') ? 'active' : ''}`}>
+                        <FaEnvelope className="nav-icon" />
+                        <AppText as="span">{t('nav_business_inbox', 'Inbox')}</AppText>
+                    </Link>
+        }
                     {isGuest ?
         <Link to="/login" className={`nav-item ${isActive('/login') ? 'active' : ''}`} style={{ color: 'var(--primary)', textDecoration: 'none' }}>
                             <FaSignInAlt className="nav-icon" />
@@ -821,10 +833,18 @@ const Layout = ({ children }) => {
                             <div className="fab-container"><FaPlusCircle className="nav-icon fab" /></div>
                         </button>
         }
-                    <Link to="/restaurants" className={`nav-item ${isRestaurantsNavActive ? 'active' : ''}`}>
+                    {!isBusinessAccount &&
+        <Link to="/restaurants" className={`nav-item ${isRestaurantsNavActive ? 'active' : ''}`}>
                         <FaStore className="nav-icon" />
                         <AppText as="span">{t('nav_partners', 'Businesses')}</AppText>
                     </Link>
+        }
+                    {isBusinessAccount && currentUser &&
+        <Link to={`/business/${currentUser.uid}`} className={`nav-item ${location.pathname === `/business/${currentUser.uid}` ? 'active' : ''}`}>
+                        <FaStore className="nav-icon" />
+                        <AppText as="span">{t('profile_title', 'My Profile')}</AppText>
+                    </Link>
+        }
                     {!isBusinessAccount && !isGuest && userProfile?.role !== 'guest' &&
         <Link to="/search" className={`nav-item ${isDirectoryNavActive ? 'active' : ''}`}>
                             <div className="friend-nav-icon-container"><FaUsers className="nav-icon" /></div>
