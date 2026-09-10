@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { HiBuildingStorefront } from 'react-icons/hi2';
 import { AppText } from '../components/base';
 import { useBusinessProfile } from '../hooks/useBusinessProfile';
-import DeliveryLinksSection from '../components/DeliveryLinksSection';
 import BusinessProfileSeoHead from '../components/business/BusinessProfileSeoHead';
 import BusinessProfileSetupBanner from '../components/business/BusinessProfileSetupBanner';
 import BusinessProfileCardPreviewOverlay from '../components/business/BusinessProfileCardPreviewOverlay';
@@ -154,18 +153,6 @@ const BusinessProfile = () => {
           marginTop: 'var(--profile-stack-gap)',
           marginBottom: 'var(--profile-stack-gap)'
         }}>
-
-                <DeliveryLinksSection
-          business={profile.business}
-          isOwner={profile.isOwner}
-          deliveryLinks={profile.deliveryLinks}
-          tempDeliveryLinks={profile.tempDeliveryLinks}
-          setTempDeliveryLinks={profile.setTempDeliveryLinks}
-          editingDeliveryLinks={profile.editingDeliveryLinks}
-          setEditingDeliveryLinks={profile.setEditingDeliveryLinks}
-          onSave={profile.handleSaveDeliveryLinks}
-          onCancel={profile.handleCancelDeliveryLinks} />
-
 
                 {/* Tabs Navigation — scrollable on mobile */}
                 <BusinessProfileTabBar profile={profile} />

@@ -29,6 +29,9 @@ export default function InviteCreateTypePicker({
   className = '',
   includeStage = false,
   horizontal = false,
+  // When true, offer only actual invitations (public + social) — used by the
+  // "host an invitation" surfaces (list, swipe, venue). The "+" menu stays full.
+  invitationsOnly = false,
 }) {
   const { t } = useTranslation();
   const isDesktopShell = useDesktopShell();
@@ -44,7 +47,8 @@ export default function InviteCreateTypePicker({
 
   // Live games + the match show are available on every viewport, including the
   // desktop "create invitation" surface (they were previously mobile-only).
-  const includeLiveGames = true;
+  // Suppressed on invitations-only host surfaces.
+  const includeLiveGames = !invitationsOnly;
 
   const options = [
     {
@@ -120,7 +124,7 @@ export default function InviteCreateTypePicker({
           },
         ]
       : []),
-    ...(includeStage
+    ...(includeStage && !invitationsOnly
       ? [
           {
             kind: 'stage',

@@ -43,6 +43,7 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
           variant="selector"
           navigationState={navigationState}
           onAfterNavigate={onClose}
+          invitationsOnly
         />
       </div>
     </div>

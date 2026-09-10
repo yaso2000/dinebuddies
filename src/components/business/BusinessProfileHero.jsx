@@ -7,7 +7,7 @@ import { resolveBusinessOpenNow } from '../../utils/googlePlacesBusiness';
 import { goToLogin } from '../../utils/goToLogin';
 import BusinessClaimPanel from '../BusinessClaimPanel';
 import ImageCropModal from '../ImageCropModal';
-import CommunityMemberCard from './CommunityMemberCard';
+import CommunityMemberCardButton from './CommunityMemberCardButton';
 
 export default function BusinessProfileHero({ profile }) {
   const { t } = useTranslation();
@@ -338,13 +338,15 @@ export default function BusinessProfileHero({ profile }) {
       }
             </div>
 
-            {/* Member loyalty card (number + QR) — only for a signed-in member who is
-                not the business owner. */}
+            {/* Member loyalty card (number + QR) — a compact chip that opens the full
+                card in a floating modal, only for a signed-in member (not the owner). */}
             {currentUser?.uid && currentUser.uid !== profileId && !userProfile?.isBusiness && effectiveIsMember &&
-      <CommunityMemberCard
-        partnerId={profileId}
-        currentUser={currentUser}
-        businessName={businessInfo?.name || business?.name} />
+      <div style={{ textAlign: 'center' }}>
+        <CommunityMemberCardButton
+          partnerId={profileId}
+          currentUser={currentUser}
+          businessName={businessInfo?.name || business?.name} />
+      </div>
       }
 
             {/* Frame the logo / cover before uploading, same step as the personal profile */}
