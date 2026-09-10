@@ -971,7 +971,7 @@ const Layout = ({ children }) => {
               className="business-create-option"
               onClick={() => {
                 setBusinessCreateOpen(false);
-                navigate('/create-swipe-offer');
+                navigate('/create-community-offer');
               }}>
               
                                 <AppText as="span" className="business-create-option__icon business-create-option__icon--offer" aria-hidden>

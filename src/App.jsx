@@ -106,6 +106,7 @@ import CreatePrivateInvitation from './pages/CreatePrivateInvitation';
 const BusinessCreatePostGate = lazy(() => import('./components/BusinessCreatePostGate'));
 const CreateFeaturedPost = lazy(() => import('./pages/business/CreateFeaturedPost'));
 const CreateSwipeSpecialOffer = lazy(() => import('./pages/business/CreateSwipeSpecialOffer'));
+const CreateCommunityOffer = lazy(() => import('./pages/CreateCommunityOffer'));
 const CreateStory = lazy(() => import('./pages/CreateStory'));
 const AiDesignStudio = lazy(() => import('./pages/AiDesignStudio'));
 const AiTextStudio = lazy(() => import('./pages/AiTextStudio'));
@@ -360,6 +361,7 @@ function App() {
                                                     <Route path="/create-post" element={<GuestBlockedRoute><BusinessCreatePostGate /></GuestBlockedRoute>} />
                                                     <Route path="/create-featured-post" element={<GuestBlockedRoute><CreateFeaturedPost /></GuestBlockedRoute>} />
                                                     <Route path="/create-swipe-offer" element={<GuestBlockedRoute><CreateSwipeSpecialOffer /></GuestBlockedRoute>} />
+                                                    <Route path="/create-community-offer" element={<GuestBlockedRoute><CreateCommunityOffer /></GuestBlockedRoute>} />
                                                     <Route path="/create-story" element={<GuestBlockedRoute><CreateStory /></GuestBlockedRoute>} />
 
                                                     <Route path="/settings/email" element={<GuestBlockedRoute><EmailSettings /></GuestBlockedRoute>} />

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import CommunityMemberScanner from './business/CommunityMemberScanner';
 import { useAuth } from '../context/AuthContext';
 import { getBusinessPlanAccess } from '../config/businessPlanFeatures';
-import { sendCommunityOffer, listCommunityOffers } from '../services/communityMemberApi';
+import { listCommunityOffers } from '../services/communityMemberApi';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,7 @@ import { useToast } from '../context/ToastContext';
 import { useInvitations } from '../context/InvitationContext';
 import { getCallableErrorReason } from '../utils/callableErrorDetails';
 import './CommunityManagement.css';
-import { AppText, AppTextInput } from './base';
+import { AppText } from './base';
 import { useConfirm } from '../context/ConfirmContext';
 
 const FUNCTIONS_REGION = 'us-central1';
@@ -40,15 +40,8 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
   const { userProfile } = useAuth();
   const planAccess = getBusinessPlanAccess(userProfile?.subscriptionTier);
   const canSendOffers = planAccess.canUseMemberNotifications === true;
-  const [offerTitle, setOfferTitle] = useState('');
-  const [offerDesc, setOfferDesc] = useState('');
-  const [offerOnce, setOfferOnce] = useState(true);
-  const [offerExpiry, setOfferExpiry] = useState('');
-  // Distribution channels (any combination).
-  const [offerNotify, setOfferNotify] = useState(true);
-  const [offerFeed, setOfferFeed] = useState(true);
-  const [offerSwipe, setOfferSwipe] = useState(false);
-  const [sendingOffer, setSendingOffer] = useState(false);
+  // Offer CREATION lives in the "+" menu (/create-community-offer) to keep this
+  // page uncluttered; here we only list the business's offers + redemption counts.
   const [offers, setOffers] = useState([]);
 
   const loadOffers = useCallback(async () => {
@@ -63,49 +56,6 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
   useEffect(() => {
     loadOffers();
   }, [loadOffers]);
-
-  const handleSendOffer = async () => {
-    const title = offerTitle.trim();
-    if (!title) {
-      showToast(t('offer_title_required', 'Add an offer title first.'), 'error');
-      return;
-    }
-    if (!offerNotify && !offerFeed && !offerSwipe) {
-      showToast(t('offer_pick_channel', 'Pick at least one: notify members, feed, or swipe card.'), 'error');
-      return;
-    }
-    setSendingOffer(true);
-    try {
-      const expiresAt = offerExpiry ? new Date(`${offerExpiry}T23:59:59`).getTime() : undefined;
-      const res = await sendCommunityOffer({
-        title,
-        description: offerDesc.trim(),
-        oncePerMember: offerOnce,
-        expiresAt,
-        notifyMembers: offerNotify,
-        onFeed: offerFeed,
-        onSwipe: offerSwipe,
-      });
-      showToast(
-        t('offer_sent_count', 'Offer sent to {{count}} members', { count: res?.sent || 0 }),
-        'success'
-      );
-      setOfferTitle('');
-      setOfferDesc('');
-      setOfferExpiry('');
-      loadOffers();
-    } catch (e) {
-      const reason = getCallableErrorReason(e);
-      showToast(
-        reason === 'permission-denied'
-          ? t('offer_paid_only', 'Sending member offers is a paid feature.')
-          : t('offer_send_failed', 'Could not send the offer. Please try again.'),
-        'error'
-      );
-    } finally {
-      setSendingOffer(false);
-    }
-  };
 
   useEffect(() => {
     loadMembers();
@@ -265,109 +215,42 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
       }
 
             <div className="cm-offer-box">
-                <AppText as="h4" className="cm-offer-title">
-                    <FaBullhorn aria-hidden />
-                    {t('send_member_offer', 'Send an offer to members')}
+                <div className="cm-offer-head-row">
+                    <AppText as="h4" className="cm-offer-title">
+                        <FaBullhorn aria-hidden />
+                        {t('member_offers_title', 'Member offers')}
+                    </AppText>
+                    {canSendOffers ?
+          <Link to="/create-community-offer" className="cm-offer-new-btn">
+                        + {t('offer_new', 'New offer')}
+                    </Link> :
+          <Link to="/settings/subscription" className="cm-offer-upgrade-btn">
+                        {t('upgrade_to_paid', 'Upgrade plan')}
+                    </Link>
+          }
+                </div>
+
+                {canSendOffers && offers.length === 0 &&
+        <AppText as="p" className="cm-offer-hint">
+                    {t('offer_create_from_plus', 'Create a special offer from the + button. Your offers and their redemptions show here.')}
                 </AppText>
+        }
 
-                {canSendOffers ? (
-                  <>
-                        <AppTextInput
-                    type="text"
-                    className="ui-form-field cm-offer-input"
-                    value={offerTitle}
-                    onChange={(e) => setOfferTitle(e.target.value)}
-                    maxLength={120}
-                    placeholder={t('offer_title_placeholder', 'Offer, e.g. 20% off for members today')} />
-                        <textarea
-                    className="ui-form-field cm-offer-textarea"
-                    value={offerDesc}
-                    onChange={(e) => setOfferDesc(e.target.value)}
-                    maxLength={500}
-                    rows={2}
-                    placeholder={t('offer_desc_placeholder', 'Optional details (validity, conditions)…')} />
-                        <div className="cm-offer-options">
-                            <AppText as="div" style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-                                {t('offer_channels_label', 'Where to publish')}
-                            </AppText>
-                            <label className="cm-offer-once">
-                                <input
-                        type="checkbox"
-                        checked={offerNotify}
-                        onChange={(e) => setOfferNotify(e.target.checked)} />
-                                {t('offer_channel_notify', 'Notify all members')}
-                            </label>
-                            <label className="cm-offer-once">
-                                <input
-                        type="checkbox"
-                        checked={offerFeed}
-                        onChange={(e) => setOfferFeed(e.target.checked)} />
-                                {t('offer_channel_feed', 'Publish on the offers feed')}
-                            </label>
-                            <label className="cm-offer-once">
-                                <input
-                        type="checkbox"
-                        checked={offerSwipe}
-                        onChange={(e) => setOfferSwipe(e.target.checked)} />
-                                {t('offer_channel_swipe', 'Show on swipe card')}
-                            </label>
-                            <label className="cm-offer-once">
-                                <input
-                        type="checkbox"
-                        checked={offerOnce}
-                        onChange={(e) => setOfferOnce(e.target.checked)} />
-                                {t('offer_once_per_member', 'One redemption per member')}
-                            </label>
-                            <label className="cm-offer-expiry">
-                                <span>{t('offer_valid_until', 'Valid until (optional)')}</span>
-                                <input
-                        type="date"
-                        className="ui-form-field"
-                        value={offerExpiry}
-                        onChange={(e) => setOfferExpiry(e.target.value)} />
-                            </label>
-                        </div>
-                        <button
-                    type="button"
-                    className="cm-offer-send-btn"
-                    onClick={handleSendOffer}
-                    disabled={sendingOffer || !offerTitle.trim()}>
-                            {sendingOffer ? t('sending', 'Sending…') : t('send_offer', 'Send offer')}
-                        </button>
-                        <AppText as="p" className="cm-offer-hint">
-                            {t('offer_verify_hint', 'Members redeem by showing their QR — scan it above to confirm before applying the discount.')}
-                        </AppText>
-
-                        {offers.length > 0 && (
-                          <div className="cm-offer-list">
-                                <AppText as="p" className="cm-offer-list-title">
-                                    {t('offer_your_offers', 'Your offers')}
-                                </AppText>
-                                {offers.map((o) => (
-                                  <div key={o.id} className="cm-offer-list-row">
-                                        <span className="cm-offer-list-name">
-                                            {o.title}
-                                            {!o.active ? ` · ${t('offer_expired', 'expired')}` : ''}
-                                        </span>
-                                        <span className="cm-offer-list-count">
-                                            {t('offer_redeemed_count', '{{count}} redeemed', { count: o.redemptionCount })}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </>
-                ) : (
-                  <div className="cm-offer-locked">
-                        <FaLock aria-hidden className="cm-offer-locked-icon" />
-                        <AppText as="p" className="cm-offer-locked-text">
-                            {t('offer_paid_upsell', 'Broadcasting offers to your community members is a paid feature.')}
-                        </AppText>
-                        <Link to="/settings/subscription" className="cm-offer-upgrade-btn">
-                            {t('upgrade_to_paid', 'Upgrade plan')}
-                        </Link>
+                {offers.length > 0 &&
+        <div className="cm-offer-list">
+                    <AppText as="p" className="cm-offer-list-title">{t('offer_your_offers', 'Your offers')}</AppText>
+                    {offers.map((o) =>
+          <div key={o.id} className="cm-offer-list-row">
+                        <span className="cm-offer-list-name">
+                            {o.title}{!o.active ? ` · ${t('offer_expired', 'expired')}` : ''}
+                        </span>
+                        <span className="cm-offer-list-count">
+                            {t('offer_redeemed_count', '{{count}} redeemed', { count: o.redemptionCount })}
+                        </span>
                     </div>
-                )}
+          )}
+                </div>
+        }
             </div>
 
             {members.length === 0 ?
