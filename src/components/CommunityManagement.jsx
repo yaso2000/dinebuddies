@@ -44,6 +44,10 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
   const [offerDesc, setOfferDesc] = useState('');
   const [offerOnce, setOfferOnce] = useState(true);
   const [offerExpiry, setOfferExpiry] = useState('');
+  // Distribution channels (any combination).
+  const [offerNotify, setOfferNotify] = useState(true);
+  const [offerFeed, setOfferFeed] = useState(true);
+  const [offerSwipe, setOfferSwipe] = useState(false);
   const [sendingOffer, setSendingOffer] = useState(false);
   const [offers, setOffers] = useState([]);
 
@@ -66,6 +70,10 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
       showToast(t('offer_title_required', 'Add an offer title first.'), 'error');
       return;
     }
+    if (!offerNotify && !offerFeed && !offerSwipe) {
+      showToast(t('offer_pick_channel', 'Pick at least one: notify members, feed, or swipe card.'), 'error');
+      return;
+    }
     setSendingOffer(true);
     try {
       const expiresAt = offerExpiry ? new Date(`${offerExpiry}T23:59:59`).getTime() : undefined;
@@ -74,6 +82,9 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
         description: offerDesc.trim(),
         oncePerMember: offerOnce,
         expiresAt,
+        notifyMembers: offerNotify,
+        onFeed: offerFeed,
+        onSwipe: offerSwipe,
       });
       showToast(
         t('offer_sent_count', 'Offer sent to {{count}} members', { count: res?.sent || 0 }),
@@ -276,6 +287,30 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
                     rows={2}
                     placeholder={t('offer_desc_placeholder', 'Optional details (validity, conditions)…')} />
                         <div className="cm-offer-options">
+                            <AppText as="div" style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                                {t('offer_channels_label', 'Where to publish')}
+                            </AppText>
+                            <label className="cm-offer-once">
+                                <input
+                        type="checkbox"
+                        checked={offerNotify}
+                        onChange={(e) => setOfferNotify(e.target.checked)} />
+                                {t('offer_channel_notify', 'Notify all members')}
+                            </label>
+                            <label className="cm-offer-once">
+                                <input
+                        type="checkbox"
+                        checked={offerFeed}
+                        onChange={(e) => setOfferFeed(e.target.checked)} />
+                                {t('offer_channel_feed', 'Publish on the offers feed')}
+                            </label>
+                            <label className="cm-offer-once">
+                                <input
+                        type="checkbox"
+                        checked={offerSwipe}
+                        onChange={(e) => setOfferSwipe(e.target.checked)} />
+                                {t('offer_channel_swipe', 'Show on swipe card')}
+                            </label>
                             <label className="cm-offer-once">
                                 <input
                         type="checkbox"

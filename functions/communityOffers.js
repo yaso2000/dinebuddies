@@ -19,6 +19,11 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             typeof data?.description === 'string' ? data.description.trim().slice(0, 500) : '';
         // One redemption per member (default on); optional expiry.
         const oncePerMember = data?.oncePerMember !== false;
+        // Distribution channels (any combination). Default: notify members only,
+        // matching the previous behaviour.
+        const notifyMembers = data?.notifyMembers !== false;
+        const onFeed = data?.onFeed === true;
+        const onSwipe = data?.onSwipe === true;
         let expiresAt = null;
         if (data?.expiresAt != null) {
             const ms = typeof data.expiresAt === 'number' ? data.expiresAt : Date.parse(String(data.expiresAt));
@@ -85,11 +90,16 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
         await offerRef.set({
             partnerId: businessId,
             businessName,
+            businessAvatar: senderAvatar || null,
             title,
             description: description || null,
             oncePerMember,
             active: true,
             expiresAt,
+            // Distribution channels chosen at creation.
+            notifyMembers,
+            onFeed,
+            onSwipe,
             redemptionCount: 0,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -106,31 +116,34 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
         const actionUrl = `/business/${businessId}`;
 
         let sent = 0;
-        const chunkSize = 400;
-        for (let i = 0; i < recipientIds.length; i += chunkSize) {
-            const chunk = recipientIds.slice(i, i + chunkSize);
-            const batch = db.batch();
-            for (const userId of chunk) {
-                const ref = db.collection('notifications').doc();
-                batch.set(ref, {
-                    userId,
-                    type: 'community_offer',
-                    title: 'Member offer',
-                    message,
-                    actionUrl,
-                    invitationId: null,
-                    style: null,
-                    status: null,
-                    metadata,
-                    read: false,
-                    senderId: businessId,
-                    senderName: businessName,
-                    senderAvatar,
-                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                });
-                sent += 1;
+        // Only push a notification to members when that channel was chosen.
+        if (notifyMembers) {
+            const chunkSize = 400;
+            for (let i = 0; i < recipientIds.length; i += chunkSize) {
+                const chunk = recipientIds.slice(i, i + chunkSize);
+                const batch = db.batch();
+                for (const userId of chunk) {
+                    const ref = db.collection('notifications').doc();
+                    batch.set(ref, {
+                        userId,
+                        type: 'community_offer',
+                        title: 'Member offer',
+                        message,
+                        actionUrl,
+                        invitationId: null,
+                        style: null,
+                        status: null,
+                        metadata,
+                        read: false,
+                        senderId: businessId,
+                        senderName: businessName,
+                        senderAvatar,
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    });
+                    sent += 1;
+                }
+                await batch.commit();
             }
-            await batch.commit();
         }
 
         return { success: true, sent, offerId };
@@ -280,6 +293,112 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             memberName,
             offerTitle: offer.title || '',
         };
+    });
+
+    // Public offers list for the consumer "Special Offers" page: active offers the
+    // business chose to publish to the feed. Any signed-in user can read it.
+    exports.listActiveCommunityOffers = functions.https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+        }
+        const nowMs = Date.now();
+        let snap;
+        try {
+            snap = await db
+                .collection('community_offers')
+                .where('onFeed', '==', true)
+                .orderBy('createdAt', 'desc')
+                .limit(100)
+                .get();
+        } catch (err) {
+            snap = await db.collection('community_offers').where('onFeed', '==', true).limit(100).get();
+        }
+        const offers = snap.docs
+            .map((d) => {
+                const o = d.data() || {};
+                const expiresMs = o.expiresAt?.toMillis ? o.expiresAt.toMillis() : null;
+                const isExpired = expiresMs != null && expiresMs <= nowMs;
+                return {
+                    id: d.id,
+                    partnerId: o.partnerId || null,
+                    businessName: o.businessName || '',
+                    businessAvatar: o.businessAvatar || null,
+                    title: o.title || '',
+                    description: o.description || null,
+                    expiresAt: expiresMs,
+                    active: o.active !== false && !isExpired,
+                    createdAt: o.createdAt?.toMillis ? o.createdAt.toMillis() : null,
+                };
+            })
+            .filter((o) => o.active)
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        return { offers };
+    });
+
+    // Consumer self-claim ("Take it"): a community member records that they took an
+    // offer (one-per-member enforced). Non-members are told to join first.
+    exports.takeCommunityOffer = functions.https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+        }
+        const uid = context.auth.uid;
+        const offerId = String(data?.offerId || '').trim();
+        if (!offerId) {
+            throw new functions.https.HttpsError('invalid-argument', 'offerId is required.');
+        }
+
+        await enforceCallableRateLimit(uid, 'take_community_offer', {
+            perMinute: 30,
+            perHour: 300,
+            perDay: 1000,
+            cooldownMs: 0,
+        });
+
+        const offerRef = db.collection('community_offers').doc(offerId);
+        const offerSnap = await offerRef.get();
+        if (!offerSnap.exists) return { ok: false, reason: 'offer_not_found' };
+        const offer = offerSnap.data() || {};
+        const expiresMs = offer.expiresAt?.toMillis ? offer.expiresAt.toMillis() : null;
+        if (offer.active === false || (expiresMs != null && expiresMs <= Date.now())) {
+            return { ok: false, reason: 'offer_inactive' };
+        }
+
+        const partnerId = offer.partnerId;
+        // Must be an active member of the offer's community to take it.
+        const memSnap = await db.collection('community_memberships').doc(`${partnerId}__${uid}`).get();
+        const m = memSnap.exists ? memSnap.data() || {} : null;
+        if (!m || m.status !== 'active') {
+            return { ok: false, reason: 'not_member', partnerId };
+        }
+
+        const oncePerMember = offer.oncePerMember !== false;
+        const redemptionRef = offerRef.collection('redemptions').doc(uid);
+        const result = await db.runTransaction(async (tx) => {
+            const existing = await tx.get(redemptionRef);
+            if (oncePerMember && existing.exists) {
+                const prev = existing.data() || {};
+                return {
+                    ok: false,
+                    reason: 'already_taken',
+                    takenAt: prev.redeemedAt?.toMillis ? prev.redeemedAt.toMillis() : null,
+                };
+            }
+            tx.set(
+                redemptionRef,
+                {
+                    memberId: uid,
+                    memberNumber: m.memberNumber || null,
+                    source: 'self_claim',
+                    redeemedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    count: admin.firestore.FieldValue.increment(1),
+                },
+                { merge: true }
+            );
+            tx.update(offerRef, { redemptionCount: admin.firestore.FieldValue.increment(1) });
+            return { ok: true };
+        });
+
+        return result;
     });
 }
 

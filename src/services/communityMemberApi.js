@@ -37,10 +37,43 @@ export async function verifyCommunityMember({ partnerId, qrToken }) {
  * @param {{ title: string, description?: string }} args
  * @returns {Promise<{ success: boolean, sent: number }>}
  */
-export async function sendCommunityOffer({ title, description, oncePerMember, expiresAt }) {
+export async function sendCommunityOffer({
+  title,
+  description,
+  oncePerMember,
+  expiresAt,
+  notifyMembers,
+  onFeed,
+  onSwipe,
+}) {
   const fn = httpsCallable(getFunctions(app, REGION), 'sendCommunityOffer');
-  const { data } = await fn({ title, description, oncePerMember, expiresAt });
+  const { data } = await fn({
+    title,
+    description,
+    oncePerMember,
+    expiresAt,
+    notifyMembers,
+    onFeed,
+    onSwipe,
+  });
   return data || { success: false, sent: 0 };
+}
+
+/** Public list of active offers published to the feed (consumer Special Offers page). */
+export async function listActiveCommunityOffers() {
+  const fn = httpsCallable(getFunctions(app, REGION), 'listActiveCommunityOffers');
+  const { data } = await fn({});
+  return Array.isArray(data?.offers) ? data.offers : [];
+}
+
+/**
+ * Consumer "Take it": records the claim for a community member.
+ * @returns {Promise<{ ok: boolean, reason?: string, partnerId?: string, takenAt?: number }>}
+ */
+export async function takeCommunityOffer({ offerId }) {
+  const fn = httpsCallable(getFunctions(app, REGION), 'takeCommunityOffer');
+  const { data } = await fn({ offerId });
+  return data || { ok: false, reason: 'error' };
 }
 
 /** List the business's own community offers (with redemption counts). */
