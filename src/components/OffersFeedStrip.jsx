@@ -82,6 +82,7 @@ export default function OffersFeedStrip() {
         offerId: offer.id,
         claimToken: res.claimToken || null,
         offerTitle: offer.title || res.offerTitle || '',
+        businessName: offer.businessName || '',
         status: res.status || 'claimed',
       });
     },

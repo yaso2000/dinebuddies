@@ -91,6 +91,7 @@ export default function SpecialOffersPage() {
             offerId: offer.id,
             claimToken: res.claimToken || null,
             offerTitle: offer.title || res.offerTitle || '',
+            businessName: offer.businessName || '',
             status: res.status || 'claimed',
           });
         } else if (res.reason === 'not_member') {
@@ -121,6 +122,7 @@ export default function SpecialOffersPage() {
           offerId: offer.id,
           claimToken: r.claimToken,
           offerTitle: offer.title || r.offerTitle || '',
+          businessName: offer.businessName || '',
           status: 'claimed',
         });
         return;
