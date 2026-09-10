@@ -656,7 +656,13 @@ function toPublicProfile(userDocData, uid) {
                 null,
             address: asTrimmedString(businessInfo.address) || asTrimmedString(userData.location),
             description: asTrimmedString(businessInfo.description) || asTrimmedString(userData.bio),
+            cuisineType: asTrimmedString(businessInfo.cuisineType),
             coverImage: asTrimmedString(businessInfo.coverImage),
+            // Menu must reach visitors (who read the public projection), else the
+            // Menu tab only ever shows to the owner.
+            menu: Array.isArray(businessInfo.menu) ? businessInfo.menu : [],
+            menuListingType: asTrimmedString(businessInfo.menuListingType) || 'menu',
+            gallery: Array.isArray(businessInfo.gallery) ? businessInfo.gallery : [],
             lat: asFiniteNumber(
                 businessInfo.lat ?? bizCoords.lat ?? bizCoords.latitude ?? userData.lat
             ),
