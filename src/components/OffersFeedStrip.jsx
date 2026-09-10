@@ -3,11 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaTag } from 'react-icons/fa';
 import { AppText } from './base';
-import { getSafeAvatar } from '../utils/avatarUtils';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { haversineKm } from '../utils/postsFeedScope';
 import { listActiveCommunityOffers, takeCommunityOffer } from '../services/communityMemberApi';
+import { offerBannerStyle } from '../utils/offerBanner';
 import './OffersFeedStrip.css';
 
 /**
@@ -115,13 +115,12 @@ export default function OffersFeedStrip() {
         {sorted.map((offer) => {
           const done = takenById[offer.id];
           return (
-            <div key={offer.id} className="offers-feed-strip__card">
-              <img
-                className="offers-feed-strip__logo"
-                src={getSafeAvatar({ photo_url: offer.businessAvatar })}
-                alt=""
-                onClick={() => offer.partnerId && navigate(`/business/${offer.partnerId}`)} />
-              <div className="offers-feed-strip__business">{offer.businessName}</div>
+            <div key={offer.id} className="offers-feed-strip__card" style={offerBannerStyle(offer)}>
+              <div
+                className="offers-feed-strip__business"
+                onClick={() => offer.partnerId && navigate(`/business/${offer.partnerId}`)}>
+                {offer.businessName}
+              </div>
               <div className="offers-feed-strip__offer-title">{offer.title}</div>
               <button
                 type="button"

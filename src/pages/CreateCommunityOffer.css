@@ -1,0 +1,124 @@
+/* Shared offer banner look (preview + feed + offers page) */
+.offer-banner {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 104px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    overflow: hidden;
+    color: #fff;
+}
+
+.offer-banner__content {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.offer-banner__business {
+    font-size: 0.72rem;
+    font-weight: 700;
+    opacity: 0.9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.offer-banner__title {
+    font-size: 1.15rem;
+    font-weight: 900;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.offer-banner__desc {
+    font-size: 0.82rem;
+    opacity: 0.92;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.offer-banner__take {
+    flex-shrink: 0;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #111827;
+    font-weight: 800;
+    font-size: 0.85rem;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.offer-banner__take:disabled {
+    opacity: 0.85;
+}
+
+.offer-banner--preview {
+    margin-bottom: 12px;
+}
+
+/* Pickers */
+.offer-create-look {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.offer-create-look__img-btn,
+.offer-create-look__img-remove {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.5rem 0.9rem;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-main);
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.offer-create-look__img-remove {
+    color: #dc2626;
+}
+
+.offer-create-look__colors {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.offer-create-look__swatch {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+}
+
+.offer-create-look__swatch.is-active {
+    border-color: var(--text-main);
+    box-shadow: 0 0 0 2px var(--bg-body, #fff);
+}
+
+.offer-create-look__hint {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}

@@ -24,6 +24,15 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
         const notifyMembers = data?.notifyMembers !== false;
         const onFeed = data?.onFeed === true;
         const onSwipe = data?.onSwipe === true;
+        // Banner look: optional image + background style.
+        const imageUrl =
+            typeof data?.imageUrl === 'string' && /^https:\/\//i.test(data.imageUrl.trim())
+                ? data.imageUrl.trim().slice(0, 600)
+                : null;
+        const bgColor =
+            typeof data?.bgColor === 'string' && data.bgColor.trim()
+                ? data.bgColor.trim().slice(0, 200)
+                : null;
         let expiresAt = null;
         if (data?.expiresAt != null) {
             const ms = typeof data.expiresAt === 'number' ? data.expiresAt : Date.parse(String(data.expiresAt));
@@ -120,6 +129,8 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             businessAvatar: senderAvatar || null,
             title,
             description: description || null,
+            imageUrl,
+            bgColor,
             oncePerMember,
             active: true,
             expiresAt,
@@ -356,6 +367,8 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
                     businessAvatar: o.businessAvatar || null,
                     title: o.title || '',
                     description: o.description || null,
+                    imageUrl: o.imageUrl || null,
+                    bgColor: o.bgColor || null,
                     expiresAt: expiresMs,
                     active: o.active !== false && !isExpired,
                     lat: typeof o.lat === 'number' ? o.lat : null,

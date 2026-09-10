@@ -1,15 +1,18 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { FaArrowLeft, FaArrowRight, FaBullhorn, FaLock } from 'react-icons/fa';
+import { FaArrowLeft, FaArrowRight, FaBullhorn, FaLock, FaCamera, FaTimes } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { getBusinessPlanAccess } from '../config/businessPlanFeatures';
 import { sendCommunityOffer } from '../services/communityMemberApi';
 import { getCallableErrorReason } from '../utils/callableErrorDetails';
+import { uploadImage, validateImageFile } from '../utils/imageUpload';
+import { OFFER_BG_PRESETS, DEFAULT_OFFER_BG, offerBannerStyle } from '../utils/offerBanner';
 import { AppText, AppTextInput } from '../components/base';
 import '../components/CommunityManagement.css';
+import './CreateCommunityOffer.css';
 
 /**
  * Unified "Special offer" creation, launched from the business "+" menu (kept out
@@ -19,8 +22,9 @@ import '../components/CommunityManagement.css';
 export default function CreateCommunityOffer() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { userProfile } = useAuth();
+  const { userProfile, currentUser } = useAuth();
   const { showToast } = useToast();
+  const fileRef = useRef(null);
   const BackIcon = i18n.dir() === 'rtl' ? FaArrowRight : FaArrowLeft;
 
   const canSendOffers = getBusinessPlanAccess(userProfile?.subscriptionTier).canUseMemberNotifications === true;
@@ -32,7 +36,33 @@ export default function CreateCommunityOffer() {
   const [notify, setNotify] = useState(true);
   const [feed, setFeed] = useState(true);
   const [swipe, setSwipe] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [bgColor, setBgColor] = useState(DEFAULT_OFFER_BG);
   const [sending, setSending] = useState(false);
+
+  const businessName =
+    userProfile?.businessInfo?.businessName || userProfile?.display_name || t('your_business', 'Your business');
+
+  const handlePickImage = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const v = validateImageFile(file, 15);
+    if (!v.valid) {
+      showToast(v.error || t('image_invalid', 'Invalid image.'), 'error');
+      return;
+    }
+    setUploading(true);
+    try {
+      const url = await uploadImage(file, `community-offers/${currentUser?.uid || 'anon'}/${Date.now()}`);
+      setImageUrl(typeof url === 'string' ? url : url?.url || '');
+    } catch (e2) {
+      showToast(t('image_upload_failed', 'Could not upload the image.'), 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const submit = async () => {
     const ttl = title.trim();
@@ -55,6 +85,8 @@ export default function CreateCommunityOffer() {
         notifyMembers: notify,
         onFeed: feed,
         onSwipe: swipe,
+        imageUrl: imageUrl || undefined,
+        bgColor,
       });
       showToast(
         t('offer_sent_count', 'Offer sent to {{count}} members', { count: res?.sent || 0 }),
@@ -93,6 +125,48 @@ export default function CreateCommunityOffer() {
       <div className="cm-offer-box">
         {canSendOffers ? (
           <>
+            {/* Live banner preview */}
+            <div className="offer-banner offer-banner--preview" style={offerBannerStyle({ imageUrl, bgColor })}>
+              <div className="offer-banner__content">
+                <div className="offer-banner__business">{businessName}</div>
+                <div className="offer-banner__title">{title || t('offer_preview_placeholder', 'Your offer title')}</div>
+                {desc ? <div className="offer-banner__desc">{desc}</div> : null}
+              </div>
+              <span className="offer-banner__take">{t('offer_take_it', 'Take it')}</span>
+            </div>
+
+            {/* Image + background pickers */}
+            <div className="offer-create-look">
+              <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePickImage} />
+              <button
+                type="button"
+                className="offer-create-look__img-btn"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}>
+                <FaCamera aria-hidden />
+                {uploading ? t('uploading', 'Uploading…') : imageUrl ? t('change_image', 'Change image') : t('add_image', 'Add image')}
+              </button>
+              {imageUrl ? (
+                <button type="button" className="offer-create-look__img-remove" onClick={() => setImageUrl('')}>
+                  <FaTimes aria-hidden /> {t('remove_image', 'Remove image')}
+                </button>
+              ) : null}
+              <div className="offer-create-look__colors">
+                {OFFER_BG_PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    aria-label={p.id}
+                    className={`offer-create-look__swatch${bgColor === p.css ? ' is-active' : ''}`}
+                    style={{ background: p.css }}
+                    onClick={() => setBgColor(p.css)} />
+                ))}
+              </div>
+              <AppText as="p" className="offer-create-look__hint">
+                {t('offer_look_hint', 'Add an image for a photo banner, or pick a background colour.')}
+              </AppText>
+            </div>
+
             <AppTextInput
               type="text"
               className="ui-form-field cm-offer-input"

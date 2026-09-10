@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle } from 'react-icons/fa';
 import { AppText } from '../components/base';
-import { getSafeAvatar } from '../utils/avatarUtils';
 import { useAuth } from '../context/AuthContext';
 import { haversineKm } from '../utils/postsFeedScope';
 import { listActiveCommunityOffers, takeCommunityOffer } from '../services/communityMemberApi';
+import { offerBannerStyle } from '../utils/offerBanner';
 import './SpecialOffersPage.css';
+import './CreateCommunityOffer.css';
 
 /**
  * Consumer "Special Offers" — every active offer businesses published to the feed,
@@ -124,27 +125,21 @@ export default function SpecialOffersPage() {
           {sortedOffers.map((offer) => {
             const state = takeState(offer);
             return (
-              <div key={offer.id} className="special-offer-card">
-                <img
-                  className="special-offer-card__logo"
-                  src={getSafeAvatar({ photo_url: offer.businessAvatar })}
-                  alt=""
-                  onClick={() => offer.partnerId && navigate(`/business/${offer.partnerId}`)} />
-                <div className="special-offer-card__body">
+              <div key={offer.id} className="offer-banner" style={offerBannerStyle(offer)}>
+                <div className="offer-banner__content">
                   <button
                     type="button"
-                    className="special-offer-card__business"
+                    className="offer-banner__business"
+                    style={{ background: 'none', border: 'none', padding: 0, color: 'inherit', cursor: 'pointer', textAlign: 'start' }}
                     onClick={() => offer.partnerId && navigate(`/business/${offer.partnerId}`)}>
                     {offer.businessName}
                   </button>
-                  <div className="special-offer-card__title">{offer.title}</div>
-                  {offer.description ? (
-                    <div className="special-offer-card__desc">{offer.description}</div>
-                  ) : null}
+                  <div className="offer-banner__title">{offer.title}</div>
+                  {offer.description ? <div className="offer-banner__desc">{offer.description}</div> : null}
                 </div>
                 <button
                   type="button"
-                  className={`special-offer-card__take${state.done ? ' is-done' : ''}`}
+                  className="offer-banner__take"
                   disabled={state.done || takingId === offer.id}
                   onClick={() => take(offer)}>
                   {state.done ? <FaCheckCircle aria-hidden style={{ marginInlineEnd: 4 }} /> : null}
