@@ -4263,6 +4263,8 @@
   "payment_each": "كل واحد يدفع",
   "payment_expires": "تنتهي {{month}}/{{year}}",
   "payment_hub_credits_desc": "شراء رصيد Dine Credits عبر البطاقة أو PayPal",
+  "payment_hub_credits_desc_native": "شراء رصيد Dine Credits",
+  "payment_hub_subscription_desc_native": "ترقية خطة عملك",
   "payment_hub_credits_title": "محفظة الرصيد",
   "payment_hub_portal_desc": "إدارة البطاقات المحفوظة والفواتير في Stripe",
   "payment_hub_portal_title": "بوابة الفوترة (Stripe)",

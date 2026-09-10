@@ -4061,6 +4061,8 @@
   "payment_each": "Each Pays",
   "payment_expires": "Expires {{month}}/{{year}}",
   "payment_hub_credits_desc": "Buy Dine Credits with Card or PayPal",
+  "payment_hub_credits_desc_native": "Buy Dine Credits",
+  "payment_hub_subscription_desc_native": "Upgrade your Business plan",
   "payment_hub_credits_title": "Credits wallet",
   "payment_hub_portal_desc": "Manage saved cards and invoices in Stripe",
   "payment_hub_portal_title": "Billing portal (Stripe)",

@@ -12,6 +12,7 @@ import {
   PAYPAL_TEST_MODE,
 } from '../config/paypalCommerce';
 import { STRIPE_PUBLISHABLE_CONFIGURED } from '../config/stripeCommerce';
+import { isStripeCommerce } from '../utils/commercePlatform';
 import './SettingsPages.css';
 import { AppText } from '../components/base';
 
@@ -62,15 +63,19 @@ const PaymentSettings = () => {
     }
   };
 
+  // On native (iOS/Android) digital payments must go through Apple IAP / Google
+  // Play — never Stripe/PayPal — per store policy. Hide external-payment entries
+  // and Stripe-specific wording there; the purchase pages themselves are gated too.
+  const isWebCommerce = isStripeCommerce();
+
   const paymentOptions = [
     {
       key: 'credits',
       icon: <FaWallet style={{ color: '#0ea5e9', fontSize: '1.35rem' }} />,
       title: t('payment_hub_credits_title', 'Credits wallet'),
-      desc: t(
-        'payment_hub_credits_desc',
-        'Buy Dine Credits with Card or PayPal'
-      ),
+      desc: isWebCommerce
+        ? t('payment_hub_credits_desc', 'Buy Dine Credits with Card or PayPal')
+        : t('payment_hub_credits_desc_native', 'Buy Dine Credits'),
       onClick: () => navigate('/settings/credits'),
       show: true,
     },
@@ -78,10 +83,9 @@ const PaymentSettings = () => {
       key: 'subscription',
       icon: <FaCrown style={{ color: '#f59e0b', fontSize: '1.35rem' }} />,
       title: t('payment_hub_subscription_title', 'Business subscription'),
-      desc: t(
-        'payment_hub_subscription_desc',
-        'Upgrade Business plan — Card or PayPal'
-      ),
+      desc: isWebCommerce
+        ? t('payment_hub_subscription_desc', 'Upgrade Business plan — Card or PayPal')
+        : t('payment_hub_subscription_desc_native', 'Upgrade your Business plan'),
       onClick: () => navigate('/settings/subscription'),
       show: isBusiness,
     },
@@ -94,7 +98,8 @@ const PaymentSettings = () => {
         'Manage saved cards and invoices in Stripe'
       ),
       onClick: openStripePortal,
-      show: isBusiness && STRIPE_PUBLISHABLE_CONFIGURED,
+      // Stripe billing portal is web-only — never surface it inside the native apps.
+      show: isBusiness && STRIPE_PUBLISHABLE_CONFIGURED && isWebCommerce,
       loading: portalLoading,
     },
   ].filter((row) => row.show);
@@ -162,7 +167,7 @@ const PaymentSettings = () => {
             ))}
           </div>
 
-          {PAYPAL_CLIENT_CONFIGURED ? (
+          {PAYPAL_CLIENT_CONFIGURED && isWebCommerce ? (
             <div
               style={{
                 marginTop: '1rem',
@@ -192,6 +197,7 @@ const PaymentSettings = () => {
             </AppText>
           ) : null}
 
+          {isWebCommerce ? (
           <div className="settings-note" style={{ marginTop: '1.5rem' }}>
             <strong>
               {t(
@@ -200,6 +206,7 @@ const PaymentSettings = () => {
               )}
             </strong>
           </div>
+          ) : null}
         </div>
       </div>
     </div>
