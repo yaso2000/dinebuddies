@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { haversineKm } from '../utils/postsFeedScope';
 import { listActiveCommunityOffers, takeCommunityOffer } from '../services/communityMemberApi';
+import { isBusinessUser } from '../utils/accountRole';
 import { offerBannerStyle } from '../utils/offerBanner';
 import '../pages/CreateCommunityOffer.css';
 import './OffersFeedStrip.css';
@@ -21,6 +22,8 @@ export default function OffersFeedStrip() {
   const navigate = useNavigate();
   const { userProfile, isGuest } = useAuth();
   const { showToast } = useToast();
+  // Business accounts don't take offers — they only share the feed & stories.
+  const isBusiness = isBusinessUser(userProfile);
 
   const [offers, setOffers] = useState([]);
   const [takingId, setTakingId] = useState('');
@@ -33,7 +36,7 @@ export default function OffersFeedStrip() {
 
   useEffect(() => {
     let cancelled = false;
-    if (isGuest) return undefined;
+    if (isGuest || isBusiness) return undefined;
     (async () => {
       try {
         const list = await listActiveCommunityOffers();
@@ -45,7 +48,7 @@ export default function OffersFeedStrip() {
     return () => {
       cancelled = true;
     };
-  }, [isGuest]);
+  }, [isGuest, isBusiness]);
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -101,7 +104,7 @@ export default function OffersFeedStrip() {
     [takingId, navigate, showToast, t]
   );
 
-  if (isGuest || sorted.length === 0) return null;
+  if (isGuest || isBusiness || sorted.length === 0) return null;
 
   return (
     <div className="offers-feed-strip">

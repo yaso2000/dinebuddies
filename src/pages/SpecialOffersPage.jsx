@@ -6,6 +6,7 @@ import { AppText } from '../components/base';
 import { useAuth } from '../context/AuthContext';
 import { haversineKm } from '../utils/postsFeedScope';
 import { listActiveCommunityOffers, takeCommunityOffer } from '../services/communityMemberApi';
+import { isBusinessUser } from '../utils/accountRole';
 import { offerBannerStyle } from '../utils/offerBanner';
 import './SpecialOffersPage.css';
 import './CreateCommunityOffer.css';
@@ -19,6 +20,8 @@ export default function SpecialOffersPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { userProfile } = useAuth();
+  // Business accounts browse offers but cannot take them (feed & stories only).
+  const isBusiness = isBusinessUser(userProfile);
   const BackIcon = i18n.dir() === 'rtl' ? FaArrowRight : FaArrowLeft;
 
   const [offers, setOffers] = useState([]);
@@ -137,14 +140,16 @@ export default function SpecialOffersPage() {
                   <div className="offer-banner__title">{offer.title}</div>
                   {offer.description ? <div className="offer-banner__desc">{offer.description}</div> : null}
                 </div>
-                <button
-                  type="button"
-                  className="offer-banner__take"
-                  disabled={state.done || takingId === offer.id}
-                  onClick={() => take(offer)}>
-                  {state.done ? <FaCheckCircle aria-hidden style={{ marginInlineEnd: 4 }} /> : null}
-                  {state.label}
-                </button>
+                {!isBusiness && (
+                  <button
+                    type="button"
+                    className="offer-banner__take"
+                    disabled={state.done || takingId === offer.id}
+                    onClick={() => take(offer)}>
+                    {state.done ? <FaCheckCircle aria-hidden style={{ marginInlineEnd: 4 }} /> : null}
+                    {state.label}
+                  </button>
+                )}
               </div>
             );
           })}

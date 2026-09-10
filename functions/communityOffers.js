@@ -417,6 +417,21 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             cooldownMs: 0,
         });
 
+        // Business accounts cannot take offers — not their own, not anyone's.
+        // They only participate in the shared feed and stories.
+        try {
+            const takerSnap = await db.collection('users').doc(uid).get();
+            const taker = takerSnap.exists ? takerSnap.data() || {} : {};
+            const takerRole = String(taker.role || taker.accountType || '').toLowerCase();
+            const takerIsBusiness =
+                takerRole === 'business' || takerRole === 'partner' || taker.isBusiness === true;
+            if (takerIsBusiness) {
+                return { ok: false, reason: 'business_forbidden' };
+            }
+        } catch (e) {
+            /* if the lookup fails, fall through — the membership check still gates it */
+        }
+
         const offerRef = db.collection('community_offers').doc(offerId);
         const offerSnap = await offerRef.get();
         if (!offerSnap.exists) return { ok: false, reason: 'offer_not_found' };
