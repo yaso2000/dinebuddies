@@ -14,6 +14,9 @@ export const OFFER_BG_PRESETS = [
 
 export const DEFAULT_OFFER_BG = OFFER_BG_PRESETS[0].css;
 
+/** Wide banner aspect ratio used for the crop tool and full-width display. */
+export const OFFER_BANNER_ASPECT = 16 / 7;
+
 /**
  * Inline style for an offer banner. With an image, cover it and darken for text;
  * otherwise use the chosen gradient (or the default).

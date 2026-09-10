@@ -31,10 +31,22 @@
     -webkit-overflow-scrolling: touch;
     padding-bottom: 4px;
     scrollbar-width: none;
+    scroll-snap-type: x mandatory;
 }
 
 .offers-feed-strip__row::-webkit-scrollbar {
     display: none;
+}
+
+/* Each offer is a full-width banner (snaps one per view). */
+.offers-feed-strip__slide {
+    flex: 0 0 100%;
+    width: 100%;
+    scroll-snap-align: center;
+}
+
+.offers-feed-strip__slide .offer-banner {
+    min-height: 120px;
 }
 
 .offers-feed-strip__card {

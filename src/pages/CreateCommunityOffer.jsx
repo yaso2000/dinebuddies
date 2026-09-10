@@ -9,7 +9,8 @@ import { getBusinessPlanAccess } from '../config/businessPlanFeatures';
 import { sendCommunityOffer } from '../services/communityMemberApi';
 import { getCallableErrorReason } from '../utils/callableErrorDetails';
 import { uploadImage, validateImageFile } from '../utils/imageUpload';
-import { OFFER_BG_PRESETS, DEFAULT_OFFER_BG, offerBannerStyle } from '../utils/offerBanner';
+import { OFFER_BG_PRESETS, DEFAULT_OFFER_BG, offerBannerStyle, OFFER_BANNER_ASPECT } from '../utils/offerBanner';
+import ImageCropModal from '../components/ImageCropModal';
 import { AppText, AppTextInput } from '../components/base';
 import '../components/CommunityManagement.css';
 import './CreateCommunityOffer.css';
@@ -38,13 +39,15 @@ export default function CreateCommunityOffer() {
   const [swipe, setSwipe] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [cropSrc, setCropSrc] = useState('');
   const [bgColor, setBgColor] = useState(DEFAULT_OFFER_BG);
   const [sending, setSending] = useState(false);
 
   const businessName =
     userProfile?.businessInfo?.businessName || userProfile?.display_name || t('your_business', 'Your business');
 
-  const handlePickImage = async (e) => {
+  // Pick → open the crop tool (drag/zoom to set the focus area) → upload the crop.
+  const handlePickImage = (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -53,14 +56,31 @@ export default function CreateCommunityOffer() {
       showToast(v.error || t('image_invalid', 'Invalid image.'), 'error');
       return;
     }
+    setCropSrc(URL.createObjectURL(file));
+  };
+
+  const handleCroppedSave = async (croppedFile) => {
+    const src = cropSrc;
+    setCropSrc('');
+    if (src) {
+      try { URL.revokeObjectURL(src); } catch { /* ignore */ }
+    }
     setUploading(true);
     try {
-      const url = await uploadImage(file, `community-offers/${currentUser?.uid || 'anon'}/${Date.now()}`);
+      const url = await uploadImage(croppedFile, `community-offers/${currentUser?.uid || 'anon'}/${Date.now()}`);
       setImageUrl(typeof url === 'string' ? url : url?.url || '');
     } catch (e2) {
       showToast(t('image_upload_failed', 'Could not upload the image.'), 'error');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleCropCancel = () => {
+    const src = cropSrc;
+    setCropSrc('');
+    if (src) {
+      try { URL.revokeObjectURL(src); } catch { /* ignore */ }
     }
   };
 
@@ -229,6 +249,17 @@ export default function CreateCommunityOffer() {
           </div>
         )}
       </div>
+
+      {cropSrc ? (
+        <ImageCropModal
+          imageSrc={cropSrc}
+          cropShape="rect"
+          aspect={OFFER_BANNER_ASPECT}
+          outputWidth={1600}
+          fileName="offer-banner.jpg"
+          onCancel={handleCropCancel}
+          onSave={handleCroppedSave} />
+      ) : null}
     </div>
   );
 }

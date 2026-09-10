@@ -8,6 +8,7 @@ import { useToast } from '../context/ToastContext';
 import { haversineKm } from '../utils/postsFeedScope';
 import { listActiveCommunityOffers, takeCommunityOffer } from '../services/communityMemberApi';
 import { offerBannerStyle } from '../utils/offerBanner';
+import '../pages/CreateCommunityOffer.css';
 import './OffersFeedStrip.css';
 
 /**
@@ -115,20 +116,26 @@ export default function OffersFeedStrip() {
         {sorted.map((offer) => {
           const done = takenById[offer.id];
           return (
-            <div key={offer.id} className="offers-feed-strip__card" style={offerBannerStyle(offer)}>
-              <div
-                className="offers-feed-strip__business"
-                onClick={() => offer.partnerId && navigate(`/business/${offer.partnerId}`)}>
-                {offer.businessName}
+            <div key={offer.id} className="offers-feed-strip__slide">
+              <div className="offer-banner" style={offerBannerStyle(offer)}>
+                <div className="offer-banner__content">
+                  <div
+                    className="offer-banner__business"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => offer.partnerId && navigate(`/business/${offer.partnerId}`)}>
+                    {offer.businessName}
+                  </div>
+                  <div className="offer-banner__title">{offer.title}</div>
+                  {offer.description ? <div className="offer-banner__desc">{offer.description}</div> : null}
+                </div>
+                <button
+                  type="button"
+                  className="offer-banner__take"
+                  disabled={done || takingId === offer.id}
+                  onClick={() => take(offer)}>
+                  {done ? t('offer_taken', 'Taken ✓') : takingId === offer.id ? t('offer_taking', 'Taking…') : t('offer_take_it', 'Take it')}
+                </button>
               </div>
-              <div className="offers-feed-strip__offer-title">{offer.title}</div>
-              <button
-                type="button"
-                className={`offers-feed-strip__take${done ? ' is-done' : ''}`}
-                disabled={done || takingId === offer.id}
-                onClick={() => take(offer)}>
-                {done ? t('offer_taken', 'Taken ✓') : takingId === offer.id ? t('offer_taking', 'Taking…') : t('offer_take_it', 'Take it')}
-              </button>
             </div>
           );
         })}
