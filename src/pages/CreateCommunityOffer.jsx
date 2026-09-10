@@ -47,6 +47,8 @@ export default function CreateCommunityOffer() {
   const [sending, setSending] = useState(false);
   // How many active offers the business already has (to price this one).
   const [activeCount, setActiveCount] = useState(null);
+  // Whether an active offer already occupies the swipe card (only one allowed).
+  const [swipeTaken, setSwipeTaken] = useState(false);
   const dragRef = useRef(null); // { startX, startY, baseX, baseY }
 
   const EXTRA_OFFER_CREDITS_PER_DAY = 150;
@@ -68,7 +70,12 @@ export default function CreateCommunityOffer() {
     (async () => {
       try {
         const list = await listCommunityOffers({ activeOnly: true });
-        if (!cancelled) setActiveCount(Array.isArray(list) ? list.length : 0);
+        if (!cancelled) {
+          setActiveCount(Array.isArray(list) ? list.length : 0);
+          const taken = Array.isArray(list) && list.some((o) => o.onSwipe);
+          setSwipeTaken(taken);
+          if (taken) setSwipe(false);
+        }
       } catch {
         if (!cancelled) setActiveCount(0);
       }
@@ -186,6 +193,13 @@ export default function CreateCommunityOffer() {
           );
         } else if (res.reason === 'expiry_required') {
           showToast(t('offer_expiry_pick_date', 'Pick the offer end date.'), 'error');
+        } else if (res.reason === 'swipe_taken') {
+          setSwipeTaken(true);
+          setSwipe(false);
+          showToast(
+            t('offer_swipe_taken_hint', 'The swipe card already shows another offer. Delete it first to feature this one.'),
+            'error'
+          );
         } else {
           showToast(t('offer_send_failed', 'Could not send the offer. Please try again.'), 'error');
         }
@@ -322,10 +336,19 @@ export default function CreateCommunityOffer() {
                 <input type="checkbox" checked={feed} onChange={(e) => setFeed(e.target.checked)} />
                 {t('offer_channel_feed', 'Publish on the offers feed')}
               </label>
-              <label className="cm-offer-once">
-                <input type="checkbox" checked={swipe} onChange={(e) => setSwipe(e.target.checked)} />
+              <label className="cm-offer-once" style={swipeTaken ? { opacity: 0.55 } : undefined}>
+                <input
+                  type="checkbox"
+                  checked={swipe && !swipeTaken}
+                  disabled={swipeTaken}
+                  onChange={(e) => setSwipe(e.target.checked)} />
                 {t('offer_channel_swipe', 'Show on swipe card')}
               </label>
+              {swipeTaken ? (
+                <AppText as="p" className="offer-create-look__hint" style={{ marginTop: 0 }}>
+                  {t('offer_swipe_taken_hint', 'The swipe card already shows another offer. Delete it first to feature this one.')}
+                </AppText>
+              ) : null}
               <label className="cm-offer-once">
                 <input type="checkbox" checked={once} onChange={(e) => setOnce(e.target.checked)} />
                 {t('offer_once_per_member', 'One redemption per member')}

@@ -140,12 +140,25 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             .collection('community_offers')
             .where('partnerId', '==', businessId)
             .get();
-        const activeCount = ownSnap.docs.filter((d) => {
-            const o = d.data() || {};
+        const isActiveDoc = (o) => {
             if (o.active === false) return false;
             const exp = o.expiresAt?.toMillis ? o.expiresAt.toMillis() : null;
             return exp == null || exp > nowMs;
-        }).length;
+        };
+        const activeCount = ownSnap.docs.filter((d) => isActiveDoc(d.data() || {})).length;
+
+        // The swipe card holds ONE offer only (regardless of free/paid). Reject a
+        // second swipe offer while one is already live — before any credit charge.
+        if (onSwipe) {
+            const swipeTaken = ownSnap.docs.some((d) => {
+                const o = d.data() || {};
+                return o.onSwipe === true && isActiveDoc(o);
+            });
+            if (swipeTaken) {
+                return { success: false, reason: 'swipe_taken' };
+            }
+        }
+
         const pricing = priceCommunityOffer({
             activeCount,
             expiresAtMs: expiresAt ? expiresAt.toMillis() : null,

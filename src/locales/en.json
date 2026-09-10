@@ -1929,6 +1929,7 @@
   "offer_badge_paid": "paid",
   "offer_delete_confirm_msg": "Delete this offer? It will be removed from the feed and your profile. Paid credits are not refunded.",
   "offer_deleted": "Offer deleted.",
+  "offer_swipe_taken_hint": "The swipe card already shows another offer. Delete it first to feature this one.",
   "offer_end_date_label": "Offer end date",
   "offer_expiry_set_date": "Set an end date",
   "offer_expiry_open": "Keep it open (no end date)",

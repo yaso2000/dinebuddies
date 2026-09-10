@@ -1950,6 +1950,7 @@
   "offer_badge_paid": "مدفوع",
   "offer_delete_confirm_msg": "حذف هذا العرض؟ سيُزال من الفيد وصفحتك. الكريدت المدفوع غير قابل للاسترجاع.",
   "offer_deleted": "تم حذف العرض.",
+  "offer_swipe_taken_hint": "كرت السحب يعرض عرضًا آخر بالفعل. احذفه أولًا لتضع هذا مكانه.",
   "offer_end_date_label": "تاريخ انتهاء العرض",
   "offer_expiry_set_date": "تحديد تاريخ انتهاء",
   "offer_expiry_open": "اجعله مفتوحًا (بلا تاريخ انتهاء)",
