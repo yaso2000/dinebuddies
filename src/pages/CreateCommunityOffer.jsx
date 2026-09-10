@@ -8,9 +8,8 @@ import { useToast } from '../context/ToastContext';
 import { getBusinessPlanAccess } from '../config/businessPlanFeatures';
 import { sendCommunityOffer } from '../services/communityMemberApi';
 import { getCallableErrorReason } from '../utils/callableErrorDetails';
-import { uploadImage, validateImageFile } from '../utils/imageUpload';
-import { OFFER_BG_PRESETS, DEFAULT_OFFER_BG, offerBannerStyle, OFFER_BANNER_ASPECT } from '../utils/offerBanner';
-import ImageCropModal from '../components/ImageCropModal';
+import { uploadOfferImage, validateImageFile } from '../utils/imageUpload';
+import { OFFER_BG_PRESETS, DEFAULT_OFFER_BG, offerBannerStyle } from '../utils/offerBanner';
 import { AppText, AppTextInput } from '../components/base';
 import '../components/CommunityManagement.css';
 import './CreateCommunityOffer.css';
@@ -39,15 +38,17 @@ export default function CreateCommunityOffer() {
   const [swipe, setSwipe] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [cropSrc, setCropSrc] = useState('');
+  const [imgPos, setImgPos] = useState({ x: 50, y: 50 });
+  const [imgZoom, setImgZoom] = useState(1);
   const [bgColor, setBgColor] = useState(DEFAULT_OFFER_BG);
   const [sending, setSending] = useState(false);
+  const dragRef = useRef(null); // { startX, startY, baseX, baseY }
 
   const businessName =
     userProfile?.businessInfo?.businessName || userProfile?.display_name || t('your_business', 'Your business');
 
-  // Pick → open the crop tool (drag/zoom to set the focus area) → upload the crop.
-  const handlePickImage = (e) => {
+  // Upload the full image (moderated); focus is set in-place on the banner below.
+  const handlePickImage = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -56,32 +57,35 @@ export default function CreateCommunityOffer() {
       showToast(v.error || t('image_invalid', 'Invalid image.'), 'error');
       return;
     }
-    setCropSrc(URL.createObjectURL(file));
-  };
-
-  const handleCroppedSave = async (croppedFile) => {
-    const src = cropSrc;
-    setCropSrc('');
-    if (src) {
-      try { URL.revokeObjectURL(src); } catch { /* ignore */ }
-    }
     setUploading(true);
     try {
-      const url = await uploadImage(croppedFile, `community-offers/${currentUser?.uid || 'anon'}/${Date.now()}`);
+      const url = await uploadOfferImage(file, currentUser?.uid);
       setImageUrl(typeof url === 'string' ? url : url?.url || '');
+      setImgPos({ x: 50, y: 50 });
+      setImgZoom(1);
     } catch (e2) {
-      showToast(t('image_upload_failed', 'Could not upload the image.'), 'error');
+      showToast(e2?.message || t('image_upload_failed', 'Could not upload the image.'), 'error');
     } finally {
       setUploading(false);
     }
   };
 
-  const handleCropCancel = () => {
-    const src = cropSrc;
-    setCropSrc('');
-    if (src) {
-      try { URL.revokeObjectURL(src); } catch { /* ignore */ }
-    }
+  // Drag directly on the banner to reposition the image focus.
+  const onBannerPointerDown = (e) => {
+    if (!imageUrl) return;
+    dragRef.current = { startX: e.clientX, startY: e.clientY, baseX: imgPos.x, baseY: imgPos.y, w: e.currentTarget.clientWidth || 300, h: e.currentTarget.clientHeight || 120 };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
+  const onBannerPointerMove = (e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const nx = Math.max(0, Math.min(100, d.baseX - ((e.clientX - d.startX) / d.w) * 100));
+    const ny = Math.max(0, Math.min(100, d.baseY - ((e.clientY - d.startY) / d.h) * 100));
+    setImgPos({ x: nx, y: ny });
+  };
+  const onBannerPointerUp = (e) => {
+    dragRef.current = null;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
   };
 
   const submit = async () => {
@@ -106,6 +110,9 @@ export default function CreateCommunityOffer() {
         onFeed: feed,
         onSwipe: swipe,
         imageUrl: imageUrl || undefined,
+        imagePosX: imageUrl ? Math.round(imgPos.x) : undefined,
+        imagePosY: imageUrl ? Math.round(imgPos.y) : undefined,
+        imageZoom: imageUrl ? imgZoom : undefined,
         bgColor,
       });
       showToast(
@@ -145,15 +152,35 @@ export default function CreateCommunityOffer() {
       <div className="cm-offer-box">
         {canSendOffers ? (
           <>
-            {/* Live banner preview */}
-            <div className="offer-banner offer-banner--preview" style={offerBannerStyle({ imageUrl, bgColor })}>
+            {/* Live banner preview — drag directly on it to set the image focus */}
+            <div
+              className={`offer-banner offer-banner--preview${imageUrl ? ' offer-banner--draggable' : ''}`}
+              style={offerBannerStyle({ imageUrl, bgColor, imagePosX: imgPos.x, imagePosY: imgPos.y, imageZoom: imgZoom })}
+              onPointerDown={onBannerPointerDown}
+              onPointerMove={onBannerPointerMove}
+              onPointerUp={onBannerPointerUp}
+              onPointerCancel={onBannerPointerUp}>
               <div className="offer-banner__content">
                 <div className="offer-banner__business">{businessName}</div>
                 <div className="offer-banner__title">{title || t('offer_preview_placeholder', 'Your offer title')}</div>
                 {desc ? <div className="offer-banner__desc">{desc}</div> : null}
               </div>
               <span className="offer-banner__take">{t('offer_take_it', 'Take it')}</span>
+              {imageUrl ? <span className="offer-banner__drag-hint">{t('offer_drag_hint', 'Drag to reposition')}</span> : null}
             </div>
+
+            {imageUrl ? (
+              <label className="offer-create-zoom">
+                <span>{t('zoom', 'Zoom')}</span>
+                <input
+                  type="range"
+                  min="1"
+                  max="2.5"
+                  step="0.05"
+                  value={imgZoom}
+                  onChange={(e) => setImgZoom(Number(e.target.value))} />
+              </label>
+            ) : null}
 
             {/* Image + background pickers */}
             <div className="offer-create-look">
@@ -249,17 +276,6 @@ export default function CreateCommunityOffer() {
           </div>
         )}
       </div>
-
-      {cropSrc ? (
-        <ImageCropModal
-          imageSrc={cropSrc}
-          cropShape="rect"
-          aspect={OFFER_BANNER_ASPECT}
-          outputWidth={1600}
-          fileName="offer-banner.jpg"
-          onCancel={handleCropCancel}
-          onSave={handleCroppedSave} />
-      ) : null}
     </div>
   );
 }

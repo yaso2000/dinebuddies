@@ -37,25 +37,9 @@ export async function verifyCommunityMember({ partnerId, qrToken }) {
  * @param {{ title: string, description?: string }} args
  * @returns {Promise<{ success: boolean, sent: number }>}
  */
-export async function sendCommunityOffer({
-  title,
-  description,
-  oncePerMember,
-  expiresAt,
-  notifyMembers,
-  onFeed,
-  onSwipe,
-}) {
+export async function sendCommunityOffer(args) {
   const fn = httpsCallable(getFunctions(app, REGION), 'sendCommunityOffer');
-  const { data } = await fn({
-    title,
-    description,
-    oncePerMember,
-    expiresAt,
-    notifyMembers,
-    onFeed,
-    onSwipe,
-  });
+  const { data } = await fn(args || {});
   return data || { success: false, sent: 0 };
 }
 

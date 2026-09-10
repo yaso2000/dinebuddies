@@ -122,3 +122,45 @@
     font-size: 0.78rem;
     color: var(--text-muted);
 }
+
+.offer-banner--preview {
+    min-height: 150px;
+}
+
+.offer-banner--draggable {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.offer-banner--draggable:active {
+    cursor: grabbing;
+}
+
+.offer-banner__drag-hint {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    pointer-events: none;
+}
+
+.offer-create-zoom {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 700;
+}
+
+.offer-create-zoom input[type="range"] {
+    flex: 1;
+}

@@ -1909,6 +1909,8 @@
   "image_upload_failed": "Could not upload the image.",
   "offer_preview_placeholder": "Your offer title",
   "offer_look_hint": "Add an image for a photo banner, or pick a background colour.",
+  "offer_drag_hint": "Drag to reposition",
+  "zoom": "Zoom",
   "offer_create_from_plus": "Create a special offer from the + button. Your offers and their redemptions show here.",
   "offer_pick_channel": "Pick at least one: notify members, feed, or swipe card.",
   "offer_channels_label": "Where to publish",

@@ -33,6 +33,16 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             typeof data?.bgColor === 'string' && data.bgColor.trim()
                 ? data.bgColor.trim().slice(0, 200)
                 : null;
+        const clampPct = (v) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50;
+        };
+        const imagePosX = data?.imagePosX != null ? clampPct(data.imagePosX) : 50;
+        const imagePosY = data?.imagePosY != null ? clampPct(data.imagePosY) : 50;
+        const imageZoom = (() => {
+            const n = Number(data?.imageZoom);
+            return Number.isFinite(n) ? Math.max(1, Math.min(3, n)) : 1;
+        })();
         let expiresAt = null;
         if (data?.expiresAt != null) {
             const ms = typeof data.expiresAt === 'number' ? data.expiresAt : Date.parse(String(data.expiresAt));
@@ -130,6 +140,9 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             title,
             description: description || null,
             imageUrl,
+            imagePosX,
+            imagePosY,
+            imageZoom,
             bgColor,
             oncePerMember,
             active: true,
@@ -368,6 +381,9 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
                     title: o.title || '',
                     description: o.description || null,
                     imageUrl: o.imageUrl || null,
+                    imagePosX: typeof o.imagePosX === 'number' ? o.imagePosX : 50,
+                    imagePosY: typeof o.imagePosY === 'number' ? o.imagePosY : 50,
+                    imageZoom: typeof o.imageZoom === 'number' ? o.imageZoom : 1,
                     bgColor: o.bgColor || null,
                     expiresAt: expiresMs,
                     active: o.active !== false && !isExpired,

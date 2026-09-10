@@ -25,10 +25,14 @@ export const OFFER_BANNER_ASPECT = 16 / 7;
 export function offerBannerStyle(offer) {
   const bg = offer?.bgColor || DEFAULT_OFFER_BG;
   if (offer?.imageUrl) {
+    const zoom = Number(offer.imageZoom) > 1 ? Number(offer.imageZoom) : 1;
+    const px = Number.isFinite(Number(offer.imagePosX)) ? Number(offer.imagePosX) : 50;
+    const py = Number.isFinite(Number(offer.imagePosY)) ? Number(offer.imagePosY) : 50;
     return {
       backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.6) 100%), url("${offer.imageUrl}")`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
+      backgroundSize: `100% 100%, ${zoom > 1 ? `${zoom * 100}%` : 'cover'}`,
+      backgroundPosition: `center, ${px}% ${py}%`,
+      backgroundRepeat: 'no-repeat, no-repeat',
     };
   }
   return { background: bg };

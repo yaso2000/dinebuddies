@@ -264,6 +264,12 @@ export const uploadProfileCoverPhoto = async (file, userId, onProgress = null) =
     return uploadManagedImage(prepared, userId, ImageUploadZone.COVER, { onProgress });
 };
 
+/** Community special-offer banner image — moderated (Vision), returns the URL. */
+export const uploadOfferImage = async (file, userId, onProgress = null) => {
+    const prepared = await prepareImageFileForUpload(file);
+    return uploadManagedImage(prepared, userId, ImageUploadZone.OFFER, { onProgress });
+};
+
 /**
  * Upload invitation photo
  * @param {File} file - Image file
