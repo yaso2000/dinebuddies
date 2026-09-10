@@ -33,11 +33,18 @@ export default function BusinessInboxManage() {
           <BackIcon />
         </button>
         <AppText as="h2" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)' }}>
-          {t('feedback_box_title', 'Feedback & Complaints Inbox')}
+          {t('business_inbox_page_title', 'Community & Inbox')}
         </AppText>
       </div>
 
+      <AppText as="p" style={{ margin: '0 0 1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+        {t('business_inbox_page_sub', 'Messages & complaints, your community members, member offers, and QR verification — all in one place.')}
+      </AppText>
+
       {/* Feedback inbox + broadcast */}
+      <AppText as="h3" style={{ margin: '0 0 0.5rem', fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)' }}>
+        {t('section_messages_complaints', 'Messages & complaints')}
+      </AppText>
       <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 16, padding: '1.5rem', marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
           <button
@@ -51,7 +58,10 @@ export default function BusinessInboxManage() {
         <BusinessBroadcastComposer isOpen={showBroadcast} onClose={() => setShowBroadcast(false)} />
       </div>
 
-      {/* Member management */}
+      {/* Community: members, offers, QR verification */}
+      <AppText as="h3" style={{ margin: '0 0 0.5rem', fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)' }}>
+        {t('section_community_offers', 'Community, member offers & verification')}
+      </AppText>
       <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 16, padding: '1.5rem' }}>
         <CommunityManagement
           businessId={currentUser.uid}

@@ -9,8 +9,9 @@ import { useTranslation } from 'react-i18next';
 import { getBusinessSubscriptionAccess } from '../utils/businessSubscription';
 import BusinessPaidFeatureGate from '../components/business/BusinessPaidFeatureGate';
 import { syncBusinessPublicProfile } from '../services/businessPublicProfileSync';
+import { listCommunityOffers } from '../services/communityMemberApi';
 import { getSafeAvatar } from '../utils/avatarUtils';
-import { FaUsers, FaUserPlus, FaHeart, FaComments, FaChartLine, FaArchive, FaEye, FaStar, FaEdit, FaCalendar, FaCog, FaCheckCircle, FaGlobe, FaSearch, FaBell, FaInbox, FaBriefcase } from 'react-icons/fa';
+import { FaUsers, FaUserPlus, FaHeart, FaComments, FaChartLine, FaArchive, FaEye, FaStar, FaEdit, FaCalendar, FaCog, FaCheckCircle, FaGlobe, FaSearch, FaBell, FaInbox, FaBriefcase, FaBullhorn } from 'react-icons/fa';
 import { useNotifications } from '../context/NotificationContext';
 import { hasBusinessSessionHint } from '../utils/accountRole';
 import { AppText } from "../components/base";
@@ -147,6 +148,33 @@ const BusinessDashboard = () => {
   const tierAccess = getBusinessSubscriptionAccess(userProfile?.subscriptionTier);
   const hasBusinessAccess =
     isBusiness || (currentUser?.uid && hasBusinessSessionHint(currentUser.uid));
+
+  // Compact community summary (new feature at a glance). Members come from the
+  // business doc (no fetch); offers-redeemed is a single guarded callable.
+  const communityMemberCount = Array.isArray(userProfile?.communityMembers)
+    ? userProfile.communityMembers.length
+    : 0;
+  const [offersRedeemed, setOffersRedeemed] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!tierAccess.isPaid) {
+      setOffersRedeemed(null);
+      return undefined;
+    }
+    (async () => {
+      try {
+        const list = await listCommunityOffers({});
+        if (!cancelled) {
+          setOffersRedeemed(list.reduce((sum, o) => sum + (Number(o.redemptionCount) || 0), 0));
+        }
+      } catch {
+        if (!cancelled) setOffersRedeemed(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tierAccess.isPaid]);
 
   useEffect(() => {
     if (loading) return;
@@ -650,8 +678,27 @@ const BusinessDashboard = () => {
                     </div>
         }
 
+                {/* Community at a glance (paid feature) */}
+                {tierAccess.isPaid &&
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 140px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '14px', padding: '0.9rem 1rem' }}>
+                        <AppText as="div" style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--primary)' }}>{communityMemberCount}</AppText>
+                        <AppText as="div" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>{t('community_members', 'Community members')}</AppText>
+                    </div>
+                    <div style={{ flex: '1 1 140px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '14px', padding: '0.9rem 1rem' }}>
+                        <AppText as="div" style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--primary)' }}>{offersRedeemed == null ? '—' : offersRedeemed}</AppText>
+                        <AppText as="div" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>{t('offers_redeemed_total', 'Offers redeemed')}</AppText>
+                    </div>
+                </div>
+        }
+
                 {/* Quick Actions */}
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <QuickActionButton
+            icon={<FaBullhorn />}
+            label={t('member_offers_community', 'Member offers & community')}
+            onClick={() => navigate('/business-dashboard/inbox')} />
+
                     <QuickActionButton
             icon={<FaInbox />}
             label={t('inbox_and_complaints', 'Inbox & complaints')}
