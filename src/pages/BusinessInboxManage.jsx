@@ -23,21 +23,20 @@ export default function BusinessInboxManage() {
 
   return (
     <div className="page-container" style={{ padding: '1rem', maxWidth: 900, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem' }}>
-        <button
-          type="button"
-          onClick={() => navigate('/business-dashboard')}
-          aria-label={t('back', 'Back')}
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-main)', cursor: 'pointer', flexShrink: 0 }}>
-          <BackIcon />
-        </button>
-        <AppText as="h2" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)' }}>
-          {t('business_inbox_page_title', 'Community & Inbox')}
-        </AppText>
-      </div>
+      {/* Header — back button on its own row so title/subtitle/section headings all
+          share the same left inset (unified margins). */}
+      <button
+        type="button"
+        onClick={() => navigate('/business-dashboard')}
+        aria-label={t('back', 'Back')}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-main)', cursor: 'pointer', flexShrink: 0, marginBottom: '0.75rem' }}>
+        <BackIcon />
+      </button>
+      <AppText as="h2" style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)' }}>
+        {t('business_inbox_page_title', 'Community & Inbox')}
+      </AppText>
 
-      <AppText as="p" style={{ margin: '0 0 1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+      <AppText as="p" style={{ margin: '0 0 1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
         {t('business_inbox_page_sub', 'Messages & complaints, your community members, member offers, and QR verification — all in one place.')}
       </AppText>
 

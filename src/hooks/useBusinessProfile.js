@@ -100,7 +100,7 @@ async function loadBusinessFromPublicProfileProjection(profileId) {
         website: bp.website || '',
         categories: Array.isArray(bp.categories) ? bp.categories : [],
         description: bp.description || '',
-        coverImage: bp.coverImage || p.avatarUrl || '',
+        coverImage: bp.coverImage || '',
         coverImageStoragePath: bp.coverImageStoragePath || p.coverImageStoragePath || null,
         lat,
         lng,
@@ -1338,13 +1338,11 @@ export function useBusinessProfile(profileId) {
   rawBusinessInfo;
 
   const profileMapCoords = business ? getUserDocLatLng(business) : null;
+  // Cover is independent of the logo — do NOT fall back to photo_url/avatarUrl,
+  // else editing the logo would change the cover.
   const profileCoverUrl = business ? (
   resolveBusinessCoverImageUrl(business, { preferProxy: true }) ||
-  pickSafeDisplayImageUrl(
-    businessInfo.coverImage,
-    business.photo_url,
-    business.avatarUrl
-  ) ||
+  pickSafeDisplayImageUrl(businessInfo.coverImage) ||
   null) : null;
   const heroCoverSrc = profileCoverUrl || DEFAULT_BUSINESS_COVER;
   const profileLogoUrl = business ? getSafeAvatar(business) : null;

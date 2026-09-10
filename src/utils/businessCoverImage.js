@@ -51,14 +51,14 @@ export function resolveBusinessCoverImageUrl(business, opts = {}) {
         business.uid || business.id || business._profileDocId || business.googlePlaceId || '',
     ).trim();
 
+    // The cover is independent of the logo/avatar: never fall back to
+    // photo_url / avatarUrl / avatar here, otherwise uploading a logo (which
+    // writes photo_url) would visibly change the cover. `image` is the imported
+    // venue photo (legitimate cover for Google-imported businesses).
     const direct = pickSafeDisplayImageUrl(
         bi.coverImage,
         business.coverImage,
-        business.photo_url,
-        business.avatarUrl,
-        business.avatar,
         business.image,
-        bi.photo_url,
     );
 
     // A real, non-placeholder direct URL wins outright.
