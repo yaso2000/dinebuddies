@@ -1,4 +1,5 @@
 import { looksLikeEmail } from '../utils/parseLoginIdentifier';
+import { resolveApiUrl } from '../utils/resolveApiUrl';
 
 export const BUSINESS_LOGIN_INVALID_MSG_AR =
     'البريد الإلكتروني، رقم الجوال، أو كلمة المرور غير صحيحة.';
@@ -27,7 +28,7 @@ function isAiUnclaimedCode(code) {
 }
 
 async function callLoginResolver(action, params) {
-    const res = await fetch('/api/business-login-resolver', {
+    const res = await fetch(resolveApiUrl('/api/business-login-resolver'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

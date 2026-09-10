@@ -5,6 +5,7 @@ import { compressImage } from '../utils/imageUpload';
 import { uploadImageWithModeration, isImageModerationRejected } from './moderatedImageUpload';
 import { deleteFilesAtFirebaseDownloadUrls } from '../utils/firebaseStorageDelete';
 import { folderToImageZone } from './imageUploadZones';
+import { resolveApiUrl } from '../utils/resolveApiUrl';
 import {
     beginImageUploadSession,
     finishImageUploadSession,
@@ -379,7 +380,7 @@ async function fetchServerAiCoverBlobViaApi(objectPath, bucket = '') {
     const idToken = await user.getIdToken();
 
     const attempt = async (params) => {
-        const response = await fetch(`/api/storage-image?${params.toString()}`, {
+        const response = await fetch(resolveApiUrl(`/api/storage-image?${params.toString()}`), {
             headers: { Authorization: `Bearer ${idToken}` },
         });
         if (!response.ok) {
