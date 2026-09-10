@@ -5,16 +5,19 @@ import { useTranslation } from 'react-i18next';
 import { AppText } from '../base';
 import {
   parseMembershipQrPayload,
+  parseOfferClaimQrPayload,
   verifyCommunityMember,
-  listCommunityOffers,
-  redeemCommunityOffer,
+  redeemOfferClaim,
 } from '../../services/communityMemberApi';
 import './CommunityMemberScanner.css';
 
 /**
- * Business-owner screen: scan a member's QR (DBM1:<partnerId>:<qrToken>) to verify
- * they belong to THIS community before applying an offer. Camera via getUserMedia,
- * decode via jsQR, verification server-side (verifyCommunityMember).
+ * Business-owner scanner. Handles two QR kinds:
+ *  - Per-offer claim QR (DBO1:<offerId>:<claimToken>) — the main flow: redeems that
+ *    ONE specific offer for the member who claimed it. Unambiguous, one tap.
+ *  - Membership QR (DBM1:<partnerId>:<qrToken>) — verifies the member's identity
+ *    (their number) without touching any offer.
+ * Camera via getUserMedia, decode via jsQR, all decisions server-side.
  */
 export default function CommunityMemberScanner({ partnerId, onClose }) {
   const { t } = useTranslation();
@@ -26,11 +29,7 @@ export default function CommunityMemberScanner({ partnerId, onClose }) {
 
   const [phase, setPhase] = useState('scanning'); // scanning | verifying | result | error
   const [cameraError, setCameraError] = useState('');
-  const [result, setResult] = useState(null); // { ok, reason, memberNumber, memberName, ... }
-  const [scannedToken, setScannedToken] = useState('');
-  const [offers, setOffers] = useState([]);
-  const [redeemingId, setRedeemingId] = useState('');
-  const [redeemedById, setRedeemedById] = useState({}); // offerId -> { ok, reason, redeemedAt }
+  const [result, setResult] = useState(null); // { mode:'offer'|'member', ok, reason, ... }
 
   const stopCamera = useCallback(() => {
     if (rafRef.current) {
@@ -46,53 +45,43 @@ export default function CommunityMemberScanner({ partnerId, onClose }) {
   const handleDecoded = useCallback(
     async (payload) => {
       if (busyRef.current) return;
-      const parsed = parseMembershipQrPayload(payload);
-      if (!parsed) return; // not our QR — keep scanning
-      busyRef.current = true;
-      stopCamera();
 
-      if (parsed.partnerId !== partnerId) {
-        setResult({ ok: false, reason: 'wrong_community' });
+      // 1) Per-offer claim QR — redeem that specific offer.
+      const offerClaim = parseOfferClaimQrPayload(payload);
+      if (offerClaim) {
+        busyRef.current = true;
+        stopCamera();
+        setPhase('verifying');
+        try {
+          const res = await redeemOfferClaim(offerClaim);
+          setResult({ mode: 'offer', ...res });
+        } catch (e) {
+          setResult({ mode: 'offer', ok: false, reason: 'error', message: e?.message });
+        }
         setPhase('result');
         return;
       }
 
+      // 2) Membership QR — verify identity only.
+      const membership = parseMembershipQrPayload(payload);
+      if (!membership) return; // not our QR — keep scanning
+      busyRef.current = true;
+      stopCamera();
+      if (membership.partnerId !== partnerId) {
+        setResult({ mode: 'member', ok: false, reason: 'wrong_community' });
+        setPhase('result');
+        return;
+      }
       setPhase('verifying');
-      setScannedToken(parsed.qrToken);
-      setRedeemedById({});
       try {
-        const res = await verifyCommunityMember(parsed);
-        setResult(res);
-        if (res?.ok) {
-          // Load active offers so the owner can redeem one for this member.
-          try {
-            setOffers(await listCommunityOffers({ activeOnly: true }));
-          } catch {
-            setOffers([]);
-          }
-        }
+        const res = await verifyCommunityMember(membership);
+        setResult({ mode: 'member', ...res });
       } catch (e) {
-        setResult({ ok: false, reason: 'error', message: e?.message });
+        setResult({ mode: 'member', ok: false, reason: 'error', message: e?.message });
       }
       setPhase('result');
     },
     [partnerId, stopCamera]
-  );
-
-  const redeem = useCallback(
-    async (offer) => {
-      if (!scannedToken || redeemingId) return;
-      setRedeemingId(offer.id);
-      try {
-        const res = await redeemCommunityOffer({ qrToken: scannedToken, offerId: offer.id });
-        setRedeemedById((prev) => ({ ...prev, [offer.id]: res }));
-      } catch (e) {
-        setRedeemedById((prev) => ({ ...prev, [offer.id]: { ok: false, reason: 'error' } }));
-      } finally {
-        setRedeemingId('');
-      }
-    },
-    [scannedToken, redeemingId]
   );
 
   const startCamera = useCallback(async () => {
@@ -151,7 +140,7 @@ export default function CommunityMemberScanner({ partnerId, onClose }) {
     return () => stopCamera();
   }, [startCamera, stopCamera]);
 
-  const reasonText = (reason) => {
+  const memberReasonText = (reason) => {
     switch (reason) {
       case 'not_found':
         return t('scanner_reason_not_found', 'This code is not a valid membership.');
@@ -166,13 +155,27 @@ export default function CommunityMemberScanner({ partnerId, onClose }) {
     }
   };
 
+  const offerReasonText = (reason) => {
+    switch (reason) {
+      case 'offer_not_found':
+      case 'claim_not_found':
+        return t('scanner_offer_invalid', 'This offer code is not valid.');
+      case 'offer_inactive':
+        return t('offer_unavailable', 'This offer is no longer available.');
+      default:
+        return t('scanner_reason_error', 'Could not redeem this offer. Try again.');
+    }
+  };
+
+  const memberBadge = (n) => `#${String(n || 0).padStart(4, '0')}`;
+
   return (
     <div className="member-scanner-overlay" role="dialog" aria-modal="true">
       <div className="member-scanner">
         <div className="member-scanner__header">
           <AppText as="h3" className="member-scanner__title">
             <FaCamera aria-hidden style={{ marginInlineEnd: 8 }} />
-            {t('scanner_title', 'Verify member')}
+            {t('scanner_title_offer', 'Scan & redeem')}
           </AppText>
           <button
             type="button"
@@ -194,7 +197,7 @@ export default function CommunityMemberScanner({ partnerId, onClose }) {
                 <div className="member-scanner__frame" aria-hidden />
               </div>
               <AppText as="p" className="member-scanner__hint">
-                {t('scanner_hint', "Point the camera at the member's QR code.")}
+                {t('scanner_hint_offer', "Point the camera at the member's offer or membership QR.")}
               </AppText>
             </>
           )}
@@ -215,69 +218,77 @@ export default function CommunityMemberScanner({ partnerId, onClose }) {
             </div>
           )}
 
-          {phase === 'result' && result?.ok && (
+          {/* Offer redeemed successfully */}
+          {phase === 'result' && result?.mode === 'offer' && result.ok && (
             <div className="member-scanner__result member-scanner__result--ok">
               <FaCheckCircle className="member-scanner__result-icon" aria-hidden />
               <AppText as="p" className="member-scanner__result-title">
-                {t('scanner_verified', 'Verified member')}
+                {t('scanner_offer_redeemed', 'Redeemed ✓')}
               </AppText>
-              <AppText as="p" className="member-scanner__result-number">
-                {`#${String(result.memberNumber || 0).padStart(4, '0')}`}
-              </AppText>
-              {result.memberName ? (
-                <AppText as="p" className="member-scanner__result-name">{result.memberName}</AppText>
+              {result.offerTitle ? (
+                <AppText as="p" className="member-scanner__result-offer">{result.offerTitle}</AppText>
               ) : null}
-
-              {offers.length > 0 && (
-                <div className="member-scanner__offers">
-                  <AppText as="p" className="member-scanner__offers-title">
-                    {t('scanner_redeem_offer', 'Redeem an offer')}
-                  </AppText>
-                  {offers.map((offer) => {
-                    const r = redeemedById[offer.id];
-                    return (
-                      <div key={offer.id} className="member-scanner__offer-row">
-                        <div className="member-scanner__offer-info">
-                          <span className="member-scanner__offer-name">{offer.title}</span>
-                          {r?.ok ? (
-                            <span className="member-scanner__offer-state member-scanner__offer-state--ok">
-                              {t('scanner_offer_redeemed', 'Redeemed ✓')}
-                            </span>
-                          ) : r && r.reason === 'already_redeemed' ? (
-                            <span className="member-scanner__offer-state member-scanner__offer-state--warn">
-                              {t('scanner_offer_already', 'Already redeemed')}
-                            </span>
-                          ) : r ? (
-                            <span className="member-scanner__offer-state member-scanner__offer-state--warn">
-                              {t('scanner_offer_failed', 'Could not redeem')}
-                            </span>
-                          ) : null}
-                        </div>
-                        {!r?.ok && (
-                          <button
-                            type="button"
-                            className="member-scanner__offer-btn"
-                            disabled={redeemingId === offer.id}
-                            onClick={() => redeem(offer)}>
-                            {redeemingId === offer.id ? t('scanner_verifying', 'Verifying…') : t('scanner_redeem', 'Redeem')}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
+              <AppText as="p" className="member-scanner__result-number">
+                {memberBadge(result.memberNumber)}
+                {result.memberName ? ` · ${result.memberName}` : ''}
+              </AppText>
               <button type="button" className="member-scanner__btn" onClick={startCamera}>
                 {t('scanner_scan_another', 'Scan another')}
               </button>
             </div>
           )}
 
-          {phase === 'result' && result && !result.ok && (
+          {/* Offer already redeemed */}
+          {phase === 'result' && result?.mode === 'offer' && !result.ok && result.reason === 'already_redeemed' && (
             <div className="member-scanner__result member-scanner__result--fail">
               <FaExclamationTriangle className="member-scanner__result-icon" aria-hidden />
-              <AppText as="p">{reasonText(result.reason)}</AppText>
+              <AppText as="p" className="member-scanner__result-title">
+                {t('scanner_offer_already', 'Already redeemed')}
+              </AppText>
+              {result.offerTitle ? (
+                <AppText as="p" className="member-scanner__result-offer">{result.offerTitle}</AppText>
+              ) : null}
+              <button type="button" className="member-scanner__btn" onClick={startCamera}>
+                {t('scanner_scan_another', 'Scan another')}
+              </button>
+            </div>
+          )}
+
+          {/* Offer redeem failed */}
+          {phase === 'result' && result?.mode === 'offer' && !result.ok && result.reason !== 'already_redeemed' && (
+            <div className="member-scanner__result member-scanner__result--fail">
+              <FaExclamationTriangle className="member-scanner__result-icon" aria-hidden />
+              <AppText as="p">{offerReasonText(result.reason)}</AppText>
+              <button type="button" className="member-scanner__btn" onClick={startCamera}>
+                {t('retry', 'Retry')}
+              </button>
+            </div>
+          )}
+
+          {/* Membership verified (identity only) */}
+          {phase === 'result' && result?.mode === 'member' && result.ok && (
+            <div className="member-scanner__result member-scanner__result--ok">
+              <FaCheckCircle className="member-scanner__result-icon" aria-hidden />
+              <AppText as="p" className="member-scanner__result-title">
+                {t('scanner_verified', 'Verified member')}
+              </AppText>
+              <AppText as="p" className="member-scanner__result-number">
+                {memberBadge(result.memberNumber)}
+              </AppText>
+              {result.memberName ? (
+                <AppText as="p" className="member-scanner__result-name">{result.memberName}</AppText>
+              ) : null}
+              <button type="button" className="member-scanner__btn" onClick={startCamera}>
+                {t('scanner_scan_another', 'Scan another')}
+              </button>
+            </div>
+          )}
+
+          {/* Membership verify failed */}
+          {phase === 'result' && result?.mode === 'member' && !result.ok && (
+            <div className="member-scanner__result member-scanner__result--fail">
+              <FaExclamationTriangle className="member-scanner__result-icon" aria-hidden />
+              <AppText as="p">{memberReasonText(result.reason)}</AppText>
               <button type="button" className="member-scanner__btn" onClick={startCamera}>
                 {t('retry', 'Retry')}
               </button>

@@ -9,6 +9,7 @@ import { haversineKm } from '../utils/postsFeedScope';
 import { listActiveCommunityOffers, takeCommunityOffer } from '../services/communityMemberApi';
 import { isBusinessUser } from '../utils/accountRole';
 import { offerBannerStyle } from '../utils/offerBanner';
+import OfferClaimQrModal from '../components/OfferClaimQrModal';
 import './SpecialOffersPage.css';
 import './CreateCommunityOffer.css';
 
@@ -58,8 +59,9 @@ export default function SpecialOffersPage() {
     });
   }, [offers, userLoc]);
   const [takingId, setTakingId] = useState('');
-  const [takenById, setTakenById] = useState({}); // offerId -> { ok, reason }
+  const [takenById, setTakenById] = useState({}); // offerId -> { ok, reason, status, claimToken }
   const [joinPrompt, setJoinPrompt] = useState(null); // { partnerId, businessName }
+  const [claimModal, setClaimModal] = useState(null); // { offerId, claimToken, offerTitle, status }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,13 +85,21 @@ export default function SpecialOffersPage() {
       try {
         const res = await takeCommunityOffer({ offerId: offer.id });
         setTakenById((prev) => ({ ...prev, [offer.id]: res }));
-        if (!res.ok && res.reason === 'not_member') {
+        if (res.ok) {
+          // Claimed (or already claimed) — show the per-offer QR to redeem at venue.
+          setClaimModal({
+            offerId: offer.id,
+            claimToken: res.claimToken || null,
+            offerTitle: offer.title || res.offerTitle || '',
+            status: res.status || 'claimed',
+          });
+        } else if (res.reason === 'not_member') {
           setJoinPrompt({ partnerId: offer.partnerId, businessName: offer.businessName });
-        } else if (!res.ok && res.reason === 'business_forbidden') {
+        } else if (res.reason === 'business_forbidden') {
           showToast(t('offer_business_forbidden', "Business accounts can't take offers."), 'info');
-        } else if (!res.ok && (res.reason === 'offer_inactive' || res.reason === 'offer_not_found')) {
+        } else if (res.reason === 'offer_inactive' || res.reason === 'offer_not_found') {
           showToast(t('offer_unavailable', 'This offer is no longer available.'), 'info');
-        } else if (!res.ok && res.reason !== 'already_taken') {
+        } else {
           showToast(t('offer_take_failed', 'Could not take the offer. Please try again.'), 'error');
         }
       } catch {
@@ -102,10 +112,28 @@ export default function SpecialOffersPage() {
     [takingId, showToast, t]
   );
 
+  // Button click: re-open the QR for an already-claimed offer, else claim it.
+  const onTakeClick = useCallback(
+    (offer) => {
+      const r = takenById[offer.id];
+      if (r?.ok && r.status === 'claimed' && r.claimToken) {
+        setClaimModal({
+          offerId: offer.id,
+          claimToken: r.claimToken,
+          offerTitle: offer.title || r.offerTitle || '',
+          status: 'claimed',
+        });
+        return;
+      }
+      take(offer);
+    },
+    [takenById, take]
+  );
+
   const takeState = (offer) => {
     const r = takenById[offer.id];
-    if (r?.ok) return { label: t('offer_taken', 'Taken ✓'), done: true };
-    if (r?.reason === 'already_taken') return { label: t('offer_already_taken', 'Already taken'), done: true };
+    if (r?.ok && r.status === 'redeemed') return { label: t('offer_redeemed', 'Redeemed ✓'), done: true };
+    if (r?.ok) return { label: t('offer_show_code', 'Show code'), done: false };
     return { label: takingId === offer.id ? t('offer_taking', 'Taking…') : t('offer_take_it', 'Take it'), done: false };
   };
 
@@ -154,7 +182,7 @@ export default function SpecialOffersPage() {
                     type="button"
                     className="offer-banner__take"
                     disabled={state.done || takingId === offer.id}
-                    onClick={() => take(offer)}>
+                    onClick={() => onTakeClick(offer)}>
                     {state.done ? <FaCheckCircle aria-hidden style={{ marginInlineEnd: 4 }} /> : null}
                     {state.label}
                   </button>
@@ -163,6 +191,10 @@ export default function SpecialOffersPage() {
             );
           })}
         </div>
+      )}
+
+      {claimModal && (
+        <OfferClaimQrModal claim={claimModal} onClose={() => setClaimModal(null)} />
       )}
 
       {joinPrompt && (

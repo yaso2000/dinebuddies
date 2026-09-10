@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const functions = require('firebase-functions');
 const { normalizeBusinessSubscriptionTier } = require('./creditsCore');
 
@@ -315,7 +316,9 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
 
         const result = await db.runTransaction(async (tx) => {
             const existing = await tx.get(redemptionRef);
-            if (oncePerMember && existing.exists) {
+            // Only an already-REDEEMED claim blocks; a pending 'claimed' doc is fine
+            // to redeem here (this is the membership-QR fallback path).
+            if (oncePerMember && existing.exists && (existing.data() || {}).status === 'redeemed') {
                 const prev = existing.data() || {};
                 return {
                     ok: false,
@@ -330,6 +333,7 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
                 {
                     memberId,
                     memberNumber: m.memberNumber || null,
+                    status: 'redeemed',
                     redeemedBy: businessId,
                     redeemedAt: admin.firestore.FieldValue.serverTimestamp(),
                     count: admin.firestore.FieldValue.increment(1),
@@ -398,8 +402,12 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
         return { offers };
     });
 
-    // Consumer self-claim ("Take it"): a community member records that they took an
-    // offer (one-per-member enforced). Non-members are told to join first.
+    // Consumer "Take it" — CLAIM a specific offer (not redeem it). Creates a pending
+    // claim for the member and issues a per-offer claim token. The member shows the
+    // resulting QR (DBO1:<offerId>:<claimToken>) at the venue; the business scans it
+    // and calls redeemOfferClaim, which is the only step that marks the offer redeemed
+    // and counts it. One claim per member (idempotent — re-taking returns the same
+    // token so the member can show the code again).
     exports.takeCommunityOffer = functions.https.onCall(async (data, context) => {
         if (!context.auth) {
             throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
@@ -449,34 +457,124 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             return { ok: false, reason: 'not_member', partnerId };
         }
 
-        const oncePerMember = offer.oncePerMember !== false;
         const redemptionRef = offerRef.collection('redemptions').doc(uid);
+        const newToken = crypto.randomBytes(20).toString('hex');
         const result = await db.runTransaction(async (tx) => {
             const existing = await tx.get(redemptionRef);
-            if (oncePerMember && existing.exists) {
+            if (existing.exists) {
                 const prev = existing.data() || {};
-                return {
-                    ok: false,
-                    reason: 'already_taken',
-                    takenAt: prev.redeemedAt?.toMillis ? prev.redeemedAt.toMillis() : null,
-                };
+                // Already redeemed at the venue — nothing more to claim.
+                if (prev.status === 'redeemed') {
+                    return {
+                        ok: true,
+                        status: 'redeemed',
+                        claimToken: prev.claimToken || null,
+                        redeemedAt: prev.redeemedAt?.toMillis ? prev.redeemedAt.toMillis() : null,
+                    };
+                }
+                // Pending claim already exists — return the same token (idempotent).
+                let token = prev.claimToken;
+                if (!token) {
+                    token = newToken;
+                    tx.update(redemptionRef, { claimToken: token });
+                }
+                return { ok: true, status: 'claimed', claimToken: token };
             }
-            tx.set(
-                redemptionRef,
-                {
-                    memberId: uid,
-                    memberNumber: m.memberNumber || null,
-                    source: 'self_claim',
-                    redeemedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    count: admin.firestore.FieldValue.increment(1),
-                },
-                { merge: true }
-            );
-            tx.update(offerRef, { redemptionCount: admin.firestore.FieldValue.increment(1) });
-            return { ok: true };
+            tx.set(redemptionRef, {
+                memberId: uid,
+                memberNumber: m.memberNumber || null,
+                source: 'self_claim',
+                status: 'claimed',
+                claimToken: newToken,
+                claimedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            return { ok: true, status: 'claimed', claimToken: newToken };
         });
 
-        return result;
+        return { offerId, offerTitle: offer.title || '', ...result };
+    });
+
+    // Business redeems a member's CLAIMED offer by scanning the per-offer QR
+    // (DBO1:<offerId>:<claimToken>). This is the authoritative redemption step: it
+    // flips the claim to 'redeemed', stamps who/when, and bumps the offer's count.
+    // Idempotent — a second scan of the same code reports it was already redeemed.
+    exports.redeemOfferClaim = functions.https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+        }
+        const businessId = context.auth.uid;
+        const offerId = String(data?.offerId || '').trim();
+        const claimToken = String(data?.claimToken || '').trim();
+        if (!offerId || !claimToken) {
+            throw new functions.https.HttpsError('invalid-argument', 'offerId and claimToken are required.');
+        }
+        if (!/^[a-f0-9]{20,64}$/.test(claimToken)) {
+            throw new functions.https.HttpsError('invalid-argument', 'Malformed claim token.');
+        }
+
+        await enforceCallableRateLimit(businessId, 'redeem_offer_claim', {
+            perMinute: 60,
+            perHour: 600,
+            perDay: 3000,
+            cooldownMs: 0,
+        });
+
+        const offerRef = db.collection('community_offers').doc(offerId);
+        const offerSnap = await offerRef.get();
+        if (!offerSnap.exists) return { ok: false, reason: 'offer_not_found' };
+        const offer = offerSnap.data() || {};
+        if (offer.partnerId !== businessId) {
+            throw new functions.https.HttpsError('permission-denied', 'This offer belongs to another community.');
+        }
+        const expiresMs = offer.expiresAt?.toMillis ? offer.expiresAt.toMillis() : null;
+        if (offer.active === false || (expiresMs != null && expiresMs <= Date.now())) {
+            return { ok: false, reason: 'offer_inactive' };
+        }
+
+        // Find the claim by its token within this offer's redemptions.
+        const claimQuery = await offerRef
+            .collection('redemptions')
+            .where('claimToken', '==', claimToken)
+            .limit(1)
+            .get();
+        if (claimQuery.empty) {
+            return { ok: false, reason: 'claim_not_found' };
+        }
+        const claimRef = claimQuery.docs[0].ref;
+        const memberId = claimQuery.docs[0].id;
+
+        let memberName = null;
+        try {
+            const userSnap = await db.collection('users').doc(memberId).get();
+            const u = userSnap.exists ? userSnap.data() : {};
+            memberName = u.display_name || u.displayName || u.name || null;
+        } catch (e) {
+            /* non-fatal */
+        }
+
+        const result = await db.runTransaction(async (tx) => {
+            const snap = await tx.get(claimRef);
+            const c = snap.exists ? snap.data() || {} : {};
+            if (c.status === 'redeemed') {
+                return {
+                    ok: false,
+                    reason: 'already_redeemed',
+                    redeemedAt: c.redeemedAt?.toMillis ? c.redeemedAt.toMillis() : null,
+                    memberNumber: c.memberNumber || null,
+                };
+            }
+            tx.update(claimRef, {
+                status: 'redeemed',
+                redeemedBy: businessId,
+                redeemedAt: admin.firestore.FieldValue.serverTimestamp(),
+                count: admin.firestore.FieldValue.increment(1),
+            });
+            tx.update(offerRef, { redemptionCount: admin.firestore.FieldValue.increment(1) });
+            return { ok: true, memberNumber: c.memberNumber || null };
+        });
+
+        if (!result.ok) return { ...result, memberName, offerTitle: offer.title || '' };
+        return { ...result, memberId, memberName, offerTitle: offer.title || '' };
     });
 }
 

@@ -20,6 +20,26 @@ export function parseMembershipQrPayload(raw) {
 }
 
 /**
+ * Per-offer claim QR: DBO1:<offerId>:<claimToken>. The member shows this after
+ * taking a specific offer; the business scans it to redeem that offer only.
+ * Returns null if it isn't ours.
+ */
+export function parseOfferClaimQrPayload(raw) {
+  const text = String(raw || '').trim();
+  const parts = text.split(':');
+  if (parts.length !== 3 || parts[0] !== 'DBO1') return null;
+  const offerId = parts[1].trim();
+  const claimToken = parts[2].trim();
+  if (!offerId || !/^[a-f0-9]{20,64}$/.test(claimToken)) return null;
+  return { offerId, claimToken };
+}
+
+/** Build the per-offer claim QR payload string. */
+export function offerClaimQrPayload(offerId, claimToken) {
+  return `DBO1:${offerId}:${claimToken}`;
+}
+
+/**
  * @param {{ partnerId: string, qrToken: string }} args
  * @returns {Promise<{ ok: boolean, reason?: string, memberNumber?: number|null,
  *   memberId?: string|null, memberName?: string|null, memberAvatar?: string|null,
@@ -51,12 +71,28 @@ export async function listActiveCommunityOffers() {
 }
 
 /**
- * Consumer "Take it": records the claim for a community member.
- * @returns {Promise<{ ok: boolean, reason?: string, partnerId?: string, takenAt?: number }>}
+ * Consumer "Take it": CLAIM a specific offer. Returns a per-offer claim token the
+ * member shows as a QR (DBO1:<offerId>:<claimToken>); the venue scans it to redeem.
+ * @returns {Promise<{ ok: boolean, reason?: string, partnerId?: string,
+ *   offerId?: string, offerTitle?: string, status?: 'claimed'|'redeemed',
+ *   claimToken?: string|null, redeemedAt?: number|null }>}
  */
 export async function takeCommunityOffer({ offerId }) {
   const fn = httpsCallable(getFunctions(app, REGION), 'takeCommunityOffer');
   const { data } = await fn({ offerId });
+  return data || { ok: false, reason: 'error' };
+}
+
+/**
+ * Business redeems a member's claimed offer from the per-offer QR
+ * (DBO1:<offerId>:<claimToken>). Authoritative redemption + count.
+ * @returns {Promise<{ ok: boolean, reason?: string, memberNumber?: number|null,
+ *   memberId?: string|null, memberName?: string|null, offerTitle?: string,
+ *   redeemedAt?: number|null }>}
+ */
+export async function redeemOfferClaim({ offerId, claimToken }) {
+  const fn = httpsCallable(getFunctions(app, REGION), 'redeemOfferClaim');
+  const { data } = await fn({ offerId, claimToken });
   return data || { ok: false, reason: 'error' };
 }
 

@@ -9,6 +9,7 @@ import { haversineKm } from '../utils/postsFeedScope';
 import { listActiveCommunityOffers, takeCommunityOffer } from '../services/communityMemberApi';
 import { isBusinessUser } from '../utils/accountRole';
 import { offerBannerStyle } from '../utils/offerBanner';
+import OfferClaimQrModal from './OfferClaimQrModal';
 import '../pages/CreateCommunityOffer.css';
 import './OffersFeedStrip.css';
 
@@ -27,7 +28,8 @@ export default function OffersFeedStrip() {
 
   const [offers, setOffers] = useState([]);
   const [takingId, setTakingId] = useState('');
-  const [takenById, setTakenById] = useState({});
+  const [takenById, setTakenById] = useState({}); // offerId -> { status, claimToken }
+  const [claimModal, setClaimModal] = useState(null);
   const [userLoc, setUserLoc] = useState(() => {
     const lat = Number(userProfile?.coordinates?.lat);
     const lng = Number(userProfile?.coordinates?.lng);
@@ -74,18 +76,33 @@ export default function OffersFeedStrip() {
       .slice(0, 12);
   }, [offers, userLoc]);
 
+  const openClaim = useCallback(
+    (offer, res) => {
+      setClaimModal({
+        offerId: offer.id,
+        claimToken: res.claimToken || null,
+        offerTitle: offer.title || res.offerTitle || '',
+        status: res.status || 'claimed',
+      });
+    },
+    []
+  );
+
   const take = useCallback(
     async (offer) => {
       if (takingId) return;
+      // Already claimed this session — just re-show the code.
+      const known = takenById[offer.id];
+      if (known?.status === 'claimed' && known.claimToken) {
+        openClaim(offer, known);
+        return;
+      }
       setTakingId(offer.id);
       try {
         const res = await takeCommunityOffer({ offerId: offer.id });
         if (res.ok) {
-          setTakenById((prev) => ({ ...prev, [offer.id]: true }));
-          showToast(t('offer_taken', 'Taken ✓'), 'success');
-        } else if (res.reason === 'already_taken') {
-          setTakenById((prev) => ({ ...prev, [offer.id]: true }));
-          showToast(t('offer_already_taken', 'Already taken'), 'info');
+          setTakenById((prev) => ({ ...prev, [offer.id]: res }));
+          openClaim(offer, res);
         } else if (res.reason === 'not_member') {
           showToast(
             t('offer_join_first_toast', 'Join the community first to take this offer.'),
@@ -105,7 +122,7 @@ export default function OffersFeedStrip() {
         setTakingId('');
       }
     },
-    [takingId, navigate, showToast, t]
+    [takingId, takenById, openClaim, navigate, showToast, t]
   );
 
   if (isGuest || isBusiness || sorted.length === 0) return null;
@@ -121,7 +138,15 @@ export default function OffersFeedStrip() {
       </div>
       <div className="offers-feed-strip__row">
         {sorted.map((offer) => {
-          const done = takenById[offer.id];
+          const claimed = takenById[offer.id];
+          const isRedeemed = claimed?.status === 'redeemed';
+          const label = isRedeemed
+            ? t('offer_redeemed', 'Redeemed ✓')
+            : claimed?.status === 'claimed'
+            ? t('offer_show_code', 'Show code')
+            : takingId === offer.id
+            ? t('offer_taking', 'Taking…')
+            : t('offer_take_it', 'Take it');
           return (
             <div key={offer.id} className="offers-feed-strip__slide">
               <div className="offer-banner" style={offerBannerStyle(offer)}>
@@ -138,15 +163,18 @@ export default function OffersFeedStrip() {
                 <button
                   type="button"
                   className="offer-banner__take"
-                  disabled={done || takingId === offer.id}
+                  disabled={isRedeemed || takingId === offer.id}
                   onClick={() => take(offer)}>
-                  {done ? t('offer_taken', 'Taken ✓') : takingId === offer.id ? t('offer_taking', 'Taking…') : t('offer_take_it', 'Take it')}
+                  {label}
                 </button>
               </div>
             </div>
           );
         })}
       </div>
+      {claimModal && (
+        <OfferClaimQrModal claim={claimModal} onClose={() => setClaimModal(null)} />
+      )}
     </div>
   );
 }

@@ -135,6 +135,13 @@
     color: var(--primary);
 }
 
+.member-scanner__result-offer {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
 .member-scanner__result-name {
     margin: 0;
     font-size: 0.95rem;
