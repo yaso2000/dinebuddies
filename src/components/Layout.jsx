@@ -345,7 +345,7 @@ const Layout = ({ children }) => {
   const businessCreateFabActive =
   location.pathname === '/create-post' ||
   location.pathname === '/create-featured-post' ||
-  location.pathname === '/create-swipe-offer' ||
+  location.pathname === '/create-community-offer' ||
   location.pathname === '/create-stage' ||
   (businessHasLiveStage &&
     businessLiveStageId &&

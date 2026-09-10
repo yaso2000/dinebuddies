@@ -230,6 +230,34 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
         }
         const offerId = offerRef.id;
 
+        // Swipe-card channel: denormalize a compact summary onto the business doc,
+        // in the shape the discovery swipe cards already read
+        // (businessInfo.swipeSpecialOffer). This replaces the retired standalone
+        // "swipe special offer" editor — community offers are now the single source.
+        // The existing users->public mirror propagates it to the swipe deck.
+        if (onSwipe) {
+            const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
+            const startDate = iso(nowMs);
+            const endDate = expiresAt ? iso(expiresAt.toMillis()) : '2099-12-31';
+            await db
+                .collection('users')
+                .doc(businessId)
+                .set(
+                    {
+                        businessInfo: {
+                            swipeSpecialOffer: {
+                                offerId,
+                                title,
+                                imageUrl: imageUrl || null,
+                                startDate,
+                                endDate,
+                            },
+                        },
+                    },
+                    { merge: true }
+                );
+        }
+
         const message = `${businessName}: ${title}`.slice(0, 500);
         const metadata = {
             partnerId: businessId,
@@ -363,6 +391,20 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             active: false,
             deletedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+
+        // If this offer was the one mirrored to the swipe card, clear the summary.
+        try {
+            const bizSnap = await db.collection('users').doc(businessId).get();
+            const swipe = bizSnap.exists ? bizSnap.data()?.businessInfo?.swipeSpecialOffer : null;
+            if (swipe && swipe.offerId === offerId) {
+                await db
+                    .collection('users')
+                    .doc(businessId)
+                    .set({ businessInfo: { swipeSpecialOffer: null } }, { merge: true });
+            }
+        } catch (e) {
+            /* best-effort cleanup */
+        }
         return { ok: true };
     });
 
