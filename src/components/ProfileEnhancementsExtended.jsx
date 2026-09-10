@@ -59,6 +59,8 @@ export const FavoritePlaces = ({ userId, readOnly = false, syncedPlaces = null }
   const [venueSearchLoading, setVenueSearchLoading] = useState(false);
   const [savingVenueId, setSavingVenueId] = useState(null);
   const [showAllPlaces, setShowAllPlaces] = useState(false);
+  // Repairs favorites saved without a name: businessId -> { name, address, image }.
+  const [resolvedById, setResolvedById] = useState({});
 
   const [searchData, setSearchData] = useState({
     city: '',
@@ -148,6 +150,61 @@ export const FavoritePlaces = ({ userId, readOnly = false, syncedPlaces = null }
     syncedList ? { favoritePlaces: syncedList } : null,
     { favoritePlaces: remotePlaces }
   );
+
+  // Some favorites were saved without a name (e.g. hearted from the directory
+  // before the capture fix). Resolve those live from the business doc so the row
+  // isn't blank — no data migration needed.
+  useEffect(() => {
+    const missing = places
+      .filter((p) => !String(p?.name || '').trim() && (p?.businessId || p?.id))
+      .map((p) => String(p.businessId || p.id))
+      .filter((id) => resolvedById[id] === undefined);
+    if (missing.length === 0) return undefined;
+
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        [...new Set(missing)].map(async (id) => {
+          try {
+            let snap = await getDoc(doc(db, 'users', id));
+            if (!snap.exists()) snap = await getDoc(doc(db, 'public_profiles', id));
+            if (!snap.exists()) return [id, null];
+            const d = snap.data() || {};
+            const bi = d.businessInfo || {};
+            return [id, {
+              name: d.display_name || d.displayName || d.name || bi.businessName || bi.name || '',
+              address: bi.address || d.address || '',
+              image: pickSafeDisplayImageUrl(d.photo_url || d.avatar || bi.logoUrl || bi.coverImage) || null,
+            }];
+          } catch {
+            return [id, null];
+          }
+        })
+      );
+      if (cancelled) return;
+      setResolvedById((prev) => {
+        const next = { ...prev };
+        for (const [id, val] of entries) next[id] = val; // null marks "looked up, not found"
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [places, resolvedById]);
+
+  // Merge any resolved names/addresses into the places we render.
+  const displayPlaces = places.map((p) => {
+    const id = String(p?.businessId || p?.id || '');
+    const r = id ? resolvedById[id] : null;
+    if (!r || String(p?.name || '').trim()) return p;
+    return {
+      ...p,
+      name: p.name || r.name || '',
+      address: p.address || r.address || '',
+      image: p.image || r.image || null,
+    };
+  });
 
   useEffect(() => {
     if (!userId) {
@@ -264,8 +321,8 @@ export const FavoritePlaces = ({ userId, readOnly = false, syncedPlaces = null }
   }
 
   const PREVIEW_COUNT = 3;
-  const previewPlaces = places.slice(0, PREVIEW_COUNT);
-  const hasMorePlaces = places.length > PREVIEW_COUNT;
+  const previewPlaces = displayPlaces.slice(0, PREVIEW_COUNT);
+  const hasMorePlaces = displayPlaces.length > PREVIEW_COUNT;
 
   const renderPlaceItem = (place, idx) => (
     <div key={place.id || place.businessId || idx} className="place-item">
@@ -469,7 +526,7 @@ export const FavoritePlaces = ({ userId, readOnly = false, syncedPlaces = null }
                         </button>
                     </div>
                     <div className="favorite-places-modal__list">
-                        {places.map(renderPlaceItem)}
+                        {displayPlaces.map(renderPlaceItem)}
                     </div>
                 </div>
             </div>

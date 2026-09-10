@@ -401,12 +401,15 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
     setOptimisticLiked(nextLiked);
     setLikeInProgress(true);
     try {
+      // Imported businesses store their name in display_name / businessInfo, not
+      // `res.name` — fall back across those so we never save a nameless favorite.
+      const bi = res.businessInfo || {};
       const businessInfoForFavorite = !effectiveLiked ? {
         businessId: res.id,
-        name: res.name || '',
-        image: res.image,
-        address: res.location || '',
-        city: ''
+        name: res.name || res.display_name || res.displayName || res.businessName || bi.businessName || bi.name || '',
+        image: res.image || res.photo_url || res.avatar || null,
+        address: res.location || res.address || bi.address || '',
+        city: res.city || bi.city || ''
       } : undefined;
       void toggleBusinessLike(businessId, userId, effectiveLiked, businessInfoForFavorite).catch((err) => {
         setOptimisticLiked(effectiveLiked);
