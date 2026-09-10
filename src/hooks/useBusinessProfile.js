@@ -100,8 +100,14 @@ async function loadBusinessFromPublicProfileProjection(profileId) {
         website: bp.website || '',
         categories: Array.isArray(bp.categories) ? bp.categories : [],
         description: bp.description || '',
+        cuisineType: bp.cuisineType || '',
         coverImage: bp.coverImage || '',
         coverImageStoragePath: bp.coverImageStoragePath || p.coverImageStoragePath || null,
+        // Menu must survive the public projection, else visitors never see the
+        // Menu tab (owners read the full users doc, so they alone saw it).
+        menu: Array.isArray(bp.menu) ? bp.menu : [],
+        menuListingType: bp.menuListingType || 'menu',
+        gallery: Array.isArray(bp.gallery) ? bp.gallery : [],
         lat,
         lng,
         hours: bp.hours || null,
