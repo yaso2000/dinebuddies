@@ -1,6 +1,11 @@
 const crypto = require('crypto');
 const functions = require('firebase-functions');
-const { normalizeBusinessSubscriptionTier } = require('./creditsCore');
+const { normalizeBusinessSubscriptionTier, spendCreditsInTransaction } = require('./creditsCore');
+
+// A business's paid plan includes ONE concurrent offer at no credit cost. Each
+// additional concurrent offer is prepaid at this rate per day of validity.
+const EXTRA_OFFER_CREDITS_PER_DAY = 150;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Paid business feature: broadcast a discount offer to the business's community
@@ -131,10 +136,37 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             .map((d) => d.id)
             .filter((id) => id && id !== businessId);
 
+        // Concurrent-offer quota: the plan includes ONE active offer at no credit
+        // cost. Each additional active offer is prepaid at 150 credits/day and MUST
+        // carry an expiry (no open-ended paid offers).
+        const nowMs = Date.now();
+        const ownSnap = await db
+            .collection('community_offers')
+            .where('partnerId', '==', businessId)
+            .get();
+        const activeCount = ownSnap.docs.filter((d) => {
+            const o = d.data() || {};
+            if (o.active === false) return false;
+            const exp = o.expiresAt?.toMillis ? o.expiresAt.toMillis() : null;
+            return exp == null || exp > nowMs;
+        }).length;
+        const isExtraOffer = activeCount >= 1;
+
+        let paidDays = 0;
+        let paidCredits = 0;
+        if (isExtraOffer) {
+            if (!expiresAt) {
+                // Paid extra offers cannot be open-ended.
+                return { success: false, reason: 'expiry_required' };
+            }
+            paidDays = Math.max(1, Math.ceil((expiresAt.toMillis() - nowMs) / DAY_MS));
+            paidCredits = EXTRA_OFFER_CREDITS_PER_DAY * paidDays;
+        }
+
         // Persist the offer so redemptions can reference it (model B). The QR scan
         // then redeems against this offer id, with one-per-member enforcement.
         const offerRef = db.collection('community_offers').doc();
-        await offerRef.set({
+        const offerData = {
             partnerId: businessId,
             businessName,
             businessAvatar: senderAvatar || null,
@@ -152,13 +184,50 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             notifyMembers,
             onFeed,
             onSwipe,
-            // Business geo for nearest-first ordering (best-effort).
+            // Business geo (best-effort).
             lat: offerLat,
             lng: offerLng,
             city: offerCity,
             redemptionCount: 0,
+            // Billing: included (plan) vs prepaid extra.
+            isPaidOffer: isExtraOffer,
+            paidDays,
+            paidCredits,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        };
+
+        if (isExtraOffer) {
+            // Charge the credits and create the offer atomically.
+            const userRef = db.collection('users').doc(businessId);
+            try {
+                await db.runTransaction(async (tx) => {
+                    const snap = await tx.get(userRef);
+                    const u = snap.exists ? snap.data() || {} : {};
+                    spendCreditsInTransaction(tx, userRef, u, {
+                        uid: businessId,
+                        accountRole: 'business',
+                        amount: paidCredits,
+                        type: 'community_offer',
+                        reason: 'community_offer_extra',
+                        relatedId: offerRef.id,
+                        allowSavedCredits: true,
+                    });
+                    tx.set(offerRef, offerData);
+                });
+            } catch (err) {
+                if (err && err.code === 'INSUFFICIENT_CREDITS') {
+                    return {
+                        success: false,
+                        reason: 'insufficient_credits',
+                        requiredCredits: paidCredits,
+                        days: paidDays,
+                    };
+                }
+                throw err;
+            }
+        } else {
+            await offerRef.set(offerData);
+        }
         const offerId = offerRef.id;
 
         const message = `${businessName}: ${title}`.slice(0, 500);
@@ -202,7 +271,7 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             }
         }
 
-        return { success: true, sent, offerId };
+        return { success: true, sent, offerId, isPaidOffer: isExtraOffer, paidCredits, paidDays };
     });
 
     // Owner lists their community offers (active first) with redemption counts.
@@ -234,12 +303,25 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
                 const isExpired = expiresMs != null && expiresMs <= nowMs;
                 return {
                     id: d.id,
+                    partnerId: o.partnerId || businessId,
+                    businessName: o.businessName || '',
                     title: o.title || '',
                     description: o.description || null,
+                    imageUrl: o.imageUrl || null,
+                    imagePosX: typeof o.imagePosX === 'number' ? o.imagePosX : 50,
+                    imagePosY: typeof o.imagePosY === 'number' ? o.imagePosY : 50,
+                    imageZoom: typeof o.imageZoom === 'number' ? o.imageZoom : 1,
+                    bgColor: o.bgColor || null,
                     oncePerMember: o.oncePerMember !== false,
                     active: o.active !== false && !isExpired,
                     isExpired,
                     expiresAt: expiresMs,
+                    onFeed: o.onFeed === true,
+                    onSwipe: o.onSwipe === true,
+                    notifyMembers: o.notifyMembers !== false,
+                    isPaidOffer: o.isPaidOffer === true,
+                    paidDays: Number(o.paidDays || 0),
+                    paidCredits: Number(o.paidCredits || 0),
                     redemptionCount: Number(o.redemptionCount || 0),
                     createdAt: o.createdAt?.toMillis ? o.createdAt.toMillis() : null,
                 };
@@ -248,6 +330,40 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
         return { offers };
+    });
+
+    // Owner deletes one of their offers (soft delete — keeps redemption history for
+    // analytics, removes it from the feed/profile, and frees the concurrent slot).
+    // Prepaid extra offers are not refunded on early deletion.
+    exports.deleteCommunityOffer = functions.https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+        }
+        const businessId = context.auth.uid;
+        const offerId = String(data?.offerId || '').trim();
+        if (!offerId) {
+            throw new functions.https.HttpsError('invalid-argument', 'offerId is required.');
+        }
+
+        await enforceCallableRateLimit(businessId, 'delete_community_offer', {
+            perMinute: 20,
+            perHour: 120,
+            perDay: 500,
+            cooldownMs: 0,
+        });
+
+        const offerRef = db.collection('community_offers').doc(offerId);
+        const snap = await offerRef.get();
+        if (!snap.exists) return { ok: false, reason: 'offer_not_found' };
+        if ((snap.data() || {}).partnerId !== businessId) {
+            throw new functions.https.HttpsError('permission-denied', 'This offer belongs to another community.');
+        }
+
+        await offerRef.update({
+            active: false,
+            deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return { ok: true };
     });
 
     // Redeem an offer for the scanned member (model B): verify owner + member +
@@ -394,6 +510,46 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
                     lat: typeof o.lat === 'number' ? o.lat : null,
                     lng: typeof o.lng === 'number' ? o.lng : null,
                     city: o.city || null,
+                    createdAt: o.createdAt?.toMillis ? o.createdAt.toMillis() : null,
+                };
+            })
+            .filter((o) => o.active)
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        return { offers };
+    });
+
+    // Active offers for ONE business — shown on that business's profile page. Any
+    // signed-in user can read it (visitors see the offer; only members can take it).
+    exports.listBusinessActiveOffers = functions.https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+        }
+        const partnerId = String(data?.partnerId || '').trim();
+        if (!partnerId) return { offers: [] };
+        const nowMs = Date.now();
+        const snap = await db
+            .collection('community_offers')
+            .where('partnerId', '==', partnerId)
+            .limit(50)
+            .get();
+        const offers = snap.docs
+            .map((d) => {
+                const o = d.data() || {};
+                const expiresMs = o.expiresAt?.toMillis ? o.expiresAt.toMillis() : null;
+                const isExpired = expiresMs != null && expiresMs <= nowMs;
+                return {
+                    id: d.id,
+                    partnerId: o.partnerId || partnerId,
+                    businessName: o.businessName || '',
+                    title: o.title || '',
+                    description: o.description || null,
+                    imageUrl: o.imageUrl || null,
+                    imagePosX: typeof o.imagePosX === 'number' ? o.imagePosX : 50,
+                    imagePosY: typeof o.imagePosY === 'number' ? o.imagePosY : 50,
+                    imageZoom: typeof o.imageZoom === 'number' ? o.imageZoom : 1,
+                    bgColor: o.bgColor || null,
+                    expiresAt: expiresMs,
+                    active: o.active !== false && !isExpired,
                     createdAt: o.createdAt?.toMillis ? o.createdAt.toMillis() : null,
                 };
             })

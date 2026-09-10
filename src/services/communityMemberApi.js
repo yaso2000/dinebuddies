@@ -70,6 +70,13 @@ export async function listActiveCommunityOffers() {
   return Array.isArray(data?.offers) ? data.offers : [];
 }
 
+/** Active offers for one business — shown on that business's profile page. */
+export async function listBusinessActiveOffers({ partnerId }) {
+  const fn = httpsCallable(getFunctions(app, REGION), 'listBusinessActiveOffers');
+  const { data } = await fn({ partnerId });
+  return Array.isArray(data?.offers) ? data.offers : [];
+}
+
 /**
  * Consumer "Take it": CLAIM a specific offer. Returns a per-offer claim token the
  * member shows as a QR (DBO1:<offerId>:<claimToken>); the venue scans it to redeem.
@@ -101,6 +108,13 @@ export async function listCommunityOffers({ activeOnly = false } = {}) {
   const fn = httpsCallable(getFunctions(app, REGION), 'listCommunityOffers');
   const { data } = await fn({ activeOnly });
   return Array.isArray(data?.offers) ? data.offers : [];
+}
+
+/** Owner deletes one of their offers (frees the concurrent slot; no refund on paid). */
+export async function deleteCommunityOffer({ offerId }) {
+  const fn = httpsCallable(getFunctions(app, REGION), 'deleteCommunityOffer');
+  const { data } = await fn({ offerId });
+  return data || { ok: false, reason: 'error' };
 }
 
 /** Redeem an offer for the scanned member (one-per-member enforced server-side). */

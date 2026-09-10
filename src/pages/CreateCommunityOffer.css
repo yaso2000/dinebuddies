@@ -164,3 +164,66 @@
 .offer-create-zoom input[type="range"] {
     flex: 1;
 }
+
+/* Expiry + billing */
+.cm-offer-expiry-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.cm-offer-expiry-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.cm-offer-expiry-modes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cm-offer-included-note {
+    margin: 10px 0 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #16a34a;
+}
+
+.cm-offer-paid-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-body, rgba(0, 0, 0, 0.03));
+}
+
+.cm-offer-paid-note svg {
+    color: var(--secondary, #f97316);
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.cm-offer-paid-note__title {
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.cm-offer-paid-note__line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.cm-offer-paid-note__warn {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #dc2626;
+    margin-top: 4px;
+}

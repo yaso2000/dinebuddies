@@ -1,12 +1,13 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { FaArrowLeft, FaArrowRight, FaBullhorn, FaLock, FaCamera, FaTimes } from 'react-icons/fa';
+import { FaArrowLeft, FaArrowRight, FaBullhorn, FaLock, FaCamera, FaTimes, FaCoins } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { getBusinessPlanAccess } from '../config/businessPlanFeatures';
-import { sendCommunityOffer } from '../services/communityMemberApi';
+import { sendCommunityOffer, listCommunityOffers } from '../services/communityMemberApi';
+import { getSpendableCredits } from '../utils/walletCredits';
 import { getCallableErrorReason } from '../utils/callableErrorDetails';
 import { uploadOfferImage, validateImageFile } from '../utils/imageUpload';
 import { OFFER_BG_PRESETS, DEFAULT_OFFER_BG, offerBannerStyle } from '../utils/offerBanner';
@@ -33,6 +34,8 @@ export default function CreateCommunityOffer() {
   const [desc, setDesc] = useState('');
   const [once, setOnce] = useState(true);
   const [expiry, setExpiry] = useState('');
+  // Included offer must explicitly choose 'date' or 'open'; paid extras force 'date'.
+  const [expiryMode, setExpiryMode] = useState('');
   const [notify, setNotify] = useState(true);
   const [feed, setFeed] = useState(true);
   const [swipe, setSwipe] = useState(false);
@@ -42,7 +45,43 @@ export default function CreateCommunityOffer() {
   const [imgZoom, setImgZoom] = useState(1);
   const [bgColor, setBgColor] = useState(DEFAULT_OFFER_BG);
   const [sending, setSending] = useState(false);
+  // How many active offers the business already has (to price this one).
+  const [activeCount, setActiveCount] = useState(null);
   const dragRef = useRef(null); // { startX, startY, baseX, baseY }
+
+  const EXTRA_OFFER_CREDITS_PER_DAY = 150;
+
+  // The plan includes one active offer; anything beyond that is a prepaid extra.
+  const isExtra = activeCount != null && activeCount >= 1;
+  const spendable = getSpendableCredits(userProfile);
+  const expiryDays = (() => {
+    if (!expiry) return 0;
+    const end = new Date(`${expiry}T23:59:59`).getTime();
+    const diff = end - Date.now();
+    return diff > 0 ? Math.max(1, Math.ceil(diff / 86400000)) : 0;
+  })();
+  const extraCost = isExtra ? EXTRA_OFFER_CREDITS_PER_DAY * expiryDays : 0;
+  const canAfford = !isExtra || (expiryDays > 0 && spendable >= extraCost);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await listCommunityOffers({ activeOnly: true });
+        if (!cancelled) setActiveCount(Array.isArray(list) ? list.length : 0);
+      } catch {
+        if (!cancelled) setActiveCount(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Paid extras cannot be open-ended: force the date mode.
+  useEffect(() => {
+    if (isExtra && expiryMode !== 'date') setExpiryMode('date');
+  }, [isExtra, expiryMode]);
 
   const businessName =
     userProfile?.businessInfo?.businessName || userProfile?.display_name || t('your_business', 'Your business');
@@ -98,9 +137,30 @@ export default function CreateCommunityOffer() {
       showToast(t('offer_pick_channel', 'Pick at least one: notify members, feed, or swipe card.'), 'error');
       return;
     }
+    // Expiry rules: included offer must explicitly choose date or open; paid extra
+    // must set a date (no open-ended) and be affordable.
+    if (!isExtra && !expiryMode) {
+      showToast(t('offer_expiry_choose', 'Choose an end date or make the offer open-ended.'), 'error');
+      return;
+    }
+    const wantsDate = isExtra || expiryMode === 'date';
+    if (wantsDate && !expiry) {
+      showToast(t('offer_expiry_pick_date', 'Pick the offer end date.'), 'error');
+      return;
+    }
+    if (isExtra && !canAfford) {
+      showToast(
+        t('offer_insufficient_credits', 'Not enough credits: {{cost}} needed for {{days}} day(s).', {
+          cost: extraCost,
+          days: expiryDays,
+        }),
+        'error'
+      );
+      return;
+    }
     setSending(true);
     try {
-      const expiresAt = expiry ? new Date(`${expiry}T23:59:59`).getTime() : undefined;
+      const expiresAt = wantsDate && expiry ? new Date(`${expiry}T23:59:59`).getTime() : undefined;
       const res = await sendCommunityOffer({
         title: ttl,
         description: desc.trim(),
@@ -115,8 +175,30 @@ export default function CreateCommunityOffer() {
         imageZoom: imageUrl ? imgZoom : undefined,
         bgColor,
       });
+      if (res?.success === false) {
+        if (res.reason === 'insufficient_credits') {
+          showToast(
+            t('offer_insufficient_credits', 'Not enough credits: {{cost}} needed for {{days}} day(s).', {
+              cost: res.requiredCredits || extraCost,
+              days: res.days || expiryDays,
+            }),
+            'error'
+          );
+        } else if (res.reason === 'expiry_required') {
+          showToast(t('offer_expiry_pick_date', 'Pick the offer end date.'), 'error');
+        } else {
+          showToast(t('offer_send_failed', 'Could not send the offer. Please try again.'), 'error');
+        }
+        setSending(false);
+        return;
+      }
       showToast(
-        t('offer_sent_count', 'Offer sent to {{count}} members', { count: res?.sent || 0 }),
+        res?.isPaidOffer
+          ? t('offer_published_paid', 'Offer published — {{cost}} credits for {{days}} day(s).', {
+              cost: res.paidCredits || extraCost,
+              days: res.paidDays || expiryDays,
+            })
+          : t('offer_published_included', 'Offer published.'),
         'success'
       );
       navigate('/business-dashboard/inbox');
@@ -248,17 +330,83 @@ export default function CreateCommunityOffer() {
                 <input type="checkbox" checked={once} onChange={(e) => setOnce(e.target.checked)} />
                 {t('offer_once_per_member', 'One redemption per member')}
               </label>
-              <label className="cm-offer-expiry">
-                <span>{t('offer_valid_until', 'Valid until (optional)')}</span>
-                <input type="date" className="ui-form-field" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
-              </label>
+              {/* Expiry — included offer chooses date OR open; paid extra forces a date. */}
+              <div className="cm-offer-expiry-block">
+                <AppText as="div" className="cm-offer-expiry-title">
+                  {t('offer_end_date_label', 'Offer end date')}
+                </AppText>
+                {!isExtra && (
+                  <div className="cm-offer-expiry-modes">
+                    <label className="cm-offer-once">
+                      <input
+                        type="radio"
+                        name="expiryMode"
+                        checked={expiryMode === 'date'}
+                        onChange={() => setExpiryMode('date')} />
+                      {t('offer_expiry_set_date', 'Set an end date')}
+                    </label>
+                    <label className="cm-offer-once">
+                      <input
+                        type="radio"
+                        name="expiryMode"
+                        checked={expiryMode === 'open'}
+                        onChange={() => { setExpiryMode('open'); setExpiry(''); }} />
+                      {t('offer_expiry_open', 'Keep it open (no end date)')}
+                    </label>
+                  </div>
+                )}
+                {(isExtra || expiryMode === 'date') && (
+                  <input
+                    type="date"
+                    className="ui-form-field"
+                    value={expiry}
+                    min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
+                    onChange={(e) => setExpiry(e.target.value)} />
+                )}
+              </div>
+
+              {/* Included vs paid-extra summary */}
+              {activeCount != null && (
+                isExtra ? (
+                  <div className="cm-offer-paid-note">
+                    <FaCoins aria-hidden />
+                    <div>
+                      <AppText as="div" className="cm-offer-paid-note__title">
+                        {t('offer_extra_title', 'Extra offer — {{rate}} credits/day', { rate: EXTRA_OFFER_CREDITS_PER_DAY })}
+                      </AppText>
+                      <AppText as="div" className="cm-offer-paid-note__line">
+                        {expiryDays > 0
+                          ? t('offer_extra_cost', 'Total: {{cost}} credits for {{days}} day(s). Balance: {{bal}}.', {
+                              cost: extraCost,
+                              days: expiryDays,
+                              bal: spendable,
+                            })
+                          : t('offer_extra_pick_date', 'Pick an end date to see the cost. Balance: {{bal}}.', { bal: spendable })}
+                      </AppText>
+                      {expiryDays > 0 && !canAfford ? (
+                        <AppText as="div" className="cm-offer-paid-note__warn">
+                          {t('offer_not_enough_credits', 'Not enough credits.')}
+                        </AppText>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <AppText as="p" className="cm-offer-included-note">
+                    {t('offer_included_note', 'This is your included offer (free with your plan).')}
+                  </AppText>
+                )
+              )}
             </div>
             <button
               type="button"
               className="cm-offer-send-btn"
               onClick={submit}
-              disabled={sending || !title.trim()}>
-              {sending ? t('sending', 'Sending…') : t('send_offer', 'Send offer')}
+              disabled={sending || !title.trim() || (isExtra && !canAfford)}>
+              {sending
+                ? t('sending', 'Sending…')
+                : isExtra && extraCost > 0
+                ? t('offer_publish_pay', 'Publish · {{cost}} credits', { cost: extraCost })
+                : t('offer_publish', 'Publish offer')}
             </button>
             <AppText as="p" className="cm-offer-hint">
               {t('offer_verify_hint', 'Members redeem by showing their QR — scan it in Community to confirm before applying the discount.')}

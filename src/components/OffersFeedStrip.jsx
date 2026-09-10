@@ -5,7 +5,6 @@ import { FaTag } from 'react-icons/fa';
 import { AppText } from './base';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { haversineKm } from '../utils/postsFeedScope';
 import { listActiveCommunityOffers, takeCommunityOffer } from '../services/communityMemberApi';
 import { isBusinessUser } from '../utils/accountRole';
 import { offerBannerStyle } from '../utils/offerBanner';
@@ -14,9 +13,9 @@ import '../pages/CreateCommunityOffer.css';
 import './OffersFeedStrip.css';
 
 /**
- * Horizontal "special offers near you" strip on the main social feed. Nearest
- * first. "Take it" records the claim for members; non-members are nudged to join
- * (full join-prompt UX lives on the /offers page).
+ * Horizontal special-offers strip on the main social feed. Order is randomised on
+ * every load so no single offer is always first (fair rotation). "Take it" records
+ * the claim for members; non-members are nudged to join.
  */
 export default function OffersFeedStrip() {
   const { t } = useTranslation();
@@ -30,11 +29,6 @@ export default function OffersFeedStrip() {
   const [takingId, setTakingId] = useState('');
   const [takenById, setTakenById] = useState({}); // offerId -> { status, claimToken }
   const [claimModal, setClaimModal] = useState(null);
-  const [userLoc, setUserLoc] = useState(() => {
-    const lat = Number(userProfile?.coordinates?.lat);
-    const lng = Number(userProfile?.coordinates?.lng);
-    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
-  });
 
   useEffect(() => {
     let cancelled = false;
@@ -42,7 +36,14 @@ export default function OffersFeedStrip() {
     (async () => {
       try {
         const list = await listActiveCommunityOffers();
-        if (!cancelled) setOffers(list);
+        // Randomise order so no single offer is always first — reshuffled on every
+        // load/refresh so businesses get fair rotation in the swipe strip.
+        const shuffled = Array.isArray(list) ? [...list] : [];
+        for (let i = shuffled.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        if (!cancelled) setOffers(shuffled);
       } catch {
         if (!cancelled) setOffers([]);
       }
@@ -52,29 +53,7 @@ export default function OffersFeedStrip() {
     };
   }, [isGuest, isBusiness]);
 
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => {},
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
-    );
-  }, []);
-
-  const sorted = useMemo(() => {
-    const withDist = offers.map((o) => {
-      const hasGeo = userLoc && Number.isFinite(o.lat) && Number.isFinite(o.lng);
-      return { ...o, _dist: hasGeo ? haversineKm(userLoc.lat, userLoc.lng, o.lat, o.lng) : null };
-    });
-    return withDist
-      .sort((a, b) => {
-        if (a._dist == null && b._dist == null) return (b.createdAt || 0) - (a.createdAt || 0);
-        if (a._dist == null) return 1;
-        if (b._dist == null) return -1;
-        return a._dist - b._dist;
-      })
-      .slice(0, 12);
-  }, [offers, userLoc]);
+  const sorted = useMemo(() => offers.slice(0, 12), [offers]);
 
   const openClaim = useCallback(
     (offer, res) => {
@@ -133,7 +112,7 @@ export default function OffersFeedStrip() {
       <div className="offers-feed-strip__head">
         <AppText as="span" className="offers-feed-strip__title">
           <FaTag aria-hidden style={{ marginInlineEnd: 6, color: 'var(--secondary)' }} />
-          {t('offers_near_you', 'Special offers near you')}
+          {t('special_offers_title', 'Special offers')}
         </AppText>
         <Link to="/offers" className="offers-feed-strip__all">{t('see_all', 'See all')}</Link>
       </div>

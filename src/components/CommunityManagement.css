@@ -311,10 +311,32 @@
 }
 
 .cm-offer-list-name {
+    flex: 1;
+    min-width: 0;
     color: var(--text-main);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.cm-offer-delete-btn {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-card);
+    color: #dc2626;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.cm-offer-delete-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 .cm-offer-list-count {

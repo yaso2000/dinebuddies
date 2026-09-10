@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FaUsers, FaBan, FaUserShield, FaVolumeMute, FaVolumeUp, FaUnlock, FaQrcode, FaBullhorn, FaLock } from 'react-icons/fa';
+import { FaUsers, FaBan, FaUserShield, FaVolumeMute, FaVolumeUp, FaUnlock, FaQrcode, FaBullhorn, FaLock, FaTrash } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
 import CommunityMemberScanner from './business/CommunityMemberScanner';
 import { useAuth } from '../context/AuthContext';
 import { getBusinessPlanAccess } from '../config/businessPlanFeatures';
-import { listCommunityOffers } from '../services/communityMemberApi';
+import { listCommunityOffers, deleteCommunityOffer } from '../services/communityMemberApi';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 import { useTranslation } from 'react-i18next';
@@ -56,6 +56,33 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
   useEffect(() => {
     loadOffers();
   }, [loadOffers]);
+
+  const [deletingOfferId, setDeletingOfferId] = useState('');
+  const handleDeleteOffer = useCallback(
+    async (offer) => {
+      if (deletingOfferId) return;
+      const ok = await confirm({
+        message: t('offer_delete_confirm_msg', 'Delete this offer? It will be removed from the feed and your profile. Paid credits are not refunded.'),
+        tone: 'danger',
+      });
+      if (!ok) return;
+      setDeletingOfferId(offer.id);
+      try {
+        const res = await deleteCommunityOffer({ offerId: offer.id });
+        if (res?.ok) {
+          setOffers((prev) => prev.filter((o) => o.id !== offer.id));
+          showToast(t('offer_deleted', 'Offer deleted.'), 'success');
+        } else {
+          showToast(t('save_failed', 'Could not save. Please try again.'), 'error');
+        }
+      } catch {
+        showToast(t('save_failed', 'Could not save. Please try again.'), 'error');
+      } finally {
+        setDeletingOfferId('');
+      }
+    },
+    [confirm, deletingOfferId, showToast, t]
+  );
 
   useEffect(() => {
     loadMembers();
@@ -242,11 +269,22 @@ const CommunityManagement = ({ businessId, businessName, compact = false }) => {
                     {offers.map((o) =>
           <div key={o.id} className="cm-offer-list-row">
                         <span className="cm-offer-list-name">
-                            {o.title}{!o.active ? ` · ${t('offer_expired', 'expired')}` : ''}
+                            {o.title}
+                            {o.isPaidOffer ? ` · ${t('offer_badge_paid', 'paid')}` : ''}
+                            {!o.active ? ` · ${t('offer_expired', 'expired')}` : ''}
                         </span>
                         <span className="cm-offer-list-count">
                             {t('offer_redeemed_count', '{{count}} redeemed', { count: o.redemptionCount })}
                         </span>
+                        <button
+                          type="button"
+                          className="cm-offer-delete-btn"
+                          onClick={() => handleDeleteOffer(o)}
+                          disabled={deletingOfferId === o.id}
+                          title={t('delete', 'Delete')}
+                          aria-label={t('delete', 'Delete')}>
+                            <FaTrash aria-hidden />
+                        </button>
                     </div>
           )}
                 </div>

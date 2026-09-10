@@ -1,0 +1,38 @@
+.biz-profile-offers {
+    padding: 0 var(--profile-content-padding, 1rem);
+    margin-top: var(--profile-stack-gap, 1rem);
+}
+
+.biz-profile-offers__title {
+    display: flex;
+    align-items: center;
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.biz-profile-offers__list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.biz-profile-offers__delete {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #dc2626;
+    cursor: pointer;
+}
+
+.biz-profile-offers__delete:disabled {
+    opacity: 0.6;
+    cursor: default;
+}

@@ -9,6 +9,7 @@ import BusinessProfileSeoHead from '../components/business/BusinessProfileSeoHea
 import BusinessProfileSetupBanner from '../components/business/BusinessProfileSetupBanner';
 import BusinessProfileCardPreviewOverlay from '../components/business/BusinessProfileCardPreviewOverlay';
 import BusinessProfileHero from '../components/business/BusinessProfileHero';
+import BusinessProfileOffers from '../components/business/BusinessProfileOffers';
 import BusinessProfileTabBar from '../components/business/BusinessProfileTabBar';
 import BusinessProfileAboutTab from '../components/business/BusinessProfileAboutTab';
 import BusinessProfileMenuTab from '../components/business/BusinessProfileMenuTab';
@@ -139,6 +140,9 @@ const BusinessProfile = () => {
 
             {/* --- Hero Design --- */}
             <BusinessProfileHero profile={profile} />
+
+            {/* Active special offers for this business */}
+            <BusinessProfileOffers profileId={profileId} isOwner={isOwner} />
 
             {/* Delivery + tabs: unified vertical rhythm (same gap as profile sections) */}
             <div
