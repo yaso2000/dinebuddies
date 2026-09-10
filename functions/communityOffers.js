@@ -325,8 +325,12 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
                 const o = d.data() || {};
                 const expiresMs = o.expiresAt?.toMillis ? o.expiresAt.toMillis() : null;
                 const isExpired = expiresMs != null && expiresMs <= nowMs;
+                // Soft-deleted offers store active:false (+ deletedAt); expiry keeps
+                // active:true. Deleted ones must never come back in the owner list.
+                const isDeleted = o.active === false || o.deletedAt != null;
                 return {
                     id: d.id,
+                    _deleted: isDeleted,
                     partnerId: o.partnerId || businessId,
                     businessName: o.businessName || '',
                     title: o.title || '',
@@ -350,7 +354,8 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
                     createdAt: o.createdAt?.toMillis ? o.createdAt.toMillis() : null,
                 };
             })
-            .filter((o) => (activeOnly ? o.active : true))
+            .filter((o) => !o._deleted && (activeOnly ? o.active : true))
+            .map(({ _deleted, ...o }) => o)
             .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
         return { offers };
