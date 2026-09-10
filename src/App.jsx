@@ -29,10 +29,10 @@ import AuthActionHandler from './pages/AuthActionHandler';
 import VerifyEmail from './pages/VerifyEmail';
 import InviteReceivedPage from './pages/InviteReceivedPage';
 import DiscoveryInboxPage from './pages/DiscoveryInboxPage';
-import DiscoveryPage from './pages/DiscoveryPage';
-import UsersDirectory from './pages/UsersDirectory';
-import InvitationsSwipePage from './pages/InvitationsSwipePage';
-import BusinessesSwipePage from './pages/BusinessesSwipePage';
+const DiscoveryPage = lazy(() => import('./pages/DiscoveryPage'));
+const UsersDirectory = lazy(() => import('./pages/UsersDirectory'));
+const InvitationsSwipePage = lazy(() => import('./pages/InvitationsSwipePage'));
+const BusinessesSwipePage = lazy(() => import('./pages/BusinessesSwipePage'));
 import { isCashoutFeatureEnabled } from './config/cashoutFeature';
 
 // Lazy Pages (Loaded on demand to improve startup speed)
@@ -91,18 +91,18 @@ const BusinessDashboard = lazy(() => import('./pages/BusinessDashboard'));
 const BusinessInboxManage = lazy(() => import('./pages/BusinessInboxManage'));
 const BusinessJobsManage = lazy(() => import('./pages/BusinessJobsManage'));
 // Eager — lazy chunks here caused ChunkLoadError on mobile after deploy → feed redirect.
-import SocialInvitationDetails from './pages/SocialInvitationDetails';
-import SocialInvitationPreview from './pages/SocialInvitationPreview';
-import PublicSocialInvitationJoin from './pages/PublicSocialInvitationJoin';
+const SocialInvitationDetails = lazy(() => import('./pages/SocialInvitationDetails'));
+const SocialInvitationPreview = lazy(() => import('./pages/SocialInvitationPreview'));
+const PublicSocialInvitationJoin = lazy(() => import('./pages/PublicSocialInvitationJoin'));
 // Eager for the same reason as PublicSocialInvitationJoin above — reached via external share links.
-import PublicStoryView from './pages/PublicStoryView';
+const PublicStoryView = lazy(() => import('./pages/PublicStoryView'));
 const InvitationChatRoom = lazy(() => import('./pages/InvitationChatRoom'));
 const SocialInvitationChatRoom = lazy(() => import('./pages/SocialInvitationChatRoom'));
 const FollowersList = lazy(() => import('./pages/FollowersList'));
 const CreateInvitation = lazy(() => import('./pages/CreateInvitation'));
 const CreateInvitationManualHub = lazy(() => import('./pages/CreateInvitationManualHub'));
-import CreateSocialInvitation from './pages/CreateSocialInvitation';
-import CreatePrivateInvitation from './pages/CreatePrivateInvitation';
+const CreateSocialInvitation = lazy(() => import('./pages/CreateSocialInvitation'));
+const CreatePrivateInvitation = lazy(() => import('./pages/CreatePrivateInvitation'));
 const BusinessCreatePostGate = lazy(() => import('./components/BusinessCreatePostGate'));
 const CreateFeaturedPost = lazy(() => import('./pages/business/CreateFeaturedPost'));
 const CreateSwipeSpecialOffer = lazy(() => import('./pages/business/CreateSwipeSpecialOffer'));
