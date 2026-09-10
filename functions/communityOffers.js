@@ -1,11 +1,7 @@
 const crypto = require('crypto');
 const functions = require('firebase-functions');
 const { normalizeBusinessSubscriptionTier, spendCreditsInTransaction } = require('./creditsCore');
-
-// A business's paid plan includes ONE concurrent offer at no credit cost. Each
-// additional concurrent offer is prepaid at this rate per day of validity.
-const EXTRA_OFFER_CREDITS_PER_DAY = 150;
-const DAY_MS = 24 * 60 * 60 * 1000;
+const { priceCommunityOffer } = require('./communityOffersPricing');
 
 /**
  * Paid business feature: broadcast a discount offer to the business's community
@@ -150,18 +146,18 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             const exp = o.expiresAt?.toMillis ? o.expiresAt.toMillis() : null;
             return exp == null || exp > nowMs;
         }).length;
-        const isExtraOffer = activeCount >= 1;
-
-        let paidDays = 0;
-        let paidCredits = 0;
-        if (isExtraOffer) {
-            if (!expiresAt) {
-                // Paid extra offers cannot be open-ended.
-                return { success: false, reason: 'expiry_required' };
-            }
-            paidDays = Math.max(1, Math.ceil((expiresAt.toMillis() - nowMs) / DAY_MS));
-            paidCredits = EXTRA_OFFER_CREDITS_PER_DAY * paidDays;
+        const pricing = priceCommunityOffer({
+            activeCount,
+            expiresAtMs: expiresAt ? expiresAt.toMillis() : null,
+            nowMs,
+        });
+        const isExtraOffer = pricing.isPaid;
+        if (isExtraOffer && pricing.error === 'expiry_required') {
+            // Paid extra offers cannot be open-ended.
+            return { success: false, reason: 'expiry_required' };
         }
+        const paidDays = pricing.days;
+        const paidCredits = pricing.credits;
 
         // Persist the offer so redemptions can reference it (model B). The QR scan
         // then redeems against this offer id, with one-per-member enforcement.

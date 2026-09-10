@@ -46,7 +46,7 @@
     "codemod:bidi": "node scripts/codemod-bidi.mjs --write",
     "fix:bidi-imports": "node scripts/fix-bidi-imports.mjs",
     "lint:ci": "eslint src api --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "test:credits": "vitest run functions/creditsSpendMath.test.js api/_dineCreditsSpendMath.test.js api/_dineCredits.ledger.test.js src/utils/walletCredits.test.js src/utils/cashoutShieldTiers.test.js",
+    "test:credits": "vitest run functions/creditsSpendMath.test.js api/_dineCreditsSpendMath.test.js api/_dineCredits.ledger.test.js src/utils/walletCredits.test.js src/utils/cashoutShieldTiers.test.js functions/communityOffersPricing.test.js",
     "typecheck:api": "tsc -p tsconfig.api.json --noEmit",
     "preview": "vite preview",
     "preview:live": "npx --yes serve dist -p 4173",
@@ -131,6 +131,7 @@
     "postcss": "^8.5.15",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.8.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^3.2.7"
   }
 }
