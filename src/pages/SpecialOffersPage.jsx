@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle } from 'react-icons/fa';
 import { AppText } from '../components/base';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { useAuth } from '../context/AuthContext';
+import { haversineKm } from '../utils/postsFeedScope';
 import { listActiveCommunityOffers, takeCommunityOffer } from '../services/communityMemberApi';
 import './SpecialOffersPage.css';
 
@@ -15,10 +17,40 @@ import './SpecialOffersPage.css';
 export default function SpecialOffersPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { userProfile } = useAuth();
   const BackIcon = i18n.dir() === 'rtl' ? FaArrowRight : FaArrowLeft;
 
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [userLoc, setUserLoc] = useState(() => {
+    const lat = Number(userProfile?.coordinates?.lat);
+    const lng = Number(userProfile?.coordinates?.lng);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  });
+
+  // Live GPS refines ordering; profile coords are the immediate fallback.
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    );
+  }, []);
+
+  // Nearest-first ordering (offers without geo sink to the bottom).
+  const sortedOffers = useMemo(() => {
+    const withDist = offers.map((o) => {
+      const hasGeo = userLoc && Number.isFinite(o.lat) && Number.isFinite(o.lng);
+      return { ...o, _dist: hasGeo ? haversineKm(userLoc.lat, userLoc.lng, o.lat, o.lng) : null };
+    });
+    return withDist.sort((a, b) => {
+      if (a._dist == null && b._dist == null) return (b.createdAt || 0) - (a.createdAt || 0);
+      if (a._dist == null) return 1;
+      if (b._dist == null) return -1;
+      return a._dist - b._dist;
+    });
+  }, [offers, userLoc]);
   const [takingId, setTakingId] = useState('');
   const [takenById, setTakenById] = useState({}); // offerId -> { ok, reason }
   const [joinPrompt, setJoinPrompt] = useState(null); // { partnerId, businessName }
@@ -89,7 +121,7 @@ export default function SpecialOffersPage() {
         </div>
       ) : (
         <div className="special-offers-list">
-          {offers.map((offer) => {
+          {sortedOffers.map((offer) => {
             const state = takeState(offer);
             return (
               <div key={offer.id} className="special-offer-card">

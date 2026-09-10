@@ -1915,6 +1915,8 @@
   "offer_join_first_title": "Join to unlock this offer",
   "offer_join_first_text": "This offer is for {{business}} community members. Join the community first to take it.",
   "offer_join_community": "Join the community",
+  "offers_near_you": "Special offers near you",
+  "offer_join_first_toast": "Join the community first to take this offer.",
   "offers_redeemed_total": "Offers redeemed",
   "business_inbox_page_title": "Community & Inbox",
   "business_inbox_page_sub": "Messages & complaints, your community members, member offers, and QR verification — all in one place.",

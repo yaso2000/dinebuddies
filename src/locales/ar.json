@@ -1936,6 +1936,8 @@
   "offer_join_first_title": "انضمّ لتحصل على هذا العرض",
   "offer_join_first_text": "هذا العرض لأعضاء مجتمع {{business}}. انضمّ للكميونتي أولًا لتأخذه.",
   "offer_join_community": "انضمّ للكميونتي",
+  "offers_near_you": "عروض خاصة قريبة منك",
+  "offer_join_first_toast": "انضمّ للكميونتي أولًا لتأخذ هذا العرض.",
   "offers_redeemed_total": "العروض المستهلكة",
   "business_inbox_page_title": "المجتمع والوارد",
   "business_inbox_page_sub": "الرسائل والشكاوى، أعضاء مجتمعك، عروض الأعضاء، والتحقّق بالـ QR — في مكان واحد.",

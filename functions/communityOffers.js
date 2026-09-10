@@ -73,6 +73,33 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
         const senderAvatar =
             biz.avatar || biz.photo_url || biz.photoURL || bi.logoUrl || bi.logo || null;
 
+        // Business geo (for nearest-first ordering on the offers feed/page). Prefer
+        // the users doc, else the restaurants listing.
+        const pickNum = (...vals) => {
+            for (const v of vals) {
+                const n = Number(v);
+                if (Number.isFinite(n) && n !== 0) return n;
+            }
+            return null;
+        };
+        let offerLat = pickNum(biz.lat, biz.latitude, biz.location?.lat, bi.lat, biz.coordinates?.lat);
+        let offerLng = pickNum(biz.lng, biz.longitude, biz.location?.lng, bi.lng, biz.coordinates?.lng);
+        let offerCity = String(biz.city || bi.city || '').trim() || null;
+        if (offerLat == null || offerLng == null) {
+            try {
+                const restSnap = await db.collection('restaurants').doc(businessId).get();
+                if (restSnap.exists) {
+                    const r = restSnap.data() || {};
+                    const rbi = r.businessInfo && typeof r.businessInfo === 'object' ? r.businessInfo : {};
+                    offerLat = offerLat ?? pickNum(r.lat, r.latitude, r.location?.lat, rbi.lat, r.coordinates?.lat);
+                    offerLng = offerLng ?? pickNum(r.lng, r.longitude, r.location?.lng, rbi.lng, r.coordinates?.lng);
+                    offerCity = offerCity || String(r.city || rbi.city || '').trim() || null;
+                }
+            } catch (e) {
+                /* geo is best-effort */
+            }
+        }
+
         // Community members (user-side membership cache).
         const membersSnap = await db
             .collection('users')
@@ -100,6 +127,10 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             notifyMembers,
             onFeed,
             onSwipe,
+            // Business geo for nearest-first ordering (best-effort).
+            lat: offerLat,
+            lng: offerLng,
+            city: offerCity,
             redemptionCount: 0,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -327,6 +358,9 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
                     description: o.description || null,
                     expiresAt: expiresMs,
                     active: o.active !== false && !isExpired,
+                    lat: typeof o.lat === 'number' ? o.lat : null,
+                    lng: typeof o.lng === 'number' ? o.lng : null,
+                    city: o.city || null,
                     createdAt: o.createdAt?.toMillis ? o.createdAt.toMillis() : null,
                 };
             })

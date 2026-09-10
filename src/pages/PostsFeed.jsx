@@ -8,6 +8,7 @@ import PostCard from '../components/PostCard';
 import MotionPostFeedCard from '../components/MotionPostFeedCard';
 import JobFeedCard from '../components/JobFeedCard';
 import StoriesBar from '../components/StoriesBar';
+import OffersFeedStrip from '../components/OffersFeedStrip';
 import StoryViewer from '../components/StoryViewer';
 import FeaturedPostSlideCard from '../components/FeaturedPostSlideCard';
 import { normalizeFeaturedPostDoc } from '../services/featuredPostService';
@@ -559,6 +560,9 @@ const PostsFeed = () => {
     <div>
             {/* Stories */}
             <StoriesBar onStoryClick={setViewingStory} />
+
+            {/* Special offers near you */}
+            <OffersFeedStrip />
 
             {/* Mobile filter bar (hidden on desktop via CSS) */}
             <div className="mobile-filter-bar posts-feed-scope-bar">
