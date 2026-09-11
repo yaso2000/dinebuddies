@@ -389,6 +389,32 @@ service cloud.firestore {
       return !request.resource.data.keys().hasAny(['role']) ||
         request.resource.data.role in ['user', 'guest', 'business', 'partner'];
     }
+
+    // TasteScope (entertainment quiz result). When the owner writes `tasteScope`,
+    // validate its shape: version 1, a known titleId, and exactly the 10 known axis
+    // keys each holding one of that axis's two poles. Other updates are unaffected.
+    function tasteScopeWriteOk() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['tasteScope'])
+        || tasteScopeValid(request.resource.data.tasteScope);
+    }
+    function tasteScopeValid(ts) {
+      return ts is map
+        && ts.version == 1
+        && ts.titleId in ['explorer','authentic','connoisseur','host','serene','fiery','dreamer','disciplined','companion','warm']
+        && ts.answers is map
+        && ts.answers.keys().hasOnly(['adventure','heat','ritual','social','rhythm','simplicity','sweetness','origin','sugar','sharing'])
+        && ts.answers.keys().hasAll(['adventure','heat','ritual','social','rhythm','simplicity','sweetness','origin','sugar','sharing'])
+        && ts.answers.adventure in ['familiar','unknown']
+        && ts.answers.heat in ['mild','spicy']
+        && ts.answers.ritual in ['casual','formal']
+        && ts.answers.social in ['solo','group']
+        && ts.answers.rhythm in ['morning','night']
+        && ts.answers.simplicity in ['simple','complex']
+        && ts.answers.sweetness in ['savory','sweet']
+        && ts.answers.origin in ['home','restaurant']
+        && ts.answers.sugar in ['sugarfree','sugar']
+        && ts.answers.sharing in ['mine','shared'];
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -433,6 +459,7 @@ service cloud.firestore {
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['following']) &&
                        request.resource.data.following is list;
       allow update: if isOwner(userId) && ownerAffiliateWriteGuards() &&
+                       tasteScopeWriteOk() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'accountType']);
       // Admin panel (admin + moderator/support/staff/regional_manager): credits, moderation, etc.

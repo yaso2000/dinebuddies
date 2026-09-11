@@ -736,7 +736,13 @@ function toPublicProfile(userDocData, uid) {
         userPublic: profileType === 'user'
             ? {
                 city: userCity || null,
-                country: userCountry || null
+                country: userCountry || null,
+                // TasteScope badge on user cards/lists — titleId only (display form
+                // is resolved by gender at render time). See TASTESCOPE_SPEC §6.
+                tasteScope:
+                    userData.tasteScope && typeof userData.tasteScope === 'object' && userData.tasteScope.titleId
+                        ? { titleId: userData.tasteScope.titleId }
+                        : null
             }
             : null,
         businessPublic,
