@@ -399,6 +399,7 @@ service cloud.firestore {
     }
     function tasteScopeValid(ts) {
       return ts is map
+        && ts.keys().hasOnly(['version','titleId','runnerUpId','answers','takenAt','retakeAvailableAt','history'])
         && ts.version == 1
         && ts.titleId in ['explorer','authentic','connoisseur','host','serene','fiery','dreamer','disciplined','companion','warm']
         && ts.answers is map
