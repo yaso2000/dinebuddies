@@ -1,89 +1,143 @@
-.community-member-card {
-    margin: 12px auto 0;
-    width: 100%;
-    max-width: 420px;
-    box-sizing: border-box;
-    padding: 16px;
-    border-radius: 18px;
-    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, var(--secondary, #e86e2e) 100%);
-    color: #ffffff;
-    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.28);
-}
-
-.community-member-card__head {
+.mcard-wrap {
     display: flex;
+    flex-direction: column;
     align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+/* Standard credit-card proportions (85.6 x 54 ≈ 1.586:1). */
+.mcard {
+    position: relative;
+    width: 100%;
+    max-width: 340px;
+    aspect-ratio: 1.586 / 1;
+    border-radius: 16px;
+    overflow: hidden;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
     justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 12px;
+    color: #fff;
+    background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 55%, #0ea5e9 100%);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
 }
 
-.community-member-card__label {
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    opacity: 0.9;
+/* Faint app-logo watermark. */
+.mcard__wm {
+    position: absolute;
+    right: -28px;
+    bottom: -30px;
+    width: 190px;
+    height: 190px;
+    opacity: 0.1;
+    transform: rotate(-12deg);
+    pointer-events: none;
 }
 
-.community-member-card__business {
-    font-size: 0.85rem;
-    font-weight: 800;
-    text-align: end;
-    max-width: 55%;
+.mcard__top {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.mcard__brand {
+    font-size: 0.98rem;
+    font-weight: 900;
+    letter-spacing: 0.2px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
-.community-member-card__body {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-}
-
-.community-member-card__number-block {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-}
-
-.community-member-card__number-label {
-    font-size: 0.72rem;
-    font-weight: 600;
+.mcard__label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
     opacity: 0.85;
 }
 
-.community-member-card__number {
-    font-size: 2rem;
-    font-weight: 900;
-    letter-spacing: 0.02em;
-    line-height: 1;
+.mcard__body {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
 }
 
-.community-member-card__qr {
-    flex-shrink: 0;
-    width: 96px;
-    height: 96px;
-    padding: 6px;
-    border-radius: 12px;
-    background: #ffffff;
+.mcard__info {
     display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.mcard__name {
+    font-size: 1.05rem;
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 170px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.mcard__num-label {
+    margin-top: 8px;
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    opacity: 0.8;
+}
+
+.mcard__num {
+    font-size: 1.5rem;
+    font-weight: 900;
+    letter-spacing: 3px;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+
+.mcard__qr {
+    flex-shrink: 0;
+    background: #fff;
+    padding: 5px;
+    border-radius: 8px;
+    line-height: 0;
+}
+
+.mcard__qr img {
+    display: block;
+    width: 74px;
+    height: 74px;
+}
+
+.mcard-download {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
+    padding: 0.6rem 1.2rem;
+    border-radius: 12px;
+    border: none;
+    background: var(--primary, #7c3aed);
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.9rem;
+    cursor: pointer;
 }
 
-.community-member-card__qr img {
-    width: 100%;
-    height: 100%;
-    display: block;
+.mcard-download:disabled {
+    opacity: 0.6;
+    cursor: default;
 }
 
-.community-member-card__hint {
-    margin: 12px 0 0;
+.mcard-hint {
+    margin: 0;
+    max-width: 320px;
+    text-align: center;
     font-size: 0.78rem;
-    line-height: 1.4;
-    opacity: 0.92;
+    color: var(--text-muted, #6b7280);
 }

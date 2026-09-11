@@ -1,20 +1,25 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import PremiumBadge from '../PremiumBadge';
+import { deliveryLinksReadyToSave } from '../../utils/deliveryLinkMeta';
 
 export default function BusinessProfileTabBar({ profile }) {
   const { t } = useTranslation();
-  const { businessInfo, isOwner, menuTabListingType, activeTab, setActiveTab, tc, navigate } = profile;
+  const { businessInfo, isOwner, isPaid, menuTabListingType, activeTab, setActiveTab, tc, navigate, deliveryLinks } = profile;
 
   const info = businessInfo || {};
   const hasContactInfo = !!(info.phone || info.email || info.address || info.website);
+  // Delivery tab shows for visitors only when there are real links (and the paid
+  // gate is met, matching DeliveryLinksSection); owners always see it to edit.
+  const hasDelivery = deliveryLinksReadyToSave(deliveryLinks || info.deliveryLinks).length > 0;
   const menuTabLabel = menuTabListingType === 'services' ? t('tab_services') : t('tab_menu');
   const tabs = [
   { id: 'about', label: t('tab_about'), locked: false },
   { id: 'menu', label: menuTabLabel, locked: false, hide: !isOwner && !(info.menu?.length > 0) },
   { id: 'services', label: t('tab_services'), locked: false, hide: true },
   { id: 'hours', label: t('tab_hours'), locked: false, hide: !isOwner && !info.hours },
-  { id: 'contact', label: t('tab_contact'), locked: false, hide: !isOwner && !hasContactInfo }];
+  { id: 'contact', label: t('tab_contact'), locked: false, hide: !isOwner && !hasContactInfo },
+  { id: 'delivery', label: t('tab_delivery', 'Delivery'), locked: false, hide: !isOwner && !(hasDelivery && isPaid) }];
 
   const visibleTabs = tabs.filter((tab) => !tab.hide);
   return (

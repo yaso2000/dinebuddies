@@ -15,6 +15,7 @@ import BusinessProfileMenuTab from '../components/business/BusinessProfileMenuTa
 import BusinessProfileServicesTab from '../components/business/BusinessProfileServicesTab';
 import BusinessProfileHoursTab from '../components/business/BusinessProfileHoursTab';
 import BusinessProfileContactTab from '../components/business/BusinessProfileContactTab';
+import BusinessProfileDeliveryTab from '../components/business/BusinessProfileDeliveryTab';
 import BusinessProfileReviewModal from '../components/business/BusinessProfileReviewModal';
 import BusinessProfileInfoModals from '../components/business/BusinessProfileInfoModals';
 import BusinessProfileMiscModals from '../components/business/BusinessProfileMiscModals';
@@ -165,6 +166,7 @@ const BusinessProfile = () => {
                 <BusinessProfileServicesTab profile={profile} />
                 <BusinessProfileHoursTab profile={profile} />
                 <BusinessProfileContactTab profile={profile} />
+                <BusinessProfileDeliveryTab profile={profile} />
             </div>
 
             <BusinessProfileReviewModal profile={profile} />

@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { FaTimes } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useInvitations } from '../context/InvitationContext';
@@ -25,7 +26,9 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
 
   if (!isOpen) return null;
 
-  return (
+  // Portal to <body>: rendered from within the directory/card list (which uses
+  // transforms), a fixed overlay would otherwise be trapped off-screen (blur only).
+  return createPortal(
     <div className="selector-overlay" onClick={onClose}>
       <div className="selector-content" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="close-btn" onClick={onClose}>
@@ -46,7 +49,8 @@ const CreateInvitationSelector = ({ isOpen, onClose, navigationState }) => {
           invitationsOnly
         />
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
