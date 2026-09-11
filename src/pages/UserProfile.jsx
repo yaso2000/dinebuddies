@@ -27,6 +27,7 @@ import {
 'react-icons/fa';
 import { getSafeAvatar, normalizeUserGender } from '../utils/avatarUtils';
 import TasteScopeBadge from '../features/tastescope/TasteScopeBadge';
+import TasteCompatibility from '../features/tastescope/TasteCompatibility';
 import { getMutualFollowers } from '../utils/followHelpers';
 import {
   canViewerSeeProfileFriends,
@@ -1037,6 +1038,15 @@ const UserProfile = () => {
         showMenu={Boolean(myUid && !currentUser?.isGuest)} />
 
       <div className="user-profile-body px-4" onClick={(e) => e.stopPropagation()}>
+        {/* Taste compatibility (other users only). Viewed user's tasteScope comes
+            from the already-loaded doc — public projection first, users doc fallback. */}
+        <div style={{ marginBottom: 12 }}>
+          <TasteCompatibility
+            otherUserId={userId}
+            otherTasteScope={user?.userPublic?.tasteScope || user?.tasteScope || null}
+            onInvite={handlePrivateInvite}
+          />
+        </div>
         <SectionCard className="user-profile-summary-card">
           <div className="user-profile-stats">
             <div className="user-profile-stat">
