@@ -25,7 +25,8 @@ import {
   FaClipboardList,
   FaCompass } from
 'react-icons/fa';
-import { getSafeAvatar } from '../utils/avatarUtils';
+import { getSafeAvatar, normalizeUserGender } from '../utils/avatarUtils';
+import TasteScopeBadge from '../features/tastescope/TasteScopeBadge';
 import { getMutualFollowers } from '../utils/followHelpers';
 import {
   canViewerSeeProfileFriends,
@@ -138,7 +139,7 @@ function ProfileHero({
   menuPanel,
   showMenu
 }) {
-  const { displayName, ageRange, avatarUrl, coverPhotoUrl } = profile;
+  const { displayName, ageRange, avatarUrl, coverPhotoUrl, tasteTitleId, tasteGender } = profile;
   const headline = ageRange ? `${displayName}, ${ageRange}` : displayName;
 
   return (
@@ -208,6 +209,11 @@ function ProfileHero({
         <AppText as="h2" className="user-profile-headline" dir="ltr">
           {headline}
         </AppText>
+        {tasteTitleId ? (
+          <div className="mt-2 flex justify-center">
+            <TasteScopeBadge variant="full" titleId={tasteTitleId} gender={tasteGender} />
+          </div>
+        ) : null}
       </div>
     </>
   );
@@ -251,6 +257,14 @@ function mapUserDocToProfileModel(firestoreUser) {
     shortBio: String(firestoreUser.bio || firestoreUser.shortBio || '').slice(0, 150),
     acceptsPrivateInvite,
     gender: firestoreUser.gender ?? null,
+    // TasteScope badge (other user): titleId from the users doc when the viewer
+    // could read it, else from the public_profiles projection. Gender picks the
+    // Arabic form. See TASTESCOPE_SPEC §7.
+    tasteTitleId:
+      firestoreUser.tasteScope?.titleId ||
+      firestoreUser.userPublic?.tasteScope?.titleId ||
+      null,
+    tasteGender: normalizeUserGender(firestoreUser),
     invitePreference:
     firestoreUser.invitePreference ??
     firestoreUser.privateInvitationPreference ??

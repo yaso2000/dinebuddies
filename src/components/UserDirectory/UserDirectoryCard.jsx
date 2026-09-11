@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
 import { FaComments, FaGift, FaHeart, FaMapMarkerAlt, FaRegHeart, FaUserCheck, FaUserPlus } from 'react-icons/fa';
 import { db } from '../../firebase/config';
-import { getSafeAvatar, mergeAvatarStyleWithGenderRing, hasRealProfilePhoto } from '../../utils/avatarUtils';
+import { getSafeAvatar, mergeAvatarStyleWithGenderRing, hasRealProfilePhoto, normalizeUserGender } from '../../utils/avatarUtils';
+import TasteScopeBadge from '../../features/tastescope/TasteScopeBadge';
 import { getPrivateInviteeDisplayName } from '../../utils/privateInviteAvailability';
 import { goToLogin } from '../../utils/goToLogin';
 import { useConfirm } from '../../context/ConfirmContext';
@@ -406,6 +407,9 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
               {ageLabel ? <span className="user-directory-card__age">, {ageLabel}</span> : null}
             </AppText>
           )}
+          {user?.tasteTitleId ? (
+            <TasteScopeBadge variant="icon" titleId={user.tasteTitleId} gender={normalizeUserGender(user)} />
+          ) : null}
 
           {cityLabel ? (
             <AppText as="span" className="user-directory-card__city">

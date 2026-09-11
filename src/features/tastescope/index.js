@@ -1,4 +1,7 @@
 export { default as TasteScopePage } from './TasteScopePage';
+export { default as TasteScopeBadge } from './TasteScopeBadge';
+export { default as TasteScopeOwnBadge } from './TasteScopeOwnBadge';
+export { default as TasteScopeCtaCard } from './TasteScopeCtaCard';
 export { default as useTasteScope, isValidAnswers } from './useTasteScope';
 export { computeTitle } from './computeTitle';
 export { computeCompatibility } from './computeCompatibility';

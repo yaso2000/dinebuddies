@@ -68,6 +68,9 @@ export function mapDirectoryUser(publicDoc, userDoc = null) {
         invitePreference: normalizeInvitePreference(u.invitePreference),
         openToDating: isUserOpenToDating(u),
         gender: u.gender || null,
+        // TasteScope icon on the card: titleId from the users doc when present,
+        // else from the public_profiles projection. See TASTESCOPE_SPEC §6.
+        tasteTitleId: u.tasteScope?.titleId || userPublic.tasteScope?.titleId || null,
         profileType: 'user',
         role: u.role || publicDoc.accountRole || 'user',
         accountRole: publicDoc.accountRole || u.role || 'user',

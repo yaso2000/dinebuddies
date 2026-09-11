@@ -16,6 +16,7 @@ import { useTheme } from '../context/ThemeContext';
 import { FaSun, FaMoon } from 'react-icons/fa';
 import { getSafeAvatar, getGenderBorderColor, isUserUploadedPhotoUrl, isProviderAccountPhotoUrl, buildAvatarPersistFields, getAvatarUrlOrNull, isGeneratedAvatarUrl } from '../utils/avatarUtils';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
+import { TasteScopeOwnBadge, TasteScopeCtaCard } from '../features/tastescope';
 import { goToLogin } from '../utils/goToLogin';
 import { normalizeBusinessTier } from '../utils/businessSubscription';
 import { isPrivateInvitationDraft } from '../utils/socialInvitationDraft';
@@ -999,7 +1000,13 @@ const Profile = () => {
 
               <>
                                 <AppText as="h1" style={{ fontSize: '1.6rem', fontWeight: '900', marginTop: '0.75rem', marginBottom: '0.15rem', color: 'var(--text-main)' }}>{realtimeUser.name}</AppText>
+                                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.35rem' }}>
+                                    <TasteScopeOwnBadge />
+                                </div>
                                 <AppText as="p" style={{ color: 'var(--text-muted)', marginBottom: '0.4rem', fontSize: '0.85rem' }}>{realtimeUser.bio || t('active_member')}</AppText>
+                                <div style={{ maxWidth: 360, margin: '0.35rem auto 0.9rem' }}>
+                                    <TasteScopeCtaCard />
+                                </div>
                                 {Array.isArray(realtimeUser.lookingFor) &&
                 realtimeUser.lookingFor.length > 0 &&
                 <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
