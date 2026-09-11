@@ -90,8 +90,8 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
         </span>
       </div>
 
-      {/* Two images, stacked on phones */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0, padding: '4px 16px calc(20px + env(safe-area-inset-bottom, 0px))' }}>
+      {/* Two images side by side — better for free, unbiased choice. */}
+      <div style={{ display: 'flex', flexDirection: 'row', gap: 12, flex: 1, minHeight: 0, padding: '4px 16px calc(20px + env(safe-area-inset-bottom, 0px))' }}>
         {round.poles.map((pole) => (
           <PoleCard
             key={pole}

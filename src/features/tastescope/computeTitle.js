@@ -7,7 +7,7 @@
  *     2) fewer signature poles (a tighter archetype wins)
  *     3) fixed TITLES order (deterministic)
  */
-import { TITLES, POLE_TO_AXIS, axisWeight } from './tastescopeData';
+import { TITLES, TITLES_BY_ID, POLE_TO_AXIS, axisWeight } from './tastescopeData';
 
 /**
  * @param {Record<string,string>} answers  { [axisId]: poleId } — up to 10 keys.
@@ -38,6 +38,26 @@ export function computeTitle(answers) {
     runnerUpId: ranked[1] ? ranked[1].id : ranked[0].id,
     scores,
   };
+}
+
+/**
+ * Explain a title from the answers: which of the title's signature poles the
+ * user actually chose (`matched`) and which they didn't (`missing`). Pure — used
+ * by the result screen to show *why* this title was assigned (the link between
+ * the picks and the name). See TASTESCOPE_SPEC.md §3–§4.
+ *
+ * @param {Record<string,string>} answers  { [axisId]: poleId }
+ * @param {string} titleId
+ * @returns {{ matched: string[], missing: string[] }}  pole ids
+ */
+export function explainTitle(answers, titleId) {
+  const title = TITLES_BY_ID[titleId];
+  if (!title) return { matched: [], missing: [] };
+  const chosen = answers && typeof answers === 'object' ? answers : {};
+  const chosenPoles = new Set(Object.values(chosen).filter(Boolean));
+  const matched = title.signature.filter((pole) => chosenPoles.has(pole));
+  const missing = title.signature.filter((pole) => !chosenPoles.has(pole));
+  return { matched, missing };
 }
 
 export default computeTitle;

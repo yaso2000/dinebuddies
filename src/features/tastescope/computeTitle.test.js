@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { computeTitle } from './computeTitle';
-import { TITLES, TITLE_IDS, POLE_TO_AXIS, AXES } from './tastescopeData';
+import { computeTitle, explainTitle } from './computeTitle';
+import { TITLES, TITLES_BY_ID, TITLE_IDS, POLE_TO_AXIS, AXES } from './tastescopeData';
 
 /** Build an answers map from a set of poles: { [axisOf(pole)]: pole }. */
 const answersFromPoles = (poles) =>
@@ -51,5 +51,29 @@ describe('computeTitle', () => {
     expect(scores.dreamer).toBe(1);
     expect(scores.explorer).toBe(scores.dreamer); // same raw score → weight breaks it
     expect(titleId).toBe('explorer'); // weighted (adventure=2) beats sweetness=1
+  });
+});
+
+describe('explainTitle', () => {
+  it('marks every signature pole matched when the exact signature is chosen', () => {
+    for (const title of TITLES) {
+      const answers = answersFromPoles(title.signature);
+      const { matched, missing } = explainTitle(answers, title.id);
+      expect(new Set(matched)).toEqual(new Set(title.signature));
+      expect(missing).toEqual([]);
+    }
+  });
+
+  it('splits matched vs missing for a partial overlap', () => {
+    // Choose only the first two of explorer's signature poles.
+    const partial = answersFromPoles(TITLES_BY_ID.explorer.signature.slice(0, 2));
+    const { matched, missing } = explainTitle(partial, 'explorer');
+    expect(matched).toEqual(TITLES_BY_ID.explorer.signature.slice(0, 2));
+    expect(missing).toEqual(TITLES_BY_ID.explorer.signature.slice(2));
+  });
+
+  it('is safe for unknown title / malformed answers', () => {
+    expect(explainTitle({}, 'nope')).toEqual({ matched: [], missing: [] });
+    expect(explainTitle(null, 'explorer').matched).toEqual([]);
   });
 });

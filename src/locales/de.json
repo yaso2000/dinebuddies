@@ -19,7 +19,9 @@
       "addedToProfile": "Added to your profile ✓",
       "addToProfile": "Add to my profile",
       "share": "Share",
-      "saveError": "Couldn't save — please try again"
+      "saveError": "Couldn't save — please try again",
+      "why": "Why are you {{title}}?",
+      "whyLead": "Because your picks lean toward"
     },
     "profile": {
       "retakeIn": "Retake in {{days}} days",

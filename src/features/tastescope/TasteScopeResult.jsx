@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { AXES, POLE_TO_AXIS } from './tastescopeData';
+import { explainTitle } from './computeTitle';
 import { titleName, titleDesc, titleVisuals } from './titleDisplay';
 
 /**
@@ -24,6 +25,9 @@ export default function TasteScopeResult({ titleId, runnerUpId, answers, gender,
     .filter(Boolean)
     .map((pole) => ({ pole, axisId: POLE_TO_AXIS[pole] }));
 
+  // The picks that actually define this title — the "why you got this name".
+  const definingPoles = explainTitle(answers, titleId).matched;
+
   const share = async () => {
     const text = isArabic
       ? `لقبي الغذائي في DineBuddies: ${name} ${emoji}`
@@ -46,6 +50,22 @@ export default function TasteScopeResult({ titleId, runnerUpId, answers, gender,
         <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary, #6b7280)', margin: '0 0 22px' }}>
           {t('tastescope.result.touchOf', { title: runnerUpName, defaultValue: `بلمسة من ${runnerUpName}` })}
         </p>
+      )}
+
+      {/* Why this title — the link between the picks and the name. */}
+      {definingPoles.length > 0 && (
+        <div style={{ textAlign: 'start', margin: '0 0 22px', padding: '14px 16px', borderRadius: 14, background: 'var(--bg-card, #f3f4f6)', border: `1px solid ${accent}33` }}>
+          <div style={{ fontSize: '0.9rem', fontWeight: 800, color: accent, marginBottom: 6 }}>
+            {t('tastescope.result.why', { title: name, defaultValue: `لماذا أنت ${name}؟` })}
+          </div>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: 1.7, margin: 0 }}>
+            {t('tastescope.result.whyLead', 'لأن اختياراتك مالت إلى')}{' '}
+            <span style={{ fontWeight: 800 }}>
+              {definingPoles.map((pole) => t(`tastescope.pole.${pole}`, pole)).join(isArabic ? '، ' : ', ')}
+            </span>
+            {' '}—{' '}{desc}
+          </p>
+        </div>
       )}
 
       {/* How you answered — the screenshot strip */}
