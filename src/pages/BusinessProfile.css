@@ -212,7 +212,17 @@
     border: 1px solid var(--border-color);
     border-radius: var(--profile-card-radius, 20px);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    overflow: hidden;
+    /* Scroll horizontally instead of clipping — so every tab (e.g. Delivery) is
+       reachable on narrow screens. */
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Tabs size to their content and never shrink, so overflow scrolls the bar
+   (with flex:1 they crammed and the last tab was clipped). */
+.business-profile-tabs .ui-tab {
+    flex: 0 0 auto;
 }
 
 .business-profile-tab--locked {
