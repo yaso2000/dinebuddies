@@ -832,7 +832,11 @@ const UserProfile = () => {
   activeList :
   activeList.slice(0, PROFILE_SECTION_PREVIEW_MAX);
 
-  const handlePrivateInvite = async () => {
+  const handlePrivateInvite = async (suggestedInvite) => {
+    // TasteScope passes its suggestedInvite key here; other callers pass a click
+    // event, so only accept a string. Forwarded as a hint the create flow can use
+    // to preselect a type (no meal-occasion category exists today — see Step 5).
+    const tasteScopeSuggestedInvite = typeof suggestedInvite === 'string' ? suggestedInvite : null;
     if (!canPrivateInvite) {
       showToast(
         t(
@@ -873,7 +877,8 @@ const UserProfile = () => {
           avatar: user.avatar || user.photo_url || user.photoURL || '',
           gender: user.gender || null,
           availableForPrivateInvite: user.availableForPrivateInvite
-        }
+        },
+        tasteScopeSuggestedInvite
       }
     });
   };

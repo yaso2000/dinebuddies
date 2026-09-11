@@ -5,17 +5,6 @@ import { useAuth } from '../../context/AuthContext';
 import { AXES } from './tastescopeData';
 import { computeCompatibility } from './computeCompatibility';
 
-/** Interim Arabic defaults (real i18n arrives in Step 6). */
-const AXIS_LABEL_AR = {
-  adventure: 'المغامرة', heat: 'الحدّة', ritual: 'الطقس', social: 'الاجتماعية',
-  rhythm: 'الإيقاع', simplicity: 'البساطة', sweetness: 'الحلاوة', origin: 'الأصل',
-  sugar: 'السكر', sharing: 'المشاركة',
-};
-const INVITE_LABEL_AR = {
-  breakfast: 'فطور', lateDinner: 'عشاء متأخر', groupTable: 'طاولة جماعية',
-  fineDining: 'عشاء فاخر', cafe: 'مقهى', dinnerForTwo: 'عشاء لشخصين',
-};
-
 const hasTaste = (ts) => Boolean(ts && ts.titleId && ts.answers && typeof ts.answers === 'object');
 
 /**
@@ -66,7 +55,7 @@ export default function TasteCompatibility({ otherUserId, otherTasteScope, onInv
     );
   }
 
-  const inviteLabel = t(`tastescope.compat.invite.${result.suggestedInvite}`, INVITE_LABEL_AR[result.suggestedInvite] || result.suggestedInvite);
+  const inviteLabel = t(`tastescope.compat.invite.${result.suggestedInvite}`, result.suggestedInvite);
 
   return (
     <>
@@ -122,7 +111,7 @@ export default function TasteCompatibility({ otherUserId, otherTasteScope, onInv
                       {matched ? '✓' : '·'}
                     </span>
                     <span style={{ flex: 1, fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary, #6b7280)' }}>
-                      {t(`tastescope.axis.${axis.id}`, AXIS_LABEL_AR[axis.id] || axis.id)}
+                      {t(`tastescope.axis.${axis.id}`, axis.id)}
                     </span>
                     <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>
                       {matched
@@ -137,7 +126,7 @@ export default function TasteCompatibility({ otherUserId, otherTasteScope, onInv
             {onInvite && (
               <button
                 type="button"
-                onClick={() => { setOpen(false); onInvite(); }}
+                onClick={() => { setOpen(false); onInvite(result.suggestedInvite); }}
                 style={{ display: 'block', width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', background: 'var(--primary, #ef4444)', color: '#fff', fontSize: '0.98rem', fontWeight: 800, cursor: 'pointer' }}
               >
                 {t('tastescope.compat.sendInvite', 'أرسل دعوة')}

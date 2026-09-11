@@ -1,4 +1,132 @@
 {
+  "tastescope": {
+    "name": "TasteScope",
+    "intro": {
+      "title": "Discover your taste title",
+      "subtitle": "Ten photos. Tap what you crave. There's no wrong answer.",
+      "disclaimer": "Just for fun 🎈",
+      "viewTitle": "Show my title",
+      "start": "Start",
+      "retake": "Retake"
+    },
+    "round": {
+      "progress": "{{n}} / 10"
+    },
+    "result": {
+      "youAre": "Your taste title",
+      "touchOf": "with a touch of {{title}}",
+      "saving": "Saving…",
+      "addedToProfile": "Added to your profile ✓",
+      "addToProfile": "Add to my profile",
+      "share": "Share",
+      "saveError": "Couldn't save — please try again"
+    },
+    "profile": {
+      "retakeIn": "Retake in {{days}} days",
+      "cta": "Discover your taste title",
+      "ctaSub": "Ten photos, under a minute"
+    },
+    "changed": "Your title changed from {{from}} to {{to}}",
+    "compat": {
+      "nudge": "Take the quiz to see your match",
+      "line": "Taste match: {{percent}}% — best invite: {{invite}}",
+      "sendInvite": "Send an invite",
+      "invite": {
+        "breakfast": "breakfast",
+        "lateDinner": "late dinner",
+        "groupTable": "a group table",
+        "fineDining": "fine dining",
+        "cafe": "a café",
+        "dinnerForTwo": "dinner for two"
+      }
+    },
+    "axis": {
+      "adventure": "Adventure",
+      "heat": "Heat",
+      "ritual": "Ritual",
+      "social": "Social",
+      "rhythm": "Rhythm",
+      "simplicity": "Simplicity",
+      "sweetness": "Sweetness",
+      "origin": "Origin",
+      "sugar": "Sugar",
+      "sharing": "Sharing"
+    },
+    "pole": {
+      "familiar": "Familiar",
+      "unknown": "New",
+      "mild": "Mild",
+      "spicy": "Spicy",
+      "casual": "Casual",
+      "formal": "Formal",
+      "solo": "Solo",
+      "group": "Group",
+      "morning": "Morning",
+      "night": "Night",
+      "simple": "Simple",
+      "complex": "Layered",
+      "savory": "Savory",
+      "sweet": "Sweet",
+      "home": "Home",
+      "restaurant": "Restaurant",
+      "sugarfree": "No sugar",
+      "sugar": "With sugar",
+      "mine": "Just mine",
+      "shared": "We share"
+    },
+    "title": {
+      "explorer": {
+        "m": "The Explorer",
+        "f": "The Explorer",
+        "desc": "Eats to discover — the dish they can't name is the one they order."
+      },
+      "authentic": {
+        "m": "The Authentic",
+        "f": "The Authentic",
+        "desc": "Knows what they love — the dish they grew up on has no rival."
+      },
+      "connoisseur": {
+        "m": "The Connoisseur",
+        "f": "The Connoisseur",
+        "desc": "Food is an art served in order — the details are the pleasure."
+      },
+      "host": {
+        "m": "The Host",
+        "f": "The Host",
+        "desc": "The table is completed by people, not plates — generosity is a nature, not a choice."
+      },
+      "serene": {
+        "m": "The Serene",
+        "f": "The Serene",
+        "desc": "Eats calmly and mindfully — a little, done well, is enough."
+      },
+      "fiery": {
+        "m": "The Fiery",
+        "f": "The Fiery",
+        "desc": "Wants food to hit hard — nothing is ever \"too much\"."
+      },
+      "dreamer": {
+        "m": "The Dreamer",
+        "f": "The Dreamer",
+        "desc": "Food is a reward and a private moment — dessert isn't the end of the meal, it's the point."
+      },
+      "disciplined": {
+        "m": "The Disciplined",
+        "f": "The Disciplined",
+        "desc": "Knows their limits and respects them — the joy is in control, not chaos."
+      },
+      "companion": {
+        "m": "The Companion",
+        "f": "The Companion",
+        "desc": "Eating is an excuse to gather — who they eat with matters more than what."
+      },
+      "warm": {
+        "m": "The Warm",
+        "f": "The Warm",
+        "desc": "Loves starting the day around a table — home is their favourite restaurant."
+      }
+    }
+  },
   "🎯 Add-on Offer Slots": "🎯 Slots de oferta adicionais",
   "💕 Private Invite Packs": "💕 Pacotes de convites de encontro",
   "1 Month FREE Trial ✨": "Teste GRÁTIS de 1 mês ✨",

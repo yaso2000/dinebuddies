@@ -1239,6 +1239,134 @@
   "community_chat_unavailable": "This community is not available",
   "community_chat_blocked_hint": "You cannot access this chat room right now.",
   "community_chat_business_title": "Business accounts",
+  "tastescope": {
+    "name": "TasteScope",
+    "intro": {
+      "title": "Discover your taste title",
+      "subtitle": "Ten photos. Tap what you crave. There's no wrong answer.",
+      "disclaimer": "Just for fun 🎈",
+      "viewTitle": "Show my title",
+      "start": "Start",
+      "retake": "Retake"
+    },
+    "round": {
+      "progress": "{{n}} / 10"
+    },
+    "result": {
+      "youAre": "Your taste title",
+      "touchOf": "with a touch of {{title}}",
+      "saving": "Saving…",
+      "addedToProfile": "Added to your profile ✓",
+      "addToProfile": "Add to my profile",
+      "share": "Share",
+      "saveError": "Couldn't save — please try again"
+    },
+    "profile": {
+      "retakeIn": "Retake in {{days}} days",
+      "cta": "Discover your taste title",
+      "ctaSub": "Ten photos, under a minute"
+    },
+    "changed": "Your title changed from {{from}} to {{to}}",
+    "compat": {
+      "nudge": "Take the quiz to see your match",
+      "line": "Taste match: {{percent}}% — best invite: {{invite}}",
+      "sendInvite": "Send an invite",
+      "invite": {
+        "breakfast": "breakfast",
+        "lateDinner": "late dinner",
+        "groupTable": "a group table",
+        "fineDining": "fine dining",
+        "cafe": "a café",
+        "dinnerForTwo": "dinner for two"
+      }
+    },
+    "axis": {
+      "adventure": "Adventure",
+      "heat": "Heat",
+      "ritual": "Ritual",
+      "social": "Social",
+      "rhythm": "Rhythm",
+      "simplicity": "Simplicity",
+      "sweetness": "Sweetness",
+      "origin": "Origin",
+      "sugar": "Sugar",
+      "sharing": "Sharing"
+    },
+    "pole": {
+      "familiar": "Familiar",
+      "unknown": "New",
+      "mild": "Mild",
+      "spicy": "Spicy",
+      "casual": "Casual",
+      "formal": "Formal",
+      "solo": "Solo",
+      "group": "Group",
+      "morning": "Morning",
+      "night": "Night",
+      "simple": "Simple",
+      "complex": "Layered",
+      "savory": "Savory",
+      "sweet": "Sweet",
+      "home": "Home",
+      "restaurant": "Restaurant",
+      "sugarfree": "No sugar",
+      "sugar": "With sugar",
+      "mine": "Just mine",
+      "shared": "We share"
+    },
+    "title": {
+      "explorer": {
+        "m": "The Explorer",
+        "f": "The Explorer",
+        "desc": "Eats to discover — the dish they can't name is the one they order."
+      },
+      "authentic": {
+        "m": "The Authentic",
+        "f": "The Authentic",
+        "desc": "Knows what they love — the dish they grew up on has no rival."
+      },
+      "connoisseur": {
+        "m": "The Connoisseur",
+        "f": "The Connoisseur",
+        "desc": "Food is an art served in order — the details are the pleasure."
+      },
+      "host": {
+        "m": "The Host",
+        "f": "The Host",
+        "desc": "The table is completed by people, not plates — generosity is a nature, not a choice."
+      },
+      "serene": {
+        "m": "The Serene",
+        "f": "The Serene",
+        "desc": "Eats calmly and mindfully — a little, done well, is enough."
+      },
+      "fiery": {
+        "m": "The Fiery",
+        "f": "The Fiery",
+        "desc": "Wants food to hit hard — nothing is ever \"too much\"."
+      },
+      "dreamer": {
+        "m": "The Dreamer",
+        "f": "The Dreamer",
+        "desc": "Food is a reward and a private moment — dessert isn't the end of the meal, it's the point."
+      },
+      "disciplined": {
+        "m": "The Disciplined",
+        "f": "The Disciplined",
+        "desc": "Knows their limits and respects them — the joy is in control, not chaos."
+      },
+      "companion": {
+        "m": "The Companion",
+        "f": "The Companion",
+        "desc": "Eating is an excuse to gather — who they eat with matters more than what."
+      },
+      "warm": {
+        "m": "The Warm",
+        "f": "The Warm",
+        "desc": "Loves starting the day around a table — home is their favourite restaurant."
+      }
+    }
+  },
   "try_again": "Try again",
   "business_cannot_review": "Business accounts cannot submit reviews",
   "business_claim_account_cta": "Claim account via SMS",
@@ -1891,8 +2019,8 @@
   "scanner_reason_error": "Could not verify this member. Try again.",
   "send_member_offer": "Send an offer to members",
   "send_offer": "Send offer",
-  "offer_title_placeholder": "Offer, e.g. 20% off for members today",
-  "offer_desc_placeholder": "Optional details (validity, conditions)…",
+  "offer_title_placeholder": "Offer Title (e.g. 20% Discount)",
+  "offer_desc_placeholder": "Offer Description (Appears in banner)",
   "offer_verify_hint": "Members redeem by showing their QR — scan it above to confirm before applying the discount.",
   "offer_paid_upsell": "Broadcasting offers to your community members is a paid feature.",
   "upgrade_to_paid": "Upgrade plan",
@@ -4020,7 +4148,6 @@
   "offer": "Offer",
   "offer_delete_confirm": "Are you sure you want to delete this offer permanently?",
   "offer_delete_err": "Error deleting offer: ",
-  "offer_desc_placeholder": "Offer Description (Appears in banner)",
   "offer_desc_placeholder_preview": "Short description will appear here...",
   "offer_freeze_confirm": "Are you sure you want to freeze this offer? It will be removed from the active carousel.",
   "offer_freeze_err": "Error freezing offer: ",
@@ -4031,7 +4158,6 @@
   "offer_republish_confirm": "Are you sure you want to republish this offer?",
   "offer_republish_err": "Could not republish: ",
   "offer_status_label": "Status:",
-  "offer_title_placeholder": "Offer Title (e.g. 20% Discount)",
   "offer_title_placeholder_preview": "Offer Title here...",
   "offer_updated": "✅ Offer updated successfully!",
   "offers": "Offers",
