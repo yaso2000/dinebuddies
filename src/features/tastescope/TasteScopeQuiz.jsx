@@ -14,6 +14,30 @@ function shuffled(arr) {
 }
 
 /**
+ * One tappable image card. Hoisted to module scope so the <img> is not
+ * re-created on every quiz render (which would re-trigger a network/decode).
+ */
+function PoleCard({ pole, src, label, selected, onPick }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(pole)}
+      aria-label={label}
+      style={{
+        position: 'relative', display: 'block', width: '100%', flex: 1, minHeight: 0,
+        border: selected ? '3px solid var(--primary, #ef4444)' : '3px solid transparent',
+        borderRadius: 18, overflow: 'hidden', padding: 0, cursor: 'pointer', background: 'var(--bg-card, #f3f4f6)',
+      }}
+    >
+      <img src={src} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      <span style={{ position: 'absolute', insetInlineStart: 10, bottom: 10, padding: '4px 10px', borderRadius: 999, background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: '0.8rem', fontWeight: 700 }}>
+        {label}
+      </span>
+    </button>
+  );
+}
+
+/**
  * TasteScope quiz: 10 image-pair rounds. Tap = answer (no confirm). Round order
  * and left/right position are randomized once per session to average out bias.
  * Answers are stored as { axisId: poleId }. See TASTESCOPE_SPEC.md §2, §7.
@@ -49,28 +73,6 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
     setIndex(index - 1);
   };
 
-  const Card = ({ pole }) => (
-    <button
-      type="button"
-      onClick={() => pick(pole)}
-      aria-label={t(`tastescope.pole.${pole}`, pole)}
-      style={{
-        position: 'relative', display: 'block', width: '100%', flex: 1, minHeight: 0,
-        border: answers[round.axis.id] === pole ? '3px solid var(--primary, #ef4444)' : '3px solid transparent',
-        borderRadius: 18, overflow: 'hidden', padding: 0, cursor: 'pointer', background: 'var(--bg-card, #f3f4f6)',
-      }}
-    >
-      <img
-        src={round.axis.image[pole]}
-        alt={t(`tastescope.pole.${pole}`, pole)}
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-      />
-      <span style={{ position: 'absolute', insetInlineStart: 10, bottom: 10, padding: '4px 10px', borderRadius: 999, background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: '0.8rem', fontWeight: 700 }}>
-        {t(`tastescope.pole.${pole}`, pole)}
-      </span>
-    </button>
-  );
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxWidth: 520, margin: '0 auto' }}>
       {/* Header: back + progress dots */}
@@ -90,8 +92,16 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
 
       {/* Two images, stacked on phones */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0, padding: '4px 16px calc(20px + env(safe-area-inset-bottom, 0px))' }}>
-        <Card pole={round.poles[0]} />
-        <Card pole={round.poles[1]} />
+        {round.poles.map((pole) => (
+          <PoleCard
+            key={pole}
+            pole={pole}
+            src={round.axis.image[pole]}
+            label={t(`tastescope.pole.${pole}`, pole)}
+            selected={answers[round.axis.id] === pole}
+            onPick={pick}
+          />
+        ))}
       </div>
     </div>
   );

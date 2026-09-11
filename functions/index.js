@@ -737,11 +737,19 @@ function toPublicProfile(userDocData, uid) {
             ? {
                 city: userCity || null,
                 country: userCountry || null,
-                // TasteScope badge on user cards/lists — titleId only (display form
-                // is resolved by gender at render time). See TASTESCOPE_SPEC §6.
+                // TasteScope projection: titleId (badge; display form resolved by
+                // gender at render time) + answers (the 10-key map — compatibility
+                // reads it from here without touching users/{uid}). No history/
+                // timestamps. See TASTESCOPE_SPEC §5–§6.
                 tasteScope:
                     userData.tasteScope && typeof userData.tasteScope === 'object' && userData.tasteScope.titleId
-                        ? { titleId: userData.tasteScope.titleId }
+                        ? {
+                            titleId: userData.tasteScope.titleId,
+                            answers:
+                                userData.tasteScope.answers && typeof userData.tasteScope.answers === 'object'
+                                    ? userData.tasteScope.answers
+                                    : null,
+                        }
                         : null
             }
             : null,
