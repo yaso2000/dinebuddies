@@ -18,12 +18,13 @@ export function titleName(t, titleId, gender, isArabic) {
   return t(`tastescope.title.${titleId}.${g}`, fallback);
 }
 
-/** One-line description in the active language. */
-export function titleDesc(t, titleId, isArabic) {
+/** One-line description in the active language, gendered like the title name. */
+export function titleDesc(t, titleId, gender, isArabic) {
   const title = TITLES_BY_ID[titleId];
   if (!title) return '';
+  const g = genderKey(gender);
   const fallback = isArabic ? title.desc.ar : title.desc.en;
-  return t(`tastescope.title.${titleId}.desc`, fallback);
+  return t(`tastescope.title.${titleId}.desc.${g}`, fallback);
 }
 
 /** Emoji + accent color for a title (both from the data file). */

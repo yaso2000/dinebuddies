@@ -14,7 +14,7 @@ export default function TasteScopeResult({ titleId, runnerUpId, answers, gender,
   const isArabic = (i18n.language || 'ar').startsWith('ar');
 
   const name = titleName(t, titleId, gender, isArabic);
-  const desc = titleDesc(t, titleId, isArabic);
+  const desc = titleDesc(t, titleId, gender, isArabic);
   const { emoji, accent } = titleVisuals(titleId);
   const runnerUpName = runnerUpId ? titleName(t, runnerUpId, gender, isArabic) : '';
 

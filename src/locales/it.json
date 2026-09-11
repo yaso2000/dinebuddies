@@ -446,52 +446,82 @@
       "explorer": {
         "m": "The Explorer",
         "f": "The Explorer",
-        "desc": "Eats to discover — the dish they can't name is the one they order."
+        "desc": {
+          "m": "Eats to discover — the dish they can't name is the one they order.",
+          "f": "Eats to discover — the dish they can't name is the one they order."
+        }
       },
       "authentic": {
-        "m": "The Authentic",
-        "f": "The Authentic",
-        "desc": "Knows what they love — the dish they grew up on has no rival."
+        "m": "The Classic",
+        "f": "The Classic",
+        "desc": {
+          "m": "Knows what they love — the dish they grew up on has no rival.",
+          "f": "Knows what they love — the dish they grew up on has no rival."
+        }
       },
       "connoisseur": {
         "m": "The Connoisseur",
         "f": "The Connoisseur",
-        "desc": "Food is an art served in order — the details are the pleasure."
+        "desc": {
+          "m": "Food is an art served in order — the details are the pleasure.",
+          "f": "Food is an art served in order — the details are the pleasure."
+        }
       },
       "host": {
         "m": "The Host",
         "f": "The Host",
-        "desc": "The table is completed by people, not plates — generosity is a nature, not a choice."
+        "desc": {
+          "m": "The table is completed by people, not plates — generosity is a nature, not a choice.",
+          "f": "The table is completed by people, not plates — generosity is a nature, not a choice."
+        }
       },
       "serene": {
-        "m": "The Serene",
-        "f": "The Serene",
-        "desc": "Eats calmly and mindfully — a little, done well, is enough."
+        "m": "The Zen",
+        "f": "The Zen",
+        "desc": {
+          "m": "Eats calmly and mindfully — a little, done well, is enough.",
+          "f": "Eats calmly and mindfully — a little, done well, is enough."
+        }
       },
       "fiery": {
-        "m": "The Fiery",
-        "f": "The Fiery",
-        "desc": "Wants food to hit hard — nothing is ever \"too much\"."
+        "m": "The Firecracker",
+        "f": "The Firecracker",
+        "desc": {
+          "m": "Wants food to hit hard — nothing is ever \"too much\".",
+          "f": "Wants food to hit hard — nothing is ever \"too much\"."
+        }
       },
       "dreamer": {
-        "m": "The Dreamer",
-        "f": "The Dreamer",
-        "desc": "Food is a reward and a private moment — dessert isn't the end of the meal, it's the point."
+        "m": "The Sweet Tooth",
+        "f": "The Sweet Tooth",
+        "desc": {
+          "m": "Food is a reward and a private moment — dessert isn't the end of the meal, it's the point.",
+          "f": "Food is a reward and a private moment — dessert isn't the end of the meal, it's the point."
+        }
       },
       "disciplined": {
         "m": "The Disciplined",
         "f": "The Disciplined",
-        "desc": "Knows their limits and respects them — the joy is in control, not chaos."
+        "desc": {
+          "m": "Knows their limits and respects them — the joy is in control, not chaos.",
+          "f": "Knows their limits and respects them — the joy is in control, not chaos."
+        }
       },
       "companion": {
         "m": "The Companion",
         "f": "The Companion",
-        "desc": "Eating is an excuse to gather — who they eat with matters more than what."
+        "desc": {
+          "m": "Eating is an excuse to gather — who they eat with matters more than what.",
+          "f": "Eating is an excuse to gather — who they eat with matters more than what."
+        }
       },
       "warm": {
-        "m": "The Warm",
-        "f": "The Warm",
-        "desc": "Loves starting the day around a table — home is their favourite restaurant."
+        "m": "The Homebody",
+        "f": "The Homebody",
+        "desc": {
+          "m": "Loves starting the day around a table — home is their favourite restaurant.",
+          "f": "Loves starting the day around a table — home is their favourite restaurant."
+        }
       }
     }
   },

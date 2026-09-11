@@ -28,7 +28,7 @@ export default function TasteScopeBadge({
   if (!titleId) return null;
 
   const name = titleName(t, titleId, gender, isArabic);
-  const desc = titleDesc(t, titleId, isArabic);
+  const desc = titleDesc(t, titleId, gender, isArabic);
   const { emoji, accent } = titleVisuals(titleId);
 
   if (variant === 'icon') {

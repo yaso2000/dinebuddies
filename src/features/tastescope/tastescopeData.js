@@ -67,7 +67,7 @@ export const TITLES = [
   {
     id: 'authentic',
     signature: ['familiar', 'home', 'simple', 'savory', 'mild'],
-    en: 'The Authentic',
+    en: 'The Classic',
     ar: { m: 'الأصيل', f: 'الأصيلة' },
     desc: {
       ar: 'يعرف ما يحب ولا يحتاج أن يبحث عنه، والطبق الذي كبر عليه لا يُنافَس.',
@@ -103,7 +103,7 @@ export const TITLES = [
   {
     id: 'serene',
     signature: ['solo', 'simple', 'mild', 'morning', 'sugarfree', 'savory'],
-    en: 'The Serene',
+    en: 'The Zen',
     ar: { m: 'الصافي', f: 'الصافية' },
     desc: {
       ar: 'يأكل بهدوء ووعي، والقليل الجيد يكفيه.',
@@ -115,7 +115,7 @@ export const TITLES = [
   {
     id: 'fiery',
     signature: ['spicy', 'sugar', 'casual', 'night', 'shared'],
-    en: 'The Fiery',
+    en: 'The Firecracker',
     ar: { m: 'الناري', f: 'النارية' },
     desc: {
       ar: 'يريد من الطعام إحساساً قوياً، ولا شيء عنده "زيادة عن اللزوم".',
@@ -127,7 +127,7 @@ export const TITLES = [
   {
     id: 'dreamer',
     signature: ['sweet', 'sugar', 'solo', 'casual', 'complex'],
-    en: 'The Dreamer',
+    en: 'The Sweet Tooth',
     ar: { m: 'الحالم', f: 'الحالمة' },
     desc: {
       ar: 'الطعام عنده مكافأة ولحظة خاصة، والحلو ليس آخر الوجبة بل غايتها.',
@@ -163,7 +163,7 @@ export const TITLES = [
   {
     id: 'warm',
     signature: ['morning', 'home', 'sweet', 'group', 'mild'],
-    en: 'The Warm',
+    en: 'The Homebody',
     ar: { m: 'الدافئ', f: 'الدافئة' },
     desc: {
       ar: 'يحب بداية اليوم حول طاولة، والبيت هو مطعمه المفضل.',
