@@ -18,8 +18,8 @@ export default function BusinessProfileTabBar({ profile }) {
   { id: 'menu', label: menuTabLabel, locked: false, hide: !isOwner && !(info.menu?.length > 0) },
   { id: 'services', label: t('tab_services'), locked: false, hide: true },
   { id: 'hours', label: t('tab_hours'), locked: false, hide: !isOwner && !info.hours },
-  { id: 'contact', label: t('tab_contact'), locked: false, hide: !isOwner && !hasContactInfo },
-  { id: 'delivery', label: t('tab_delivery', 'Delivery'), locked: false, hide: !isOwner && !(hasDelivery && isPaid) }];
+  { id: 'delivery', label: t('tab_delivery', 'Delivery'), locked: false, hide: !isOwner && !(hasDelivery && isPaid) },
+  { id: 'contact', label: t('tab_contact'), locked: false, hide: !isOwner && !hasContactInfo }];
 
   const visibleTabs = tabs.filter((tab) => !tab.hide);
   return (

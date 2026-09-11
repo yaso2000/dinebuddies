@@ -690,10 +690,10 @@ export function useBusinessProfile(profileId) {
     if (isOwnerProfile || info.menu?.length > 0) visibleIds.push('menu');
     // Services tab hidden until feature is re-enabled
     if (isOwnerProfile || info.hours) visibleIds.push('hours');
-    if (isOwnerProfile || hasContactInfo) visibleIds.push('contact');
     const hasDelivery = Array.isArray(info.deliveryLinks)
       && info.deliveryLinks.some((l) => String(l?.url || '').trim() && String(l?.name || '').trim());
     if (isOwnerProfile || (hasDelivery && isPaid)) visibleIds.push('delivery');
+    if (isOwnerProfile || hasContactInfo) visibleIds.push('contact');
     // Functional update: do not list activeTab in deps — that pattern re-ran the effect on every tab change.
     setActiveTab((tab) => !visibleIds.includes(tab) ? visibleIds[0] || 'about' : tab);
   }, [isOwnerProfile, business?.businessInfo?.menu?.length, business?.businessInfo?.hours, business?.businessInfo?.phone, business?.businessInfo?.email, business?.businessInfo?.address, business?.businessInfo?.website]);

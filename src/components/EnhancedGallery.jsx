@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { FaImages, FaEdit, FaTimes, FaPlus, FaUtensils, FaBuilding, FaUsers, FaCalendar, FaTrash, FaShare, FaGripVertical, FaImage } from 'react-icons/fa';
+import { FaImages, FaEdit, FaTimes, FaPlus, FaBuilding, FaUsers, FaCalendar, FaTrash, FaShare, FaGripVertical, FaImage } from 'react-icons/fa';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { uploadImage, deleteImage } from '../utils/imageUpload';
@@ -29,8 +29,9 @@ import { shouldBlockDirectImageLoad } from '../utils/avatarUtils';
 import { AppText, AppTextInput } from "./base";
 import { useConfirm } from '../context/ConfirmContext';
 
+// 'food' was removed from the gallery — food belongs in the Menu tab, so the
+// gallery no longer duplicates it with a Food banner/category.
 const CATEGORIES = [
-{ id: 'food', label: 'Food', icon: FaUtensils, color: '#f59e0b' },
 { id: 'venue', label: 'Venue', icon: FaBuilding, color: '#3b82f6' },
 { id: 'team', label: 'Team', icon: FaUsers, color: '#10b981' },
 { id: 'events', label: 'Events', icon: FaCalendar, color: '#8b5cf6' }];
