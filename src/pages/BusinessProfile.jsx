@@ -165,7 +165,7 @@ const BusinessProfile = () => {
                             background: 'var(--bg-card, #f3f4f6)', border: '1px dashed var(--border-color, #e5e7eb)',
                             fontSize: '0.8rem', lineHeight: 1.6, color: 'var(--text-muted, #6b7280)'
                         }}>
-                        💡 {t('business_sections_hint', 'تحكّم بتبويبات صفحتك: أزل ما لا يخصّ نشاطك بزر × على التبويب، وأضِف أي تبويب بزر + في النهاية. التبويبات الفارغة لا تظهر للزبائن، والإزالة لا تحذف المحتوى.')}
+                        💡 {t('business_sections_hint', 'التبويبات الفارغة لا تظهر للزبائن. إن كان قسم لا يخصّ نشاطك، اتركه فارغًا ولن يراه أحد غيرك.')}
                     </AppText>
                 ) : null}
 

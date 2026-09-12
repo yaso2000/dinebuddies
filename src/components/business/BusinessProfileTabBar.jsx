@@ -1,9 +1,6 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaTimes } from 'react-icons/fa';
 import { useBusinessEvents } from '../../hooks/useBusinessEvents';
-import { useBusinessSections } from '../../hooks/useBusinessSections';
-import BusinessSectionPicker from './BusinessSectionPicker';
 import { deliveryLinksReadyToSave } from '../../utils/deliveryLinkMeta';
 import { PROFILE_SECTIONS, sectionLabel, getBusinessTypeConfig } from '../../config/businessProfileConfig';
 
@@ -17,9 +14,9 @@ const itemKind = (it) =>
 
 /**
  * All profile sections as side-by-side tabs (about, menu, services, events,
- * hours, contact, delivery). Open one at a time. Owner-curated: each tab has a ×
- * to remove and a + at the end to add a removed section back (content is kept).
- * A visitor sees a tab only when it is enabled AND has content.
+ * hours, contact, delivery). Open one at a time. Simple rule, no curation UI:
+ * the owner always sees every tab; a visitor sees a tab only when it has content.
+ * To hide a section from customers, the owner just leaves it empty.
  */
 export default function BusinessProfileTabBar({ profile }) {
   const { i18n } = useTranslation();
@@ -29,8 +26,6 @@ export default function BusinessProfileTabBar({ profile }) {
   const info = businessInfo || {};
   const businessType = info.businessType || 'Restaurant';
   const businessId = business?.uid || business?.id || profileId || '';
-
-  const { enabled, disabled, removeSection, addSection } = useBusinessSections(profile);
 
   const items = Array.isArray(info.menu) ? info.menu : [];
   const hasContent = {
@@ -43,9 +38,8 @@ export default function BusinessProfileTabBar({ profile }) {
     delivery: deliveryLinksReadyToSave(profile?.deliveryLinks || info.deliveryLinks).length > 0 && Boolean(isPaid),
   };
 
-  // Enabled sections in canonical order; visitors keep only those with content.
-  const enabledOrdered = PROFILE_SECTIONS.filter((s) => enabled.includes(s));
-  const visible = enabledOrdered.filter((s) => isOwner || hasContent[s]);
+  // Canonical order; visitors keep only sections that have content.
+  const visible = PROFILE_SECTIONS.filter((s) => isOwner || hasContent[s]);
 
   // Resolve/repair the active tab: the type's default when visible, else first.
   useEffect(() => {
@@ -62,44 +56,25 @@ export default function BusinessProfileTabBar({ profile }) {
     <div
       className="ui-tabs ui-tabs--horizontal hide-scrollbar business-profile-tabs"
       style={{
-        display: 'flex', alignItems: 'center', gap: 6,
         border: tc?.accent ? `1px solid color-mix(in srgb, ${tc.accent} 28%, var(--border-color))` : undefined,
         boxShadow: tc?.btnShadow || undefined,
       }}
     >
       {visible.map((tab) => (
-        <span key={tab} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-          <button
-            type="button"
-            className={`ui-tab ui-tab--compact ${activeTab === tab ? 'ui-tab--active' : ''}`}
-            onClick={() => setActiveTab(tab)}
-            style={
-              activeTab === tab && tc?.accent
-                ? { background: tc.footerBg, color: tc.accentText || '#fff', boxShadow: tc.btnShadow }
-                : undefined
-            }
-          >
-            {sectionLabel(tab, businessType, isArabic)}
-          </button>
-          {isOwner && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); removeSection(tab); }}
-              aria-label={isArabic ? 'إزالة التبويب' : 'remove tab'}
-              title={isArabic ? 'إزالة التبويب (يبقى محتواه محفوظًا)' : 'Remove tab (content is kept)'}
-              style={{
-                marginInlineStart: -2, width: 18, height: 18, borderRadius: 999, border: 'none',
-                background: 'transparent', color: 'var(--text-tertiary,#9ca3af)', cursor: 'pointer',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9,
-              }}
-            >
-              <FaTimes />
-            </button>
-          )}
-        </span>
+        <button
+          key={tab}
+          type="button"
+          className={`ui-tab ui-tab--compact ${activeTab === tab ? 'ui-tab--active' : ''}`}
+          onClick={() => setActiveTab(tab)}
+          style={
+            activeTab === tab && tc?.accent
+              ? { background: tc.footerBg, color: tc.accentText || '#fff', boxShadow: tc.btnShadow }
+              : undefined
+          }
+        >
+          {sectionLabel(tab, businessType, isArabic)}
+        </button>
       ))}
-
-      {isOwner && <BusinessSectionPicker disabled={disabled} type={businessType} onAdd={addSection} />}
     </div>
   );
 }

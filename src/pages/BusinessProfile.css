@@ -208,7 +208,11 @@
     position: sticky;
     top: 10px;
     z-index: 50;
-    background: color-mix(in srgb, var(--bg-card) 90%, transparent);
+    /* Opaque + no backdrop-filter: WebKit (iOS) renders the bar's own content
+       blurred/faded when backdrop-filter meets overflow:auto on a sticky element. */
+    background: var(--bg-card);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
     border: 1px solid var(--border-color);
     border-radius: var(--profile-card-radius, 20px);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
