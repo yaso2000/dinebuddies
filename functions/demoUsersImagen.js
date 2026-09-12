@@ -694,4 +694,6 @@ module.exports = {
     generateDemoUserImage,
     generateDemoUserCharacterPair,
     COVER_SCENE_PROMPTS,
+    // Generic Vertex Imagen call (prompt, aspectRatio, kind) → { buffer, mimeType, model }.
+    callVertexImagen,
 };

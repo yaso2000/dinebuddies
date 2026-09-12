@@ -515,6 +515,9 @@ registerStageRooms(exports, { db, admin, enforceCallableRateLimit });
 const { registerAccountDeletion } = require('./accountDeletion');
 registerAccountDeletion(exports, { admin, enforceCallableRateLimit });
 
+const { registerTastescopeGenerate } = require('./tastescopeGenerate');
+registerTastescopeGenerate(exports, { db, admin, enforceCallableRateLimit });
+
 const { registerAccountLifecycle } = require('./accountLifecycle');
 registerAccountLifecycle(exports, { admin });
 
@@ -762,6 +765,7 @@ function toPublicProfile(userDocData, uid) {
                                 userData.tasteScope.answers && typeof userData.tasteScope.answers === 'object'
                                     ? userData.tasteScope.answers
                                     : null,
+                            coverUrl: userData.tasteScope.coverUrl || null,
                         }
                         : null
             }

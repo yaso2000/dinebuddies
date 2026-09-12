@@ -160,6 +160,22 @@
           "f": "Loves starting the day around a table — home is their favourite restaurant."
         }
       }
+    },
+    "gen": {
+      "reading": {
+        "cta": "Generate my reading"
+      },
+      "cover": {
+        "cta": "Generate my cover"
+      },
+      "free": "Free",
+      "price": "{{n}} credits",
+      "balance": "Balance: {{n}}",
+      "generating": "Generating…",
+      "failed": "Couldn't generate — nothing was charged",
+      "insufficient": "Not enough credits",
+      "readMore": "Read the full reading",
+      "regenerate": "Regenerate"
     }
   },
   "🎯 Add-on Offer Slots": "🎯 Ek Teklif Alanları",

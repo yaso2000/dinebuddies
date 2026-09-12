@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AXES, POLE_TO_AXIS } from './tastescopeData';
 import { explainTitle } from './computeTitle';
 import { titleName, titleDesc, titleVisuals } from './titleDisplay';
+import TasteScopeGenerate from './TasteScopeGenerate';
 
 /**
  * TasteScope result screen: gendered title, description, "with a touch of …",
@@ -76,6 +77,9 @@ export default function TasteScopeResult({ titleId, runnerUpId, answers, gender,
           </span>
         ))}
       </div>
+
+      {/* Generate a personal reading + cover (Gemini; first of each is free). */}
+      {saved ? <TasteScopeGenerate /> : null}
 
       <button
         type="button"
