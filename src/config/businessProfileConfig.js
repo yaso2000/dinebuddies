@@ -93,3 +93,50 @@ export function resolveInitialTab(type, nonEmpty = {}) {
 export function visibleTabs(nonEmpty = {}) {
   return BUSINESS_TABS.filter((t) => Boolean(nonEmpty[t]));
 }
+
+// ── Owner-curated sections ──────────────────────────────────────────────────
+// The owner chooses which sections appear (via + / ×). Removing a section only
+// hides it — its content is never deleted, so re-adding restores everything.
+
+/** Header-panel sections (rendered under the hero) + the three tab sections. */
+export const HEADER_SECTIONS = ['about', 'hours', 'contact', 'delivery'];
+export const TAB_SECTIONS = BUSINESS_TABS; // ['menu','services','events']
+
+/** Every curatable section, in canonical order. */
+export const PROFILE_SECTIONS = [...HEADER_SECTIONS, ...TAB_SECTIONS];
+
+export const SECTION_LABELS_AR = {
+  about: 'النبذة', hours: 'الدوام', contact: 'التواصل', delivery: 'التوصيل',
+  menu: 'المنيو', services: 'الخدمات', events: 'المناسبات',
+};
+export const SECTION_LABELS_EN = {
+  about: 'About', hours: 'Hours', contact: 'Contact', delivery: 'Delivery',
+  menu: 'Menu', services: 'Services', events: 'Events',
+};
+
+export function sectionLabel(id, type, isArabic) {
+  if (TAB_SECTIONS.includes(id)) return tabLabel(id, type, isArabic);
+  return (isArabic ? SECTION_LABELS_AR : SECTION_LABELS_EN)[id] || id;
+}
+
+/** Default enabled sections for a type when the owner hasn't curated yet. */
+export function defaultSectionsForType(type) {
+  const t = normalizeBusinessType(type);
+  const base = ['about', 'hours', 'contact'];
+  if (t === 'Night Club') return [...base, 'events'];
+  if (t === 'Hotel') return [...base, 'services'];
+  return [...base, 'delivery', 'menu']; // Restaurant / Cafe / Bar
+}
+
+/**
+ * The owner's enabled sections, in order. Falls back to the type default when
+ * `businessInfo.sections` was never set (existing/imported businesses).
+ */
+export function resolveEnabledSections(businessInfo = {}) {
+  const arr = businessInfo?.sections;
+  if (Array.isArray(arr)) {
+    const clean = arr.filter((s) => PROFILE_SECTIONS.includes(s));
+    if (clean.length) return clean;
+  }
+  return defaultSectionsForType(businessInfo?.businessType);
+}

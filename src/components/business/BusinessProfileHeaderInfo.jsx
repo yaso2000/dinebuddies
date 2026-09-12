@@ -1,40 +1,80 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { FaTimes } from 'react-icons/fa';
 import BusinessProfileAboutTab from './BusinessProfileAboutTab';
 import BusinessProfileHoursTab from './BusinessProfileHoursTab';
 import BusinessProfileContactTab from './BusinessProfileContactTab';
 import BusinessProfileDeliveryTab from './BusinessProfileDeliveryTab';
 import { deliveryLinksReadyToSave } from '../../utils/deliveryLinkMeta';
+import { useBusinessSections } from '../../hooks/useBusinessSections';
+import { sectionLabel, HEADER_SECTIONS } from '../../config/businessProfileConfig';
+
+/** Owner-only remove (×) chrome around a header section. */
+function OwnerSection({ id, type, isOwner, onRemove, isArabic, children }) {
+  if (!isOwner) return children;
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => onRemove(id)}
+        aria-label={`${sectionLabel(id, type, isArabic)} — ${isArabic ? 'إزالة القسم' : 'remove section'}`}
+        title={isArabic ? 'إزالة القسم (يبقى محتواه محفوظًا)' : 'Remove section (content is kept)'}
+        style={{
+          position: 'absolute', top: 6, insetInlineEnd: 6, zIndex: 2,
+          width: 26, height: 26, borderRadius: 999, border: '1px solid var(--border-color,#e5e7eb)',
+          background: 'var(--bg-card,#fff)', color: 'var(--text-secondary,#6b7280)', cursor: 'pointer',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
+        }}
+      >
+        <FaTimes />
+      </button>
+      {children}
+    </div>
+  );
+}
 
 /**
  * Always-visible header block below the hero: about, hours (open-now), contact,
- * delivery — shown for EVERY business type. Empty panels are NOT shown to
- * consumers: each section renders for a visitor only when it has content (owners
- * always see them, to edit). Rendered with a forced active id so the reused tab
- * components display outside the tab system (which now holds only menu/services/
- * events).
+ * delivery — for every business type, in the owner's chosen order. A section is
+ * shown to a VISITOR only when it is enabled AND has content (empty panels never
+ * reach consumers). Owners see every enabled section (to edit) with a × to
+ * remove it; removal only hides the section — content is preserved.
  */
 export default function BusinessProfileHeaderInfo({ profile }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isArabic = (i18n.language || 'ar').startsWith('ar');
   const info = profile?.businessInfo || {};
-  const isOwner = Boolean(profile?.isOwner);
+  const type = info.businessType || 'Restaurant';
+  const { enabled, isOwner, removeSection } = useBusinessSections(profile);
 
-  const hasHours = Boolean(info.hours || info.openingHours || profile?.business?.openingHours);
-  const hasContact = Boolean(info.phone || info.email || info.address || info.website);
   const hasDelivery = deliveryLinksReadyToSave(profile?.deliveryLinks || info.deliveryLinks).length > 0;
-  const showDelivery = isOwner || (hasDelivery && profile?.isPaid);
+  const hasContent = {
+    about: true, // identity/type chip always meaningful
+    hours: Boolean(info.hours || info.openingHours || profile?.business?.openingHours),
+    contact: Boolean(info.phone || info.email || info.address || info.website),
+    delivery: hasDelivery && Boolean(profile?.isPaid),
+  };
+
+  const components = {
+    about: <BusinessProfileAboutTab profile={{ ...profile, activeTab: 'about' }} />,
+    hours: <BusinessProfileHoursTab profile={{ ...profile, activeTab: 'hours' }} />,
+    contact: <BusinessProfileContactTab profile={{ ...profile, activeTab: 'contact' }} />,
+    delivery: <BusinessProfileDeliveryTab profile={{ ...profile, activeTab: 'delivery' }} />,
+  };
+
+  // Header sections in the owner's order (only the header ones).
+  const ordered = enabled.filter((id) => HEADER_SECTIONS.includes(id));
+  const shown = ordered.filter((id) => isOwner || hasContent[id]);
 
   return (
     <div
       className="business-profile-header-info"
       style={{ display: 'flex', flexDirection: 'column', gap: 'var(--profile-stack-gap)' }}
     >
-      {/* Owner guidance: empty lists/sections stay hidden from customers. */}
       {isOwner && (
         <div
           style={{
-            display: 'flex', gap: 8, alignItems: 'flex-start',
-            padding: '10px 14px', borderRadius: 12,
+            display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 14px', borderRadius: 12,
             background: 'var(--bg-card, #f3f4f6)', border: '1px dashed var(--border-color, #e5e7eb)',
             fontSize: '0.82rem', lineHeight: 1.6, color: 'var(--text-secondary, #6b7280)',
           }}
@@ -42,17 +82,18 @@ export default function BusinessProfileHeaderInfo({ profile }) {
           <span style={{ fontSize: 15 }}>💡</span>
           <span>
             {t(
-              'business_empty_sections_hint',
-              'الأقسام والقوائم الفارغة لا تظهر للزبائن. اترك ما لا يخصّ نشاطك فارغًا (مثلًا: نادٍ ليلي بلا منيو أو توصيل).',
+              'business_sections_hint',
+              'أنت تتحكّم بأقسام صفحتك: أزل ما لا يخصّ نشاطك بزر ×، وأضِف أي قسم بزر + في شريط التبويبات. الأقسام الفارغة لا تظهر للزبائن، والإزالة لا تحذف المحتوى.',
             )}
           </span>
         </div>
       )}
 
-      <BusinessProfileAboutTab profile={{ ...profile, activeTab: 'about' }} />
-      {(isOwner || hasHours) && <BusinessProfileHoursTab profile={{ ...profile, activeTab: 'hours' }} />}
-      {(isOwner || hasContact) && <BusinessProfileContactTab profile={{ ...profile, activeTab: 'contact' }} />}
-      {showDelivery && <BusinessProfileDeliveryTab profile={{ ...profile, activeTab: 'delivery' }} />}
+      {shown.map((id) => (
+        <OwnerSection key={id} id={id} type={type} isOwner={isOwner} onRemove={removeSection} isArabic={isArabic}>
+          {components[id]}
+        </OwnerSection>
+      ))}
     </div>
   );
 }

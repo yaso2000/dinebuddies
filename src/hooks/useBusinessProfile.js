@@ -107,6 +107,7 @@ async function loadBusinessFromPublicProfileProjection(profileId) {
         // Menu tab (owners read the full users doc, so they alone saw it).
         menu: Array.isArray(bp.menu) ? bp.menu : [],
         menuListingType: bp.menuListingType || 'menu',
+        ...(Array.isArray(bp.sections) ? { sections: bp.sections } : {}),
         gallery: Array.isArray(bp.gallery) ? bp.gallery : [],
         deliveryLinks: Array.isArray(bp.deliveryLinks) ? bp.deliveryLinks : [],
         googleMapsUri: bp.googleMapsUri || '',

@@ -664,6 +664,8 @@ function toPublicProfile(userDocData, uid) {
             // is legacy (the switch was removed) — kept for older clients only.
             menu: Array.isArray(businessInfo.menu) ? businessInfo.menu : [],
             menuListingType: asTrimmedString(businessInfo.menuListingType) || 'menu',
+            // Owner-curated visible sections (empty/removed sections stay hidden).
+            sections: Array.isArray(businessInfo.sections) ? businessInfo.sections : null,
             gallery: Array.isArray(businessInfo.gallery) ? businessInfo.gallery : [],
             // Header/contact + delivery so guests (who read this projection) get them.
             phone: asTrimmedString(businessInfo.phone) || asTrimmedString(userData.phone) || null,
