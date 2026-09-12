@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { FaChevronLeft } from 'react-icons/fa';
+import { FaChevronLeft, FaExpand, FaCompress } from 'react-icons/fa';
 import { AXES } from './tastescopeData';
 
 /** Fisher–Yates shuffle (returns a new array). */
@@ -103,6 +103,40 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
     return () => clearTimeout(timer);
   }, [isPortrait]);
 
+  // Force landscape on demand (works even when the device's auto-rotate is off):
+  // fullscreen the quiz, then lock the screen orientation to landscape. On
+  // platforms that don't support it (e.g. iOS Safari) it silently no-ops and
+  // physical rotation still works.
+  const rootRef = useRef(null);
+  const [forcedLandscape, setForcedLandscape] = useState(false);
+  const canForceLandscape =
+    typeof window !== 'undefined' &&
+    (window.screen?.orientation?.lock || document.documentElement.requestFullscreen);
+
+  const toggleLandscape = async () => {
+    try {
+      if (!forcedLandscape) {
+        const el = rootRef.current || document.documentElement;
+        if (el.requestFullscreen) await el.requestFullscreen();
+        if (window.screen?.orientation?.lock) await window.screen.orientation.lock('landscape');
+        setForcedLandscape(true);
+      } else {
+        try { window.screen?.orientation?.unlock?.(); } catch { /* ignore */ }
+        if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+        setForcedLandscape(false);
+      }
+    } catch {
+      // Unsupported (iOS Safari, desktop) — physical rotation is the fallback.
+      setForcedLandscape(false);
+    }
+  };
+
+  // Release the lock / fullscreen when leaving the quiz.
+  useEffect(() => () => {
+    try { window.screen?.orientation?.unlock?.(); } catch { /* ignore */ }
+    try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch { /* ignore */ }
+  }, []);
+
   const round = rounds[index];
   const total = rounds.length;
 
@@ -119,7 +153,7 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
   };
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'var(--bg-body)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+    <div ref={rootRef} style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'var(--bg-body)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
       <style>{`
         @keyframes tsTiltPhone { 0%,12% { transform: rotate(0deg); } 45%,60% { transform: rotate(-90deg); } 92%,100% { transform: rotate(0deg); } }
         @keyframes tsNudgeFade { 0% { opacity: 0; } 8% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
@@ -138,6 +172,17 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
         <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-secondary, #6b7280)', minWidth: 42, textAlign: 'center' }}>
           {t('tastescope.round.progress', { n: index + 1, defaultValue: `${index + 1} / ${total}` })}
         </span>
+        {canForceLandscape && (
+          <button
+            type="button"
+            onClick={toggleLandscape}
+            aria-label={t('tastescope.round.landscape', 'عرض أفقي أكبر')}
+            title={t('tastescope.round.landscape', 'عرض أفقي أكبر')}
+            style={{ background: 'transparent', border: 'none', color: 'var(--primary, #ef4444)', fontSize: '1.05rem', cursor: 'pointer', padding: 4 }}
+          >
+            {forcedLandscape ? <FaCompress /> : <FaExpand />}
+          </button>
+        )}
       </div>
 
       {/* Prompt (hidden in landscape to give images the full height) */}
