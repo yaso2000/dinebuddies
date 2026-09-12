@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { doc, updateDoc } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
-import app from '../../firebase/config';
+import app, { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getSpendableCredits } from '../../utils/walletCredits';
@@ -19,7 +20,7 @@ export default function TasteScopeGenerate() {
   const { t, i18n } = useTranslation();
   const isArabic = (i18n.language || 'ar').startsWith('ar');
   const locale = isArabic ? 'ar' : 'en';
-  const { userProfile } = useAuth();
+  const { userProfile, currentUser } = useAuth();
   const { showToast } = useToast();
 
   const ts = userProfile?.tasteScope || null;
@@ -27,9 +28,11 @@ export default function TasteScopeGenerate() {
   const readingText = gen.reading?.text || '';
   const coverUrl = ts?.coverUrl || gen.cover?.url || '';
   const balance = getSpendableCredits(userProfile);
+  const isAccountCover = Boolean(coverUrl) && userProfile?.cover_photo === coverUrl;
 
   const [busy, setBusy] = useState(null); // 'reading' | 'cover' | null
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [settingCover, setSettingCover] = useState(false);
 
   if (!ts?.titleId) return null;
 
@@ -65,14 +68,48 @@ export default function TasteScopeGenerate() {
     return p === 0 ? t('tastescope.gen.free', 'مجاناً') : t('tastescope.gen.price', { n: p, defaultValue: `${p} كريدت` });
   };
 
+  const setAsAccountCover = async () => {
+    if (!coverUrl || settingCover || isAccountCover) return;
+    const uid = userProfile?.uid || currentUser?.uid;
+    if (!uid) return;
+    setSettingCover(true);
+    try {
+      await updateDoc(doc(db, 'users', uid), { cover_photo: coverUrl });
+      showToast(t('tastescope.gen.coverSet', 'صارت غلاف حسابك ✓'), 'success');
+    } catch {
+      showToast(t('tastescope.gen.coverSetFailed', 'تعذّر التعيين'), 'error');
+    } finally {
+      setSettingCover(false);
+    }
+  };
+
   const firstLine = readingText.split('\n').map((s) => s.trim()).filter(Boolean)[0] || '';
 
   return (
     <div dir={i18n.dir()} style={{ display: 'flex', flexDirection: 'column', gap: 12, margin: '4px 0 20px' }}>
       {/* Cover preview (16:9) once generated */}
       {coverUrl ? (
-        <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', borderRadius: 16, overflow: 'hidden', background: 'var(--bg-card,#f3f4f6)' }}>
-          <img src={coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', borderRadius: 16, overflow: 'hidden', background: 'var(--bg-card,#f3f4f6)' }}>
+            <img src={coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          </div>
+          <button
+            type="button"
+            onClick={setAsAccountCover}
+            disabled={settingCover || isAccountCover}
+            style={{
+              alignSelf: 'stretch', padding: '10px 12px', borderRadius: 12,
+              border: `1px solid ${isAccountCover ? 'var(--border-color,#e5e7eb)' : 'var(--primary,#ef4444)'}`,
+              background: 'transparent', color: isAccountCover ? 'var(--text-tertiary,#9ca3af)' : 'var(--primary,#ef4444)',
+              fontWeight: 800, fontSize: '0.9rem', cursor: (settingCover || isAccountCover) ? 'default' : 'pointer',
+            }}
+          >
+            {settingCover
+              ? t('tastescope.gen.coverSetting', 'جارٍ التعيين…')
+              : isAccountCover
+                ? t('tastescope.gen.coverIsSet', 'غلاف حسابك ✓')
+                : t('tastescope.gen.setAsCover', 'اجعلها غلاف حسابي')}
+          </button>
         </div>
       ) : null}
 

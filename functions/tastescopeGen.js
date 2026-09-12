@@ -107,13 +107,25 @@ function countWords(text) {
   return String(text || '').trim().split(/\s+/).filter(Boolean).length;
 }
 
+// Whole-word matchers. A naive substring check false-rejects innocent words
+// (دين ⊂ المدينة، صحي ⊂ صحيح، مرض ⊂ تمرض). Require a non-letter boundary on
+// each side, allowing only the attached Arabic clitic prefixes (ال، و، ب، ل…).
+const AR_PREFIXES = '(?:وال|فال|بال|كال|لل|ال|و|ف|ب|ك|ل)?';
+// Attached pronoun / plural / feminine suffixes (ك، كم، ه، ها، نا، ية، ات، ة)
+// and an optional English plural -s. Left boundary still blocks mid-word hits.
+const SUFFIXES = '(?:كم|كن|هم|هن|نا|ها|ية|ات|ك|ه|ي|ة|s)?';
+const BANNED_MATCHERS = BANNED_WORDS.map((w) => {
+  const esc = w.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\p{L}])${AR_PREFIXES}${esc}${SUFFIXES}(?![\\p{L}])`, 'u');
+});
+
 /** Validate a reading. @returns {{ ok:boolean, reason?:string }} */
 function validateReading(text) {
   const clean = String(text || '').trim();
   const words = countWords(clean);
   if (words < 90 || words > 220) return { ok: false, reason: 'length' };
   const lower = clean.toLowerCase();
-  if (BANNED_WORDS.some((w) => lower.includes(w.toLowerCase()))) return { ok: false, reason: 'banned_word' };
+  if (BANNED_MATCHERS.some((re) => re.test(lower))) return { ok: false, reason: 'banned_word' };
   return { ok: true };
 }
 

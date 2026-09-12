@@ -1415,7 +1415,12 @@
       "failed": "Couldn't generate — nothing was charged",
       "insufficient": "Not enough credits",
       "readMore": "Read the full reading",
-      "regenerate": "Regenerate"
+      "regenerate": "Regenerate",
+      "setAsCover": "Set as my cover",
+      "coverSetting": "Setting…",
+      "coverIsSet": "Your cover ✓",
+      "coverSet": "Set as your cover ✓",
+      "coverSetFailed": "Could not set cover"
     }
   },
   "try_again": "Try again",

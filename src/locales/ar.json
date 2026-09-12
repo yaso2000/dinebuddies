@@ -1372,7 +1372,12 @@
       "failed": "تعذّر الإنشاء، لم يُخصم شيء",
       "insufficient": "رصيدك لا يكفي",
       "readMore": "اقرأ القراءة كاملة",
-      "regenerate": "أنشئ من جديد"
+      "regenerate": "أنشئ من جديد",
+      "setAsCover": "اجعلها غلاف حسابي",
+      "coverSetting": "جارٍ التعيين…",
+      "coverIsSet": "غلاف حسابك ✓",
+      "coverSet": "صارت غلاف حسابك ✓",
+      "coverSetFailed": "تعذّر التعيين"
     }
   },
   "user_blocked": "تم الحظر. لن ترى بطاقاته بعد الآن.",

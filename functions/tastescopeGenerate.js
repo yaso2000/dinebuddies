@@ -31,7 +31,7 @@ function resolveProjectId() {
 }
 
 /** Gemini plain-text generation with a system instruction (Vertex REST). */
-async function generateReadingText(system, user, { temperature = 0.9, maxOutputTokens = 700 } = {}) {
+async function generateReadingText(system, user, { temperature = 0.9, maxOutputTokens = 1024 } = {}) {
   const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
   const client = await auth.getClient();
   const url = `https://${GEMINI_LOCATION}-aiplatform.googleapis.com/v1/projects/${resolveProjectId()}/locations/${GEMINI_LOCATION}/publishers/google/models/${GEMINI_MODEL}:generateContent`;
@@ -39,12 +39,23 @@ async function generateReadingText(system, user, { temperature = 0.9, maxOutputT
     url,
     method: 'POST',
     data: {
-      systemInstruction: { parts: [{ text: system }] },
+      systemInstruction: { role: 'system', parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: user }] }],
-      generationConfig: { temperature, maxOutputTokens },
+      // gemini-2.5-flash "thinks" by default and spends thinking tokens out of
+      // maxOutputTokens — with a tight budget the visible text comes back empty.
+      // Disable thinking and give the answer room (Arabic tokenizes heavily).
+      generationConfig: { temperature, maxOutputTokens, thinkingConfig: { thinkingBudget: 0 } },
     },
   });
-  return String(res?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+  const cand = res?.data?.candidates?.[0];
+  const text = (cand?.content?.parts || []).map((p) => p?.text || '').join('').trim();
+  if (!text) {
+    const why = cand?.finishReason || res?.data?.promptFeedback?.blockReason || 'empty';
+    const e = new Error(`no reading text (${why})`);
+    e.code = 'reading-empty';
+    throw e;
+  }
+  return text;
 }
 
 /** Generate a cover with "Nano Banana" (Gemini 2.5 Flash Image), Vertex REST. */
