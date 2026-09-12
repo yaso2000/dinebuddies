@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaPlus, FaEdit, FaTrash, FaRegCalendarAlt, FaUserPlus } from 'react-icons/fa';
@@ -56,6 +56,35 @@ export default function BusinessProfileEventsTab({ profile }) {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const sheetRef = useRef(null);
+
+  // Keep the editor sheet above the on-screen keyboard (fields were hidden
+  // behind it on iOS/Android): pin its height/offset to the visual viewport.
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    const el = sheetRef.current;
+    if (!editing || !vv || !el) return undefined;
+    const apply = () => {
+      const keyboard = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      el.style.maxHeight = `${Math.round(vv.height - 12)}px`;
+      el.style.marginBottom = `${Math.round(keyboard)}px`;
+    };
+    apply();
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    return () => {
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+    };
+  }, [editing]);
+
+  /** Scroll the just-focused input into the visible area above the keyboard. */
+  const scrollFieldIntoView = (e) => {
+    const target = e.target;
+    setTimeout(() => {
+      try { target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch { /* ignore */ }
+    }, 250);
+  };
 
   if (profile?.activeTab !== 'events') return null;
 
@@ -200,7 +229,7 @@ export default function BusinessProfileEventsTab({ profile }) {
 
       {editing && (
         <div onClick={() => !saving && setEditing(null)} style={overlay}>
-          <div onClick={(e) => e.stopPropagation()} dir={i18n.dir()} style={sheet}>
+          <div ref={sheetRef} onClick={(e) => e.stopPropagation()} onFocusCapture={scrollFieldIntoView} dir={i18n.dir()} style={sheet}>
             <h3 style={{ margin: '0 0 12px', fontWeight: 800 }}>{editing === 'new' ? t('business_event_add', 'أضف مناسبة') : t('business_event_edit', 'تعديل المناسبة')}</h3>
             <label style={lbl}>{t('business_event_title', 'العنوان')} *</label>
             <input style={inp} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
@@ -251,6 +280,6 @@ const chip = { padding: '4px 10px', borderRadius: 999, background: 'var(--bg-bod
 const btnPrimary = { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 12, border: 'none', background: 'var(--primary,#ef4444)', color: '#fff', fontWeight: 800, fontSize: '0.92rem', cursor: 'pointer' };
 const btnGhost = { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 12, border: '1px solid var(--border-color,#e5e7eb)', background: 'transparent', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer' };
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' };
-const sheet = { width: '100%', maxWidth: 520, maxHeight: '92dvh', overflowY: 'auto', background: 'var(--bg-card,#fff)', borderRadius: '20px 20px 0 0', padding: '20px 20px calc(24px + env(safe-area-inset-bottom,0px))' };
+const sheet = { width: '100%', maxWidth: 520, maxHeight: '92dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: 'var(--bg-card,#fff)', borderRadius: '20px 20px 0 0', padding: '20px 20px calc(80px + env(safe-area-inset-bottom,0px))' };
 const lbl = { display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary,#6b7280)', margin: '10px 0 4px' };
 const inp = { width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border-color,#e5e7eb)', background: 'var(--bg-body,#fff)', color: 'var(--text-main)', fontSize: '0.92rem' };
