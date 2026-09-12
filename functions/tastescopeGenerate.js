@@ -15,6 +15,8 @@ const G = require('./tastescopeGen');
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
 const GEMINI_LOCATION = process.env.GEMINI_VERTEX_LOCATION?.trim() || 'us-central1';
+// "Nano Banana" — Gemini 2.5 Flash Image (primary cover generator).
+const GEMINI_IMAGE_MODEL = process.env.VERTEX_GEMINI_IMAGE_MODEL?.trim() || 'gemini-2.5-flash-image';
 const GEN_ENABLED = process.env.TASTESCOPE_GEN_ENABLED !== 'false'; // default: on
 const PRICE = { reading: 10, cover: 25 };
 const DAILY_LIMIT = 5; // successful generations per kind per user per day
@@ -45,6 +47,42 @@ async function generateReadingText(system, user, { temperature = 0.9, maxOutputT
   return String(res?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 }
 
+/** Generate a cover with "Nano Banana" (Gemini 2.5 Flash Image), Vertex REST. */
+async function callNanoBanana(prompt) {
+  const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+  const client = await auth.getClient();
+  const body = { contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['IMAGE'] } };
+  // Gemini image models are region-picky; try the configured location then global.
+  const locations = GEMINI_LOCATION === 'global' ? ['global', 'us-central1'] : [GEMINI_LOCATION, 'global'];
+  let lastErr = 'nano-banana failed';
+  for (const loc of locations) {
+    const host = loc === 'global' ? 'aiplatform.googleapis.com' : `${loc}-aiplatform.googleapis.com`;
+    const url = `https://${host}/v1/projects/${resolveProjectId()}/locations/${loc}/publishers/google/models/${GEMINI_IMAGE_MODEL}:generateContent`;
+    try {
+      const res = await client.request({ url, method: 'POST', data: body });
+      const parts = res?.data?.candidates?.[0]?.content?.parts || [];
+      const img = parts.find((p) => p?.inlineData?.data)?.inlineData;
+      if (img?.data) return { buffer: Buffer.from(img.data, 'base64'), mimeType: img.mimeType || 'image/png' };
+      lastErr = `no image @${loc}`;
+    } catch (err) {
+      lastErr = `${err?.response?.data?.error?.message || err?.message || 'error'} @${loc}`;
+    }
+  }
+  const e = new Error(lastErr);
+  e.code = 'nano-banana-failed';
+  throw e;
+}
+
+/** Cover generation: Nano Banana first, Vertex Imagen as fallback. */
+async function generateCoverImage(prompt) {
+  try {
+    return await callNanoBanana(prompt);
+  } catch (err) {
+    console.warn('[tastescopeGenerate] Nano Banana failed, Imagen fallback:', err && err.message);
+    return callVertexImagen(prompt, '16:9', 'cover');
+  }
+}
+
 let visionClient = null;
 function getVisionClient() {
   if (!visionClient) visionClient = new vision.ImageAnnotatorClient();
@@ -62,7 +100,8 @@ async function moderateImageBytes(buffer) {
 /** Upload the cover to the (unguarded) tastescope/ prefix; return a token URL. */
 async function uploadCover(admin, uid, buffer, mimeType) {
   const bucket = admin.storage().bucket();
-  const ext = mimeType === 'image/webp' ? 'webp' : 'jpg';
+  const mt = String(mimeType || 'image/jpeg');
+  const ext = mt.includes('png') ? 'png' : mt.includes('webp') ? 'webp' : 'jpg';
   const path = `tastescope/covers/${uid}/${Date.now()}.${ext}`;
   const token = crypto.randomUUID();
   await bucket.file(path).save(buffer, {
@@ -143,9 +182,9 @@ function registerTastescopeGenerate(exports, { db, admin, enforceCallableRateLim
         payload = { text };
       } else {
         const prompt = G.buildCoverPrompt({ titleId: ts.titleId, answers: ts.answers, countryCode });
-        let img = await callVertexImagen(prompt, '16:9', 'cover');
+        let img = await generateCoverImage(prompt);
         if (!(await moderateImageBytes(img.buffer))) {
-          img = await callVertexImagen(prompt, '16:9', 'cover'); // retry once
+          img = await generateCoverImage(prompt); // retry once
           if (!(await moderateImageBytes(img.buffer))) return { ok: false, reason: 'generation_failed' };
         }
         const up = await uploadCover(admin, uid, img.buffer, img.mimeType || 'image/jpeg');
