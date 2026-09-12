@@ -10,10 +10,13 @@ import BusinessProfileCardPreviewOverlay from '../components/business/BusinessPr
 import BusinessProfileHero from '../components/business/BusinessProfileHero';
 import BusinessProfileOffers from '../components/business/BusinessProfileOffers';
 import BusinessProfileTabBar from '../components/business/BusinessProfileTabBar';
-import BusinessProfileHeaderInfo from '../components/business/BusinessProfileHeaderInfo';
+import BusinessProfileAboutTab from '../components/business/BusinessProfileAboutTab';
 import BusinessProfileMenuTab from '../components/business/BusinessProfileMenuTab';
 import BusinessProfileServicesTab from '../components/business/BusinessProfileServicesTab';
 import BusinessProfileEventsTab from '../components/business/BusinessProfileEventsTab';
+import BusinessProfileHoursTab from '../components/business/BusinessProfileHoursTab';
+import BusinessProfileContactTab from '../components/business/BusinessProfileContactTab';
+import BusinessProfileDeliveryTab from '../components/business/BusinessProfileDeliveryTab';
 import BusinessProfileReviewModal from '../components/business/BusinessProfileReviewModal';
 import BusinessProfileInfoModals from '../components/business/BusinessProfileInfoModals';
 import BusinessProfileMiscModals from '../components/business/BusinessProfileMiscModals';
@@ -139,9 +142,6 @@ const BusinessProfile = () => {
             {/* --- Hero Design --- */}
             <BusinessProfileHero profile={profile} />
 
-            {/* Always-visible header: about, hours/open-now, contact, delivery */}
-            <BusinessProfileHeaderInfo profile={profile} />
-
             {/* Active special offers for this business */}
             <BusinessProfileOffers profileId={profileId} isOwner={isOwner} />
 
@@ -156,15 +156,32 @@ const BusinessProfile = () => {
           marginBottom: 'var(--profile-stack-gap)'
         }}>
 
+                {/* Owner-only hint about curating sections */}
+                {isOwner ? (
+                    <AppText
+                        as="p"
+                        style={{
+                            margin: 0, padding: '8px 12px', borderRadius: 12,
+                            background: 'var(--bg-card, #f3f4f6)', border: '1px dashed var(--border-color, #e5e7eb)',
+                            fontSize: '0.8rem', lineHeight: 1.6, color: 'var(--text-muted, #6b7280)'
+                        }}>
+                        💡 {t('business_sections_hint', 'تحكّم بتبويبات صفحتك: أزل ما لا يخصّ نشاطك بزر × على التبويب، وأضِف أي تبويب بزر + في النهاية. التبويبات الفارغة لا تظهر للزبائن، والإزالة لا تحذف المحتوى.')}
+                    </AppText>
+                ) : null}
+
                 {/* Tabs Navigation — scrollable on mobile */}
                 <BusinessProfileTabBar profile={profile} />
             </div>
 
-            {/* Content Area — three tabs only: menu, services, events */}
+            {/* Content Area — one section open at a time (tab-driven) */}
             <div className="profile-content" style={{ padding: 'var(--profile-content-padding)' }}>
+                <BusinessProfileAboutTab profile={profile} />
                 <BusinessProfileMenuTab profile={profile} />
                 <BusinessProfileServicesTab profile={profile} />
                 <BusinessProfileEventsTab profile={profile} />
+                <BusinessProfileHoursTab profile={profile} />
+                <BusinessProfileContactTab profile={profile} />
+                <BusinessProfileDeliveryTab profile={profile} />
             </div>
 
             <BusinessProfileReviewModal profile={profile} />

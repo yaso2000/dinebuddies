@@ -98,12 +98,11 @@ export function visibleTabs(nonEmpty = {}) {
 // The owner chooses which sections appear (via + / ×). Removing a section only
 // hides it — its content is never deleted, so re-adding restores everything.
 
-/** Header-panel sections (rendered under the hero) + the three tab sections. */
-export const HEADER_SECTIONS = ['about', 'hours', 'contact', 'delivery'];
+/** The three list tabs. */
 export const TAB_SECTIONS = BUSINESS_TABS; // ['menu','services','events']
 
-/** Every curatable section, in canonical order. */
-export const PROFILE_SECTIONS = [...HEADER_SECTIONS, ...TAB_SECTIONS];
+/** Every section is a side-by-side tab, in this display order. */
+export const PROFILE_SECTIONS = ['about', 'menu', 'services', 'events', 'hours', 'contact', 'delivery'];
 
 export const SECTION_LABELS_AR = {
   about: 'النبذة', hours: 'الدوام', contact: 'التواصل', delivery: 'التوصيل',

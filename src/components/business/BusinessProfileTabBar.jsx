@@ -4,7 +4,8 @@ import { FaTimes } from 'react-icons/fa';
 import { useBusinessEvents } from '../../hooks/useBusinessEvents';
 import { useBusinessSections } from '../../hooks/useBusinessSections';
 import BusinessSectionPicker from './BusinessSectionPicker';
-import { TAB_SECTIONS, tabLabel, resolveInitialTab } from '../../config/businessProfileConfig';
+import { deliveryLinksReadyToSave } from '../../utils/deliveryLinkMeta';
+import { PROFILE_SECTIONS, sectionLabel, getBusinessTypeConfig } from '../../config/businessProfileConfig';
 
 /** Item kind, tolerant of pre-migration data. */
 const itemKind = (it) =>
@@ -15,15 +16,15 @@ const itemKind = (it) =>
       : 'dish';
 
 /**
- * The three-tab bar (Menu / Services / Events), owner-curated. A tab shows to a
- * VISITOR only when it is enabled AND has content; owners see every enabled tab
- * (each with a × to remove) plus a + to add any removed section back. The config
- * decides which tab opens first, falling back to the first available one.
+ * All profile sections as side-by-side tabs (about, menu, services, events,
+ * hours, contact, delivery). Open one at a time. Owner-curated: each tab has a ×
+ * to remove and a + at the end to add a removed section back (content is kept).
+ * A visitor sees a tab only when it is enabled AND has content.
  */
 export default function BusinessProfileTabBar({ profile }) {
   const { i18n } = useTranslation();
   const isArabic = (i18n.language || 'ar').startsWith('ar');
-  const { businessInfo, isOwner, activeTab, setActiveTab, tc, business, profileId } = profile;
+  const { businessInfo, isOwner, activeTab, setActiveTab, tc, business, profileId, isPaid } = profile;
 
   const info = businessInfo || {};
   const businessType = info.businessType || 'Restaurant';
@@ -33,25 +34,28 @@ export default function BusinessProfileTabBar({ profile }) {
 
   const items = Array.isArray(info.menu) ? info.menu : [];
   const hasContent = {
+    about: Boolean(info.description || (info.gallery?.length) || (info.galleryEnhanced?.length)),
     menu: items.some((it) => itemKind(it) === 'dish'),
     services: items.some((it) => itemKind(it) === 'service'),
     events: useBusinessEvents(businessId, { includeEnded: false }).hasUpcoming,
+    hours: Boolean(info.hours || info.openingHours || business?.openingHours),
+    contact: Boolean(info.phone || info.email || info.address || info.website),
+    delivery: deliveryLinksReadyToSave(profile?.deliveryLinks || info.deliveryLinks).length > 0 && Boolean(isPaid),
   };
 
-  // Enabled tab-sections, then (for visitors) only those with content.
-  const enabledTabs = TAB_SECTIONS.filter((t) => enabled.includes(t));
-  const visible = enabledTabs.filter((t) => isOwner || hasContent[t]);
+  // Enabled sections in canonical order; visitors keep only those with content.
+  const enabledOrdered = PROFILE_SECTIONS.filter((s) => enabled.includes(s));
+  const visible = enabledOrdered.filter((s) => isOwner || hasContent[s]);
 
-  // Resolve/repair the active tab.
+  // Resolve/repair the active tab: the type's default when visible, else first.
   useEffect(() => {
     if (visible.length === 0) return;
     if (!visible.includes(activeTab)) {
-      const nonEmpty = { menu: visible.includes('menu'), services: visible.includes('services'), events: visible.includes('events') };
-      setActiveTab(resolveInitialTab(businessType, nonEmpty) || visible[0]);
+      const preferred = getBusinessTypeConfig(businessType).defaultTab;
+      setActiveTab(visible.includes(preferred) ? preferred : visible[0]);
     }
   }, [activeTab, visible.join(','), businessType]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Nothing to show and not an owner → no tab bar at all.
   if (visible.length === 0 && !isOwner) return null;
 
   return (
@@ -75,7 +79,7 @@ export default function BusinessProfileTabBar({ profile }) {
                 : undefined
             }
           >
-            {tabLabel(tab, businessType, isArabic)}
+            {sectionLabel(tab, businessType, isArabic)}
           </button>
           {isOwner && (
             <button
@@ -84,9 +88,9 @@ export default function BusinessProfileTabBar({ profile }) {
               aria-label={isArabic ? 'إزالة التبويب' : 'remove tab'}
               title={isArabic ? 'إزالة التبويب (يبقى محتواه محفوظًا)' : 'Remove tab (content is kept)'}
               style={{
-                marginInlineStart: -4, width: 20, height: 20, borderRadius: 999, border: 'none',
+                marginInlineStart: -2, width: 18, height: 18, borderRadius: 999, border: 'none',
                 background: 'transparent', color: 'var(--text-tertiary,#9ca3af)', cursor: 'pointer',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9,
               }}
             >
               <FaTimes />
