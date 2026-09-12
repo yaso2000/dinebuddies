@@ -31,6 +31,9 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
   /** "Who suits you?" + "Real or AI?" + "Guess my sign?" swipe decks — fullscreen. */
   const isSuitabilityDeckRoute = path === '/suitability' || path === '/realornai' || path === '/zodiac';
 
+  /** TasteScope quiz — its own focused fullscreen screen (no app chrome). */
+  const isTasteScopeRoute = path === '/tastescope';
+
   /**
    * Connect swipe deck (/search) — its own filter toolbar replaces the app top
    * header, but the bottom tab bar stays. The list view (/search/list) keeps
@@ -81,10 +84,10 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
     showConversationSidebar,
     isNotificationsRoute,
     /** Hide mobile app header (conversation / deck / browse screens have their own bar). */
-    hideMobileAppHeader: (isConversationScreen && !isCommunityFullscreen) || isSuitabilityDeckRoute || isRealOrAiCreateRoute || isBrowseHeaderlessRoute,
+    hideMobileAppHeader: (isConversationScreen && !isCommunityFullscreen) || isSuitabilityDeckRoute || isRealOrAiCreateRoute || isBrowseHeaderlessRoute || isTasteScopeRoute,
     /** Hide bottom tab bar — chat rooms + suitability deck only; browse screens keep it. */
-    hideBottomNav: isConversationScreen || isSuitabilityDeckRoute || isRealOrAiCreateRoute,
+    hideBottomNav: isConversationScreen || isSuitabilityDeckRoute || isRealOrAiCreateRoute || isTasteScopeRoute,
     /** app-main--chat: fixed height / no outer scroll for threads + deck. */
-    useChatMainLayout: isConversationScreen || isSuitabilityDeckRoute,
+    useChatMainLayout: isConversationScreen || isSuitabilityDeckRoute || isTasteScopeRoute,
   };
 }

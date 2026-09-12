@@ -15,7 +15,9 @@ function shuffled(arr) {
 
 /**
  * One tappable image card. Hoisted to module scope so the <img> is not
- * re-created on every quiz render (which would re-trigger a network/decode).
+ * re-created on every quiz render. The image is shown WHOLE (object-fit:
+ * contain) — never cropped — and carries no visible caption; the photo is the
+ * question. The pole name stays as an accessible label only.
  */
 function PoleCard({ pole, src, label, selected, onPick }) {
   return (
@@ -24,16 +26,23 @@ function PoleCard({ pole, src, label, selected, onPick }) {
       onClick={() => onPick(pole)}
       aria-label={label}
       style={{
-        position: 'relative', display: 'block', width: '100%', flex: 1, minHeight: 0,
-        border: selected ? '3px solid var(--primary, #ef4444)' : '3px solid transparent',
-        borderRadius: 18, overflow: 'hidden', padding: 0, cursor: 'pointer', background: 'var(--bg-card, #f3f4f6)',
+        display: 'block', width: '100%', flex: 1, minHeight: 0,
+        border: selected ? '3px solid var(--primary, #ef4444)' : '3px solid var(--border-color, #e5e7eb)',
+        borderRadius: 18, overflow: 'hidden', padding: 0, cursor: 'pointer', background: 'var(--bg-body, #f7f7f7)',
       }}
     >
-      <img src={src} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-      <span style={{ position: 'absolute', insetInlineStart: 10, bottom: 10, padding: '4px 10px', borderRadius: 999, background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: '0.8rem', fontWeight: 700 }}>
-        {label}
-      </span>
+      <img src={src} alt={label} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
     </button>
+  );
+}
+
+/** Small phone glyph that tips portrait → landscape (for the rotate nudge). */
+function RotatePhoneIcon() {
+  return (
+    <svg width="46" height="46" viewBox="0 0 24 24" fill="none" style={{ animation: 'tsTiltPhone 1.5s ease-in-out infinite' }}>
+      <rect x="8" y="2.5" width="8" height="19" rx="2" stroke="#fff" strokeWidth="1.7" />
+      <line x1="10.6" y1="18.8" x2="13.4" y2="18.8" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -55,12 +64,7 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState({});
 
-  // Optional "rotate for a bigger view" hint: square images get cropped in the
-  // narrow portrait panels. Show a dismissible tip in portrait only; remember
-  // dismissal per viewer. Never blocks the quiz.
-  const [tipDismissed, setTipDismissed] = useState(() => {
-    try { return localStorage.getItem('tastescope_rotate_tip') === '1'; } catch { return false; }
-  });
+  // Track orientation so the rotate nudge only shows in portrait.
   const [isPortrait, setIsPortrait] = useState(() => {
     try { return window.matchMedia('(orientation: portrait)').matches; } catch { return true; }
   });
@@ -77,11 +81,16 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
       };
     } catch { return undefined; }
   }, []);
-  const showRotateTip = isPortrait && !tipDismissed;
-  const dismissTip = () => {
-    setTipDismissed(true);
-    try { localStorage.setItem('tastescope_rotate_tip', '1'); } catch { /* ignore */ }
-  };
+
+  // Brief centered "rotate your phone" nudge: appears on entry (portrait only)
+  // for ~2s, then fades out on its own. Purely a hint — never blocks the quiz.
+  const [showRotate, setShowRotate] = useState(false);
+  useEffect(() => {
+    if (!isPortrait) { setShowRotate(false); return undefined; }
+    setShowRotate(true);
+    const timer = setTimeout(() => setShowRotate(false), 2200);
+    return () => clearTimeout(timer);
+  }, [isPortrait]);
 
   const round = rounds[index];
   const total = rounds.length;
@@ -89,11 +98,8 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
   const pick = (pole) => {
     const next = { ...answers, [round.axis.id]: pole };
     setAnswers(next);
-    if (index + 1 >= total) {
-      onComplete(next);
-    } else {
-      setIndex(index + 1);
-    }
+    if (index + 1 >= total) onComplete(next);
+    else setIndex(index + 1);
   };
 
   const goBack = () => {
@@ -102,9 +108,14 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxWidth: 520, margin: '0 auto' }}>
-      {/* Header: back + progress dots */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 'calc(12px + env(safe-area-inset-top, 0px)) 16px 10px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxWidth: 720, margin: '0 auto', boxSizing: 'border-box' }}>
+      <style>{`
+        @keyframes tsTiltPhone { 0%,12% { transform: rotate(0deg); } 45%,60% { transform: rotate(-90deg); } 92%,100% { transform: rotate(0deg); } }
+        @keyframes tsNudgeFade { 0% { opacity: 0; } 12% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+      `}</style>
+
+      {/* Header: back + progress dots + counter */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 'calc(12px + env(safe-area-inset-top, 0px)) 16px 8px' }}>
         <button type="button" onClick={goBack} aria-label={t('back', 'رجوع')} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', fontSize: '1.2rem', cursor: 'pointer', padding: 4 }}>
           <FaChevronLeft style={{ transform: rtl ? 'scaleX(-1)' : 'none' }} />
         </button>
@@ -118,26 +129,13 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
         </span>
       </div>
 
-      {/* Optional rotate hint (portrait only, dismissible) */}
-      {showRotateTip && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 16px 6px', padding: '8px 12px', borderRadius: 12, background: 'var(--bg-card, #f3f4f6)', border: '1px solid var(--border-color, #e5e7eb)' }}>
-          <span style={{ fontSize: 16 }}>🔄</span>
-          <span style={{ flex: 1, fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary, #6b7280)', lineHeight: 1.5 }}>
-            {t('tastescope.round.rotateHint', 'دوّر جهازك أفقيًا لعرض الصور أكبر وأوضح (اختياري)')}
-          </span>
-          <button
-            type="button"
-            onClick={dismissTip}
-            aria-label={rtl ? 'إغلاق' : 'Dismiss'}
-            style={{ background: 'transparent', border: 'none', color: 'var(--text-tertiary, #9ca3af)', fontSize: '0.95rem', cursor: 'pointer', padding: 2, lineHeight: 1 }}
-          >
-            ✕
-          </button>
-        </div>
-      )}
+      {/* Prompt */}
+      <div style={{ textAlign: 'center', fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)', padding: '2px 16px 8px' }}>
+        {t('tastescope.round.tapPrompt', 'اضغط ما تشتهيه')}
+      </div>
 
-      {/* Two images side by side — better for free, unbiased choice. */}
-      <div style={{ display: 'flex', flexDirection: 'row', gap: 12, flex: 1, minHeight: 0, padding: '4px 16px calc(20px + env(safe-area-inset-bottom, 0px))' }}>
+      {/* Two whole images, side by side */}
+      <div style={{ display: 'flex', flexDirection: 'row', gap: 12, flex: 1, minHeight: 0, padding: '2px 16px 8px' }}>
         {round.poles.map((pole) => (
           <PoleCard
             key={pole}
@@ -149,6 +147,23 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
           />
         ))}
       </div>
+
+      {/* Footer reassurance */}
+      <div style={{ textAlign: 'center', fontSize: '0.82rem', color: 'var(--text-tertiary, #9ca3af)', padding: '0 16px calc(14px + env(safe-area-inset-bottom, 0px))' }}>
+        {t('tastescope.round.noWrong', 'لا توجد إجابة خاطئة')}
+      </div>
+
+      {/* Centered rotate nudge — shows ~2s on entry (portrait), then fades away */}
+      {showRotate && isPortrait && (
+        <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 60 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '18px 22px', borderRadius: 18, background: 'rgba(0,0,0,0.72)', animation: 'tsNudgeFade 2.2s ease forwards' }}>
+            <RotatePhoneIcon />
+            <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 700 }}>
+              {t('tastescope.round.rotateHint', 'أدِر جهازك أفقيًا لعرض أكبر')}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

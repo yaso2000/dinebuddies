@@ -379,7 +379,9 @@
     },
     "round": {
       "progress": "{{n}} / 10",
-      "rotateHint": "Rotate your phone sideways for larger, fuller images (optional)"
+      "rotateHint": "Rotate for a bigger view",
+      "tapPrompt": "Tap what you crave",
+      "noWrong": "There's no wrong answer"
     },
     "result": {
       "youAre": "Your taste title",
