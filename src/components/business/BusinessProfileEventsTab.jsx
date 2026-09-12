@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaPlus, FaEdit, FaTrash, FaRegCalendarAlt, FaUserPlus } from 'react-icons/fa';
@@ -143,10 +143,9 @@ export default function BusinessProfileEventsTab({ profile }) {
     });
   };
 
-  const sorted = useMemo(
-    () => [...events].sort((a, b) => toMillis(a.startAt) - toMillis(b.startAt)),
-    [events],
-  );
+  // Plain computation (NOT a hook) — it runs after the early return above, so it
+  // must not be useMemo (that would be a conditional hook and crash on tab switch).
+  const sorted = [...events].sort((a, b) => toMillis(a.startAt) - toMillis(b.startAt));
 
   // Visitor with no upcoming events: render nothing (the tab is hidden anyway).
   if (!isOwner && sorted.length === 0) return null;
