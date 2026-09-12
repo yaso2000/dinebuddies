@@ -378,7 +378,8 @@
       "retake": "Retake"
     },
     "round": {
-      "progress": "{{n}} / 10"
+      "progress": "{{n}} / 10",
+      "rotateHint": "Rotate your phone sideways for larger, fuller images (optional)"
     },
     "result": {
       "youAre": "Your taste title",

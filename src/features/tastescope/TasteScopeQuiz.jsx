@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaChevronLeft } from 'react-icons/fa';
 import { AXES } from './tastescopeData';
@@ -55,6 +55,34 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState({});
 
+  // Optional "rotate for a bigger view" hint: square images get cropped in the
+  // narrow portrait panels. Show a dismissible tip in portrait only; remember
+  // dismissal per viewer. Never blocks the quiz.
+  const [tipDismissed, setTipDismissed] = useState(() => {
+    try { return localStorage.getItem('tastescope_rotate_tip') === '1'; } catch { return false; }
+  });
+  const [isPortrait, setIsPortrait] = useState(() => {
+    try { return window.matchMedia('(orientation: portrait)').matches; } catch { return true; }
+  });
+  useEffect(() => {
+    let mq;
+    try {
+      mq = window.matchMedia('(orientation: portrait)');
+      const onChange = (e) => setIsPortrait(e.matches);
+      if (mq.addEventListener) mq.addEventListener('change', onChange);
+      else mq.addListener(onChange);
+      return () => {
+        if (mq.removeEventListener) mq.removeEventListener('change', onChange);
+        else mq.removeListener(onChange);
+      };
+    } catch { return undefined; }
+  }, []);
+  const showRotateTip = isPortrait && !tipDismissed;
+  const dismissTip = () => {
+    setTipDismissed(true);
+    try { localStorage.setItem('tastescope_rotate_tip', '1'); } catch { /* ignore */ }
+  };
+
   const round = rounds[index];
   const total = rounds.length;
 
@@ -89,6 +117,24 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
           {t('tastescope.round.progress', { n: index + 1, defaultValue: `${index + 1} / ${total}` })}
         </span>
       </div>
+
+      {/* Optional rotate hint (portrait only, dismissible) */}
+      {showRotateTip && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 16px 6px', padding: '8px 12px', borderRadius: 12, background: 'var(--bg-card, #f3f4f6)', border: '1px solid var(--border-color, #e5e7eb)' }}>
+          <span style={{ fontSize: 16 }}>🔄</span>
+          <span style={{ flex: 1, fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary, #6b7280)', lineHeight: 1.5 }}>
+            {t('tastescope.round.rotateHint', 'دوّر جهازك أفقيًا لعرض الصور أكبر وأوضح (اختياري)')}
+          </span>
+          <button
+            type="button"
+            onClick={dismissTip}
+            aria-label={rtl ? 'إغلاق' : 'Dismiss'}
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-tertiary, #9ca3af)', fontSize: '0.95rem', cursor: 'pointer', padding: 2, lineHeight: 1 }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Two images side by side — better for free, unbiased choice. */}
       <div style={{ display: 'flex', flexDirection: 'row', gap: 12, flex: 1, minHeight: 0, padding: '4px 16px calc(20px + env(safe-area-inset-bottom, 0px))' }}>
