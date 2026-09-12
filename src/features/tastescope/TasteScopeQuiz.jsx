@@ -26,12 +26,22 @@ function PoleCard({ pole, src, label, selected, onPick }) {
       onClick={() => onPick(pole)}
       aria-label={label}
       style={{
-        display: 'block', width: '100%', flex: 1, minHeight: 0,
-        border: selected ? '3px solid var(--primary, #ef4444)' : '3px solid var(--border-color, #e5e7eb)',
-        borderRadius: 18, overflow: 'hidden', padding: 0, cursor: 'pointer', background: 'var(--bg-body, #f7f7f7)',
+        flex: '1 1 0', minWidth: 0, height: '100%',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
       }}
     >
-      <img src={src} alt={label} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+      {/* Square source image, shown whole (no frame). Centered both axes; sized
+          to fit its half — grows in landscape. Selection = a subtle ring only. */}
+      <img
+        src={src}
+        alt={label}
+        style={{
+          maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto',
+          objectFit: 'contain', display: 'block', borderRadius: 16,
+          boxShadow: selected ? '0 0 0 3px var(--primary, #ef4444)' : 'none',
+        }}
+      />
     </button>
   );
 }
@@ -134,8 +144,8 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
         {t('tastescope.round.tapPrompt', 'اضغط ما تشتهيه')}
       </div>
 
-      {/* Two whole images, side by side */}
-      <div style={{ display: 'flex', flexDirection: 'row', gap: 12, flex: 1, minHeight: 0, padding: '2px 16px 8px' }}>
+      {/* Two whole square images, side by side, centered — no frame */}
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, flex: 1, minHeight: 0, padding: '2px 16px 8px' }}>
         {round.poles.map((pole) => (
           <PoleCard
             key={pole}
