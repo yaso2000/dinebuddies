@@ -88,6 +88,6 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
     /** Hide bottom tab bar — chat rooms + suitability deck only; browse screens keep it. */
     hideBottomNav: isConversationScreen || isSuitabilityDeckRoute || isRealOrAiCreateRoute || isTasteScopeRoute,
     /** app-main--chat: fixed height / no outer scroll for threads + deck. */
-    useChatMainLayout: isConversationScreen || isSuitabilityDeckRoute || isTasteScopeRoute,
+    useChatMainLayout: isConversationScreen || isSuitabilityDeckRoute,
   };
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { FaChevronLeft } from 'react-icons/fa';
 import { AXES } from './tastescopeData';
@@ -117,8 +118,8 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
     setIndex(index - 1);
   };
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxWidth: 720, margin: '0 auto', boxSizing: 'border-box' }}>
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'var(--bg-body)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
       <style>{`
         @keyframes tsTiltPhone { 0%,12% { transform: rotate(0deg); } 45%,60% { transform: rotate(-90deg); } 92%,100% { transform: rotate(0deg); } }
         @keyframes tsNudgeFade { 0% { opacity: 0; } 8% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
@@ -139,10 +140,12 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
         </span>
       </div>
 
-      {/* Prompt */}
-      <div style={{ textAlign: 'center', fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)', padding: '2px 16px 8px' }}>
-        {t('tastescope.round.tapPrompt', 'اضغط ما تشتهيه')}
-      </div>
+      {/* Prompt (hidden in landscape to give images the full height) */}
+      {isPortrait && (
+        <div style={{ textAlign: 'center', fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)', padding: '2px 16px 8px' }}>
+          {t('tastescope.round.tapPrompt', 'اضغط ما تشتهيه')}
+        </div>
+      )}
 
       {/* Two whole square images, side by side, centered — no frame */}
       <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, flex: 1, minHeight: 0, padding: '2px 16px 8px' }}>
@@ -158,10 +161,12 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
         ))}
       </div>
 
-      {/* Footer reassurance */}
-      <div style={{ textAlign: 'center', fontSize: '0.82rem', color: 'var(--text-tertiary, #9ca3af)', padding: '0 16px calc(14px + env(safe-area-inset-bottom, 0px))' }}>
-        {t('tastescope.round.noWrong', 'لا توجد إجابة خاطئة')}
-      </div>
+      {/* Footer reassurance (hidden in landscape) */}
+      {isPortrait && (
+        <div style={{ textAlign: 'center', fontSize: '0.82rem', color: 'var(--text-tertiary, #9ca3af)', padding: '0 16px calc(14px + env(safe-area-inset-bottom, 0px))' }}>
+          {t('tastescope.round.noWrong', 'لا توجد إجابة خاطئة')}
+        </div>
+      )}
 
       {/* Centered rotate nudge — shows ~2s on entry (portrait), then fades away */}
       {showRotate && isPortrait && (
@@ -174,6 +179,7 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
