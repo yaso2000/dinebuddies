@@ -98,7 +98,7 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
   useEffect(() => {
     if (!isPortrait) { setShowRotate(false); return undefined; }
     setShowRotate(true);
-    const timer = setTimeout(() => setShowRotate(false), 2200);
+    const timer = setTimeout(() => setShowRotate(false), 3000);
     return () => clearTimeout(timer);
   }, [isPortrait]);
 
@@ -121,7 +121,7 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxWidth: 720, margin: '0 auto', boxSizing: 'border-box' }}>
       <style>{`
         @keyframes tsTiltPhone { 0%,12% { transform: rotate(0deg); } 45%,60% { transform: rotate(-90deg); } 92%,100% { transform: rotate(0deg); } }
-        @keyframes tsNudgeFade { 0% { opacity: 0; } 12% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+        @keyframes tsNudgeFade { 0% { opacity: 0; } 8% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
       `}</style>
 
       {/* Header: back + progress dots + counter */}
@@ -166,7 +166,7 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
       {/* Centered rotate nudge — shows ~2s on entry (portrait), then fades away */}
       {showRotate && isPortrait && (
         <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 60 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '18px 22px', borderRadius: 18, background: 'rgba(0,0,0,0.72)', animation: 'tsNudgeFade 2.2s ease forwards' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '18px 22px', borderRadius: 18, background: 'rgba(0,0,0,0.72)', animation: 'tsNudgeFade 3s ease forwards' }}>
             <RotatePhoneIcon />
             <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 700 }}>
               {t('tastescope.round.rotateHint', 'أدِر جهازك أفقيًا لعرض أكبر')}
