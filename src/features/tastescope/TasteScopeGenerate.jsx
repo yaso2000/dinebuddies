@@ -12,7 +12,7 @@ import { shareNativeOrFallback } from '../../utils/shareNativeOrFallback';
 import { fetchPostImageFile } from '../../utils/sharePostMedia';
 import { getAppOrigin } from '../../utils/appOrigin';
 import InternalShareModal from '../../components/InternalShareModal';
-import { titleName } from './titleDisplay';
+import { titleName, titleVisuals } from './titleDisplay';
 
 const functions = getFunctions(app, 'us-central1');
 const PRICE = { reading: 10, cover: 25 };
@@ -40,6 +40,7 @@ export default function TasteScopeGenerate() {
   const uid = userProfile?.uid || currentUser?.uid || '';
   // Title name only (no emoji) — for the cover overlay and share text.
   const name = ts?.titleId ? titleName(t, ts.titleId, normalizeUserGender(userProfile), isArabic) : '';
+  const accent = ts?.titleId ? titleVisuals(ts.titleId).accent : 'var(--primary,#ef4444)';
 
   const [busy, setBusy] = useState(null); // 'reading' | 'cover' | null
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -134,9 +135,7 @@ export default function TasteScopeGenerate() {
           <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', borderRadius: 16, overflow: 'hidden', background: 'var(--bg-card,#f3f4f6)' }}>
             <img src={coverUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
             {name ? (
-              <div style={{ position: 'absolute', insetInlineStart: 0, insetInlineEnd: 0, bottom: 0, padding: '26px 18px 14px', display: 'flex', background: 'linear-gradient(to top, rgba(0,0,0,0.62), rgba(0,0,0,0))', pointerEvents: 'none' }}>
-                <span style={{ color: '#fff', fontWeight: 900, fontSize: '1.5rem', lineHeight: 1.15, textShadow: '0 2px 10px rgba(0,0,0,0.65)' }}>{name}</span>
-              </div>
+              <span style={{ position: 'absolute', top: 10, insetInlineStart: 10, maxWidth: '78%', padding: '5px 12px', borderRadius: 999, background: accent, color: '#fff', fontWeight: 900, fontSize: '0.95rem', lineHeight: 1.15, boxShadow: '0 2px 8px rgba(0,0,0,0.35)', pointerEvents: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
             ) : null}
           </div>
           <button

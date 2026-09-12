@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { titleName, titleDesc, titleVisuals } from './titleDisplay';
+import TasteScopeGenerate from './TasteScopeGenerate';
 
 /**
  * TasteScope title badge. Two variants (TASTESCOPE_SPEC.md §7):
@@ -68,12 +69,16 @@ export default function TasteScopeBadge({
           <div
             onClick={(e) => e.stopPropagation()}
             dir={i18n.dir()}
-            style={{ width: '100%', maxWidth: 520, background: 'var(--bg-card, #fff)', borderRadius: '20px 20px 0 0', padding: '20px 22px calc(26px + env(safe-area-inset-bottom, 0px))', textAlign: 'center' }}
+            style={{ width: '100%', maxWidth: 520, maxHeight: '88dvh', overflowY: 'auto', background: 'var(--bg-card, #fff)', borderRadius: '20px 20px 0 0', padding: '20px 22px calc(26px + env(safe-area-inset-bottom, 0px))', textAlign: 'center' }}
           >
             <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--border-color, #e5e7eb)', margin: '0 auto 16px' }} />
             <div style={{ fontSize: '2.6rem', lineHeight: 1, marginBottom: 8 }}>{emoji}</div>
             <h3 style={{ fontSize: '1.35rem', fontWeight: 900, margin: '0 0 8px', color: accent }}>{name}</h3>
             <p style={{ fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: 1.7, margin: '0 0 18px' }}>{desc}</p>
+
+            {/* Own profile: the generated reading + cover live here so they're
+                always reachable after the quiz is closed. */}
+            {showCta && <TasteScopeGenerate />}
 
             {showCta && (
               <button

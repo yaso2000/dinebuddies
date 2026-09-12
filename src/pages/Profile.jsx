@@ -16,7 +16,7 @@ import { useTheme } from '../context/ThemeContext';
 import { FaSun, FaMoon } from 'react-icons/fa';
 import { getSafeAvatar, getGenderBorderColor, isUserUploadedPhotoUrl, isProviderAccountPhotoUrl, buildAvatarPersistFields, getAvatarUrlOrNull, isGeneratedAvatarUrl } from '../utils/avatarUtils';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
-import { TasteScopeOwnBadge, TasteScopeCtaCard } from '../features/tastescope';
+import { TasteScopeOwnBadge, TasteScopeCtaCard, TasteScopeCoverName } from '../features/tastescope';
 import { goToLogin } from '../utils/goToLogin';
 import { normalizeBusinessTier } from '../utils/businessSubscription';
 import { isPrivateInvitationDraft } from '../utils/socialInvitationDraft';
@@ -762,6 +762,7 @@ const Profile = () => {
               editable={isEditing} /> :
 
             null}
+                        {isOwnProfile && <TasteScopeCoverName />}
                         <div className="profile-header-actions">
                         {/* Help & Support Button */}
                         {isOwnProfile &&
