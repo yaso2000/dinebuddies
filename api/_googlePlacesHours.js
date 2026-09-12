@@ -84,29 +84,11 @@ export function normalizeGooglePlaceCategories(types) {
 }
 
 /**
- * @param {string[]} types
- */
-export function mapGoogleTypesToBusinessType(types) {
-    if (!Array.isArray(types) || types.length === 0) return 'Restaurant';
-    const lower = new Set(types.map((x) => String(x).toLowerCase()));
-    if (lower.has('night_club')) return 'Night Club';
-    if (lower.has('lodging') || lower.has('hotel') || lower.has('resort_hotel')) return 'Hotel';
-    if (lower.has('bar')) return 'Bar';
-    if (lower.has('cafe') || lower.has('bakery')) return 'Cafe';
-    if (lower.has('restaurant') || lower.has('meal_takeaway') || lower.has('meal_delivery')) return 'Restaurant';
-    // Fast food / food trucks are listed under Restaurants in the app (no separate type).
-    if (lower.has('fast_food') || lower.has('food_truck')) return 'Restaurant';
-    return 'Restaurant';
-}
-
-/**
- * Strict allow-list gate: resolve a Google place to ONE of the app's five venue
- * categories, or null if it is none of them. Unlike mapGoogleTypesToBusinessType
- * (which defaults everything to "Restaurant"), this returns null for unsupported
- * places (e.g. a barber shop) so callers can refuse to ingest them.
- *
- * "Flexible" matching: a place qualifies if ANY of its Google types maps to one
- * of the five categories.
+ * Resolve a Google place to ONE of the five app categories, or null if none.
+ * Fixed conflict priority (business spec): Night Club, Bar, Hotel, Cafe,
+ * Restaurant — first match wins. bar → Bar · night_club → Night Club ·
+ * lodging/hotel → Hotel · cafe/coffee_shop/bakery → Cafe · other food → Restaurant.
+ * `bar` matches exact types only (never substring) so "barber_shop" is not a Bar.
  * @param {string[]|null|undefined} types
  * @returns {'Restaurant'|'Cafe'|'Bar'|'Night Club'|'Hotel'|null}
  */
@@ -119,16 +101,23 @@ export function resolveAllowedVenueCategory(types) {
     const anyRestaurant = lower.some((x) => x.includes('restaurant'));
 
     if (has('night_club')) return 'Night Club';
+    if (has('bar') || has('pub') || has('wine_bar') || has('cocktail_bar') || has('brewery')) return 'Bar';
     if (has('lodging') || has('hotel') || has('resort_hotel') || has('motel') || has('guest_house') || has('bed_and_breakfast')) {
         return 'Hotel';
     }
-    // Restaurant family BEFORE cafe/bar so fast-food chains (which Google also
-    // tags "cafe") classify as Restaurant, not Cafe.
+    if (has('cafe') || has('coffee_shop') || has('cafeteria') || has('bakery')) return 'Cafe';
     if (anyRestaurant || has('meal_takeaway') || has('meal_delivery') || has('fast_food') || has('food_truck')) {
         return 'Restaurant';
     }
-    // Exact matches only for bar — never substring (avoid "barber_shop" → Bar).
-    if (has('bar') || has('pub') || has('wine_bar') || has('cocktail_bar') || has('brewery')) return 'Bar';
-    if (has('cafe') || has('coffee_shop') || has('cafeteria') || has('bakery')) return 'Cafe';
     return null;
+}
+
+/**
+ * Same five-category priority, but never null — unmatched/food places default to
+ * Restaurant. Used by the importer to always land on one of the five types.
+ * @param {string[]} types
+ * @returns {'Restaurant'|'Cafe'|'Bar'|'Night Club'|'Hotel'}
+ */
+export function mapGoogleTypesToBusinessType(types) {
+    return resolveAllowedVenueCategory(types) || 'Restaurant';
 }

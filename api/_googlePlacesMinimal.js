@@ -180,12 +180,30 @@ export async function fetchGooglePlaceMinimal(placeId, options = {}) {
         }
     }
 
+    // Gallery: the cover plus up to two more of the first three Google photos,
+    // each downloaded and re-hosted on our Storage (Google photo URLs expire).
+    const galleryImages = [];
+    if (isFirebaseStorageMediaUrl(coverImageUrl)) {
+        galleryImages.push({ url: coverImageUrl, path: coverImageStoragePath || null });
+    }
+    if (!skipPhotoUpload && Array.isArray(base.photoNames)) {
+        for (const name of base.photoNames.slice(1)) {
+            try {
+                const up = await uploadGooglePlacePhotoToStorage(id, name, referer);
+                if (isFirebaseStorageMediaUrl(up.url)) galleryImages.push({ url: up.url, path: up.path || null });
+            } catch (err) {
+                console.warn('[fetchGooglePlaceMinimal] gallery photo upload failed', id, String(err));
+            }
+        }
+    }
+
     return {
         ...base,
         googlePhotoReference,
         coverImageUrl,
         coverImageStoragePath,
         coverImageFromFirebase: isFirebaseStorageMediaUrl(coverImageUrl),
+        galleryImages,
         previewCoverImage: null,
         photoError,
     };

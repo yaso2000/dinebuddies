@@ -172,7 +172,12 @@ const CreateSocialInvitation = () => {
   const [coverMediaStash, setCoverMediaStash] = useState([]);
 
   const [formData, setFormData] = useState({
-    title: restaurantData ? `${t('dinner_at')} ${restaurantData.name}` : '',
+    title: location.state?.eventTitle
+      ? String(location.state.eventTitle)
+      : restaurantData ? `${t('dinner_at')} ${restaurantData.name}` : '',
+    // Link to a business Event when the invite was started from an event card.
+    eventId: location.state?.eventId || editInvitation?.eventId || null,
+    businessId: location.state?.businessId || restaurantData?.id || null,
     restaurantId: restaurantData?.id || null,
     restaurantName: restaurantData?.name || '',
     city: restaurantData?.city || '',

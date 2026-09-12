@@ -1537,6 +1537,26 @@ service cloud.firestore {
       allow delete: if isAdminOrPanelStaff();
     }
 
+    // ============================================
+    // BUSINESS EVENTS (standalone; power the Events tab)
+    // ============================================
+    match /business_events/{eventId} {
+      // Active events are public; owner + admin/staff can also read inactive ones.
+      allow read: if resource.data.isActive == true ||
+                     (isSignedIn() && resource.data.ownerId == request.auth.uid) ||
+                     isAdminOrPanelStaff();
+      // The owning business (ownerId == uid) creates its own events; admins may
+      // create for any business (e.g. imported venues that have no real owner).
+      allow create: if isAdminOrPanelStaff() ||
+                       (isSignedIn() &&
+                        request.resource.data.ownerId == request.auth.uid &&
+                        request.resource.data.businessId is string);
+      allow update, delete: if isAdminOrPanelStaff() ||
+                               (isSignedIn() &&
+                                resource.data.ownerId == request.auth.uid &&
+                                request.resource.data.ownerId == resource.data.ownerId);
+    }
+
     // Discovery feed profile likes ("Liked You" source data)
     match /discovery_likes/{likeId} {
       // getDoc on a missing doc has resource == null — must allow before checking fields.

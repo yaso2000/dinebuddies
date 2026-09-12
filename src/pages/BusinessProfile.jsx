@@ -10,12 +10,10 @@ import BusinessProfileCardPreviewOverlay from '../components/business/BusinessPr
 import BusinessProfileHero from '../components/business/BusinessProfileHero';
 import BusinessProfileOffers from '../components/business/BusinessProfileOffers';
 import BusinessProfileTabBar from '../components/business/BusinessProfileTabBar';
-import BusinessProfileAboutTab from '../components/business/BusinessProfileAboutTab';
+import BusinessProfileHeaderInfo from '../components/business/BusinessProfileHeaderInfo';
 import BusinessProfileMenuTab from '../components/business/BusinessProfileMenuTab';
 import BusinessProfileServicesTab from '../components/business/BusinessProfileServicesTab';
-import BusinessProfileHoursTab from '../components/business/BusinessProfileHoursTab';
-import BusinessProfileContactTab from '../components/business/BusinessProfileContactTab';
-import BusinessProfileDeliveryTab from '../components/business/BusinessProfileDeliveryTab';
+import BusinessProfileEventsTab from '../components/business/BusinessProfileEventsTab';
 import BusinessProfileReviewModal from '../components/business/BusinessProfileReviewModal';
 import BusinessProfileInfoModals from '../components/business/BusinessProfileInfoModals';
 import BusinessProfileMiscModals from '../components/business/BusinessProfileMiscModals';
@@ -141,6 +139,9 @@ const BusinessProfile = () => {
             {/* --- Hero Design --- */}
             <BusinessProfileHero profile={profile} />
 
+            {/* Always-visible header: about, hours/open-now, contact, delivery */}
+            <BusinessProfileHeaderInfo profile={profile} />
+
             {/* Active special offers for this business */}
             <BusinessProfileOffers profileId={profileId} isOwner={isOwner} />
 
@@ -159,14 +160,11 @@ const BusinessProfile = () => {
                 <BusinessProfileTabBar profile={profile} />
             </div>
 
-            {/* Content Area */}
+            {/* Content Area — three tabs only: menu, services, events */}
             <div className="profile-content" style={{ padding: 'var(--profile-content-padding)' }}>
-                <BusinessProfileAboutTab profile={profile} />
                 <BusinessProfileMenuTab profile={profile} />
                 <BusinessProfileServicesTab profile={profile} />
-                <BusinessProfileHoursTab profile={profile} />
-                <BusinessProfileContactTab profile={profile} />
-                <BusinessProfileDeliveryTab profile={profile} />
+                <BusinessProfileEventsTab profile={profile} />
             </div>
 
             <BusinessProfileReviewModal profile={profile} />

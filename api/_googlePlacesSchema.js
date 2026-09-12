@@ -8,11 +8,22 @@ export const GOOGLE_PLACE_IMPORT_FIELD_MASK = [
     'displayName',
     'internationalPhoneNumber',
     'websiteUri',
+    'googleMapsUri',
     'formattedAddress',
     'addressComponents',
     'location',
     'regularOpeningHours',
     'types',
+    'primaryType',
+    'editorialSummary',
+    'priceLevel',
+    'rating',
+    'userRatingCount',
+    'delivery',
+    'takeout',
+    'dineIn',
+    'curbsidePickup',
+    'reservable',
     'photos',
     'photos.name',
 ].join(',');
@@ -134,11 +145,24 @@ export function mapGooglePlaceResourceToDetails(placeId, data, derived = {}) {
     const fromComponents = parseGoogleAddressComponents(data.addressComponents);
     const fromAddress = parseCityCountryFromGoogleAddress(address);
 
+    // First up to three photo resource names (uploaded to our Storage at ingest).
+    const photoNames = Array.isArray(data.photos)
+        ? data.photos
+              .map((p) => (p && typeof p === 'object' && 'name' in p ? String(p.name || '').trim() : ''))
+              .filter(Boolean)
+              .slice(0, 3)
+        : [];
+
+    const editorialSummary = textFromGooglePlaceField(data.editorialSummary);
+    const rating = Number(data.rating);
+    const userRatingCount = Number(data.userRatingCount);
+
     return {
         googlePlaceId: id,
         name: textFromGooglePlaceField(data.displayName) || id,
         phone: String(data.internationalPhoneNumber ?? '').trim(),
         website: String(data.websiteUri ?? '').trim(),
+        googleMapsUri: String(data.googleMapsUri ?? '').trim(),
         address,
         city: fromComponents.city || fromAddress.city,
         country: fromComponents.country || fromAddress.country,
@@ -149,6 +173,19 @@ export function mapGooglePlaceResourceToDetails(placeId, data, derived = {}) {
         openNow,
         categories: derived.categories ?? [],
         businessType: derived.businessType ?? 'Restaurant',
+        // Shared fields used to build the bio + the profile header for every type.
+        editorialSummary: editorialSummary || '',
+        priceLevel: String(data.priceLevel ?? '').trim(),
+        rating: Number.isFinite(rating) ? rating : null,
+        userRatingCount: Number.isFinite(userRatingCount) ? userRatingCount : null,
+        serviceFlags: {
+            delivery: data.delivery === true,
+            takeout: data.takeout === true,
+            dineIn: data.dineIn === true,
+            curbsidePickup: data.curbsidePickup === true,
+            reservable: data.reservable === true,
+        },
+        photoNames,
     };
 }
 

@@ -6,6 +6,7 @@ import { DEFAULT_RESTAURANT_COVER_PLACEHOLDER } from './_googlePlacesMinimal.js'
 import { buildPublicProfileFromRestaurant } from './_restaurantPublicProfile.js';
 import { verifyStorageObjectReadable } from './_aiStorage.js';
 import { isFirebaseStorageMediaUrl, uploadRestaurantCoverFromDataUrl } from './_googlePlacePhotoStorage.js';
+import { buildBusinessBio } from './_businessBio.js';
 
 /**
  * Upload preview base64 cover to Storage and merge URLs into Google details before Firestore write.
@@ -128,6 +129,24 @@ function buildRestaurantDocFromGoogleDetails(details, opts = {}) {
         String(details.coverImageUrl || '').trim() || DEFAULT_RESTAURANT_COVER_PLACEHOLDER;
     const coverImageFromFirebase = isFirebaseStorageMediaUrl(coverImage);
 
+    // Shared fields for every business type.
+    const googleMapsUri = String(details.googleMapsUri || '').trim();
+    const priceLevel = String(details.priceLevel || '').trim();
+    const rating = typeof details.rating === 'number' ? details.rating : null;
+    const userRatingCount = typeof details.userRatingCount === 'number' ? details.userRatingCount : null;
+    const serviceFlags = details.serviceFlags && typeof details.serviceFlags === 'object' ? details.serviceFlags : {};
+    const galleryImages = Array.isArray(details.galleryImages) ? details.galleryImages : [];
+    const gallery = galleryImages.map((g) => String(g?.url || '').trim()).filter(Boolean);
+    const { description, bioSource } = buildBusinessBio({
+        editorialSummary: details.editorialSummary,
+        businessType,
+        city,
+        priceLevel,
+        rating,
+        userRatingCount,
+        serviceFlags,
+    });
+
     const restaurantDoc = {
         createdBy: 'admin',
         isClaimed: false,
@@ -174,6 +193,20 @@ function buildRestaurantDocFromGoogleDetails(details, opts = {}) {
             hours,
             openingHours,
             categories,
+            description,
+            bioSource,
+            googleMapsUri: googleMapsUri || null,
+            priceLevel: priceLevel || null,
+            googlePlaceRating: rating,
+            userRatingCount,
+            serviceFlags: {
+                delivery: serviceFlags.delivery === true,
+                takeout: serviceFlags.takeout === true,
+                dineIn: serviceFlags.dineIn === true,
+                curbsidePickup: serviceFlags.curbsidePickup === true,
+                reservable: serviceFlags.reservable === true,
+            },
+            gallery,
             coverImage: coverImage || null,
             coverImageStoragePath,
             coverImageFromFirebase,

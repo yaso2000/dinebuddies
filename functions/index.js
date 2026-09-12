@@ -660,9 +660,20 @@ function toPublicProfile(userDocData, uid) {
             coverImage: asTrimmedString(businessInfo.coverImage),
             // Menu must reach visitors (who read the public projection), else the
             // Menu tab only ever shows to the owner.
+            // Unified item list (dish|service via each item's `kind`). menuListingType
+            // is legacy (the switch was removed) — kept for older clients only.
             menu: Array.isArray(businessInfo.menu) ? businessInfo.menu : [],
             menuListingType: asTrimmedString(businessInfo.menuListingType) || 'menu',
             gallery: Array.isArray(businessInfo.gallery) ? businessInfo.gallery : [],
+            // Header/contact + delivery so guests (who read this projection) get them.
+            phone: asTrimmedString(businessInfo.phone) || asTrimmedString(userData.phone) || null,
+            website: asTrimmedString(businessInfo.website) || null,
+            googleMapsUri: asTrimmedString(businessInfo.googleMapsUri) || null,
+            deliveryLinks: Array.isArray(businessInfo.deliveryLinks) ? businessInfo.deliveryLinks : [],
+            serviceFlags: businessInfo.serviceFlags && typeof businessInfo.serviceFlags === 'object'
+                ? businessInfo.serviceFlags
+                : null,
+            bioSource: asTrimmedString(businessInfo.bioSource) || null,
             lat: asFiniteNumber(
                 businessInfo.lat ?? bizCoords.lat ?? bizCoords.latitude ?? userData.lat
             ),

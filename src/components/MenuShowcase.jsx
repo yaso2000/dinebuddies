@@ -190,10 +190,19 @@ const EMPTY_FORM = {
   category: 'mains',
   image: null,
   imageUrl: '',
-  serviceIcon: '⚙️'
+  serviceIcon: '⚙️',
+  bookingUrl: ''
 };
 
-const MenuShowcase = ({ partnerId, profileId, menuData = [], menuListingType = 'menu', isOwner, isPaid = true, theme, onListingTypeChange }) => {
+/** Item kind, tolerant of pre-migration data. */
+const itemKindOf = (it) =>
+  it?.kind === 'service' || it?.kind === 'dish'
+    ? it.kind
+    : it?.listingKind === 'services'
+      ? 'service'
+      : 'dish';
+
+const MenuShowcase = ({ partnerId, profileId, menuData = [], kind = 'dish', isOwner, isPaid = true, theme }) => {
   const businessId = partnerId ?? profileId;
   const { t } = useTranslation();
   const confirm = useConfirm();
@@ -201,9 +210,11 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], menuListingType = '
   const tc = theme?.colors || null;
   const th = (themed, fallback) => tc ? themed : fallback;
 
+  // menuItems holds ALL items (both kinds); this instance shows/edits only `kind`.
   const [menuItems, setMenuItems] = useState(() => normalizeMenuData(menuData));
-  const [listingType, setListingType] = useState(menuListingType === 'services' ? 'services' : 'menu');
-  const isServicesMode = listingType === 'services';
+  const isServicesMode = kind === 'service';
+  const kindItems = menuItems.filter((it) => itemKindOf(it) === kind);
+  const otherKindItems = menuItems.filter((it) => itemKindOf(it) !== kind);
   const formCopy = getListingFormCopy(t, isServicesMode);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [serviceIconSearch, setServiceIconSearch] = useState('');
@@ -211,10 +222,6 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], menuListingType = '
   useEffect(() => {
     setMenuItems(normalizeMenuData(menuData));
   }, [menuData]);
-
-  useEffect(() => {
-    setListingType(menuListingType === 'services' ? 'services' : 'menu');
-  }, [menuListingType]);
 
   // Add form
   const [showAddForm, setShowAddForm] = useState(false);
@@ -326,9 +333,9 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], menuListingType = '
 
   /* ---- helpers -------------------------------------------------- */
   const getStats = () => {
-    const stats = { all: menuItems.length };
+    const stats = { all: kindItems.length };
     MENU_CATEGORIES.forEach((cat) => {
-      stats[cat.id] = menuItems.filter(
+      stats[cat.id] = kindItems.filter(
         (item) => (item.category || 'mains').toLowerCase() === cat.id
       ).length;
     });
@@ -337,32 +344,14 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], menuListingType = '
   const stats = getStats();
 
   const filteredItems = selectedCategory === 'all' ?
-  menuItems :
-  menuItems.filter((item) =>
+  kindItems :
+  kindItems.filter((item) =>
   (item.category || 'mains').toLowerCase() === selectedCategory
   );
 
   const saveToFirestore = async (updatedMenu) => {
     const ref = doc(db, 'users', businessId);
     await updateDoc(ref, { 'businessInfo.menu': updatedMenu });
-  };
-
-  const saveListingType = async (nextType) => {
-    if (nextType === listingType) return;
-    const prev = listingType;
-    setListingType(nextType);
-    onListingTypeChange?.(nextType);
-    setSelectedCategory('all');
-    setShowAddForm(false);
-    setEditingId(null);
-    setServiceIconSearch('');
-    try {
-      await updateDoc(doc(db, 'users', businessId), { 'businessInfo.menuListingType': nextType });
-    } catch {
-      setListingType(prev);
-      onListingTypeChange?.(prev);
-      showToast(t('update_error', 'Update failed'), 'error');
-    }
   };
 
   const formatItemPrice = (price) => {
@@ -377,7 +366,9 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], menuListingType = '
   const handleReorder = async (oldIndex, newIndex) => {
     if (oldIndex === newIndex) return;
     try {
-      const updated = arrayMove(menuItems, oldIndex, newIndex);
+      // Reorder within this kind, then merge back with the other kind's items.
+      const reorderedKind = arrayMove(kindItems, oldIndex, newIndex);
+      const updated = [...otherKindItems, ...reorderedKind];
       setMenuItems(updated);
       await saveToFirestore(updated);
       showToast(t('order_updated', 'Order updated'), 'success');
@@ -429,13 +420,18 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], menuListingType = '
     const parsedPrice = addForm.price === '' ? null : parseFloat(addForm.price);
     const newItem = {
       id: Date.now().toString(),
+      title: addForm.name.trim(),
       name: addForm.name.trim(),
       description: addForm.description.trim(),
       price: parsedPrice,
       category: isServicesMode ? 'general' : addForm.category,
       imageUrl: isServicesMode ? '' : imageUrl || '',
       serviceIcon: isServicesMode ? addForm.serviceIcon || '⚙️' : '',
+      bookingUrl: isServicesMode ? (addForm.bookingUrl || '').trim() : '',
+      kind, // 'dish' | 'service'
       listingKind: isServicesMode ? 'services' : 'menu',
+      order: menuItems.length,
+      isActive: true,
       addedAt: new Date().toISOString()
     };
     // Add to pending list (not saved yet)
@@ -525,7 +521,7 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], menuListingType = '
   };
 
   /* ---- render --------------------------------------------------- */
-  if (menuItems.length === 0 && !isOwner) return null;
+  if (kindItems.length === 0 && !isOwner) return null;
 
   return (
     <>
@@ -586,26 +582,8 @@ const MenuShowcase = ({ partnerId, profileId, menuData = [], menuListingType = '
             <FaUtensils style={{ color: 'var(--brand-primary)' }} />}
                         {isServicesMode ?
             t('menu_listing_type_services', t('business_services', 'Services')) :
-            t('menu_listing_type_menu', t('menu', 'Menu'))} ({menuItems.length})
+            t('menu_listing_type_menu', t('menu', 'Menu'))} ({kindItems.length})
                     </AppText>
-                    {isOwner &&
-          <div className="menu-listing-type-toggle" role="group" aria-label={t('menu_listing_type_label', 'Listing type')}>
-                            <button
-              type="button"
-              className={`menu-listing-type-toggle__btn${listingType === 'menu' ? ' menu-listing-type-toggle__btn--active' : ''}`}
-              onClick={() => saveListingType('menu')}>
-
-                                {t('menu_listing_type_menu', t('menu', 'Menu'))}
-                            </button>
-                            <button
-              type="button"
-              className={`menu-listing-type-toggle__btn${listingType === 'services' ? ' menu-listing-type-toggle__btn--active' : ''}`}
-              onClick={() => saveListingType('services')}>
-
-                                {t('menu_listing_type_services', t('business_services', 'Services'))}
-                            </button>
-                        </div>
-          }
                     </div>
                     {isOwner &&
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -1,6 +1,25 @@
 {
     "indexes": [
         {
+            "collectionGroup": "business_events",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "businessId", "order": "ASCENDING" },
+                { "fieldPath": "isActive", "order": "ASCENDING" },
+                { "fieldPath": "endsAt", "order": "ASCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "business_events",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "countryCode", "order": "ASCENDING" },
+                { "fieldPath": "city", "order": "ASCENDING" },
+                { "fieldPath": "isActive", "order": "ASCENDING" },
+                { "fieldPath": "endsAt", "order": "ASCENDING" }
+            ]
+        },
+        {
             "collectionGroup": "business_jobs",
             "queryScope": "COLLECTION",
             "fields": [

@@ -1,8 +1,9 @@
 import React from 'react';
 import MenuShowcase from '../MenuShowcase';
 
+/** Menu tab — dishes only (kind === 'dish'). */
 export default function BusinessProfileMenuTab({ profile }) {
-  const { activeTab, profileId, businessInfo, isOwner, isPaid, setMenuTabListingType, tc } = profile;
+  const { activeTab, profileId, businessInfo, isOwner, isPaid, tc } = profile;
 
   if (activeTab !== 'menu') return null;
 
@@ -10,10 +11,10 @@ export default function BusinessProfileMenuTab({ profile }) {
     <MenuShowcase
       profileId={profileId}
       menuData={Array.isArray(businessInfo.menu) ? businessInfo.menu : []}
-      menuListingType={businessInfo.menuListingType || 'menu'}
+      kind="dish"
       isOwner={isOwner}
       isPaid={isPaid}
-      onListingTypeChange={setMenuTabListingType}
-      theme={{ colors: tc }} />);
-
+      theme={{ colors: tc }}
+    />
+  );
 }

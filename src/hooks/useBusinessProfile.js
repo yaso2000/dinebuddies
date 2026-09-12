@@ -108,6 +108,10 @@ async function loadBusinessFromPublicProfileProjection(profileId) {
         menu: Array.isArray(bp.menu) ? bp.menu : [],
         menuListingType: bp.menuListingType || 'menu',
         gallery: Array.isArray(bp.gallery) ? bp.gallery : [],
+        deliveryLinks: Array.isArray(bp.deliveryLinks) ? bp.deliveryLinks : [],
+        googleMapsUri: bp.googleMapsUri || '',
+        serviceFlags: bp.serviceFlags || null,
+        bioSource: bp.bioSource || '',
         lat,
         lng,
         hours: bp.hours || null,
@@ -224,7 +228,8 @@ export function useBusinessProfile(profileId) {
   useEffect(() => {
     currentUserRef.current = currentUser;
   }, [currentUser?.uid, currentUser?.email, currentUser?.displayName, currentUser?.photoURL]);
-  const [activeTab, setActiveTab] = useState('about');
+  // '' until the tab bar resolves the initial tab (config default per business type).
+  const [activeTab, setActiveTab] = useState('');
   const [menuTabListingType, setMenuTabListingType] = useState('menu');
 
   const [activeInvitationsCount, setActiveInvitationsCount] = useState(0);
@@ -680,23 +685,10 @@ export function useBusinessProfile(profileId) {
     }
   }, [servicesKey]);
 
-  // Keep activeTab valid when visible tabs change (visitor: some tabs hidden when empty)
+  // The 3-tab model (menu / services / events) resolves its own initial + visible
+  // tabs inside BusinessProfileTabBar (it knows event presence). About / hours /
+  // contact / delivery moved into the always-visible header, so no guard here.
   const isOwnerProfile = isBusinessProfileOwner(currentUser?.uid, profileId, business);
-  useEffect(() => {
-    const info = business?.businessInfo;
-    if (!info) return;
-    const hasContactInfo = !!(info.phone || info.email || info.address || info.website);
-    const visibleIds = ['about'];
-    if (isOwnerProfile || info.menu?.length > 0) visibleIds.push('menu');
-    // Services tab hidden until feature is re-enabled
-    if (isOwnerProfile || info.hours) visibleIds.push('hours');
-    const hasDelivery = Array.isArray(info.deliveryLinks)
-      && info.deliveryLinks.some((l) => String(l?.url || '').trim() && String(l?.name || '').trim());
-    if (isOwnerProfile || (hasDelivery && isPaid)) visibleIds.push('delivery');
-    if (isOwnerProfile || hasContactInfo) visibleIds.push('contact');
-    // Functional update: do not list activeTab in deps — that pattern re-ran the effect on every tab change.
-    setActiveTab((tab) => !visibleIds.includes(tab) ? visibleIds[0] || 'about' : tab);
-  }, [isOwnerProfile, business?.businessInfo?.menu?.length, business?.businessInfo?.hours, business?.businessInfo?.phone, business?.businessInfo?.email, business?.businessInfo?.address, business?.businessInfo?.website]);
 
   useEffect(() => {
     const memberIds = business?.communityMembers || [];
