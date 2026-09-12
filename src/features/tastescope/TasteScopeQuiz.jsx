@@ -3,6 +3,18 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { FaChevronLeft, FaExpand, FaCompress } from 'react-icons/fa';
 import { AXES } from './tastescopeData';
+import { getRuntime } from '../../platform/runtime';
+
+/** Native (Capacitor) orientation lock — reliable on Android/iOS even when the
+ *  device auto-rotate is off; loaded lazily so it never touches the web bundle. */
+async function nativeOrientation() {
+  try {
+    const { ScreenOrientation } = await import('@capacitor/screen-orientation');
+    return ScreenOrientation;
+  } catch {
+    return null;
+  }
+}
 
 /** Fisher–Yates shuffle (returns a new array). */
 function shuffled(arr) {
@@ -109,33 +121,51 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
   // physical rotation still works.
   const rootRef = useRef(null);
   const [forcedLandscape, setForcedLandscape] = useState(false);
+  const isNative = typeof window !== 'undefined' && getRuntime().isNative;
   const canForceLandscape =
-    typeof window !== 'undefined' &&
-    (window.screen?.orientation?.lock || document.documentElement.requestFullscreen);
+    isNative ||
+    (typeof window !== 'undefined' &&
+      (window.screen?.orientation?.lock || document.documentElement.requestFullscreen));
 
   const toggleLandscape = async () => {
     try {
       if (!forcedLandscape) {
-        const el = rootRef.current || document.documentElement;
-        if (el.requestFullscreen) await el.requestFullscreen();
-        if (window.screen?.orientation?.lock) await window.screen.orientation.lock('landscape');
+        if (isNative) {
+          // Native lock rotates the whole activity — no fullscreen needed, and
+          // it works even when the device's auto-rotate switch is off.
+          const SO = await nativeOrientation();
+          if (SO) await SO.lock({ orientation: 'landscape' });
+        } else {
+          const el = rootRef.current || document.documentElement;
+          if (el.requestFullscreen) await el.requestFullscreen();
+          if (window.screen?.orientation?.lock) await window.screen.orientation.lock('landscape');
+        }
         setForcedLandscape(true);
       } else {
-        try { window.screen?.orientation?.unlock?.(); } catch { /* ignore */ }
-        if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+        if (isNative) {
+          const SO = await nativeOrientation();
+          if (SO) await SO.unlock();
+        } else {
+          try { window.screen?.orientation?.unlock?.(); } catch { /* ignore */ }
+          if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+        }
         setForcedLandscape(false);
       }
     } catch {
-      // Unsupported (iOS Safari, desktop) — physical rotation is the fallback.
+      // Unsupported (older iOS Safari, desktop) — physical rotation is the fallback.
       setForcedLandscape(false);
     }
   };
 
-  // Release the lock / fullscreen when leaving the quiz.
+  // Release the lock / fullscreen when leaving the quiz (always restore portrait).
   useEffect(() => () => {
-    try { window.screen?.orientation?.unlock?.(); } catch { /* ignore */ }
-    try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch { /* ignore */ }
-  }, []);
+    if (isNative) {
+      nativeOrientation().then((SO) => { try { SO?.unlock?.(); } catch { /* ignore */ } });
+    } else {
+      try { window.screen?.orientation?.unlock?.(); } catch { /* ignore */ }
+      try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch { /* ignore */ }
+    }
+  }, [isNative]);
 
   const round = rounds[index];
   const total = rounds.length;

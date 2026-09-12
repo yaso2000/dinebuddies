@@ -1420,7 +1420,10 @@
       "coverSetting": "Setting…",
       "coverIsSet": "Your cover ✓",
       "coverSet": "Set as your cover ✓",
-      "coverSetFailed": "Could not set cover"
+      "coverSetFailed": "Could not set cover",
+      "shareExternal": "Share",
+      "shareInternal": "Send in chat",
+      "close": "Close"
     }
   },
   "try_again": "Try again",

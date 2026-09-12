@@ -1377,7 +1377,10 @@
       "coverSetting": "جارٍ التعيين…",
       "coverIsSet": "غلاف حسابك ✓",
       "coverSet": "صارت غلاف حسابك ✓",
-      "coverSetFailed": "تعذّر التعيين"
+      "coverSetFailed": "تعذّر التعيين",
+      "shareExternal": "مشاركة",
+      "shareInternal": "إرسال في المحادثة",
+      "close": "إغلاق"
     }
   },
   "user_blocked": "تم الحظر. لن ترى بطاقاته بعد الآن.",

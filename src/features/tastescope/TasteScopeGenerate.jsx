@@ -2,10 +2,17 @@ import React, { useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
+import { FaShareAlt, FaPaperPlane, FaTimes } from 'react-icons/fa';
 import app, { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getSpendableCredits } from '../../utils/walletCredits';
+import { normalizeUserGender, getSafeAvatar } from '../../utils/avatarUtils';
+import { shareNativeOrFallback } from '../../utils/shareNativeOrFallback';
+import { fetchPostImageFile } from '../../utils/sharePostMedia';
+import { getAppOrigin } from '../../utils/appOrigin';
+import InternalShareModal from '../../components/InternalShareModal';
+import { titleName } from './titleDisplay';
 
 const functions = getFunctions(app, 'us-central1');
 const PRICE = { reading: 10, cover: 25 };
@@ -14,7 +21,8 @@ const PRICE = { reading: 10, cover: 25 };
  * TasteScope: generate a personal reading (text) + cover (image) via the
  * tastescopeGenerate callable. First of each kind is free; regenerating costs
  * 10 / 25 credits. Existing reading/cover stay visible until replaced; nothing
- * is charged on failure. See TASTESCOPE_SPEC Appendix A.
+ * is charged on failure. Once generated, the result can be set as the account
+ * cover and shared internally (chat) or externally. See TASTESCOPE_SPEC A.
  */
 export default function TasteScopeGenerate() {
   const { t, i18n } = useTranslation();
@@ -29,10 +37,15 @@ export default function TasteScopeGenerate() {
   const coverUrl = ts?.coverUrl || gen.cover?.url || '';
   const balance = getSpendableCredits(userProfile);
   const isAccountCover = Boolean(coverUrl) && userProfile?.cover_photo === coverUrl;
+  const uid = userProfile?.uid || currentUser?.uid || '';
+  // Title name only (no emoji) — for the cover overlay and share text.
+  const name = ts?.titleId ? titleName(t, ts.titleId, normalizeUserGender(userProfile), isArabic) : '';
 
   const [busy, setBusy] = useState(null); // 'reading' | 'cover' | null
   const [sheetOpen, setSheetOpen] = useState(false);
   const [settingCover, setSettingCover] = useState(false);
+  const [sharingExt, setSharingExt] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
 
   if (!ts?.titleId) return null;
 
@@ -69,9 +82,7 @@ export default function TasteScopeGenerate() {
   };
 
   const setAsAccountCover = async () => {
-    if (!coverUrl || settingCover || isAccountCover) return;
-    const uid = userProfile?.uid || currentUser?.uid;
-    if (!uid) return;
+    if (!coverUrl || settingCover || isAccountCover || !uid) return;
     setSettingCover(true);
     try {
       await updateDoc(doc(db, 'users', uid), { cover_photo: coverUrl });
@@ -84,14 +95,49 @@ export default function TasteScopeGenerate() {
   };
 
   const firstLine = readingText.split('\n').map((s) => s.trim()).filter(Boolean)[0] || '';
+  const hasResult = Boolean(readingText || coverUrl);
+
+  // External share: cover image (if any) + title + reading via the OS sheet.
+  const shareExternal = async () => {
+    if (sharingExt) return;
+    setSharingExt(true);
+    try {
+      const file = coverUrl ? await fetchPostImageFile(coverUrl) : null;
+      const head = isArabic ? `لقبي الغذائي: ${name}` : `My taste title: ${name}`;
+      const text = [head, readingText].filter(Boolean).join('\n\n');
+      const url = uid ? `${getAppOrigin()}/profile/${uid}` : getAppOrigin();
+      await shareNativeOrFallback({ file, title: name || t('tastescope.name', 'TasteScope'), text, url });
+    } catch {
+      showToast(t('tastescope.gen.failed', 'تعذّر الإنشاء، لم يُخصم شيء'), 'error');
+    } finally {
+      setSharingExt(false);
+    }
+  };
+
+  // Internal share card (rendered by SharedContentBubble in chat / communities).
+  const internalShareData = {
+    type: 'tastescope',
+    id: uid,
+    title: name ? `${name} — ${t('tastescope.name', 'TasteScope')}` : t('tastescope.name', 'TasteScope'),
+    description: firstLine || readingText.slice(0, 160),
+    image: coverUrl || null,
+    url: uid ? `/profile/${uid}` : '',
+    authorName: userProfile?.display_name || currentUser?.displayName || '',
+    authorAvatar: getSafeAvatar(userProfile || currentUser),
+  };
 
   return (
     <div dir={i18n.dir()} style={{ display: 'flex', flexDirection: 'column', gap: 12, margin: '4px 0 20px' }}>
-      {/* Cover preview (16:9) once generated */}
+      {/* Cover preview (16:9) once generated, with the title name overlaid */}
       {coverUrl ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', borderRadius: 16, overflow: 'hidden', background: 'var(--bg-card,#f3f4f6)' }}>
-            <img src={coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            <img src={coverUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            {name ? (
+              <div style={{ position: 'absolute', insetInlineStart: 0, insetInlineEnd: 0, bottom: 0, padding: '26px 18px 14px', display: 'flex', background: 'linear-gradient(to top, rgba(0,0,0,0.62), rgba(0,0,0,0))', pointerEvents: 'none' }}>
+                <span style={{ color: '#fff', fontWeight: 900, fontSize: '1.5rem', lineHeight: 1.15, textShadow: '0 2px 10px rgba(0,0,0,0.65)' }}>{name}</span>
+              </div>
+            ) : null}
           </div>
           <button
             type="button"
@@ -113,7 +159,7 @@ export default function TasteScopeGenerate() {
         </div>
       ) : null}
 
-      {/* Reading: first line + read-more */}
+      {/* Reading: first line + read-more (reopens the sheet any time) */}
       {readingText ? (
         <button
           type="button"
@@ -125,6 +171,27 @@ export default function TasteScopeGenerate() {
             {t('tastescope.gen.readMore', 'اقرأ القراءة كاملة')}
           </span>
         </button>
+      ) : null}
+
+      {/* Share the result (internal chat + external OS sheet) */}
+      {hasResult ? (
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            type="button"
+            onClick={() => setInternalOpen(true)}
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--border-color,#e5e7eb)', background: 'transparent', color: 'var(--text-main)', fontWeight: 800, fontSize: '0.88rem', cursor: 'pointer' }}
+          >
+            <FaPaperPlane /> {t('tastescope.gen.shareInternal', 'إرسال في المحادثة')}
+          </button>
+          <button
+            type="button"
+            onClick={shareExternal}
+            disabled={sharingExt}
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--border-color,#e5e7eb)', background: 'transparent', color: 'var(--text-main)', fontWeight: 800, fontSize: '0.88rem', cursor: sharingExt ? 'wait' : 'pointer', opacity: sharingExt ? 0.6 : 1 }}
+          >
+            <FaShareAlt /> {t('tastescope.gen.shareExternal', 'مشاركة')}
+          </button>
+        </div>
       ) : null}
 
       {/* Generate / regenerate buttons */}
@@ -165,12 +232,41 @@ export default function TasteScopeGenerate() {
       {sheetOpen && readingText ? (
         <div onClick={() => setSheetOpen(false)} style={overlay}>
           <div onClick={(e) => e.stopPropagation()} dir={i18n.dir()} style={sheet}>
-            <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--border-color,#e5e7eb)', margin: '0 auto 14px' }} />
-            {coverUrl ? <img src={coverUrl} alt="" style={{ width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', borderRadius: 12, marginBottom: 14 }} /> : null}
-            <p style={{ whiteSpace: 'pre-wrap', fontSize: '1rem', lineHeight: 1.9, color: 'var(--text-main)', margin: 0 }}>{readingText}</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontSize: '1.05rem', fontWeight: 900, color: 'var(--text-main)' }}>{name}</span>
+              <button
+                type="button"
+                onClick={() => setSheetOpen(false)}
+                aria-label={t('tastescope.gen.close', 'إغلاق')}
+                style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: 'var(--bg-darker,rgba(0,0,0,0.06))', color: 'var(--text-main)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.95rem', flexShrink: 0 }}
+              >
+                <FaTimes />
+              </button>
+            </div>
+            {coverUrl ? <img src={coverUrl} alt={name} style={{ width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', borderRadius: 12, marginBottom: 14 }} /> : null}
+            <p style={{ whiteSpace: 'pre-wrap', fontSize: '1rem', lineHeight: 1.9, color: 'var(--text-main)', margin: '0 0 16px' }}>{readingText}</p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => { setSheetOpen(false); setInternalOpen(true); }}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 12px', borderRadius: 12, border: '1px solid var(--border-color,#e5e7eb)', background: 'transparent', color: 'var(--text-main)', fontWeight: 800, fontSize: '0.88rem', cursor: 'pointer' }}
+              >
+                <FaPaperPlane /> {t('tastescope.gen.shareInternal', 'إرسال في المحادثة')}
+              </button>
+              <button
+                type="button"
+                onClick={shareExternal}
+                disabled={sharingExt}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 12px', borderRadius: 12, border: 'none', background: 'var(--primary,#ef4444)', color: '#fff', fontWeight: 800, fontSize: '0.88rem', cursor: sharingExt ? 'wait' : 'pointer', opacity: sharingExt ? 0.7 : 1 }}
+              >
+                <FaShareAlt /> {t('tastescope.gen.shareExternal', 'مشاركة')}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
+
+      <InternalShareModal isOpen={internalOpen} onClose={() => setInternalOpen(false)} shareData={internalShareData} />
     </div>
   );
 }
