@@ -148,73 +148,90 @@ export default function InviteCreateTypePicker({
       : []),
   ];
 
+  // Group the options into their own sections so the "+" menu doesn't jumble
+  // invitations with games/quizzes. Headings only show when >1 group is present.
+  const GROUP_OF = {
+    public: 'invitations', social: 'invitations', stage: 'invitations',
+    group_game: 'games', suitability: 'games', realornai: 'games', zodiac: 'games',
+  };
+  const GROUPS = [
+    { id: 'invitations', label: t('invite_group_invitations', 'دعوات') },
+    { id: 'games', label: t('invite_group_games', 'ألعاب') },
+  ];
+  const itemsOf = (gid) => options.filter((o) => (GROUP_OF[o.kind] || 'invitations') === gid);
+  const activeGroups = GROUPS.filter((g) => itemsOf(g.id).length > 0);
+  const showHeadings = activeGroups.length > 1;
+  const headingStyle = { fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-secondary,#6b7280)', margin: '12px 4px 2px', width: '100%' };
+
   if (variant === 'sheet') {
     return (
       <div className={`business-create-sheet__options${horizontal ? ' business-create-sheet__options--horizontal' : ''}${className ? ` ${className}` : ''}`}>
-        {options.map((opt) => {
-          const Icon = opt.icon;
-          return (
-            <button
-              key={opt.kind}
-              type="button"
-              className="business-create-option"
-              disabled={Boolean(opt.busy)}
-              aria-busy={opt.busy || undefined}
-              onClick={() => goCreate(opt.kind)}
-            >
-              <AppText
-                as="span"
-                className={`business-create-option__icon ${opt.sheetIconClass}`}
-                aria-hidden
-              >
-                <Icon />
-              </AppText>
-              <AppText as="span" className="business-create-option__text">
-                <AppText as="span" className="business-create-option__label">
-                  {opt.title}
-                </AppText>
-                <AppText as="span" className="business-create-option__desc">
-                  {opt.desc}
-                </AppText>
-              </AppText>
-              <FaChevronRight className="business-create-option__arrow" aria-hidden />
-            </button>
-          );
-        })}
+        {activeGroups.map((g) => (
+          <React.Fragment key={g.id}>
+            {showHeadings ? <AppText as="div" style={headingStyle}>{g.label}</AppText> : null}
+            {itemsOf(g.id).map((opt) => {
+              const Icon = opt.icon;
+              return (
+                <button
+                  key={opt.kind}
+                  type="button"
+                  className="business-create-option"
+                  disabled={Boolean(opt.busy)}
+                  aria-busy={opt.busy || undefined}
+                  onClick={() => goCreate(opt.kind)}
+                >
+                  <AppText as="span" className={`business-create-option__icon ${opt.sheetIconClass}`} aria-hidden>
+                    <Icon />
+                  </AppText>
+                  <AppText as="span" className="business-create-option__text">
+                    <AppText as="span" className="business-create-option__label">{opt.title}</AppText>
+                    <AppText as="span" className="business-create-option__desc">{opt.desc}</AppText>
+                  </AppText>
+                  <FaChevronRight className="business-create-option__arrow" aria-hidden />
+                </button>
+              );
+            })}
+          </React.Fragment>
+        ))}
       </div>
     );
   }
 
   return (
     <div className={`selector-options${className ? ` ${className}` : ''}`}>
-      {options.map((opt) => {
-        const Icon = opt.icon;
-        return (
-          <div
-            key={opt.kind}
-            className={`selector-card ${opt.className}`}
-            onClick={() => goCreate(opt.kind)}
-            role="button"
-            tabIndex={0}
-            aria-busy={opt.busy || undefined}
-            style={opt.busy ? { opacity: 0.65, pointerEvents: 'none' } : undefined}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                goCreate(opt.kind);
-              }
-            }}
-          >
-            <div className="icon-wrapper">
-              <Icon />
-            </div>
-            <div className="option-info">
-              <AppText as="h4">{opt.title}</AppText>
-              <AppText as="p">{opt.desc}</AppText>
-            </div>
-          </div>
-        );
-      })}
+      {activeGroups.map((g) => (
+        <React.Fragment key={g.id}>
+          {showHeadings ? <div style={{ ...headingStyle, gridColumn: '1 / -1' }}>{g.label}</div> : null}
+          {itemsOf(g.id).map((opt) => {
+            const Icon = opt.icon;
+            return (
+              <div
+                key={opt.kind}
+                className={`selector-card ${opt.className}`}
+                onClick={() => goCreate(opt.kind)}
+                role="button"
+                tabIndex={0}
+                aria-busy={opt.busy || undefined}
+                style={opt.busy ? { opacity: 0.65, pointerEvents: 'none' } : undefined}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    goCreate(opt.kind);
+                  }
+                }}
+              >
+                <div className="icon-wrapper">
+                  <Icon />
+                </div>
+                <div className="option-info">
+                  <AppText as="h4">{opt.title}</AppText>
+                  <AppText as="p">{opt.desc}</AppText>
+                </div>
+              </div>
+            );
+          })}
+        </React.Fragment>
+      ))}
     </div>
   );
 }

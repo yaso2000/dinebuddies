@@ -5,7 +5,7 @@ import useTasteScope from './useTasteScope';
 
 /**
  * Own-profile entry card shown only when the current user has NOT taken the quiz
- * yet: "اكتشف لقبك الغذائي" → /tastescope. Hides itself once a title exists (the
+ * yet: "اكتشف لقب ذوقك" → /tastescope. Hides itself once a title exists (the
  * inline badge takes over). See TASTESCOPE_SPEC.md §7.
  */
 export default function TasteScopeCtaCard() {
@@ -29,7 +29,7 @@ export default function TasteScopeCtaCard() {
       <span style={{ fontSize: 28, lineHeight: 1 }}>🍽️</span>
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: 'block', fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-main)' }}>
-          {t('tastescope.profile.cta', 'اكتشف لقبك الغذائي')}
+          {t('tastescope.profile.cta', 'اكتشف لقب ذوقك')}
         </span>
         <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary, #6b7280)' }}>
           {t('tastescope.profile.ctaSub', 'عشر صور، أقل من دقيقة')}

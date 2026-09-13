@@ -112,7 +112,7 @@ export default function TasteScopePage() {
           <div style={{ width: 46, height: 46, borderRadius: '50%', border: '4px solid var(--border-color, #e5e7eb)', borderTopColor: 'var(--primary, #ef4444)', animation: 'tsSpin 0.9s linear infinite' }} />
           <style>{'@keyframes tsSpin{to{transform:rotate(360deg)}}'}</style>
           <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
-            {t('tastescope.generatingProfile', 'جارٍ تجهيز ملفك الغذائي…')}
+            {t('tastescope.generatingProfile', 'جارٍ تجهيز ملف ذوقك…')}
           </div>
           <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #6b7280)' }}>
             {t('tastescope.generatingHint', 'نرسم غلافك ونكتب قراءتك — لحظات')}

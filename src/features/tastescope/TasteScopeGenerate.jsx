@@ -67,7 +67,7 @@ export default function TasteScopeGenerate() {
     setSharingExt(true);
     try {
       const file = coverUrl ? await fetchPostImageFile(coverUrl) : null;
-      const head = isArabic ? `لقبي الغذائي: ${name}` : `My taste title: ${name}`;
+      const head = isArabic ? `لقب ذوقي: ${name}` : `My taste title: ${name}`;
       const text = [head, readingText].filter(Boolean).join('\n\n');
       const url = uid ? `${getAppOrigin()}/profile/${uid}` : getAppOrigin();
       await shareNativeOrFallback({ file, title: name || t('tastescope.name', 'TasteScope'), text, url });

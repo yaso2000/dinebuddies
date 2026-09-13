@@ -39,7 +39,7 @@ export default function TasteScopeResult({ titleId, runnerUpId, answers, gender,
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 20px calc(96px + env(safe-area-inset-bottom, 0px))', textAlign: 'center' }}>
       <TitleGlyph titleId={titleId} title={name} size={112} style={{ margin: '0 auto 10px', boxShadow: '0 6px 20px rgba(0,0,0,0.12)' }} />
       <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-tertiary, #9ca3af)', marginBottom: 4 }}>
-        {t('tastescope.result.youAre', 'لقبك الغذائي')}
+        {t('tastescope.result.youAre', 'لقب ذوقك')}
       </div>
       <h1 style={{ fontSize: '2rem', fontWeight: 900, margin: '0 0 12px' }}>{name}</h1>
       <p style={{ fontSize: '1.02rem', color: 'var(--text-main)', lineHeight: 1.7, margin: '0 0 8px' }}>{desc}</p>

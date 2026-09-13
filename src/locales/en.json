@@ -5842,5 +5842,7 @@
   "account_pending_deletion_desc": "It will be permanently deleted after the grace period, along with your credits. Reactivate now to cancel and restore everything.",
   "account_deactivated_desc": "Your profile is hidden from everyone. Reactivate to make it visible again — your data and credits are safe.",
   "account_cancel_deletion_cta": "Cancel deletion & reactivate",
-  "account_reactivate_cta": "Reactivate my account"
+  "account_reactivate_cta": "Reactivate my account",
+  "invite_group_invitations": "Invitations",
+  "invite_group_games": "Games"
 }

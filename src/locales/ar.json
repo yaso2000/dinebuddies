@@ -1199,7 +1199,7 @@
   "tastescope": {
     "name": "TasteScope",
     "intro": {
-      "title": "اكتشف لقبك الغذائي",
+      "title": "اكتشف لقب ذوقك",
       "subtitle": "عشر صور. اضغط ما تشتهيه. لا توجد إجابة خاطئة.",
       "disclaimer": "للمتعة فقط 🎈",
       "viewTitle": "اعرض لقبي",
@@ -1220,7 +1220,7 @@
       "noWrong": "لا توجد إجابة خاطئة"
     },
     "result": {
-      "youAre": "لقبك الغذائي",
+      "youAre": "لقب ذوقك",
       "touchOf": "بلمسة من {{title}}",
       "saving": "جارٍ الحفظ…",
       "addedToProfile": "أُضيف إلى ملفك ✓",
@@ -1233,13 +1233,13 @@
     },
     "profile": {
       "retakeIn": "أعد الاختبار بعد {{days}} يوم",
-      "cta": "اكتشف لقبك الغذائي",
+      "cta": "اكتشف لقب ذوقك",
       "ctaSub": "عشر صور، أقل من دقيقة"
     },
     "changed": "لقبك تغيّر من {{from}} إلى {{to}}",
     "compat": {
       "nudge": "خذ الاختبار لترى توافقكما",
-      "line": "توافقكما الغذائي: {{percent}}% — أفضل دعوة بينكما: {{invite}}",
+      "line": "توافق ذوقكما: {{percent}}% — أفضل دعوة بينكما: {{invite}}",
       "sendInvite": "أرسل دعوة",
       "invite": {
         "breakfast": "فطور",
@@ -1412,7 +1412,7 @@
         "hidden": "مخفي"
       }
     },
-    "generatingProfile": "جارٍ تجهيز ملفك الغذائي…",
+    "generatingProfile": "جارٍ تجهيز ملف ذوقك…",
     "generatingHint": "نرسم غلافك ونكتب قراءتك — لحظات"
   },
   "user_blocked": "تم الحظر. لن ترى بطاقاته بعد الآن.",
@@ -6044,5 +6044,7 @@
   "account_pending_deletion_desc": "سيُحذف نهائياً بعد انتهاء المهلة، مع رصيدك من الكريدت. أعد التنشيط الآن لإلغاء الحذف واستعادة كل شيء.",
   "account_deactivated_desc": "ملفك مخفيّ عن الجميع. أعد التنشيط ليظهر مجدداً — بياناتك ورصيدك في أمان.",
   "account_cancel_deletion_cta": "إلغاء الحذف وإعادة التنشيط",
-  "account_reactivate_cta": "إعادة تنشيط حسابي"
+  "account_reactivate_cta": "إعادة تنشيط حسابي",
+  "invite_group_invitations": "دعوات",
+  "invite_group_games": "ألعاب"
 }

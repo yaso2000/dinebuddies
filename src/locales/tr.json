@@ -5810,5 +5810,7 @@
   "business_login_google": "Google ile giriş yap",
   "business_login_google_not_business": "Bu Google hesabı bir işletme hesabı değil. Bir işletme hesabı oluştur ya da normal kullanıcı olarak giriş yap.",
   "user_directory_age_filter_aria": "Yaş kategorisi filtresi",
-  "user_directory_age_all": "Tüm yaşlar"
+  "user_directory_age_all": "Tüm yaşlar",
+  "invite_group_invitations": "Invitations",
+  "invite_group_games": "Games"
 }

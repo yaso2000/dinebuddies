@@ -84,7 +84,7 @@ export default function TasteCompatibility({ otherUserId, otherTasteScope, onInv
         <span style={{ flex: 1, minWidth: 0, fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 700 }}>
           {t('tastescope.compat.line', {
             percent: result.percent, invite: inviteLabel,
-            defaultValue: `توافقكما الغذائي: ${result.percent}% — أفضل دعوة بينكما: ${inviteLabel}`,
+            defaultValue: `توافق ذوقكما: ${result.percent}% — أفضل دعوة بينكما: ${inviteLabel}`,
           })}
         </span>
         <span style={{ color: 'var(--text-tertiary, #9ca3af)', transform: i18n.dir() === 'rtl' ? 'scaleX(-1)' : 'none' }}>›</span>

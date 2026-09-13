@@ -5810,5 +5810,7 @@
   "business_login_google": "Google سے سائن اِن کریں",
   "business_login_google_not_business": "یہ Google اکاؤنٹ ایک کاروباری اکاؤنٹ نہیں ہے۔ ایک کاروباری اکاؤنٹ بنائیں، یا ایک عام صارف کے طور پر سائن اِن کریں۔",
   "user_directory_age_filter_aria": "عمر کے زمرے کا فلٹر",
-  "user_directory_age_all": "تمام عمریں"
+  "user_directory_age_all": "تمام عمریں",
+  "invite_group_invitations": "Invitations",
+  "invite_group_games": "Games"
 }

@@ -33,7 +33,7 @@ export default function TasteScopeIntro({
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '32px 22px calc(40px + env(safe-area-inset-bottom, 0px))', textAlign: 'center' }}>
       <div style={{ fontSize: '3rem', lineHeight: 1, marginBottom: 14 }}>🍽️</div>
       <h1 style={{ fontSize: '1.6rem', fontWeight: 900, margin: '0 0 10px', color: 'var(--text-main)' }}>
-        {t('tastescope.intro.title', 'اكتشف لقبك الغذائي')}
+        {t('tastescope.intro.title', 'اكتشف لقب ذوقك')}
       </h1>
       <p style={{ fontSize: '1rem', color: 'var(--text-secondary, #6b7280)', margin: '0 0 6px', lineHeight: 1.6 }}>
         {t('tastescope.intro.subtitle', 'عشر صور. اضغط ما تشتهيه. لا توجد إجابة خاطئة.')}

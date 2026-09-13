@@ -5810,5 +5810,7 @@
   "business_login_google": "Mit Google anmelden",
   "business_login_google_not_business": "Dieses Google-Konto ist kein Business-Konto. Erstelle ein Business-Konto oder melde dich als regulärer Nutzer an.",
   "user_directory_age_filter_aria": "Alterskategorie-Filter",
-  "user_directory_age_all": "Alle Altersgruppen"
+  "user_directory_age_all": "Alle Altersgruppen",
+  "invite_group_invitations": "Invitations",
+  "invite_group_games": "Games"
 }

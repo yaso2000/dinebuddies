@@ -5810,5 +5810,7 @@
   "business_login_google": "Entrar com o Google",
   "business_login_google_not_business": "Esta conta do Google não é uma conta empresarial. Crie uma conta empresarial, ou entre como usuário comum.",
   "user_directory_age_filter_aria": "Filtro de faixa etária",
-  "user_directory_age_all": "Todas as idades"
+  "user_directory_age_all": "Todas as idades",
+  "invite_group_invitations": "Invitations",
+  "invite_group_games": "Games"
 }
