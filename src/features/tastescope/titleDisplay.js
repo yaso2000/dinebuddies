@@ -32,3 +32,6 @@ export function titleVisuals(titleId) {
   const title = TITLES_BY_ID[titleId];
   return { emoji: title?.emoji || '🍽️', accent: title?.accent || 'var(--primary, #ef4444)' };
 }
+
+/** Generated 3D pictorial icon for a title (served from /public). */
+export const titleIconUrl = (titleId) => `/tastescope/icons/${titleId}.png`;

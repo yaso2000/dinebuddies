@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { titleName, titleDesc, titleVisuals } from './titleDisplay';
 import TasteScopeGenerate from './TasteScopeGenerate';
+import TitleGlyph from './TitleGlyph';
 
 /**
  * TasteScope title badge. Two variants (TASTESCOPE_SPEC.md §7):
@@ -30,19 +31,10 @@ export default function TasteScopeBadge({
 
   const name = titleName(t, titleId, gender, isArabic);
   const desc = titleDesc(t, titleId, gender, isArabic);
-  const { emoji, accent } = titleVisuals(titleId);
+  const { accent } = titleVisuals(titleId);
 
   if (variant === 'icon') {
-    return (
-      <span
-        role="img"
-        aria-label={name}
-        title={name}
-        style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}
-      >
-        {emoji}
-      </span>
-    );
+    return <TitleGlyph titleId={titleId} title={name} size={22} />;
   }
 
   return (
@@ -57,7 +49,7 @@ export default function TasteScopeBadge({
           color: accent, fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer', maxWidth: '100%',
         }}
       >
-        <span style={{ fontSize: 15, lineHeight: 1 }}>{emoji}</span>
+        <TitleGlyph titleId={titleId} title={name} size={22} />
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
       </button>
 
@@ -72,7 +64,7 @@ export default function TasteScopeBadge({
             style={{ width: '100%', maxWidth: 520, maxHeight: '88dvh', overflowY: 'auto', background: 'var(--bg-card, #fff)', borderRadius: '20px 20px 0 0', padding: '20px 22px calc(26px + env(safe-area-inset-bottom, 0px))', textAlign: 'center' }}
           >
             <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--border-color, #e5e7eb)', margin: '0 auto 16px' }} />
-            <div style={{ fontSize: '2.6rem', lineHeight: 1, marginBottom: 8 }}>{emoji}</div>
+            <TitleGlyph titleId={titleId} title={name} size={80} style={{ margin: '0 auto 10px', boxShadow: '0 6px 20px rgba(0,0,0,0.12)' }} />
             <h3 style={{ fontSize: '1.35rem', fontWeight: 900, margin: '0 0 8px', color: accent }}>{name}</h3>
             <p style={{ fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: 1.7, margin: '0 0 18px' }}>{desc}</p>
 

@@ -4,6 +4,7 @@ import { AXES, POLE_TO_AXIS } from './tastescopeData';
 import { explainTitle } from './computeTitle';
 import { titleName, titleDesc, titleVisuals } from './titleDisplay';
 import TasteScopeGenerate from './TasteScopeGenerate';
+import TitleGlyph from './TitleGlyph';
 
 /**
  * TasteScope result screen: gendered title, description, "with a touch of …",
@@ -41,7 +42,7 @@ export default function TasteScopeResult({ titleId, runnerUpId, answers, gender,
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '28px 22px calc(40px + env(safe-area-inset-bottom, 0px))', textAlign: 'center' }}>
-      <div style={{ fontSize: '4rem', lineHeight: 1, marginBottom: 8 }}>{emoji}</div>
+      <TitleGlyph titleId={titleId} title={name} size={112} style={{ margin: '0 auto 10px', boxShadow: '0 6px 20px rgba(0,0,0,0.12)' }} />
       <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-tertiary, #9ca3af)', marginBottom: 4 }}>
         {t('tastescope.result.youAre', 'لقبك الغذائي')}
       </div>
