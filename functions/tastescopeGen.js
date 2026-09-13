@@ -136,7 +136,7 @@ function postProcessReading(text) {
 
 // ── Cover (A3) ───────────────────────────────────────────────────────────────
 
-const STYLE_BLOCK = `Editorial illustration, painterly with soft grain, cinematic wide 16:9 composition, warm and inviting. No text, no letters, no numbers, no logos, no watermark, no faces, no people (hands only if explicitly listed). Main subject in the middle third; the lower third is calm, uncluttered and slightly darker so white text can be overlaid later. Limited palette dominated by the accent color given. Consistent series look: same illustration style, same lighting mood, same level of detail.`;
+const STYLE_BLOCK = `Warm editorial illustration, painterly with soft grain, cinematic wide 16:9 composition, human and inviting. People are welcome and their faces may show — rendered in a friendly, stylized, illustrative way, never a real, identifiable, or famous person. The food and the table stay the heart of the scene. Keep the lower third calmer and slightly darker so white text can be overlaid later. No text, no letters, no numbers, no logos, no watermark. Limited palette dominated by the accent color given. Consistent series look: same illustration style, same lighting mood, same level of detail.`;
 
 const SCENE = {
   explorer: "a wooden table at the edge of a night market seen from above, one unfamiliar steaming dish in the center, blurred paper lanterns in the distance, a folded map at the table's edge",
@@ -192,10 +192,30 @@ function coverModifiers(answers = {}) {
   else if (answers.simplicity === 'complex') mods.push('layered, richly garnished dishes');
   if (answers.origin === 'home') mods.push('homely kitchen setting');
   else if (answers.origin === 'restaurant') mods.push('restaurant setting');
-  if (answers.social === 'group') mods.push('several plates, hands at the frame edges');
-  else if (answers.social === 'solo') mods.push('a single place setting');
-  if (answers.sharing === 'shared') mods.push('one central shared platter');
+  if (answers.sharing === 'shared') mods.push('one central shared platter everyone reaches for');
   return mods;
+}
+
+/**
+ * The social character of the scene — the whole point of the quiz is how social
+ * someone is, so the cover reflects it: a lively gathering for the outgoing, a
+ * calm solo table for the private. Driven by the title first, then by the
+ * social/sharing answers. @returns {string}
+ */
+function peopleClause(answers = {}, titleId) {
+  if (titleId === 'host') return 'a warm, lively gathering of several happy friends around the table, sharing food and laughter';
+  if (titleId === 'companion') return 'two close friends sharing the meal, relaxed and smiling at each other';
+  if (titleId === 'warm') return 'a cozy family together at the table, warm and welcoming';
+  const shared = answers.sharing === 'shared';
+  if (answers.social === 'group') {
+    return shared
+      ? 'a cheerful group of friends sharing the dishes together, engaged and smiling'
+      : 'a small group of people enjoying the meal side by side at the table';
+  }
+  // solo
+  return shared
+    ? 'one person sharing the meal with a single companion, calm and content'
+    : 'a single person savoring the meal on their own, serene and content';
 }
 
 /**
@@ -211,8 +231,9 @@ function buildCoverPrompt(ctx) {
     STYLE_BLOCK,
     `Accent color: ${ACCENT[titleId]}.`,
     `Scene: ${SCENE[titleId]}, ${mods}.${cuisine ? ` ${cuisine}` : ''}`,
+    `People: ${peopleClause(ctx.answers, titleId)}.`,
     `Mood: ${MOOD[titleId]}.`,
-    'No text, no faces, no logos, no brand names, no alcohol, no wine glasses.',
+    'No text, no logos, no brand names, no real or identifiable people, no alcohol, no wine glasses.',
   ].join('\n');
 }
 
