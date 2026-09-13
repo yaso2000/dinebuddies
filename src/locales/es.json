@@ -213,7 +213,8 @@
         "public": "Public",
         "friends": "Friends",
         "hidden": "Hidden"
-      }
+      },
+      "visFailed": "Could not save visibility"
     },
     "generatingProfile": "Preparing your taste profile…",
     "generatingHint": "Painting your cover and writing your reading — a moment"

@@ -1410,7 +1410,8 @@
         "public": "عام",
         "friends": "أصدقاء",
         "hidden": "مخفي"
-      }
+      },
+      "visFailed": "تعذّر حفظ الخصوصية"
     },
     "generatingProfile": "جارٍ تجهيز ملف ذوقك…",
     "generatingHint": "نرسم غلافك ونكتب قراءتك — لحظات"

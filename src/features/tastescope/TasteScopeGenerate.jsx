@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { FaShareAlt, FaPaperPlane } from 'react-icons/fa';
@@ -46,6 +46,11 @@ export default function TasteScopeGenerate() {
   const [restyleOpen, setRestyleOpen] = useState(false);
   const [restyling, setRestyling] = useState(false);
   const [visBusy, setVisBusy] = useState(false);
+  // Optimistic visibility so the selection holds immediately (don't wait for the
+  // profile snapshot round-trip); cleared once the profile catches up.
+  const [visOverride, setVisOverride] = useState(null);
+  const effectiveVis = visOverride || visibility;
+  useEffect(() => { if (visOverride && visibility === visOverride) setVisOverride(null); }, [visibility, visOverride]);
 
   if (!ts?.titleId) return null;
 
@@ -103,10 +108,15 @@ export default function TasteScopeGenerate() {
   };
 
   const changeVisibility = async (v) => {
-    if (visBusy || v === visibility) return;
+    if (visBusy || v === effectiveVis) return;
+    setVisOverride(v); // optimistic
     setVisBusy(true);
-    await setVisibility(v);
+    const res = await setVisibility(v);
     setVisBusy(false);
+    if (!res || !res.ok) {
+      setVisOverride(null);
+      showToast(t('tastescope.gen.visFailed', 'تعذّر حفظ الخصوصية'), 'error');
+    }
   };
 
   const visLabel = (v) => t(`tastescope.gen.vis.${v}`, v === 'public' ? 'عام' : v === 'friends' ? 'أصدقاء' : 'مخفي');
@@ -201,7 +211,7 @@ export default function TasteScopeGenerate() {
         </span>
         <div style={{ display: 'flex', gap: 8 }}>
           {VIS_OPTIONS.map((v) => {
-            const active = visibility === v;
+            const active = effectiveVis === v;
             return (
               <button
                 key={v}
