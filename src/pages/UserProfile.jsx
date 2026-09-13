@@ -141,6 +141,8 @@ function ProfileHero({
   showMenu
 }) {
   const { displayName, ageRange, avatarUrl, coverPhotoUrl, tasteTitleId, tasteGender } = profile;
+  const coverPos = Number.isFinite(Number(profile.coverPos)) ? Number(profile.coverPos) : 50;
+  const coverZoom = Number.isFinite(Number(profile.coverZoom)) ? Number(profile.coverZoom) : 1;
   const headline = ageRange ? `${displayName}, ${ageRange}` : displayName;
 
   return (
@@ -151,6 +153,7 @@ function ProfileHero({
             src={coverPhotoUrl}
             alt=""
             className="user-profile-persona-cover__img"
+            style={{ objectPosition: `50% ${coverPos}%`, transform: `scale(${coverZoom})`, transformOrigin: `50% ${coverPos}%` }}
             onError={(e) => {
               e.currentTarget.src = DEFAULT_COVER;
             }} />
@@ -249,6 +252,8 @@ function mapUserDocToProfileModel(firestoreUser) {
     avatarUrl: getSafeAvatar(firestoreUser),
     coverPhotoUrl:
     resolveProfileCoverUrl(firestoreUser) || DEFAULT_COVER,
+    coverPos: firestoreUser.cover_photo_pos_y ?? firestoreUser.userPublic?.cover_photo_pos_y ?? 50,
+    coverZoom: firestoreUser.cover_photo_zoom ?? firestoreUser.userPublic?.cover_photo_zoom ?? 1,
     profileGallery: normalizeProfileGallery(firestoreUser.profileGallery),
     directoryCoverIndex: firestoreUser.directoryCoverIndex ?? 0,
     diningPersona,

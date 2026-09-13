@@ -753,6 +753,11 @@ const Profile = () => {
             <CoverPhoto
               userId={currentUser.uid}
               coverPhoto={headerCoverUrl}
+              coverPos={Number(realtimeUser?.cover_photo_pos_y ?? userProfile?.cover_photo_pos_y ?? 50)}
+              coverZoom={Number(realtimeUser?.cover_photo_zoom ?? userProfile?.cover_photo_zoom ?? 1)}
+              onAdjust={({ pos, zoom }) => {
+              setRealtimeUser((prev) => ({ ...(prev || {}), cover_photo_pos_y: pos, cover_photo_zoom: zoom }));
+              }}
               onUpdate={(url) => {
               const nextCover = url || '';
               setProfileMedia((prev) => ({ ...prev, cover_photo: nextCover }));
