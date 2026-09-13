@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { FaTimes } from 'react-icons/fa';
 import { titleName, titleDesc, titleVisuals } from './titleDisplay';
 import TasteScopeGenerate from './TasteScopeGenerate';
 import TitleGlyph from './TitleGlyph';
@@ -56,15 +57,22 @@ export default function TasteScopeBadge({
       {open && (
         <div
           onClick={() => setOpen(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             dir={i18n.dir()}
-            style={{ width: '100%', maxWidth: 520, maxHeight: '88dvh', overflowY: 'auto', background: 'var(--bg-card, #fff)', borderRadius: '20px 20px 0 0', padding: '20px 22px calc(26px + env(safe-area-inset-bottom, 0px))', textAlign: 'center' }}
+            style={{ position: 'relative', width: '100%', maxWidth: 480, maxHeight: '86dvh', overflowY: 'auto', background: 'var(--bg-card, #fff)', borderRadius: 20, padding: '22px 22px 24px', textAlign: 'center', boxShadow: '0 18px 50px rgba(0,0,0,0.28)' }}
           >
-            <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--border-color, #e5e7eb)', margin: '0 auto 16px' }} />
-            <TitleGlyph titleId={titleId} title={name} size={80} style={{ margin: '0 auto 10px', boxShadow: '0 6px 20px rgba(0,0,0,0.12)' }} />
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label={t('close', 'إغلاق')}
+              style={{ position: 'absolute', top: 12, insetInlineEnd: 12, width: 34, height: 34, borderRadius: '50%', border: 'none', background: 'var(--bg-body, rgba(0,0,0,0.06))', color: 'var(--text-main)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.95rem' }}
+            >
+              <FaTimes />
+            </button>
+            <TitleGlyph titleId={titleId} title={name} size={80} style={{ margin: '4px auto 10px', boxShadow: '0 6px 20px rgba(0,0,0,0.12)' }} />
             <h3 style={{ fontSize: '1.35rem', fontWeight: 900, margin: '0 0 8px', color: accent }}>{name}</h3>
             <p style={{ fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: 1.7, margin: '0 0 18px' }}>{desc}</p>
 
