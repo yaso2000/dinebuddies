@@ -57,6 +57,14 @@ export default function TasteCompatibility({ otherUserId, otherTasteScope, onInv
 
   const inviteLabel = t(`tastescope.compat.invite.${result.suggestedInvite}`, result.suggestedInvite);
 
+  // Compatibility color: red (low) → green (high). The app logo is tinted with it.
+  const matchColor = (p) => `hsl(${Math.round((Math.max(0, Math.min(100, p)) / 100) * 130)}, 72%, 45%)`;
+  // The app mark is the two letters "db"; tint them with the compatibility color.
+  const logoMark = (px, markColor) => (
+    <span aria-hidden style={{ fontSize: px, fontWeight: 900, lineHeight: 1, letterSpacing: '-0.04em', color: markColor }}>db</span>
+  );
+  const color = matchColor(result.percent);
+
   return (
     <>
       <button
@@ -69,9 +77,9 @@ export default function TasteCompatibility({ otherUserId, otherTasteScope, onInv
           background: 'var(--bg-card, #fff)', cursor: 'pointer',
         }}
       >
-        <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1, color: '#ec4899', minWidth: 40 }}>
-          <span style={{ fontSize: 16 }}>❤️</span>
-          <span style={{ fontSize: '0.95rem', fontWeight: 900 }}>{result.percent}%</span>
+        <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1, color, minWidth: 40 }}>
+          {logoMark(20, color)}
+          <span style={{ fontSize: '0.95rem', fontWeight: 900, marginTop: 3 }}>{result.percent}%</span>
         </span>
         <span style={{ flex: 1, minWidth: 0, fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 700 }}>
           {t('tastescope.compat.line', {
@@ -94,7 +102,9 @@ export default function TasteCompatibility({ otherUserId, otherTasteScope, onInv
           >
             <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--border-color, #e5e7eb)', margin: '0 auto 14px' }} />
             <div style={{ textAlign: 'center', marginBottom: 14 }}>
-              <div style={{ fontSize: '2rem', fontWeight: 900, color: '#ec4899' }}>❤️ {result.percent}%</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: '2rem', fontWeight: 900, color }}>
+                {logoMark(30, color)} {result.percent}%
+              </div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #6b7280)', fontWeight: 700 }}>
                 {result.axisMatches}/{AXES.length} · {inviteLabel}
               </div>

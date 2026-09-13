@@ -71,6 +71,7 @@ export function mapDirectoryUser(publicDoc, userDoc = null) {
         // TasteScope icon on the card: titleId from the users doc when present,
         // else from the public_profiles projection. See TASTESCOPE_SPEC §6.
         tasteTitleId: u.tasteScope?.titleId || userPublic.tasteScope?.titleId || null,
+        tasteVisibility: u.tasteScope?.visibility || userPublic.tasteScope?.visibility || 'public',
         profileType: 'user',
         role: u.role || publicDoc.accountRole || 'user',
         accountRole: publicDoc.accountRole || u.role || 'user',

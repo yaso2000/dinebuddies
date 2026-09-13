@@ -407,8 +407,8 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
               {ageLabel ? <span className="user-directory-card__age">, {ageLabel}</span> : null}
             </AppText>
           )}
-          {user?.tasteTitleId ? (
-            <TasteScopeBadge variant="icon" titleId={user.tasteTitleId} gender={normalizeUserGender(user)} />
+          {user?.tasteTitleId && (user.tasteVisibility || 'public') === 'public' ? (
+            <TasteScopeBadge variant="icon" size={44} titleId={user.tasteTitleId} gender={normalizeUserGender(user)} />
           ) : null}
 
           {cityLabel ? (

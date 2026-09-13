@@ -20,7 +20,7 @@ import TitleGlyph from './TitleGlyph';
  * @param {number}  daysUntilRetake   used in the locked CTA label
  */
 export default function TasteScopeBadge({
-  titleId, gender, variant = 'full', showCta = false, canRetake = true, daysUntilRetake = 0,
+  titleId, gender, variant = 'full', showCta = false, canRetake = true, daysUntilRetake = 0, size,
 }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -34,7 +34,7 @@ export default function TasteScopeBadge({
   const { accent } = titleVisuals(titleId);
 
   if (variant === 'icon') {
-    return <TitleGlyph titleId={titleId} title={name} size={22} />;
+    return <TitleGlyph titleId={titleId} title={name} size={size || 36} />;
   }
 
   return (
@@ -49,7 +49,7 @@ export default function TasteScopeBadge({
           color: accent, fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer', maxWidth: '100%',
         }}
       >
-        <TitleGlyph titleId={titleId} title={name} size={22} />
+        <TitleGlyph titleId={titleId} title={name} size={26} />
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
       </button>
 
