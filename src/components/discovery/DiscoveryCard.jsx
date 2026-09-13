@@ -8,6 +8,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import { useInvitations } from '../../context/InvitationContext';
+import { normalizeUserGender } from '../../utils/avatarUtils';
+import TasteScopeBadge from '../../features/tastescope/TasteScopeBadge';
 import { useToast } from '../../context/ToastContext';
 import {
   likeDiscoveryProfile,
@@ -437,6 +439,11 @@ export default function DiscoveryCard({
           <AppText as="h2" className="discovery-card__name-line">
             {identityLine}
           </AppText>
+          {profile.tasteTitleId && (profile.tasteVisibility || 'public') === 'public' ? (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 6 }}>
+              <TasteScopeBadge variant="icon" size={40} titleId={profile.tasteTitleId} gender={normalizeUserGender(profile)} />
+            </div>
+          ) : null}
           {profile.bio ? (
             <AppText as="p" className="discovery-card__bio">
               {profile.bio}

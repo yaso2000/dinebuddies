@@ -14,9 +14,10 @@ import TasteScopeQuiz from './TasteScopeQuiz';
 import TasteScopeResult from './TasteScopeResult';
 
 /**
- * TasteScope route container (`/tastescope`): intro → quiz → result state
- * machine. Owns persistence (via useTasteScope) and gender resolution; the
- * screens stay presentational. See TASTESCOPE_SPEC.md §7, §11 (step 3).
+ * TasteScope route container (`/tastescope`): intro → quiz → generating → result.
+ * Finishing the quiz runs a server test that generates the whole profile
+ * (title + reading + cover) at once. First is free; a retake is free once every
+ * 90 days, else 150 credits; max 5/day. See TASTESCOPE_SPEC Appendix A (v2).
  */
 export default function TasteScopePage() {
   const navigate = useNavigate();
@@ -28,43 +29,49 @@ export default function TasteScopePage() {
   const gender = normalizeUserGender(userProfile);
 
   const {
-    tasteScope, hasTitle, canRetake, daysUntilRetake, saving, saveResult,
+    tasteScope, hasTitle, freeAvailable, retakePrice, canTest, testsRemainingToday, runTest,
   } = useTasteScope();
 
-  const [phase, setPhase] = useState('intro'); // 'intro' | 'quiz' | 'result'
+  const [phase, setPhase] = useState('intro'); // 'intro' | 'quiz' | 'generating' | 'result'
   const [result, setResult] = useState(null);  // { titleId, runnerUpId, answers }
-  const [saved, setSaved] = useState(false);
 
   const handleComplete = async (answers) => {
     const { titleId, runnerUpId } = computeTitle(answers);
+    const prevTitleId = tasteScope?.titleId || null;
     setResult({ titleId, runnerUpId, answers });
-    setSaved(false);
-    setPhase('result');
+    setPhase('generating');
 
-    const res = await saveResult({ answers, titleId, runnerUpId });
+    const res = await runTest({ answers, titleId, runnerUpId, style: 'cinematic', locale: isArabic ? 'ar' : 'en' });
     if (res.ok) {
-      setSaved(true);
-      if (res.changed && res.from) {
+      const finalTitle = res.titleId || titleId;
+      setResult({ titleId: finalTitle, runnerUpId: res.runnerUpId || runnerUpId, answers });
+      setPhase('result');
+      if (prevTitleId && prevTitleId !== finalTitle) {
         showToast(
           t('tastescope.changed', {
-            from: titleName(t, res.from, gender, isArabic),
-            to: titleName(t, titleId, gender, isArabic),
-            defaultValue: `لقبك تغيّر من ${titleName(t, res.from, gender, isArabic)} إلى ${titleName(t, titleId, gender, isArabic)}`,
+            from: titleName(t, prevTitleId, gender, isArabic),
+            to: titleName(t, finalTitle, gender, isArabic),
+            defaultValue: `لقبك تغيّر من ${titleName(t, prevTitleId, gender, isArabic)} إلى ${titleName(t, finalTitle, gender, isArabic)}`,
           }),
           'success',
         );
       }
-    } else if (res.reason === 'retake_locked') {
-      showToast(t('tastescope.profile.retakeIn', { days: res.daysUntilRetake, defaultValue: `أعد الاختبار بعد ${res.daysUntilRetake} يوم` }), 'info');
-    } else if (res.reason === 'write_failed') {
-      showToast(t('tastescope.result.saveError', 'تعذّر الحفظ، حاول مرة أخرى'), 'error');
+      return;
     }
+    // Failure — nothing was charged.
+    if (res.reason === 'insufficient_credits') {
+      showToast(t('tastescope.gen.insufficientRetake', { n: retakePrice, defaultValue: `رصيدك لا يكفي (${retakePrice} كريدت)` }), 'error');
+    } else if (res.reason === 'daily_limit') {
+      showToast(t('tastescope.intro.dailyLimit', 'بلغت الحدّ اليومي (5)'), 'error');
+    } else {
+      showToast(t('tastescope.gen.failed', 'تعذّر الإنشاء، لم يُخصم شيء'), 'error');
+    }
+    setPhase(hasTitle ? 'intro' : 'intro');
   };
 
   const viewStoredTitle = () => {
     if (!tasteScope?.titleId) return;
     setResult({ titleId: tasteScope.titleId, runnerUpId: tasteScope.runnerUpId, answers: tasteScope.answers });
-    setSaved(true);
     setPhase('result');
   };
 
@@ -75,7 +82,7 @@ export default function TasteScopePage() {
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg-body)' }} dir={i18n.dir()}>
-      {phase !== 'quiz' && (
+      {phase !== 'quiz' && phase !== 'generating' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 'calc(14px + env(safe-area-inset-top, 0px)) 16px 14px', background: 'var(--bg-card)', borderBottom: '1px solid var(--border-color)', position: 'sticky', top: 0, zIndex: 10 }}>
           <button type="button" onClick={goBack} aria-label={t('back', 'رجوع')} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', fontSize: '1.2rem', cursor: 'pointer' }}>
             <FaChevronLeft style={{ transform: rtl ? 'scaleX(-1)' : 'none' }} />
@@ -87,8 +94,10 @@ export default function TasteScopePage() {
       {phase === 'intro' && (
         <TasteScopeIntro
           hasTitle={hasTitle}
-          canRetake={canRetake}
-          daysUntilRetake={daysUntilRetake}
+          freeAvailable={freeAvailable}
+          retakePrice={retakePrice}
+          canTest={canTest}
+          testsRemainingToday={testsRemainingToday}
           onStart={() => setPhase('quiz')}
           onViewTitle={viewStoredTitle}
         />
@@ -98,16 +107,26 @@ export default function TasteScopePage() {
         <TasteScopeQuiz onComplete={handleComplete} onExit={() => setPhase('intro')} />
       )}
 
+      {phase === 'generating' && (
+        <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, padding: 24, textAlign: 'center' }}>
+          <div style={{ width: 46, height: 46, borderRadius: '50%', border: '4px solid var(--border-color, #e5e7eb)', borderTopColor: 'var(--primary, #ef4444)', animation: 'tsSpin 0.9s linear infinite' }} />
+          <style>{'@keyframes tsSpin{to{transform:rotate(360deg)}}'}</style>
+          <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
+            {t('tastescope.generatingProfile', 'جارٍ تجهيز ملفك الغذائي…')}
+          </div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #6b7280)' }}>
+            {t('tastescope.generatingHint', 'نرسم غلافك ونكتب قراءتك — لحظات')}
+          </div>
+        </div>
+      )}
+
       {phase === 'result' && result && (
         <TasteScopeResult
           titleId={result.titleId}
           runnerUpId={result.runnerUpId}
           answers={result.answers}
           gender={gender}
-          saving={saving}
-          saved={saved}
-          canRetake={canRetake}
-          daysUntilRetake={daysUntilRetake}
+          canRetake={canTest}
           onRetake={() => setPhase('quiz')}
           onDone={() => navigate('/profile')}
         />

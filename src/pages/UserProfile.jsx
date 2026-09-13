@@ -265,6 +265,10 @@ function mapUserDocToProfileModel(firestoreUser) {
       firestoreUser.tasteScope?.titleId ||
       firestoreUser.userPublic?.tasteScope?.titleId ||
       null,
+    tasteVisibility:
+      firestoreUser.tasteScope?.visibility ||
+      firestoreUser.userPublic?.tasteScope?.visibility ||
+      'public',
     tasteGender: normalizeUserGender(firestoreUser),
     invitePreference:
     firestoreUser.invitePreference ??
@@ -451,6 +455,16 @@ const UserProfile = () => {
 
   const profileModel = useMemo(() => mapUserDocToProfileModel(user), [user]);
   const isAdminViewer = isAdminIdentity(currentUser, userProfile);
+
+  // TasteScope visibility: 'public' shows to all; 'friends' only to mutual
+  // follows; 'hidden' to no one (self always sees their own).
+  const tasteVisibility = profileModel?.tasteVisibility || 'public';
+  const isMutualFriend = Boolean(
+    myUid && currentUser?.following?.includes?.(userId) && (user?.following || []).includes?.(myUid),
+  );
+  const canSeeOtherTaste = (myUid && userId === myUid)
+    || tasteVisibility === 'public'
+    || (tasteVisibility === 'friends' && isMutualFriend);
 
   useEffect(() => {
     setStayOnProfileAfterBlock(false);
@@ -1029,7 +1043,7 @@ const UserProfile = () => {
       className="user-profile-page relative mx-auto min-h-dvh max-w-md pb-[calc(var(--nav-height,65px)+env(safe-area-inset-bottom,0px))]"
       onClick={() => menuOpen && setMenuOpen(false)}>
       <ProfileHero
-        profile={profileModel}
+        profile={canSeeOtherTaste ? profileModel : { ...profileModel, tasteTitleId: null }}
         isOnline={isUserOnline}
         t={t}
         i18n={i18n}
@@ -1048,7 +1062,7 @@ const UserProfile = () => {
         <div style={{ marginBottom: 12 }}>
           <TasteCompatibility
             otherUserId={userId}
-            otherTasteScope={user?.userPublic?.tasteScope || user?.tasteScope || null}
+            otherTasteScope={canSeeOtherTaste ? (user?.userPublic?.tasteScope || user?.tasteScope || null) : null}
             onInvite={handlePrivateInvite}
           />
         </div>

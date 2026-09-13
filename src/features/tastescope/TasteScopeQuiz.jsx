@@ -29,8 +29,8 @@ function shuffled(arr) {
 /**
  * One tappable image card. Hoisted to module scope so the <img> is not
  * re-created on every quiz render. The image is shown WHOLE (object-fit:
- * contain) — never cropped — and carries no visible caption; the photo is the
- * question. The pole name stays as an accessible label only.
+ * contain) — never cropped — with a short caption beneath so the user knows
+ * what each choice is (clarifies the pick instead of guessing).
  */
 function PoleCard({ pole, src, label, selected, onPick }) {
   return (
@@ -40,21 +40,30 @@ function PoleCard({ pole, src, label, selected, onPick }) {
       aria-label={label}
       style={{
         flex: '1 1 0', minWidth: 0, height: '100%',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
         border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
       }}
     >
-      {/* Square source image, shown whole (no frame). Centered both axes; sized
-          to fit its half — grows in landscape. Selection = a subtle ring only. */}
+      {/* Square source image, shown whole (no frame). Centered; sized to fit its
+          half — grows in landscape. Selection = a subtle ring only. */}
       <img
         src={src}
         alt={label}
         style={{
-          maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto',
+          maxWidth: '100%', minHeight: 0, maxHeight: '100%', width: 'auto', height: 'auto',
           objectFit: 'contain', display: 'block', borderRadius: 16,
           boxShadow: selected ? '0 0 0 3px var(--primary, #ef4444)' : 'none',
         }}
       />
+      <span
+        style={{
+          flexShrink: 0, fontSize: '0.9rem', fontWeight: 800, textAlign: 'center',
+          color: selected ? 'var(--primary, #ef4444)' : 'var(--text-main)',
+          maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+      </span>
     </button>
   );
 }

@@ -7,7 +7,14 @@
       "disclaimer": "Just for fun 🎈",
       "viewTitle": "Show my title",
       "start": "Start",
-      "retake": "Retake"
+      "retake": "Retake",
+      "retakeFree": "Retake (free)",
+      "retakePaid": "Retake — {{n}} credits",
+      "dailyLimit": "Daily limit reached (5)",
+      "freeNote": "A free retake is available now",
+      "freeEvery": "One free test every 90 days",
+      "remainingToday": "{{n}} left today",
+      "openTastescope": "Open TasteScope"
     },
     "round": {
       "progress": "{{n}} / 10",
@@ -24,7 +31,8 @@
       "share": "Share",
       "saveError": "Couldn't save — please try again",
       "why": "Why are you {{title}}?",
-      "whyLead": "Because your picks lean toward"
+      "whyLead": "Because your picks lean toward",
+      "done": "Done"
     },
     "profile": {
       "retakeIn": "Retake in {{days}} days",
@@ -194,8 +202,21 @@
         "pixar": "3D",
         "watercolor": "Watercolor",
         "popart": "Pop art"
+      },
+      "insufficientRetake": "Not enough credits ({{n}})",
+      "changeCoverStyle": "Change cover style (once)",
+      "pickStyleOnce": "Pick a new style (once)",
+      "restyling": "Changing the cover…",
+      "restyleUsed": "Restyle already used for this test",
+      "visibility": "Who sees your result?",
+      "vis": {
+        "public": "Public",
+        "friends": "Friends",
+        "hidden": "Hidden"
       }
-    }
+    },
+    "generatingProfile": "Preparing your taste profile…",
+    "generatingHint": "Painting your cover and writing your reading — a moment"
   },
   "🎯 Add-on Offer Slots": "🎯 Espacios de oferta adicionales",
   "💕 Private Invite Packs": "💕 Paquetes de invitación a citas",

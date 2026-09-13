@@ -757,17 +757,19 @@ function toPublicProfile(userDocData, uid) {
                 // gender at render time) + answers (the 10-key map — compatibility
                 // reads it from here without touching users/{uid}). No history/
                 // timestamps. See TASTESCOPE_SPEC §5–§6.
-                tasteScope:
-                    userData.tasteScope && typeof userData.tasteScope === 'object' && userData.tasteScope.titleId
-                        ? {
-                            titleId: userData.tasteScope.titleId,
-                            answers:
-                                userData.tasteScope.answers && typeof userData.tasteScope.answers === 'object'
-                                    ? userData.tasteScope.answers
-                                    : null,
-                            coverUrl: userData.tasteScope.coverUrl || null,
-                        }
-                        : null
+                tasteScope: (() => {
+                    const ts = userData.tasteScope;
+                    if (!ts || typeof ts !== 'object' || !ts.titleId) return null;
+                    // 'hidden' → nothing public. 'friends'/'public' project the
+                    // badge + answers; the visibility flag lets clients gate.
+                    if (ts.visibility === 'hidden') return null;
+                    return {
+                        titleId: ts.titleId,
+                        answers: ts.answers && typeof ts.answers === 'object' ? ts.answers : null,
+                        coverUrl: ts.coverUrl || null,
+                        visibility: ts.visibility || 'public',
+                    };
+                })()
             }
             : null,
         businessPublic,

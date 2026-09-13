@@ -1,21 +1,20 @@
 /**
- * TasteScope — read/write the current user's result on users/{uid}.tasteScope,
- * with the 90-day retake gate. See TASTESCOPE_SPEC.md §6.
- *
- * The stored shape:
- *   tasteScope: { version, titleId, runnerUpId, answers{10}, takenAt,
- *                 retakeAvailableAt, history[≤5] }
- * Display form (gendered Arabic) is resolved at render time from titleId only.
+ * TasteScope — read the current user's result and run/restyle tests via server
+ * callables. Each test generates the full profile (title + reading + cover) at
+ * once: free once every 90 days, otherwise 150 credits, max 5 tests/day. One
+ * free cover restyle per test. See TASTESCOPE_SPEC Appendix A (v2).
  */
 import { useCallback, useMemo, useState } from 'react';
-import { doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import { doc, updateDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app, { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
-import { TASTESCOPE_VERSION, AXES, TITLE_IDS } from './tastescopeData';
+import { AXES } from './tastescopeData';
 
+const functions = getFunctions(app, 'us-central1');
 const DAY_MS = 24 * 60 * 60 * 1000;
-const RETAKE_COOLDOWN_MS = 90 * DAY_MS;
-const HISTORY_LIMIT = 5;
+export const RETAKE_PRICE = 150;
+export const DAILY_LIMIT = 5;
 
 const toMillis = (v) => {
   if (!v) return 0;
@@ -34,77 +33,82 @@ export function isValidAnswers(answers) {
 }
 
 export function useTasteScope() {
-  const { currentUser, userProfile } = useAuth();
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+  const { currentUser } = useAuth();
+  const { userProfile } = useAuth();
+  const [busy, setBusy] = useState(false);
 
   const tasteScope = userProfile?.tasteScope || null;
 
   const derived = useMemo(() => {
-    const hasTitle = Boolean(tasteScope?.titleId);
-    const retakeAt = toMillis(tasteScope?.retakeAvailableAt);
     const now = Date.now();
-    const canRetake = !hasTitle || retakeAt === 0 || retakeAt <= now;
-    const daysUntilRetake = canRetake ? 0 : Math.ceil((retakeAt - now) / DAY_MS);
-    return { hasTitle, canRetake, daysUntilRetake };
+    const hasTitle = Boolean(tasteScope?.titleId);
+    const freeAt = toMillis(tasteScope?.freeRetakeAt);
+    const freeAvailable = !hasTitle || !freeAt || now >= freeAt;
+    const daysUntilFree = freeAvailable ? 0 : Math.ceil((freeAt - now) / DAY_MS);
+    const today = new Date().toISOString().slice(0, 10);
+    const testsToday = tasteScope?.testDay === today ? (Number(tasteScope?.testDayCount) || 0) : 0;
+    const testsRemainingToday = Math.max(0, DAILY_LIMIT - testsToday);
+    return {
+      hasTitle,
+      freeAvailable,
+      daysUntilFree,
+      retakePrice: freeAvailable ? 0 : RETAKE_PRICE,
+      testsRemainingToday,
+      canTest: testsRemainingToday > 0,
+      coverRestyleUsed: Boolean(tasteScope?.coverRestyleUsed),
+      visibility: tasteScope?.visibility || 'public',
+    };
   }, [tasteScope]);
 
-  /**
-   * Persist a completed quiz. Returns { ok, changed, from, to } — `changed`/`from`
-   * power the "your title changed from X to Y" moment.
-   * @param {{ answers, titleId, runnerUpId }} result
-   */
-  const saveResult = useCallback(
-    async ({ answers, titleId, runnerUpId }) => {
-      const uid = currentUser?.uid;
-      if (!uid) return { ok: false, reason: 'not_signed_in' };
-      if (!isValidAnswers(answers)) return { ok: false, reason: 'invalid_answers' };
-      if (!TITLE_IDS.includes(titleId)) return { ok: false, reason: 'invalid_title' };
-      if (!derived.canRetake) return { ok: false, reason: 'retake_locked', daysUntilRetake: derived.daysUntilRetake };
+  /** Run a full test: server generates title+reading+cover and charges if paid. */
+  const runTest = useCallback(async ({ answers, titleId, runnerUpId, style = 'cinematic', locale }) => {
+    if (!currentUser?.uid) return { ok: false, reason: 'not_signed_in' };
+    if (!isValidAnswers(answers)) return { ok: false, reason: 'invalid_answers' };
+    setBusy(true);
+    try {
+      const res = await httpsCallable(functions, 'tastescopeRunTest')({ answers, titleId, runnerUpId, style, locale });
+      return res?.data || { ok: false, reason: 'failed' };
+    } catch {
+      return { ok: false, reason: 'failed' };
+    } finally {
+      setBusy(false);
+    }
+  }, [currentUser]);
 
-      const prevTitleId = tasteScope?.titleId || null;
-      const now = Date.now();
-      // History entries can't hold serverTimestamp sentinels (they live in an array),
-      // so store plain ms; keep the last HISTORY_LIMIT including this take.
-      const prevHistory = Array.isArray(tasteScope?.history) ? tasteScope.history : [];
-      const history = [...prevHistory, { titleId, takenAt: now }].slice(-HISTORY_LIMIT);
+  /** One free cover restyle per test. */
+  const restyleCover = useCallback(async (style, locale) => {
+    if (!currentUser?.uid) return { ok: false, reason: 'not_signed_in' };
+    try {
+      const res = await httpsCallable(functions, 'tastescopeRestyleCover')({ style, locale });
+      return res?.data || { ok: false, reason: 'failed' };
+    } catch {
+      return { ok: false, reason: 'failed' };
+    }
+  }, [currentUser]);
 
-      const payload = {
-        version: TASTESCOPE_VERSION,
-        titleId,
-        runnerUpId: TITLE_IDS.includes(runnerUpId) ? runnerUpId : null,
-        answers,
-        takenAt: serverTimestamp(),
-        retakeAvailableAt: Timestamp.fromMillis(now + RETAKE_COOLDOWN_MS),
-        history,
-      };
-
-      setSaving(true);
-      setError(null);
-      try {
-        await updateDoc(doc(db, 'users', uid), { tasteScope: payload });
-        return { ok: true, changed: Boolean(prevTitleId && prevTitleId !== titleId), from: prevTitleId, to: titleId };
-      } catch (e) {
-        setError(e);
-        return { ok: false, reason: 'write_failed' };
-      } finally {
-        setSaving(false);
-      }
-    },
-    [currentUser, tasteScope, derived.canRetake, derived.daysUntilRetake]
-  );
+  /** public | friends | hidden */
+  const setVisibility = useCallback(async (v) => {
+    const uid = currentUser?.uid;
+    if (!uid) return { ok: false };
+    const val = ['public', 'friends', 'hidden'].includes(v) ? v : 'public';
+    try {
+      await updateDoc(doc(db, 'users', uid), { 'tasteScope.visibility': val });
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
+  }, [currentUser]);
 
   return {
     tasteScope,
     titleId: tasteScope?.titleId || null,
     runnerUpId: tasteScope?.runnerUpId || null,
     answers: tasteScope?.answers || null,
-    hasTitle: derived.hasTitle,
-    canRetake: derived.canRetake,
-    daysUntilRetake: derived.daysUntilRetake,
-    saving,
-    error,
-    saveResult,
+    ...derived,
+    busy,
+    runTest,
+    restyleCover,
+    setVisibility,
   };
 }
 

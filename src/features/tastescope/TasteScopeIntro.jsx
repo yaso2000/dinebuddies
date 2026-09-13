@@ -6,8 +6,19 @@ import { ALL_POLES, AXES } from './tastescopeData';
  * TasteScope intro screen. Preloads all 20 pole images so the rounds feel
  * instant, then hands control to the quiz. See TASTESCOPE_SPEC.md §7.
  */
-export default function TasteScopeIntro({ hasTitle, canRetake, daysUntilRetake, onStart, onViewTitle }) {
+export default function TasteScopeIntro({
+  hasTitle, freeAvailable = true, retakePrice = 0, canTest = true, testsRemainingToday = 5,
+  onStart, onViewTitle,
+}) {
   const { t } = useTranslation();
+
+  const startLabel = !hasTitle
+    ? t('tastescope.intro.start', 'ابدأ')
+    : !canTest
+      ? t('tastescope.intro.dailyLimit', 'بلغت الحدّ اليومي (5)')
+      : freeAvailable
+        ? t('tastescope.intro.retakeFree', 'أعد الاختبار (مجاناً)')
+        : t('tastescope.intro.retakePaid', { n: retakePrice, defaultValue: `أعد الاختبار — ${retakePrice} كريدت` });
 
   // Preload every pole image up front (10 rounds × 2 = 20 files, ~100 KB each).
   useEffect(() => {
@@ -44,23 +55,28 @@ export default function TasteScopeIntro({ hasTitle, canRetake, daysUntilRetake, 
       <button
         type="button"
         onClick={onStart}
-        disabled={hasTitle && !canRetake}
+        disabled={hasTitle && !canTest}
         style={{
           display: 'block', width: '100%', padding: '14px 18px', borderRadius: 14,
           border: hasTitle ? '1.5px solid var(--border-color, #e5e7eb)' : 'none',
           background: hasTitle ? 'transparent' : 'var(--primary, #ef4444)',
           color: hasTitle ? 'var(--text-main)' : '#fff',
           fontSize: '1rem', fontWeight: 800,
-          cursor: hasTitle && !canRetake ? 'not-allowed' : 'pointer',
-          opacity: hasTitle && !canRetake ? 0.55 : 1,
+          cursor: hasTitle && !canTest ? 'not-allowed' : 'pointer',
+          opacity: hasTitle && !canTest ? 0.55 : 1,
         }}
       >
-        {!hasTitle
-          ? t('tastescope.intro.start', 'ابدأ')
-          : canRetake
-            ? t('tastescope.intro.retake', 'أعد الاختبار')
-            : t('tastescope.profile.retakeIn', { days: daysUntilRetake, defaultValue: `أعد الاختبار بعد ${daysUntilRetake} يوم` })}
+        {startLabel}
       </button>
+
+      {hasTitle && canTest && (
+        <p style={{ fontSize: '0.78rem', color: 'var(--text-tertiary, #9ca3af)', margin: '10px 0 0' }}>
+          {freeAvailable
+            ? t('tastescope.intro.freeNote', 'إعادة مجانية متاحة الآن')
+            : t('tastescope.intro.freeEvery', 'اختبار مجاني كل 90 يومًا')}
+          {` · ${t('tastescope.intro.remainingToday', { n: testsRemainingToday, defaultValue: `${testsRemainingToday} متبقٍ اليوم` })}`}
+        </p>
+      )}
     </div>
   );
 }

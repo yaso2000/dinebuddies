@@ -8,20 +8,19 @@ import TitleGlyph from './TitleGlyph';
 
 /**
  * TasteScope title badge. Two variants (TASTESCOPE_SPEC.md §7):
- *   - `full`: emoji + gendered title, tappable → bottom sheet with the
- *     description and (own profile only) a quiz/retake CTA.
- *   - `icon`: emoji only (~20px), title exposed via aria-label/tooltip; purely
+ *   - `full`: pictorial icon + gendered title, tappable → a centered modal with
+ *     the description and (own profile only) the generated profile + a CTA.
+ *   - `icon`: the pictorial icon only, title via aria-label/tooltip; purely
  *     visual so it can sit inside an already-clickable user card.
  *
- * @param {string}  titleId          required — nothing renders without it
- * @param {'male'|'female'} gender    picks the Arabic masculine/feminine form
- * @param {'full'|'icon'} variant     default 'full'
- * @param {boolean} showCta           show the quiz/retake CTA in the sheet (own profile)
- * @param {boolean} canRetake         gates the CTA label/action
- * @param {number}  daysUntilRetake   used in the locked CTA label
+ * @param {string}  titleId  required — nothing renders without it
+ * @param {'male'|'female'} gender  picks the Arabic masculine/feminine form
+ * @param {'full'|'icon'} variant  default 'full'
+ * @param {boolean} showCta  show the own-profile content + CTA in the modal
+ * @param {number}  size     icon diameter override (icon variant)
  */
 export default function TasteScopeBadge({
-  titleId, gender, variant = 'full', showCta = false, canRetake = true, daysUntilRetake = 0, size,
+  titleId, gender, variant = 'full', showCta = false, size,
 }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -83,18 +82,14 @@ export default function TasteScopeBadge({
             {showCta && (
               <button
                 type="button"
-                onClick={() => { if (canRetake) navigate('/tastescope'); }}
-                disabled={!canRetake}
+                onClick={() => { setOpen(false); navigate('/tastescope'); }}
                 style={{
                   display: 'block', width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none',
-                  background: canRetake ? 'var(--primary, #ef4444)' : 'var(--bg-body, #f3f4f6)',
-                  color: canRetake ? '#fff' : 'var(--text-tertiary, #9ca3af)',
-                  fontSize: '0.98rem', fontWeight: 800, cursor: canRetake ? 'pointer' : 'not-allowed',
+                  background: 'var(--primary, #ef4444)', color: '#fff',
+                  fontSize: '0.98rem', fontWeight: 800, cursor: 'pointer',
                 }}
               >
-                {canRetake
-                  ? t('tastescope.intro.retake', 'أعد الاختبار')
-                  : t('tastescope.profile.retakeIn', { days: daysUntilRetake, defaultValue: `أعد الاختبار بعد ${daysUntilRetake} يوم` })}
+                {t('tastescope.intro.openTastescope', 'افتح اختبار الطعام')}
               </button>
             )}
           </div>

@@ -11,7 +11,7 @@ import TasteScopeBadge from './TasteScopeBadge';
  */
 export default function TasteScopeOwnBadge() {
   const { userProfile } = useAuth();
-  const { titleId, hasTitle, canRetake, daysUntilRetake } = useTasteScope();
+  const { titleId, hasTitle } = useTasteScope();
 
   if (!hasTitle) return null;
 
@@ -21,8 +21,6 @@ export default function TasteScopeOwnBadge() {
       titleId={titleId}
       gender={normalizeUserGender(userProfile)}
       showCta
-      canRetake={canRetake}
-      daysUntilRetake={daysUntilRetake}
     />
   );
 }
