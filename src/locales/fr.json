@@ -214,7 +214,10 @@
         "friends": "Friends",
         "hidden": "Hidden"
       },
-      "visFailed": "Could not save visibility"
+      "visFailed": "Could not save visibility",
+      "shareFeed": "Share to feed",
+      "posting": "Posting…",
+      "sharedToFeed": "Shared to feed ✓"
     },
     "generatingProfile": "Preparing your taste profile…",
     "generatingHint": "Painting your cover and writing your reading — a moment"
@@ -5814,5 +5817,6 @@
   "user_directory_age_all": "Tous les âges",
   "invite_group_invitations": "Invitations",
   "invite_group_games": "Games",
-  "adjust_cover": "Adjust cover"
+  "adjust_cover": "Adjust cover",
+  "read_more": "Read more"
 }

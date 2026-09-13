@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
-import { FaShareAlt, FaPaperPlane } from 'react-icons/fa';
+import { FaShareAlt, FaPaperPlane, FaStream } from 'react-icons/fa';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -46,6 +46,7 @@ export default function TasteScopeGenerate() {
   const [restyleOpen, setRestyleOpen] = useState(false);
   const [restyling, setRestyling] = useState(false);
   const [visBusy, setVisBusy] = useState(false);
+  const [postingFeed, setPostingFeed] = useState(false);
   // Optimistic visibility so the selection holds immediately (don't wait for the
   // profile snapshot round-trip); cleared once the profile catches up.
   const [visOverride, setVisOverride] = useState(null);
@@ -92,6 +93,35 @@ export default function TasteScopeGenerate() {
     url: uid ? `/profile/${uid}` : '',
     authorName: userProfile?.display_name || currentUser?.displayName || '',
     authorAvatar: getSafeAvatar(userProfile || currentUser),
+  };
+
+  // Publish the taste profile to the community feed (a communityPosts doc).
+  const shareToFeed = async () => {
+    if (postingFeed || !uid) return;
+    setPostingFeed(true);
+    try {
+      const authorName = userProfile?.display_name || currentUser?.displayName || 'User';
+      await addDoc(collection(db, 'communityPosts'), {
+        author: { id: uid, name: authorName, avatar: getSafeAvatar(userProfile || currentUser) },
+        authorId: uid,
+        postTitle: name ? `${name} — ${t('tastescope.name', 'TasteScope')}` : t('tastescope.name', 'TasteScope'),
+        content: readingText || '',
+        mediaUrl: coverUrl || null,
+        mediaType: coverUrl ? 'image' : null,
+        textStyle: { fontSize: 16, textAlign: isArabic ? 'right' : 'left', fontWeight: 'normal', fontStyle: 'normal', color: 'var(--text-main)', backgroundColor: 'transparent', fontFamily: '"Inter", sans-serif' },
+        overlayText: '', overlayStyle: null,
+        createdAt: serverTimestamp(),
+        likes: [], comments: [], reposts: [],
+        authorInterests: Array.isArray(userProfile?.interests) ? userProfile.interests : (Array.isArray(userProfile?.hobbies) ? userProfile.hobbies : []),
+        attachedInvitation: null,
+        source: 'tastescope',
+      });
+      showToast(t('tastescope.gen.sharedToFeed', 'نُشر على الفيد ✓'), 'success');
+    } catch {
+      showToast(t('tastescope.gen.failed', 'تعذّر الإنشاء، لم يُخصم شيء'), 'error');
+    } finally {
+      setPostingFeed(false);
+    }
   };
 
   const doRestyle = async (style) => {
@@ -192,13 +222,25 @@ export default function TasteScopeGenerate() {
         <p style={{ whiteSpace: 'pre-wrap', fontSize: '1rem', lineHeight: 1.9, color: 'var(--text-main)', margin: 0, textAlign: 'start' }}>{readingText}</p>
       ) : null}
 
+      {/* Publish to the community feed */}
+      {(readingText || coverUrl) ? (
+        <button
+          type="button"
+          onClick={shareToFeed}
+          disabled={postingFeed}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 12px', borderRadius: 12, border: 'none', background: 'var(--primary,#ef4444)', color: '#fff', fontWeight: 800, fontSize: '0.9rem', cursor: postingFeed ? 'wait' : 'pointer', opacity: postingFeed ? 0.7 : 1 }}
+        >
+          <FaStream /> {postingFeed ? t('tastescope.gen.posting', 'جارٍ النشر…') : t('tastescope.gen.shareFeed', 'انشر على الفيد')}
+        </button>
+      ) : null}
+
       {/* Share (in-chat + external) */}
       {(readingText || coverUrl) ? (
         <div style={{ display: 'flex', gap: 10 }}>
           <button type="button" onClick={() => setInternalOpen(true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 12px', borderRadius: 12, border: '1px solid var(--border-color,#e5e7eb)', background: 'transparent', color: 'var(--text-main)', fontWeight: 800, fontSize: '0.88rem', cursor: 'pointer' }}>
             <FaPaperPlane /> {t('tastescope.gen.shareInternal', 'إرسال في المحادثة')}
           </button>
-          <button type="button" onClick={shareExternal} disabled={sharingExt} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 12px', borderRadius: 12, border: 'none', background: 'var(--primary,#ef4444)', color: '#fff', fontWeight: 800, fontSize: '0.88rem', cursor: sharingExt ? 'wait' : 'pointer', opacity: sharingExt ? 0.7 : 1 }}>
+          <button type="button" onClick={shareExternal} disabled={sharingExt} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 12px', borderRadius: 12, border: '1px solid var(--border-color,#e5e7eb)', background: 'transparent', color: 'var(--text-main)', fontWeight: 800, fontSize: '0.88rem', cursor: sharingExt ? 'wait' : 'pointer', opacity: sharingExt ? 0.7 : 1 }}>
             <FaShareAlt /> {t('tastescope.gen.shareExternal', 'مشاركة')}
           </button>
         </div>

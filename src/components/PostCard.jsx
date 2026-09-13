@@ -65,6 +65,29 @@ const getCommentTimeMs = (c) => {
   return new Date(v).getTime();
 };
 
+/** Post body with a 300-char clamp + read-more/less (applies to every post). */
+const POST_TEXT_LIMIT = 300;
+function PostText({ text, style, t }) {
+  const [expanded, setExpanded] = useState(false);
+  const full = String(text || '');
+  const long = full.length > POST_TEXT_LIMIT;
+  const shown = expanded || !long ? full : `${full.slice(0, POST_TEXT_LIMIT).trimEnd()}…`;
+  return (
+    <div className="post-text" style={style}>
+      {shown}
+      {long ? (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+          style={{ marginInlineStart: 6, background: 'none', border: 'none', color: 'var(--primary,#ef4444)', fontWeight: 800, cursor: 'pointer', padding: 0, fontSize: 'inherit' }}
+        >
+          {expanded ? t('show_less', 'عرض أقل') : t('read_more', 'قراءة المزيد')}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) => {
   const { t, i18n } = useTranslation();
   const confirm = useConfirm();
@@ -928,17 +951,18 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                                         </div> :
             null}
                                     {displayPost.content || displayPost.caption ?
-            <div className="post-text" style={{
-              whiteSpace: 'pre-wrap',
-              fontSize: displayPost.textStyle?.fontSize ? `${displayPost.textStyle.fontSize}px` : '0.9rem',
-              textAlign: displayPost.textStyle?.textAlign || 'left',
-              fontWeight: displayPost.textStyle?.fontWeight || 'normal',
-              fontStyle: displayPost.textStyle?.fontStyle || 'normal',
-              lineHeight: '1.5',
-              color: 'inherit'
-            }}>
-                                            {displayPost.content || displayPost.caption}
-                                        </div> :
+            <PostText
+              t={t}
+              text={displayPost.content || displayPost.caption}
+              style={{
+                whiteSpace: 'pre-wrap',
+                fontSize: displayPost.textStyle?.fontSize ? `${displayPost.textStyle.fontSize}px` : '0.9rem',
+                textAlign: displayPost.textStyle?.textAlign || 'left',
+                fontWeight: displayPost.textStyle?.fontWeight || 'normal',
+                fontStyle: displayPost.textStyle?.fontStyle || 'normal',
+                lineHeight: '1.5',
+                color: 'inherit',
+              }} /> :
             null}
                                 </div>
 
