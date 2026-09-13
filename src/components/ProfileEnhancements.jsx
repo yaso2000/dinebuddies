@@ -111,11 +111,12 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
   const inputId = `profile-cover-upload-${userId}`;
 
   return (
+    <>
     <div
       className={`profile-cover${editable ? ' profile-cover--editable' : ' profile-cover--readonly'}`}
       onMouseEnter={() => editable && setHovered(true)}
       onMouseLeave={() => editable && setHovered(false)}
-      style={{ background: defaultCover }}>
+      style={{ background: defaultCover, ...(editing ? { marginBottom: 12 } : null) }}>
 
             {coverPhoto ?
       <img
@@ -128,35 +129,6 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
           transform: `scale(${zoom})`, transformOrigin: `50% ${pos}%`,
           transition: editing ? 'none' : 'object-position 0.15s, transform 0.15s',
         }} /> :
-      null}
-
-            {editable && editing ?
-      <div
-        className="cover-adjust-panel"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          position: 'absolute', insetInline: 0, bottom: 0, zIndex: 6,
-          background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
-          padding: '12px 14px calc(12px + env(safe-area-inset-bottom,0px))',
-          display: 'flex', flexDirection: 'column', gap: 10,
-        }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#fff', fontSize: '0.8rem', fontWeight: 700 }}>
-                        <FaSearchPlus aria-hidden />
-                        <input type="range" min="1" max="3" step="0.01" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ flex: 1 }} />
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#fff', fontSize: '0.8rem', fontWeight: 700 }}>
-                        <FaArrowsAltV aria-hidden />
-                        <input type="range" min="0" max="100" step="1" value={pos} onChange={(e) => setPos(Number(e.target.value))} style={{ flex: 1 }} />
-                    </label>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <button type="button" onClick={cancelAdjust} style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.4)', background: 'transparent', color: '#fff', fontWeight: 800, cursor: 'pointer' }}>
-                            {t('cancel', 'إلغاء')}
-                        </button>
-                        <button type="button" onClick={saveAdjust} disabled={savingAdj} style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: 'none', background: 'var(--primary,#ef4444)', color: '#fff', fontWeight: 800, cursor: savingAdj ? 'wait' : 'pointer' }}>
-                            {savingAdj ? t('uploading', 'Saving…') : t('save', 'حفظ')}
-                        </button>
-                    </div>
-                </div> :
       null}
 
             {editable && !editing ?
@@ -195,7 +167,30 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
 
                 </> :
       null}
-        </div>);
+        </div>
+
+            {/* Adjust tools BELOW the image so the whole cover stays visible */}
+            {editable && editing ?
+      <div className="cover-adjust-below" style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '0 0 14px', padding: '12px 14px', borderRadius: 12, background: 'var(--bg-card, #f3f4f6)', border: '1px solid var(--border-color, #e5e7eb)' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-main)', fontSize: '0.8rem', fontWeight: 700 }}>
+                        <FaSearchPlus aria-hidden />
+                        <input type="range" min="1" max="3" step="0.01" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ flex: 1 }} />
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-main)', fontSize: '0.8rem', fontWeight: 700 }}>
+                        <FaArrowsAltV aria-hidden />
+                        <input type="range" min="0" max="100" step="1" value={pos} onChange={(e) => setPos(Number(e.target.value))} style={{ flex: 1 }} />
+                    </label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <button type="button" onClick={cancelAdjust} style={{ flex: 1, padding: '9px 10px', borderRadius: 10, border: '1px solid var(--border-color, #e5e7eb)', background: 'transparent', color: 'var(--text-main)', fontWeight: 800, cursor: 'pointer' }}>
+                            {t('cancel', 'إلغاء')}
+                        </button>
+                        <button type="button" onClick={saveAdjust} disabled={savingAdj} style={{ flex: 1, padding: '9px 10px', borderRadius: 10, border: 'none', background: 'var(--primary,#ef4444)', color: '#fff', fontWeight: 800, cursor: savingAdj ? 'wait' : 'pointer' }}>
+                            {savingAdj ? t('uploading', 'Saving…') : t('save', 'حفظ')}
+                        </button>
+                    </div>
+                </div> :
+      null}
+        </>);
 
 };
 

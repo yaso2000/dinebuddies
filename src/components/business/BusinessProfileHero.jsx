@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FaCheck, FaCrown, FaComments, FaEnvelope, FaHeart, FaRegHeart, FaShare, FaStar, FaTimes, FaUserPlus, FaUsers } from 'react-icons/fa';
+import { doc, updateDoc } from 'firebase/firestore';
+import { FaCheck, FaCrown, FaComments, FaEnvelope, FaHeart, FaRegHeart, FaShare, FaStar, FaTimes, FaUserPlus, FaUsers, FaArrowsAltV, FaSearchPlus } from 'react-icons/fa';
+import { db } from '../../firebase/config';
 import { AppText } from '../base';
 import { handleBusinessCoverImageError } from '../../utils/businessCoverImage';
 import { resolveBusinessOpenNow } from '../../utils/googlePlacesBusiness';
@@ -53,6 +55,35 @@ export default function BusinessProfileHero({ profile }) {
     handleCreateInvitation,
   } = profile;
 
+  // Cover reposition (zoom + vertical), stored on businessInfo. Applied for all
+  // viewers; the owner gets the adjust tools below the cover.
+  const [coverEditing, setCoverEditing] = useState(false);
+  const [bizPos, setBizPos] = useState(Number(businessInfo?.coverImagePosY ?? 50));
+  const [bizZoom, setBizZoom] = useState(Number(businessInfo?.coverImageZoom ?? 1));
+  const [coverSaving, setCoverSaving] = useState(false);
+  useEffect(() => { setBizPos(Number(businessInfo?.coverImagePosY ?? 50)); }, [businessInfo?.coverImagePosY]);
+  useEffect(() => { setBizZoom(Number(businessInfo?.coverImageZoom ?? 1)); }, [businessInfo?.coverImageZoom]);
+  const saveCoverAdjust = async () => {
+    if (!profileId) return;
+    setCoverSaving(true);
+    try {
+      await updateDoc(doc(db, 'users', profileId), {
+        'businessInfo.coverImagePosY': bizPos,
+        'businessInfo.coverImageZoom': bizZoom,
+      });
+      setCoverEditing(false);
+    } catch (err) {
+      console.error('Error saving business cover position:', err);
+    } finally {
+      setCoverSaving(false);
+    }
+  };
+  const cancelCoverAdjust = () => {
+    setBizPos(Number(businessInfo?.coverImagePosY ?? 50));
+    setBizZoom(Number(businessInfo?.coverImageZoom ?? 1));
+    setCoverEditing(false);
+  };
+
   return (
     <div className="profile-header">
 
@@ -70,7 +101,10 @@ export default function BusinessProfileHero({ profile }) {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            objectPosition: 'center'
+            objectPosition: `50% ${bizPos}%`,
+            transform: `scale(${bizZoom})`,
+            transformOrigin: `50% ${bizPos}%`,
+            transition: coverEditing ? 'none' : 'object-position 0.15s, transform 0.15s',
           }} />
 
 
@@ -225,6 +259,16 @@ export default function BusinessProfileHero({ profile }) {
                         {businessInfo.coverImage ?
         <button
           type="button"
+          className="business-hero-edit-cover"
+          onClick={() => setCoverEditing(true)}
+          title={t('adjust_cover', 'ضبط الغلاف')}
+          aria-label={t('adjust_cover', 'ضبط الغلاف')}>
+                                <FaArrowsAltV size={12} aria-hidden />
+                            </button> :
+        null}
+                        {businessInfo.coverImage ?
+        <button
+          type="button"
           className="business-hero-edit-cover business-hero-remove-cover"
           onClick={handleRemoveCover}
           disabled={coverUploading}
@@ -237,6 +281,27 @@ export default function BusinessProfileHero({ profile }) {
                     </div>
       }
             </div>
+
+            {isOwner && coverEditing ?
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '10px 12px 4px', padding: '12px 14px', borderRadius: 12, background: 'var(--bg-card, #f3f4f6)', border: '1px solid var(--border-color, #e5e7eb)' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-main)', fontSize: '0.8rem', fontWeight: 700 }}>
+                        <FaSearchPlus aria-hidden />
+                        <input type="range" min="1" max="3" step="0.01" value={bizZoom} onChange={(e) => setBizZoom(Number(e.target.value))} style={{ flex: 1 }} />
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-main)', fontSize: '0.8rem', fontWeight: 700 }}>
+                        <FaArrowsAltV aria-hidden />
+                        <input type="range" min="0" max="100" step="1" value={bizPos} onChange={(e) => setBizPos(Number(e.target.value))} style={{ flex: 1 }} />
+                    </label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <button type="button" onClick={cancelCoverAdjust} style={{ flex: 1, padding: '9px 10px', borderRadius: 10, border: '1px solid var(--border-color, #e5e7eb)', background: 'transparent', color: 'var(--text-main)', fontWeight: 800, cursor: 'pointer' }}>
+                            {t('cancel', 'إلغاء')}
+                        </button>
+                        <button type="button" onClick={saveCoverAdjust} disabled={coverSaving} style={{ flex: 1, padding: '9px 10px', borderRadius: 10, border: 'none', background: 'var(--primary,#ef4444)', color: '#fff', fontWeight: 800, cursor: coverSaving ? 'wait' : 'pointer' }}>
+                            {coverSaving ? t('uploading', 'Saving…') : t('save', 'حفظ')}
+                        </button>
+                    </div>
+                </div> :
+      null}
 
 
             {/* Glass Stats Box - uses BrandKit when available */}
