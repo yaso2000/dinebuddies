@@ -1380,7 +1380,18 @@
       "coverSetFailed": "تعذّر التعيين",
       "shareExternal": "مشاركة",
       "shareInternal": "إرسال في المحادثة",
-      "close": "إغلاق"
+      "close": "إغلاق",
+      "coverStyle": "نمط الغلاف",
+      "withText": "أدرج اسمي في التصميم",
+      "style": {
+        "calm": "هادئ",
+        "cinematic": "سينمائي",
+        "cartoon": "كرتون",
+        "anime": "أنمي",
+        "pixar": "ثلاثي الأبعاد",
+        "watercolor": "ألوان مائية",
+        "popart": "بوب آرت"
+      }
     }
   },
   "user_blocked": "تم الحظر. لن ترى بطاقاته بعد الآن.",

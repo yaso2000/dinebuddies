@@ -16,6 +16,8 @@ import { titleName, titleVisuals } from './titleDisplay';
 
 const functions = getFunctions(app, 'us-central1');
 const PRICE = { reading: 10, cover: 25 };
+// Art styles offered for the cover (mirror COVER_STYLE_IDS on the server).
+const STYLE_IDS = ['calm', 'cinematic', 'cartoon', 'anime', 'pixar', 'watercolor', 'popart'];
 
 /**
  * TasteScope: generate a personal reading (text) + cover (image) via the
@@ -47,6 +49,8 @@ export default function TasteScopeGenerate() {
   const [settingCover, setSettingCover] = useState(false);
   const [sharingExt, setSharingExt] = useState(false);
   const [internalOpen, setInternalOpen] = useState(false);
+  const [coverStyle, setCoverStyle] = useState('calm'); // art direction
+  const [coverWithText, setCoverWithText] = useState(false); // letter the name in?
 
   if (!ts?.titleId) return null;
 
@@ -61,7 +65,10 @@ export default function TasteScopeGenerate() {
     }
     setBusy(kind);
     try {
-      const res = await httpsCallable(functions, 'tastescopeGenerate')({ kind, locale });
+      const args = kind === 'cover'
+        ? { kind, locale, style: coverStyle, withText: coverWithText }
+        : { kind, locale };
+      const res = await httpsCallable(functions, 'tastescopeGenerate')(args);
       const out = res?.data || {};
       if (out.ok) {
         // userProfile updates via the users onSnapshot; nothing else to do.
@@ -192,6 +199,35 @@ export default function TasteScopeGenerate() {
           </button>
         </div>
       ) : null}
+
+      {/* Cover options: art style + whether to letter the name into the design */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', borderRadius: 12, background: 'var(--bg-card,#f3f4f6)', border: '1px solid var(--border-color,#e5e7eb)' }}>
+        <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-secondary,#6b7280)' }}>
+          {t('tastescope.gen.coverStyle', 'نمط الغلاف')}
+        </span>
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+          {STYLE_IDS.map((sid) => (
+            <button
+              key={sid}
+              type="button"
+              onClick={() => setCoverStyle(sid)}
+              style={{
+                flex: '0 0 auto', padding: '6px 12px', borderRadius: 999,
+                border: `1px solid ${coverStyle === sid ? 'var(--primary,#ef4444)' : 'var(--border-color,#e5e7eb)'}`,
+                background: coverStyle === sid ? 'var(--primary,#ef4444)' : 'transparent',
+                color: coverStyle === sid ? '#fff' : 'var(--text-main)', fontWeight: 700, fontSize: '0.8rem',
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              {t(`tastescope.gen.style.${sid}`, sid)}
+            </button>
+          ))}
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: 'var(--text-main)', cursor: 'pointer' }}>
+          <input type="checkbox" checked={coverWithText} onChange={(e) => setCoverWithText(e.target.checked)} />
+          {t('tastescope.gen.withText', 'أدرج اسمي في التصميم')}
+        </label>
+      </div>
 
       {/* Generate / regenerate buttons */}
       <div style={{ display: 'flex', gap: 10 }}>

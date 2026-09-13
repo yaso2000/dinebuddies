@@ -136,7 +136,61 @@ function postProcessReading(text) {
 
 // ── Cover (A3) ───────────────────────────────────────────────────────────────
 
-const STYLE_BLOCK = `Warm editorial illustration, painterly with soft grain, cinematic wide 16:9 composition, human and inviting. People are welcome and their faces may show — rendered in a friendly, stylized, illustrative way, never a real, identifiable, or famous person. The food and the table stay the heart of the scene. Keep the lower third calmer and slightly darker so white text can be overlaid later. No text, no letters, no numbers, no logos, no watermark. Limited palette dominated by the accent color given. Consistent series look: same illustration style, same lighting mood, same level of detail.`;
+// Shared base (composition + people policy + palette). The chosen art style is
+// prepended; the text/negatives are appended by buildCoverPrompt.
+const STYLE_BLOCK = `Cinematic wide 16:9 composition, human and inviting. The food and the table stay the heart of the scene. People are welcome and their faces may show — stylized and non-identifiable, never a real, identifiable, or famous person. Keep the lower third calmer and slightly darker so a caption can sit there. Limited palette dominated by the accent color given, with a consistent series look.`;
+
+// Selectable art directions. `calm` is the quiet default; the rest add energy.
+const COVER_STYLES = {
+  calm: 'Warm painterly editorial illustration with soft grain — quiet, elegant, understated.',
+  cinematic: 'Dramatic cinematic film still — moody volumetric lighting, shallow depth of field, rich filmic contrast, atmospheric and full of action.',
+  cartoon: 'Bold flat 2D cartoon — thick clean outlines, bright saturated flat colors, playful exaggerated shapes, lively sitcom energy.',
+  anime: 'Modern anime illustration — expressive characters, cel shading, clean dynamic linework, vivid colors.',
+  pixar: 'Polished stylized 3D animated-film look — soft global illumination, rounded appealing characters, warm and cheerful.',
+  watercolor: 'Delicate watercolor illustration — soft washes, bleeding pigments, gentle paper texture, airy and light.',
+  popart: 'Retro pop-art comic — halftone dots, bold ink outlines, punchy primary colors, vintage poster energy.',
+};
+const COVER_STYLE_IDS = Object.keys(COVER_STYLES);
+const DEFAULT_COVER_STYLE = 'calm';
+function isValidCoverStyle(s) { return COVER_STYLE_IDS.includes(s); }
+
+/** Human age phrase from the profile's ageCategory (or numeric age fallback). */
+function ageDescriptor(ageCategory, age) {
+  const cat = String(ageCategory || '').trim();
+  const byCat = {
+    '18-24': 'in their early twenties',
+    '25-34': 'in their late twenties to early thirties',
+    '35-44': 'around their late thirties to early forties',
+    '45-54': 'in their late forties to early fifties',
+    '55+': 'mature, in their late fifties or older',
+  };
+  if (byCat[cat]) return byCat[cat];
+  const n = Number(age);
+  if (Number.isFinite(n) && n > 0) {
+    if (n < 25) return 'in their early twenties';
+    if (n < 35) return 'in their late twenties to early thirties';
+    if (n < 45) return 'around their late thirties to early forties';
+    if (n < 55) return 'in their late forties to early fifties';
+    return 'mature, in their late fifties or older';
+  }
+  return '';
+}
+
+const genderNoun = (gender) => (gender === 'female' ? 'woman' : gender === 'male' ? 'man' : 'person');
+
+/** "a young woman in their twenties" style descriptor, or '' if nothing known. */
+function personDescriptor(gender, ageCategory, age) {
+  const g = String(gender || '').toLowerCase();
+  const noun = genderNoun(g === 'f' || g === 'female' ? 'female' : g === 'm' || g === 'male' ? 'male' : '');
+  const ageDesc = ageDescriptor(ageCategory, age);
+  if (noun === 'person' && !ageDesc) return '';
+  return [ageDesc ? `a ${noun} ${ageDesc}` : `a ${noun}`].join('');
+}
+
+/** Strip a display name to a safe, single-line snippet for in-art lettering. */
+function sanitizeName(name) {
+  return String(name || '').replace(/[\r\n"]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40);
+}
 
 const SCENE = {
   explorer: "a wooden table at the edge of a night market seen from above, one unfamiliar steaming dish in the center, blurred paper lanterns in the distance, a folded map at the table's edge",
@@ -227,14 +281,26 @@ function buildCoverPrompt(ctx) {
   const cc = String(ctx.countryCode || '').trim().toUpperCase();
   const cuisine = CUISINE[cc] || '';
   const mods = coverModifiers(ctx.answers).join(', ');
-  return [
+  const style = isValidCoverStyle(ctx.style) ? ctx.style : DEFAULT_COVER_STYLE;
+  const person = personDescriptor(ctx.gender, ctx.ageCategory, ctx.age);
+  const name = sanitizeName(ctx.name);
+  const withText = Boolean(ctx.withText) && Boolean(name);
+
+  const lines = [
+    `Art style: ${COVER_STYLES[style]}`,
     STYLE_BLOCK,
     `Accent color: ${ACCENT[titleId]}.`,
     `Scene: ${SCENE[titleId]}, ${mods}.${cuisine ? ` ${cuisine}` : ''}`,
-    `People: ${peopleClause(ctx.answers, titleId)}.`,
+    `People: ${peopleClause(ctx.answers, titleId)}${person ? `; the central figure is ${person}` : ''}.`,
     `Mood: ${MOOD[titleId]}.`,
-    'No text, no logos, no brand names, no real or identifiable people, no alcohol, no wine glasses.',
-  ].join('\n');
+  ];
+  if (withText) {
+    lines.push(`Hand-letter the name "${name}" into the artwork as bold, correctly spelled decorative typography that matches the art style and sits in the upper third; keep it clearly legible. Apart from that name, no other text.`);
+  } else {
+    lines.push('No text, no letters, no numbers.');
+  }
+  lines.push('No logos, no watermark, no brand names, no real or identifiable people, no alcohol, no wine glasses.');
+  return lines.join('\n');
 }
 
 module.exports = {
@@ -251,9 +317,17 @@ module.exports = {
   postProcessReading,
   buildCoverPrompt,
   coverModifiers,
+  peopleClause,
+  personDescriptor,
+  ageDescriptor,
+  sanitizeName,
   SCENE,
   ACCENT,
   MOOD,
   CUISINE,
   STYLE_BLOCK,
+  COVER_STYLES,
+  COVER_STYLE_IDS,
+  DEFAULT_COVER_STYLE,
+  isValidCoverStyle,
 };

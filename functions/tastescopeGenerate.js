@@ -139,6 +139,9 @@ function registerTastescopeGenerate(exports, { db, admin, enforceCallableRateLim
     const uid = context.auth.uid;
     const kind = data?.kind === 'cover' ? 'cover' : data?.kind === 'reading' ? 'reading' : null;
     const locale = data?.locale === 'en' ? 'en' : 'ar';
+    // Cover options (client-chosen): art style + whether to letter the name in.
+    const coverStyle = G.isValidCoverStyle(data?.style) ? data.style : G.DEFAULT_COVER_STYLE;
+    const coverWithText = data?.withText === true;
     if (!kind) throw new functions.https.HttpsError('invalid-argument', 'kind must be reading or cover.');
     if (!GEN_ENABLED) throw new functions.https.HttpsError('failed-precondition', 'TasteScope generation is disabled.');
 
@@ -192,7 +195,18 @@ function registerTastescopeGenerate(exports, { db, admin, enforceCallableRateLim
         if (!G.validateReading(text).ok) return { ok: false, reason: 'generation_failed' };
         payload = { text };
       } else {
-        const prompt = G.buildCoverPrompt({ titleId: ts.titleId, answers: ts.answers, countryCode });
+        const displayName = user.display_name || user.displayName || user.name || '';
+        const prompt = G.buildCoverPrompt({
+          titleId: ts.titleId,
+          answers: ts.answers,
+          countryCode,
+          style: coverStyle,
+          withText: coverWithText,
+          gender: user.gender, // raw ('male'/'female') → depicted person
+          ageCategory: user.ageCategory,
+          age: user.age,
+          name: displayName,
+        });
         let img = await generateCoverImage(prompt);
         if (!(await moderateImageBytes(img.buffer))) {
           img = await generateCoverImage(prompt); // retry once

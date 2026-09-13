@@ -1423,7 +1423,18 @@
       "coverSetFailed": "Could not set cover",
       "shareExternal": "Share",
       "shareInternal": "Send in chat",
-      "close": "Close"
+      "close": "Close",
+      "coverStyle": "Cover style",
+      "withText": "Put my name in the design",
+      "style": {
+        "calm": "Calm",
+        "cinematic": "Cinematic",
+        "cartoon": "Cartoon",
+        "anime": "Anime",
+        "pixar": "3D",
+        "watercolor": "Watercolor",
+        "popart": "Pop art"
+      }
     }
   },
   "try_again": "Try again",
