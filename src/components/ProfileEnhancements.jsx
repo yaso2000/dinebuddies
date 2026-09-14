@@ -99,6 +99,14 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
 
   const defaultCover = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
 
+  // Clamp pan to what the zoom allows so the image always covers the frame
+  // (guards against legacy/out-of-range values leaving a background gap).
+  const zoomN = Number(coverZoom) || 1;
+  const panLimit = Math.max(0, (zoomN - 1) * 50);
+  const clampPan = (v) => Math.max(-panLimit, Math.min(panLimit, Number(v) || 0));
+  const cx = clampPan(coverPosX);
+  const cy = clampPan(coverPosY);
+
   const inputId = `profile-cover-upload-${userId}`;
 
   return (
@@ -116,7 +124,7 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           objectFit: 'cover',
-          transform: `translate(${coverPosX}%, ${coverPosY}%) scale(${coverZoom})`,
+          transform: `translate(${cx}%, ${cy}%) scale(${zoomN})`,
         }} /> :
       null}
 
@@ -157,7 +165,7 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
                     {adjustOpen && coverPhoto ?
           <CoverAdjustModal
             imageUrl={coverPhoto}
-            initial={{ x: coverPosX, y: coverPosY, zoom: coverZoom }}
+            initial={{ x: cx, y: cy, zoom: zoomN }}
             onSave={saveAdjust}
             onClose={() => setAdjustOpen(false)} /> :
           null}

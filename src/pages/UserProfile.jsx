@@ -141,9 +141,11 @@ function ProfileHero({
   showMenu
 }) {
   const { displayName, ageRange, avatarUrl, coverPhotoUrl, tasteTitleId, tasteGender } = profile;
-  const coverPosX = Number.isFinite(Number(profile.coverPosX)) ? Number(profile.coverPosX) : 0;
-  const coverPosY = Number.isFinite(Number(profile.coverPosY)) ? Number(profile.coverPosY) : 0;
   const coverZoom = Number.isFinite(Number(profile.coverZoom)) ? Number(profile.coverZoom) : 1;
+  const coverPanLimit = Math.max(0, (coverZoom - 1) * 50);
+  const clampCoverPan = (v) => Math.max(-coverPanLimit, Math.min(coverPanLimit, Number.isFinite(Number(v)) ? Number(v) : 0));
+  const coverPosX = clampCoverPan(profile.coverPosX);
+  const coverPosY = clampCoverPan(profile.coverPosY);
   const headline = ageRange ? `${displayName}, ${ageRange}` : displayName;
 
   return (

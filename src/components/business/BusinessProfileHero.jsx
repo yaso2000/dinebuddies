@@ -59,9 +59,11 @@ export default function BusinessProfileHero({ profile }) {
   // Cover reposition (drag to pan + zoom), stored on businessInfo. Applied for
   // all viewers; the owner opens a floating editor.
   const [coverAdjustOpen, setCoverAdjustOpen] = useState(false);
-  const bizPosX = Number(businessInfo?.coverImagePosX ?? 0);
-  const bizPosY = Number(businessInfo?.coverImagePosY ?? 0);
   const bizZoom = Number(businessInfo?.coverImageZoom ?? 1);
+  const bizPanLimit = Math.max(0, (bizZoom - 1) * 50);
+  const bizClamp = (v) => Math.max(-bizPanLimit, Math.min(bizPanLimit, Number(v) || 0));
+  const bizPosX = bizClamp(businessInfo?.coverImagePosX);
+  const bizPosY = bizClamp(businessInfo?.coverImagePosY);
   const saveCoverAdjust = async ({ x, y, zoom }) => {
     if (!profileId) return;
     try {
