@@ -30,7 +30,7 @@ import './ProfileEnhancements.css';
 // ================================
 // 1. COVER PHOTO COMPONENT
 // ================================
-import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto, onUpdate, editable = true, coverPosX = 0, coverPosY = 0, coverZoom = 1, onAdjust }) => {
+import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto, onUpdate, editable = true, coverPosX = 50, coverPosY = 50, coverZoom = 1, onAdjust }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const { updateProfile } = useAuth();
@@ -99,13 +99,11 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
 
   const defaultCover = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
 
-  // Clamp pan to what the zoom allows so the image always covers the frame
-  // (guards against legacy/out-of-range values leaving a background gap).
+  // object-position pan (0–100%, 50 = centered). Works with objectFit:cover so a
+  // tall/wide image can be panned even at zoom 1; zoom adds extra overflow.
   const zoomN = Number(coverZoom) || 1;
-  const panLimit = Math.max(0, (zoomN - 1) * 50);
-  const clampPan = (v) => Math.max(-panLimit, Math.min(panLimit, Number(v) || 0));
-  const cx = clampPan(coverPosX);
-  const cy = clampPan(coverPosY);
+  const px = Number.isFinite(Number(coverPosX)) ? Math.max(0, Math.min(100, Number(coverPosX))) : 50;
+  const py = Number.isFinite(Number(coverPosY)) ? Math.max(0, Math.min(100, Number(coverPosY))) : 50;
 
   const inputId = `profile-cover-upload-${userId}`;
 
@@ -123,8 +121,8 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
         className="profile-cover__img"
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
-          objectFit: 'cover',
-          transform: `translate(${cx}%, ${cy}%) scale(${zoomN})`,
+          objectFit: 'cover', objectPosition: `${px}% ${py}%`,
+          transform: `scale(${zoomN})`, transformOrigin: `${px}% ${py}%`,
         }} /> :
       null}
 
@@ -165,7 +163,7 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
                     {adjustOpen && coverPhoto ?
           <CoverAdjustModal
             imageUrl={coverPhoto}
-            initial={{ x: cx, y: cy, zoom: zoomN }}
+            initial={{ x: px, y: py, zoom: zoomN }}
             onSave={saveAdjust}
             onClose={() => setAdjustOpen(false)} /> :
           null}

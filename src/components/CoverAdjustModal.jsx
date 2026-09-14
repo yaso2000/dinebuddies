@@ -1,32 +1,29 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { FaSearchPlus } from 'react-icons/fa';
 
+const clamp01 = (v) => Math.max(0, Math.min(100, v));
+
 /**
- * Floating cover editor: drag the image with a finger/mouse to pan (left/right/
- * up/down when zoomed) plus a zoom slider. Renders in a portal above everything
- * so nothing (avatars, bars) hides it. Values are stored as a translate percent
- * of the frame (x, y) + a scale (zoom); the same transform is applied wherever
- * the cover is shown. Reused by the consumer and business profile covers.
+ * Floating cover editor: drag the image (finger/mouse) to pan it inside the
+ * frame, plus a zoom slider. Panning uses object-position (0–100%), so whenever
+ * the image is larger than the frame in ANY direction — e.g. a tall image in a
+ * wide 16:9 frame — dragging works WITHOUT needing to zoom first. Zoom adds
+ * extra overflow in both directions. Values (posX, posY, zoom) are applied
+ * wherever the cover shows. Reused by the consumer + business covers.
  *
  * @param {{ imageUrl:string, aspect?:string, initial?:{x,y,zoom},
  *   onSave:(v:{x,y,zoom})=>Promise|void, onClose:()=>void }} props
  */
 export default function CoverAdjustModal({ imageUrl, aspect = '16 / 9', initial, onSave, onClose }) {
   const { t, i18n } = useTranslation();
-  const [x, setX] = useState(Number(initial?.x) || 0);
-  const [y, setY] = useState(Number(initial?.y) || 0);
+  const [x, setX] = useState(Number.isFinite(Number(initial?.x)) ? clamp01(Number(initial.x)) : 50);
+  const [y, setY] = useState(Number.isFinite(Number(initial?.y)) ? clamp01(Number(initial.y)) : 50);
   const [zoom, setZoom] = useState(Number(initial?.zoom) || 1);
   const [saving, setSaving] = useState(false);
   const frameRef = useRef(null);
   const drag = useRef(null);
-
-  // Pannable range so the frame never shows a gap: ±(zoom-1)*50 % of the frame.
-  const limit = Math.max(0, (zoom - 1) * 50);
-  const clamp = useCallback((v) => Math.max(-limit, Math.min(limit, v)), [limit]);
-
-  useEffect(() => { setX((v) => clamp(v)); setY((v) => clamp(v)); }, [zoom, clamp]);
 
   const point = (e) => (e.touches && e.touches[0]) || e;
   const onDown = (e) => { const p = point(e); drag.current = { sx: p.clientX, sy: p.clientY, x, y }; };
@@ -35,10 +32,11 @@ export default function CoverAdjustModal({ imageUrl, aspect = '16 / 9', initial,
     const p = point(e);
     const w = frameRef.current?.offsetWidth || 300;
     const h = frameRef.current?.offsetHeight || 169;
+    // Drag right reveals the left of the image → object-position X decreases.
     const dx = ((p.clientX - drag.current.sx) / w) * 100;
     const dy = ((p.clientY - drag.current.sy) / h) * 100;
-    setX(clamp(drag.current.x + dx));
-    setY(clamp(drag.current.y + dy));
+    setX(clamp01(drag.current.x - dx));
+    setY(clamp01(drag.current.y - dy));
     if (e.cancelable) e.preventDefault();
   };
   const onUp = () => { drag.current = null; };
@@ -51,7 +49,7 @@ export default function CoverAdjustModal({ imageUrl, aspect = '16 / 9', initial,
   return createPortal(
     <div
       onClick={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2147483000, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'max(16px, env(safe-area-inset-top,0px)) 16px max(16px, env(safe-area-inset-bottom,0px))' }}
     >
       <div
         dir={i18n.dir()}
@@ -80,7 +78,7 @@ export default function CoverAdjustModal({ imageUrl, aspect = '16 / 9', initial,
             src={imageUrl}
             alt=""
             draggable={false}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `translate(${x}%, ${y}%) scale(${zoom})`, userSelect: 'none', pointerEvents: 'none', display: 'block' }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${x}% ${y}%`, transform: `scale(${zoom})`, transformOrigin: `${x}% ${y}%`, userSelect: 'none', pointerEvents: 'none', display: 'block' }}
           />
         </div>
 

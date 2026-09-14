@@ -60,10 +60,9 @@ export default function BusinessProfileHero({ profile }) {
   // all viewers; the owner opens a floating editor.
   const [coverAdjustOpen, setCoverAdjustOpen] = useState(false);
   const bizZoom = Number(businessInfo?.coverImageZoom ?? 1);
-  const bizPanLimit = Math.max(0, (bizZoom - 1) * 50);
-  const bizClamp = (v) => Math.max(-bizPanLimit, Math.min(bizPanLimit, Number(v) || 0));
-  const bizPosX = bizClamp(businessInfo?.coverImagePosX);
-  const bizPosY = bizClamp(businessInfo?.coverImagePosY);
+  const bizPos = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Number(v))) : 50);
+  const bizPosX = bizPos(businessInfo?.coverImagePosX);
+  const bizPosY = bizPos(businessInfo?.coverImagePosY);
   const saveCoverAdjust = async ({ x, y, zoom }) => {
     if (!profileId) return;
     try {
@@ -94,8 +93,8 @@ export default function BusinessProfileHero({ profile }) {
             inset: 0,
             width: '100%',
             height: '100%',
-            objectFit: 'cover',
-            transform: `translate(${bizPosX}%, ${bizPosY}%) scale(${bizZoom})`,
+            objectFit: 'cover', objectPosition: `${bizPosX}% ${bizPosY}%`,
+            transform: `scale(${bizZoom})`, transformOrigin: `${bizPosX}% ${bizPosY}%`,
           }} />
 
 

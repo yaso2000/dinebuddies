@@ -753,8 +753,8 @@ const Profile = () => {
             <CoverPhoto
               userId={currentUser.uid}
               coverPhoto={headerCoverUrl}
-              coverPosX={Number(realtimeUser?.cover_photo_pos_x ?? userProfile?.cover_photo_pos_x ?? 0)}
-              coverPosY={Number(realtimeUser?.cover_photo_pos_y ?? userProfile?.cover_photo_pos_y ?? 0)}
+              coverPosX={Number(realtimeUser?.cover_photo_pos_x ?? userProfile?.cover_photo_pos_x ?? 50)}
+              coverPosY={Number(realtimeUser?.cover_photo_pos_y ?? userProfile?.cover_photo_pos_y ?? 50)}
               coverZoom={Number(realtimeUser?.cover_photo_zoom ?? userProfile?.cover_photo_zoom ?? 1)}
               onAdjust={({ x, y, zoom }) => {
               setRealtimeUser((prev) => ({ ...(prev || {}), cover_photo_pos_x: x, cover_photo_pos_y: y, cover_photo_zoom: zoom }));

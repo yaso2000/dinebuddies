@@ -142,10 +142,9 @@ function ProfileHero({
 }) {
   const { displayName, ageRange, avatarUrl, coverPhotoUrl, tasteTitleId, tasteGender } = profile;
   const coverZoom = Number.isFinite(Number(profile.coverZoom)) ? Number(profile.coverZoom) : 1;
-  const coverPanLimit = Math.max(0, (coverZoom - 1) * 50);
-  const clampCoverPan = (v) => Math.max(-coverPanLimit, Math.min(coverPanLimit, Number.isFinite(Number(v)) ? Number(v) : 0));
-  const coverPosX = clampCoverPan(profile.coverPosX);
-  const coverPosY = clampCoverPan(profile.coverPosY);
+  const clampPos = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Number(v))) : 50);
+  const coverPosX = clampPos(profile.coverPosX);
+  const coverPosY = clampPos(profile.coverPosY);
   const headline = ageRange ? `${displayName}, ${ageRange}` : displayName;
 
   return (
@@ -156,7 +155,7 @@ function ProfileHero({
             src={coverPhotoUrl}
             alt=""
             className="user-profile-persona-cover__img"
-            style={{ objectFit: 'cover', transform: `translate(${coverPosX}%, ${coverPosY}%) scale(${coverZoom})` }}
+            style={{ objectFit: 'cover', objectPosition: `${coverPosX}% ${coverPosY}%`, transform: `scale(${coverZoom})`, transformOrigin: `${coverPosX}% ${coverPosY}%` }}
             onError={(e) => {
               e.currentTarget.src = DEFAULT_COVER;
             }} />
@@ -255,8 +254,8 @@ function mapUserDocToProfileModel(firestoreUser) {
     avatarUrl: getSafeAvatar(firestoreUser),
     coverPhotoUrl:
     resolveProfileCoverUrl(firestoreUser) || DEFAULT_COVER,
-    coverPosX: firestoreUser.cover_photo_pos_x ?? firestoreUser.userPublic?.cover_photo_pos_x ?? 0,
-    coverPosY: firestoreUser.cover_photo_pos_y ?? firestoreUser.userPublic?.cover_photo_pos_y ?? 0,
+    coverPosX: firestoreUser.cover_photo_pos_x ?? firestoreUser.userPublic?.cover_photo_pos_x ?? 50,
+    coverPosY: firestoreUser.cover_photo_pos_y ?? firestoreUser.userPublic?.cover_photo_pos_y ?? 50,
     coverZoom: firestoreUser.cover_photo_zoom ?? firestoreUser.userPublic?.cover_photo_zoom ?? 1,
     profileGallery: normalizeProfileGallery(firestoreUser.profileGallery),
     directoryCoverIndex: firestoreUser.directoryCoverIndex ?? 0,
