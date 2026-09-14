@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +27,15 @@ export default function TasteScopeBadge({
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const isArabic = (i18n.language || 'ar').startsWith('ar');
+
+  // Lock the page behind the modal (iOS otherwise scrolls the profile/sticky
+  // header behind the overlay, so the two "mix").
+  useEffect(() => {
+    if (!open) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
 
   if (!titleId) return null;
 
@@ -57,7 +66,7 @@ export default function TasteScopeBadge({
       {open && createPortal(
         <div
           onClick={() => setOpen(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.62)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px))' }}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.62)', zIndex: 2147483000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px))', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
