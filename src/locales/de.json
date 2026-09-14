@@ -217,7 +217,10 @@
       "visFailed": "Could not save visibility",
       "shareFeed": "Share to feed",
       "posting": "Posting…",
-      "sharedToFeed": "Shared to feed ✓"
+      "sharedToFeed": "Shared to feed ✓",
+      "visSaved": "Visibility saved ✓",
+      "saveVisibility": "Save visibility",
+      "saving": "Saving…"
     },
     "generatingProfile": "Preparing your taste profile…",
     "generatingHint": "Painting your cover and writing your reading — a moment"

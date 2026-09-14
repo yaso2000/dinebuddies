@@ -47,11 +47,10 @@ export default function TasteScopeGenerate() {
   const [restyling, setRestyling] = useState(false);
   const [visBusy, setVisBusy] = useState(false);
   const [postingFeed, setPostingFeed] = useState(false);
-  // Optimistic visibility so the selection holds immediately (don't wait for the
-  // profile snapshot round-trip); cleared once the profile catches up.
-  const [visOverride, setVisOverride] = useState(null);
-  const effectiveVis = visOverride || visibility;
-  useEffect(() => { if (visOverride && visibility === visOverride) setVisOverride(null); }, [visibility, visOverride]);
+  // Local pending visibility choice; applied only when "Save" is tapped.
+  const [visSel, setVisSel] = useState(visibility);
+  useEffect(() => { setVisSel(visibility); }, [visibility]);
+  const visDirty = visSel !== visibility;
 
   if (!ts?.titleId) return null;
 
@@ -137,14 +136,15 @@ export default function TasteScopeGenerate() {
     }
   };
 
-  const changeVisibility = async (v) => {
-    if (visBusy || v === effectiveVis) return;
-    setVisOverride(v); // optimistic
+  const saveVisibility = async () => {
+    if (visBusy || !visDirty) return;
     setVisBusy(true);
-    const res = await setVisibility(v);
+    const res = await setVisibility(visSel);
     setVisBusy(false);
-    if (!res || !res.ok) {
-      setVisOverride(null);
+    if (res && res.ok) {
+      showToast(t('tastescope.gen.visSaved', 'تم حفظ الخصوصية ✓'), 'success');
+    } else {
+      setVisSel(visibility);
       showToast(t('tastescope.gen.visFailed', 'تعذّر حفظ الخصوصية'), 'error');
     }
   };
@@ -253,12 +253,12 @@ export default function TasteScopeGenerate() {
         </span>
         <div style={{ display: 'flex', gap: 8 }}>
           {VIS_OPTIONS.map((v) => {
-            const active = effectiveVis === v;
+            const active = visSel === v;
             return (
               <button
                 key={v}
                 type="button"
-                onClick={() => changeVisibility(v)}
+                onClick={() => setVisSel(v)}
                 disabled={visBusy}
                 style={{ flex: 1, padding: '8px 6px', borderRadius: 10, border: `1px solid ${active ? 'var(--primary,#ef4444)' : 'var(--border-color,#e5e7eb)'}`, background: active ? 'var(--primary,#ef4444)' : 'transparent', color: active ? '#fff' : 'var(--text-main)', fontWeight: 800, fontSize: '0.82rem', cursor: visBusy ? 'wait' : 'pointer' }}
               >
@@ -267,6 +267,14 @@ export default function TasteScopeGenerate() {
             );
           })}
         </div>
+        <button
+          type="button"
+          onClick={saveVisibility}
+          disabled={!visDirty || visBusy}
+          style={{ marginTop: 2, padding: '10px 12px', borderRadius: 10, border: 'none', background: (visDirty && !visBusy) ? 'var(--primary,#ef4444)' : 'var(--bg-body,#e5e7eb)', color: (visDirty && !visBusy) ? '#fff' : 'var(--text-tertiary,#9ca3af)', fontWeight: 800, fontSize: '0.85rem', cursor: (visDirty && !visBusy) ? 'pointer' : 'default' }}
+        >
+          {visBusy ? t('tastescope.gen.saving', 'جارٍ الحفظ…') : t('tastescope.gen.saveVisibility', 'حفظ الخصوصية')}
+        </button>
       </div>
 
       <InternalShareModal isOpen={internalOpen} onClose={() => setInternalOpen(false)} shareData={internalShareData} />

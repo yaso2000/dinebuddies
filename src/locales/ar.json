@@ -1414,7 +1414,10 @@
       "visFailed": "تعذّر حفظ الخصوصية",
       "shareFeed": "انشر على الفيد",
       "posting": "جارٍ النشر…",
-      "sharedToFeed": "نُشر على الفيد ✓"
+      "sharedToFeed": "نُشر على الفيد ✓",
+      "visSaved": "تم حفظ الخصوصية ✓",
+      "saveVisibility": "حفظ الخصوصية",
+      "saving": "جارٍ الحفظ…"
     },
     "generatingProfile": "جارٍ تجهيز ملف ذوقك…",
     "generatingHint": "نرسم غلافك ونكتب قراءتك — لحظات"
