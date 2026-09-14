@@ -24,44 +24,35 @@ import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'fireb
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { uploadProfileCoverPhoto } from '../utils/imageUpload';
 import { db } from '../firebase/config';
+import CoverAdjustModal from './CoverAdjustModal';
 import './ProfileEnhancements.css';
 
 // ================================
 // 1. COVER PHOTO COMPONENT
 // ================================
-import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto, onUpdate, editable = true, coverPos = 50, coverZoom = 1, onAdjust }) => {
+import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto, onUpdate, editable = true, coverPosX = 0, coverPosY = 0, coverZoom = 1, onAdjust }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const { updateProfile } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [pos, setPos] = useState(coverPos);
-  const [zoom, setZoom] = useState(coverZoom);
-  const [savingAdj, setSavingAdj] = useState(false);
-
-  useEffect(() => { setPos(coverPos); }, [coverPos]);
-  useEffect(() => { setZoom(coverZoom); }, [coverZoom]);
+  const [adjustOpen, setAdjustOpen] = useState(false);
 
   const persistAdjust = async (fields) => {
     if (updateProfile) await updateProfile(fields);
     else await updateDoc(doc(db, 'users', userId), fields);
   };
-  const saveAdjust = async () => {
-    setSavingAdj(true);
+  const saveAdjust = async ({ x, y, zoom }) => {
     try {
-      await persistAdjust({ cover_photo_pos_y: pos, cover_photo_zoom: zoom });
-      onAdjust?.({ pos, zoom });
-      setEditing(false);
+      await persistAdjust({ cover_photo_pos_x: x, cover_photo_pos_y: y, cover_photo_zoom: zoom });
+      onAdjust?.({ x, y, zoom });
+      setAdjustOpen(false);
       showToast(t('cover_photo_updated', 'Cover updated'), 'success');
     } catch (err) {
       console.error('Error saving cover position:', err);
       showToast(t('failed_upload_image', 'Could not update cover.'), 'error');
-    } finally {
-      setSavingAdj(false);
     }
   };
-  const cancelAdjust = () => { setPos(coverPos); setZoom(coverZoom); setEditing(false); };
 
   const handleCoverUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -111,12 +102,11 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
   const inputId = `profile-cover-upload-${userId}`;
 
   return (
-    <>
     <div
       className={`profile-cover${editable ? ' profile-cover--editable' : ' profile-cover--readonly'}`}
       onMouseEnter={() => editable && setHovered(true)}
       onMouseLeave={() => editable && setHovered(false)}
-      style={{ background: defaultCover, ...(editing ? { marginBottom: 12 } : null) }}>
+      style={{ background: defaultCover }}>
 
             {coverPhoto ?
       <img
@@ -125,13 +115,12 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
         className="profile-cover__img"
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
-          objectFit: 'cover', objectPosition: `50% ${pos}%`,
-          transform: `scale(${zoom})`, transformOrigin: `50% ${pos}%`,
-          transition: editing ? 'none' : 'object-position 0.15s, transform 0.15s',
+          objectFit: 'cover',
+          transform: `translate(${coverPosX}%, ${coverPosY}%) scale(${coverZoom})`,
         }} /> :
       null}
 
-            {editable && !editing ?
+            {editable ?
       <>
                     <div className="cover-overlay" style={{ opacity: hovered ? 1 : undefined }}>
                         <label className="cover-upload-btn" htmlFor={inputId}>
@@ -147,7 +136,7 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
           <button
             type="button"
             className="cover-edit-fab ios-tap-target"
-            onClick={() => setEditing(true)}
+            onClick={() => setAdjustOpen(true)}
             aria-label={t('adjust_cover', 'ضبط الغلاف')}
             title={t('adjust_cover', 'ضبط الغلاف')}
             style={{ display: 'flex', insetInlineEnd: 'auto', insetInlineStart: '0.75rem' }}>
@@ -165,32 +154,16 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
           disabled={uploading}
           hidden />
 
+                    {adjustOpen && coverPhoto ?
+          <CoverAdjustModal
+            imageUrl={coverPhoto}
+            initial={{ x: coverPosX, y: coverPosY, zoom: coverZoom }}
+            onSave={saveAdjust}
+            onClose={() => setAdjustOpen(false)} /> :
+          null}
                 </> :
       null}
-        </div>
-
-            {/* Adjust tools BELOW the image so the whole cover stays visible */}
-            {editable && editing ?
-      <div className="cover-adjust-below" style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '0 0 14px', padding: '12px 14px', borderRadius: 12, background: 'var(--bg-card, #f3f4f6)', border: '1px solid var(--border-color, #e5e7eb)' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-main)', fontSize: '0.8rem', fontWeight: 700 }}>
-                        <FaSearchPlus aria-hidden />
-                        <input type="range" min="1" max="3" step="0.01" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ flex: 1 }} />
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-main)', fontSize: '0.8rem', fontWeight: 700 }}>
-                        <FaArrowsAltV aria-hidden />
-                        <input type="range" min="0" max="100" step="1" value={pos} onChange={(e) => setPos(Number(e.target.value))} style={{ flex: 1 }} />
-                    </label>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <button type="button" onClick={cancelAdjust} style={{ flex: 1, padding: '9px 10px', borderRadius: 10, border: '1px solid var(--border-color, #e5e7eb)', background: 'transparent', color: 'var(--text-main)', fontWeight: 800, cursor: 'pointer' }}>
-                            {t('cancel', 'إلغاء')}
-                        </button>
-                        <button type="button" onClick={saveAdjust} disabled={savingAdj} style={{ flex: 1, padding: '9px 10px', borderRadius: 10, border: 'none', background: 'var(--primary,#ef4444)', color: '#fff', fontWeight: 800, cursor: savingAdj ? 'wait' : 'pointer' }}>
-                            {savingAdj ? t('uploading', 'Saving…') : t('save', 'حفظ')}
-                        </button>
-                    </div>
-                </div> :
-      null}
-        </>);
+        </div>);
 
 };
 

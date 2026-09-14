@@ -62,6 +62,7 @@ function isValidAnswers(answers) {
 const READING_SYSTEM = `You write short, warm, playful "taste readings" for a social dining app. A reading describes how a person eats and what that playfully suggests about how they enjoy life and company. It is entertainment, like a horoscope — never psychology, never diagnosis.
 
 Hard rules:
+- Write the ENTIRE reading strictly in the requested output language. Never switch to any other language; if the requested language is English, write only in English; if Arabic, write only in Arabic.
 - Speak directly to the person in the second person, in the requested language and grammatical gender.
 - 120–170 words, exactly three short paragraphs, no title, no lists, no emojis, no markdown.
 - Base the text on the ten answers provided. Mention at least four of them in a natural way (e.g., "you reach for the spicy bowl", "breakfast is your hour"). Two readings with the same title but different answers must feel different.
@@ -81,7 +82,7 @@ function buildReadingUserMessage(ctx) {
   const a = ctx.answers || {};
   const line = (axis) => `- ${axis}: ${a[axis] || ''}`;
   return [
-    `Language: ${localeName}`,
+    `Output language: ${localeName}. Write the entire reading in ${localeName} only — do not use any other language.`,
     `Grammatical gender: ${ctx.gender}`,
     `Title: ${ctx.titleName} (${ctx.titleEn})`,
     `Secondary title: ${ctx.runnerUpName}`,
@@ -89,7 +90,7 @@ function buildReadingUserMessage(ctx) {
     'Answers:',
     line('adventure'), line('heat'), line('ritual'), line('social'), line('rhythm'),
     line('simplicity'), line('sweetness'), line('origin'), line('sugar'), line('sharing'),
-    'Write the reading now.',
+    `Now write the reading, in ${localeName}.`,
   ].join('\n');
 }
 
