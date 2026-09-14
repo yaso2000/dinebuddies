@@ -183,6 +183,12 @@ export function mapDirectoryUserToDiscoveryProfile(user, userLocation = null) {
         city: user.city || '',
         country: user.country || '',
         bio: String(user.bio || user.shortBio || '').trim(),
+        gender: user.gender || null,
+        // TasteScope: title + answers feed the swipe card's title badge and the
+        // compatibility ring. Visibility gates whether the title is shown at all.
+        tasteTitleId: user.tasteTitleId || user.tasteScope?.titleId || null,
+        tasteVisibility: user.tasteVisibility || user.tasteScope?.visibility || 'public',
+        tasteAnswers: user.tasteAnswers || user.tasteScope?.answers || null,
     };
 
 }

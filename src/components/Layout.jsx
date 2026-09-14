@@ -34,6 +34,8 @@ import EmailVerificationBusinessBanner from './EmailVerificationBusinessBanner';
 import InstallAppBanner from './InstallAppBanner';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
+import AiStudioMenu from './AiStudioMenu';
+import CityRegisterPanel from './CityRegisterPanel';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import AppRouteLoading from './AppRouteLoading';
@@ -512,24 +514,11 @@ const Layout = ({ children }) => {
                 <div className="header-actions">
                     {!isGuest && userProfile?.role !== 'guest' ?
           <>
-                            <Link
-              to="/ai-design-studio"
-              className={`notification-bell header-ai-studio-btn header-ai-studio-btn--image${isAiDesignRoute ? ' active' : ''}`}
-              title={t('ai_image_nav', 'AI Images')}
-              aria-label={t('ai_image_nav', 'AI Images')}>
-              
-                                <FaImages />
-                            </Link>
-                            {!isBusinessAccount && (
-                            <Link
-              to="/ai-text-studio"
-              className={`notification-bell header-ai-studio-btn header-ai-studio-btn--text${isAiTextRoute ? ' active' : ''}`}
-              title={t('ai_text_nav', 'Relationship tips')}
-              aria-label={t('ai_text_nav', 'Relationship tips')}>
+                            {/* Single "AI" entry → menu of AI tools (extensible to more agents). */}
+                            <AiStudioMenu isBusinessAccount={isBusinessAccount} active={isAiDesignRoute || isAiTextRoute} />
 
-                                <FaPenAlt />
-                            </Link>
-                            )}
+                            {/* City register — what's available in the viewer's city. */}
+                            <CityRegisterPanel />
                             {/* DM inbox — businesses do no user chat, so hide it for them. */}
                             {!isBusinessAccount && (
                             <Link

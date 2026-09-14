@@ -72,6 +72,8 @@ export function mapDirectoryUser(publicDoc, userDoc = null) {
         // else from the public_profiles projection. See TASTESCOPE_SPEC §6.
         tasteTitleId: u.tasteScope?.titleId || userPublic.tasteScope?.titleId || null,
         tasteVisibility: u.tasteScope?.visibility || userPublic.tasteScope?.visibility || 'public',
+        // Answers power the swipe-card compatibility ring (no extra reads).
+        tasteAnswers: u.tasteScope?.answers || userPublic.tasteScope?.answers || null,
         profileType: 'user',
         role: u.role || publicDoc.accountRole || 'user',
         accountRole: publicDoc.accountRole || u.role || 'user',

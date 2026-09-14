@@ -10,6 +10,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useInvitations } from '../../context/InvitationContext';
 import { normalizeUserGender } from '../../utils/avatarUtils';
 import TasteScopeBadge from '../../features/tastescope/TasteScopeBadge';
+import TasteCompatRing from '../../features/tastescope/TasteCompatRing';
+import { computeCompatibility } from '../../features/tastescope/computeCompatibility';
 import { useToast } from '../../context/ToastContext';
 import {
   likeDiscoveryProfile,
@@ -352,6 +354,16 @@ export default function DiscoveryCard({
     if (listPath) navigate(listPath, { replace: true });
   };
 
+  // TasteScope: show the other person's title (public only) and, when the viewer
+  // also has a title, the compatibility ring. Reuses already-loaded data.
+  const tasteVisible = Boolean(profile?.tasteTitleId && (profile?.tasteVisibility || 'public') === 'public');
+  const tasteGender = normalizeUserGender(targetUser);
+  const compat = useMemo(() => {
+    const mine = userProfile?.tasteScope;
+    if (!tasteVisible || !mine?.answers || !profile?.tasteAnswers) return null;
+    return computeCompatibility(mine.answers, profile.tasteAnswers, mine.titleId, profile.tasteTitleId);
+  }, [tasteVisible, userProfile?.tasteScope, profile?.tasteAnswers, profile?.tasteTitleId]);
+
   const identityLine = ageLabel ? `${profile.name}, ${ageLabel}` : profile.name;
   const cardThemeVars = targetUser?.cardTheme?.primaryColor
     ? {
@@ -439,9 +451,15 @@ export default function DiscoveryCard({
           <AppText as="h2" className="discovery-card__name-line">
             {identityLine}
           </AppText>
-          {profile.tasteTitleId && (profile.tasteVisibility || 'public') === 'public' ? (
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 6 }}>
-              <TasteScopeBadge variant="icon" size={40} titleId={profile.tasteTitleId} gender={normalizeUserGender(profile)} />
+          {tasteVisible ? (
+            <div
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 8, flexWrap: 'wrap' }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {/* Title chip — tap shows the quick tagline (its description). */}
+              <TasteScopeBadge variant="full" titleId={profile.tasteTitleId} gender={tasteGender} />
+              {/* Compatibility ring — only when the viewer also has a title. */}
+              {compat ? <TasteCompatRing percent={compat.percent} size={62} /> : null}
             </div>
           ) : null}
           {profile.bio ? (
