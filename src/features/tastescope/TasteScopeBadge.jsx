@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaTimes } from 'react-icons/fa';
@@ -53,10 +54,10 @@ export default function TasteScopeBadge({
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
           onClick={() => setOpen(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.62)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px))' }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -93,7 +94,8 @@ export default function TasteScopeBadge({
               </button>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
