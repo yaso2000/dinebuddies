@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -37,6 +37,14 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
   const [uploading, setUploading] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const coverRef = useRef(null);
+  // Preview frame must match the real cover's aspect so the crop is identical.
+  const [frameAspect, setFrameAspect] = useState('16 / 9');
+  const openAdjust = () => {
+    const el = coverRef.current;
+    if (el && el.offsetWidth && el.offsetHeight) setFrameAspect(`${el.offsetWidth} / ${el.offsetHeight}`);
+    setAdjustOpen(true);
+  };
 
   const persistAdjust = async (fields) => {
     if (updateProfile) await updateProfile(fields);
@@ -109,6 +117,7 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
 
   return (
     <div
+      ref={coverRef}
       className={`profile-cover${editable ? ' profile-cover--editable' : ' profile-cover--readonly'}`}
       onMouseEnter={() => editable && setHovered(true)}
       onMouseLeave={() => editable && setHovered(false)}
@@ -142,7 +151,7 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
           <button
             type="button"
             className="cover-edit-fab ios-tap-target"
-            onClick={() => setAdjustOpen(true)}
+            onClick={openAdjust}
             aria-label={t('adjust_cover', 'ضبط الغلاف')}
             title={t('adjust_cover', 'ضبط الغلاف')}
             style={{ display: 'flex', insetInlineEnd: 'auto', insetInlineStart: '0.75rem' }}>
@@ -163,6 +172,7 @@ import { AppText } from "./base";export const CoverPhoto = ({ userId, coverPhoto
                     {adjustOpen && coverPhoto ?
           <CoverAdjustModal
             imageUrl={coverPhoto}
+            aspect={frameAspect}
             initial={{ x: px, y: py, zoom: zoomN }}
             onSave={saveAdjust}
             onClose={() => setAdjustOpen(false)} /> :

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc } from 'firebase/firestore';
 import { FaCheck, FaCrown, FaComments, FaEnvelope, FaHeart, FaRegHeart, FaShare, FaStar, FaTimes, FaUserPlus, FaUsers, FaArrowsAltV, FaSearchPlus } from 'react-icons/fa';
@@ -59,6 +59,13 @@ export default function BusinessProfileHero({ profile }) {
   // Cover reposition (drag to pan + zoom), stored on businessInfo. Applied for
   // all viewers; the owner opens a floating editor.
   const [coverAdjustOpen, setCoverAdjustOpen] = useState(false);
+  const coverBoxRef = useRef(null);
+  const [coverFrameAspect, setCoverFrameAspect] = useState('16 / 9');
+  const openCoverAdjust = () => {
+    const el = coverBoxRef.current;
+    if (el && el.offsetWidth && el.offsetHeight) setCoverFrameAspect(`${el.offsetWidth} / ${el.offsetHeight}`);
+    setCoverAdjustOpen(true);
+  };
   const bizZoom = Number(businessInfo?.coverImageZoom ?? 1);
   const bizPos = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Number(v))) : 50);
   const bizPosX = bizPos(businessInfo?.coverImagePosX);
@@ -81,7 +88,7 @@ export default function BusinessProfileHero({ profile }) {
     <div className="profile-header">
 
             {/* Cover & Top Nav */}
-            <div className="business-hero-cover" style={{ background: 'linear-gradient(135deg, #1e1e2e, #2d2b42)' }}>
+            <div ref={coverBoxRef} className="business-hero-cover" style={{ background: 'linear-gradient(135deg, #1e1e2e, #2d2b42)' }}>
                 <img
           src={heroCoverSrc}
           alt=""
@@ -250,7 +257,7 @@ export default function BusinessProfileHero({ profile }) {
         <button
           type="button"
           className="business-hero-edit-cover"
-          onClick={() => setCoverAdjustOpen(true)}
+          onClick={openCoverAdjust}
           title={t('adjust_cover', 'ضبط الغلاف')}
           aria-label={t('adjust_cover', 'ضبط الغلاف')}>
                                 <FaArrowsAltV size={12} aria-hidden />
@@ -275,6 +282,7 @@ export default function BusinessProfileHero({ profile }) {
             {isOwner && coverAdjustOpen && businessInfo.coverImage ?
       <CoverAdjustModal
         imageUrl={heroCoverSrc}
+        aspect={coverFrameAspect}
         initial={{ x: bizPosX, y: bizPosY, zoom: bizZoom }}
         onSave={saveCoverAdjust}
         onClose={() => setCoverAdjustOpen(false)} /> :
