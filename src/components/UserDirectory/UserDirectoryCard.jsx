@@ -398,13 +398,11 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
             <Link to={profilePath} className="user-directory-card__name-link" draggable={false}>
               <AppText as="span" className="user-directory-card__name">
                 {displayName}
-                {ageLabel ? <span className="user-directory-card__age">, {ageLabel}</span> : null}
               </AppText>
             </Link>
           ) : (
             <AppText as="span" className="user-directory-card__name">
               {displayName}
-              {ageLabel ? <span className="user-directory-card__age">, {ageLabel}</span> : null}
             </AppText>
           )}
           {user?.tasteTitleId && (user.tasteVisibility || 'public') === 'public' ? (

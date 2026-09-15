@@ -6207,5 +6207,18 @@
   "social_invitation_chat_unavailable": "This event chat is not available",
   "social_invitation_accept_hint": "Accept the invitation to unlock this chat.",
   "user_profile_preferences_title": "Preferences & vibe",
-  "liked": "Liked"
+  "liked": "Liked",
+  "price_level_free": "Free",
+  "price_level_inexpensive": "Budget-friendly",
+  "price_level_moderate": "Moderate prices",
+  "price_level_expensive": "Upscale prices",
+  "price_level_very_expensive": "Fine dining prices",
+  "venue_summary_type_city": "{{type}} in {{city}}",
+  "venue_summary_rating": "{{rating}} of 5",
+  "venue_summary_reviews": "({{count}} reviews)",
+  "venue_summary_offers": "Offers {{services}}",
+  "venue_service_dinein": "dine-in",
+  "venue_service_delivery": "delivery",
+  "venue_service_takeout": "takeout",
+  "venue_service_separator": ", "
 }

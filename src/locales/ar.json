@@ -6230,5 +6230,18 @@
   "unknown_user": "غير معروف",
   "user_directory_filters_aria": "عوامل التصفية",
   "user_directory_photo_filter_aria": "عرض الملفات التي بها صورة فقط",
-  "venue_type": "نوع المكان"
+  "venue_type": "نوع المكان",
+  "price_level_free": "مجاني",
+  "price_level_inexpensive": "أسعار اقتصادية",
+  "price_level_moderate": "أسعار متوسطة",
+  "price_level_expensive": "أسعار مرتفعة",
+  "price_level_very_expensive": "أسعار فاخرة",
+  "venue_summary_type_city": "{{type}} في {{city}}",
+  "venue_summary_rating": "تقييم {{rating}} من ٥",
+  "venue_summary_reviews": "({{count}} تقييمًا)",
+  "venue_summary_offers": "يوفّر {{services}}",
+  "venue_service_dinein": "الجلوس في المكان",
+  "venue_service_delivery": "التوصيل",
+  "venue_service_takeout": "الاستلام",
+  "venue_service_separator": "، "
 }

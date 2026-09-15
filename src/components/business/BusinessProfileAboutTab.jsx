@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { venueDisplayDescription } from '../../utils/venueSummary';
 import { FaInfoCircle } from 'react-icons/fa';
 import { AppText } from '../base';
 import { BusinessSectionCard, EditActionBtn } from './BusinessProfileCardParts';
@@ -12,7 +13,7 @@ import BusinessJobsPanel from './BusinessJobsPanel';
 import BusinessVerifyBadge from './BusinessVerifyBadge';
 
 export default function BusinessProfileAboutTab({ profile }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const {
     activeTab,
     isOwner,
@@ -99,12 +100,12 @@ export default function BusinessProfileAboutTab({ profile }) {
                     </div>
       }
 
-                {businessInfo.description ?
+                {venueDisplayDescription({ businessInfo }, t, i18n) ?
       <AppText as="p" style={{
         color: 'var(--text-secondary)', lineHeight: '1.8', fontSize: '1rem', margin: 0,
         whiteSpace: 'pre-wrap'
       }}>
-                        {businessInfo.description}
+                        {venueDisplayDescription({ businessInfo }, t, i18n)}
                     </AppText> :
 
       <div style={{ padding: '24px', textAlign: 'center', background: 'var(--hover-overlay)', borderRadius: '16px', border: '1px dashed var(--border-color)' }}>

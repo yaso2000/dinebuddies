@@ -21,6 +21,7 @@ import {
   resolveLanguageCode } from
 '../constants/languageOptions';
 import { getSpendableCredits } from '../utils/walletCredits';
+import { getRuntime } from '../platform/runtime';
 import { AppText, AppTextInput } from "../components/base";
 
 const BUSINESS_PAID_MONTHLY_USD = Number(String(BUSINESS_PAID_PLAN_DISPLAY.priceLabel).replace(/[^\d.]/g, '')) || 29;
@@ -40,7 +41,9 @@ const Settings = () => {
   const [deleting, setDeleting] = useState(false);
   const [freezing, setFreezing] = useState(false);
 
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+  // Native (Capacitor) app is already installed — the PWA "install" row is web-only.
+  const isNativeApp = getRuntime().isNative;
+  const isStandalone = isNativeApp || window.matchMedia('(display-mode: standalone)').matches;
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   useEffect(() => {

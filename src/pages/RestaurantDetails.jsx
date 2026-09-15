@@ -7,6 +7,7 @@ import { FaArrowRight, FaStar, FaMapMarkerAlt, FaPhone, FaClock, FaGlobe, FaArro
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { venueDisplayDescription } from '../utils/venueSummary';
 import RestaurantRating from '../components/RestaurantRating';
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
 import { goToLogin } from '../utils/goToLogin';
@@ -126,7 +127,7 @@ const RestaurantDetails = () => {
                 </div>
 
                 <AppText as="p" style={{ fontSize: '1rem', lineHeight: '1.6', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-                    {restaurant.businessInfo?.description || promoText}
+                    {venueDisplayDescription(restaurant, t, i18n) || promoText}
                 </AppText>
 
 

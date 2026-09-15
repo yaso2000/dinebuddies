@@ -33,6 +33,7 @@ import { useMagneticCardDrag } from '../../hooks/useMagneticCardDrag';
 import CreateInvitationSelector from '../CreateInvitationSelector';
 import './discovery.css';
 import { AppText } from '../base';
+import { venueDisplayDescription } from '../../utils/venueSummary';
 
 export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath = '/restaurants/list' }) {
   const { t, i18n } = useTranslation();
@@ -98,9 +99,8 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
     res.businessInfo?.address ||
     city ||
     '';
-  const description = String(
-    res.description || res.businessInfo?.description || res.bio || ''
-  ).trim();
+  // Real content verbatim; auto-generated summaries recomposed in the UI language.
+  const description = venueDisplayDescription(res, t, i18n);
   const distanceLabel = formatInvitationDistanceLabel(t, item.distanceKm ?? res.distanceKm);
   const categoryLabel = res.type
     ? t(`type_${String(res.type).toLowerCase().replace(/\s+/g, '')}`, res.type)

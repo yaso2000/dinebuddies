@@ -109,7 +109,6 @@ export default function DiscoveryCard({
   }, [profile?.profilePhoto]);
   const isFollowingUser = checkIsFollowing(viewerFollowing, profile?.id);
   const showPrivateInviteBadge = Boolean(profile?.id && profile.id !== viewerUid && isFollowingUser);
-  const ageLabel = formatAgeLabel(profile);
   const locationLabel = [profile?.city, profile?.country].filter(Boolean).join(', ') || profile?.city || '';
 
   const refreshCanChat = useCallback(async () => {
@@ -364,7 +363,6 @@ export default function DiscoveryCard({
     return computeCompatibility(mine.answers, profile.tasteAnswers, mine.titleId, profile.tasteTitleId);
   }, [tasteVisible, userProfile?.tasteScope, profile?.tasteAnswers, profile?.tasteTitleId]);
 
-  const identityLine = ageLabel ? `${profile.name}, ${ageLabel}` : profile.name;
   const cardThemeVars = targetUser?.cardTheme?.primaryColor
     ? {
         '--personal-accent-1': targetUser.cardTheme.primaryColor,
@@ -406,9 +404,33 @@ export default function DiscoveryCard({
 
         <div className="discovery-card__gradient" aria-hidden />
 
+        {/* Top corner (where close/inbox used to be): taste ring + title badge. */}
         <div className="discovery-card__top-row">
+          {tasteVisible ? (
+            <div
+              className="discovery-card__taste-corner"
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, marginInlineStart: 'auto' }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {/* Compatibility ring — only when the viewer also has a title. */}
+              {compat ? <TasteCompatRing percent={compat.percent} size={54} /> : null}
+              {/* Title chip — tap shows the quick tagline (its description). */}
+              <TasteScopeBadge variant="full" titleId={profile.tasteTitleId} gender={tasteGender} />
+            </div>
+          ) : null}
+        </div>
+
+        <div className="discovery-card__identity">
+          <AppText as="h2" className="discovery-card__name-line">
+            {profile.name}
+          </AppText>
+          {profile.bio ? (
+            <AppText as="p" className="discovery-card__bio">
+              {profile.bio}
+            </AppText>
+          ) : null}
           {locationLabel ? (
-            <div className="discovery-card__location-bar">
+            <div className="discovery-card__location-bar" style={{ marginTop: 8, alignSelf: 'center' }}>
               <FaMapMarkerAlt className="discovery-card__location-pin" aria-hidden />
               <AppText as="span" className="discovery-card__location-text">
                 {locationLabel}
@@ -421,51 +443,6 @@ export default function DiscoveryCard({
                 />
               ) : null}
             </div>
-          ) : (
-            <span className="discovery-card__location-spacer" aria-hidden />
-          )}
-
-          <div className="discovery-card__top-actions">
-            <InboxHubLink
-              className="discovery-card__inbox discovery-card__action--glass"
-              tab="activity"
-              showLabel={false}
-              label={t('inbox_title', 'Inbox')}
-            />
-            {listPath ? (
-              <button
-                type="button"
-                className="discovery-card__close discovery-card__action--glass"
-                aria-label={t('close', 'Close')}
-                title={t('magnetic_close_to_list', 'Back to list')}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={handleClose}
-              >
-                <LuX size={22} aria-hidden />
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="discovery-card__identity">
-          <AppText as="h2" className="discovery-card__name-line">
-            {identityLine}
-          </AppText>
-          {tasteVisible ? (
-            <div
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 8, flexWrap: 'wrap' }}
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              {/* Title chip — tap shows the quick tagline (its description). */}
-              <TasteScopeBadge variant="full" titleId={profile.tasteTitleId} gender={tasteGender} />
-              {/* Compatibility ring — only when the viewer also has a title. */}
-              {compat ? <TasteCompatRing percent={compat.percent} size={62} /> : null}
-            </div>
-          ) : null}
-          {profile.bio ? (
-            <AppText as="p" className="discovery-card__bio">
-              {profile.bio}
-            </AppText>
           ) : null}
         </div>
 

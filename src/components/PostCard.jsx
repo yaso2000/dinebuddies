@@ -902,8 +902,11 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                         </div>
                     </div> : (
 
-        /* Regular post content (not motion studio canvas) */
+        /* Regular post content (not motion studio canvas). Column flex so the
+           media can sit on top as a hero (order:-1) with the text below it. */
         <div style={{
+          display: 'flex',
+          flexDirection: 'column',
           backgroundColor: displayPost.textStyle?.backgroundColor || 'transparent',
           color: safePostTextColor,
           fontFamily: displayPost.textStyle?.fontFamily || 'inherit',
@@ -973,6 +976,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
           displayPost.mediaUrl || displayPost.images?.length > 0 || displayPost.image) &&
           <div
             ref={mediaContainerRef}
+            style={{ order: -1 }}
             className={`post-media-container${isYoutubeShort ? ' post-media-container--vertical' : ''}`}
             onClick={() => {if (!isEditing) navigate(post._isFeatured ? `/post/featured/${post.id}` : `/post/${post.id}`);}}>
 
