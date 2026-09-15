@@ -320,3 +320,5 @@ body {
     display: none;
     /* Chrome, Safari and Opera */
 }
+/* Keep Leaflet's internal z-indexes (panes 400–700, controls 1000) inside the map so they never rise above the bottom nav or app overlays. */
+.leaflet-container { isolation: isolate; }

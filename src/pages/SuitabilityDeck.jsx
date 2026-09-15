@@ -176,7 +176,7 @@ function DeckCard({ postId, isArabic, t, onDone }) {
 
       {/* Floating, closable results box shown right after a fresh vote → close = next card */}
       {floatingResults ? (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.55)', display: 'grid', placeItems: 'center', padding: 18 }}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'grid', placeItems: 'center', padding: 18 }}
           onClick={() => { setFloatingResults(false); onDone?.(); }}>
           <div className="gg-card" style={{ width: '100%', maxWidth: 420, padding: 18, position: 'relative' }} onClick={(e) => e.stopPropagation()}>
             <button type="button" aria-label={t('close', 'Close')} onClick={() => { setFloatingResults(false); onDone?.(); }}

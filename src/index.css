@@ -102,6 +102,15 @@
      its bottom padding from this. */
   --nav-height: 65px;
   --max-width: 500px;
+  /* Z-INDEX SCALE — the bottom nav is NOT the top of the world.
+     0–899   : in-page content (sticky headers, map controls, FABs inside pages)
+     --z-nav : the fixed bottom nav (and bars docked right above it: --z-nav - 1)
+     >= 1000 : anything fixed + full-screen (modals, sheets, dialogs, toasts,
+               story viewer). A sheet at zIndex 1000 always covers the nav.
+     Rule: never give an overlay a z-index below 1000, never give in-page
+     chrome a z-index above 899. */
+  --z-nav: 900;
+  --z-overlay: 1000;
   /* Desktop: fixed iPad-like shell — left | center | right = 300 + 650 + 300 (1250 total) */
   --ds-shell-max: 1250px;
   --ds-col-side: 300px;
@@ -1690,7 +1699,7 @@ html:not([data-theme='light']) .app-header .app-name {
   justify-content: space-around !important;
   align-items: center !important;
   /* Changed from stretch */
-  z-index: 99999 !important;
+  z-index: var(--z-nav) !important;
   box-shadow: 0 -5px 30px rgba(0, 0, 0, 0.5);
   pointer-events: auto !important;
   padding: 0 8px;
@@ -2417,6 +2426,8 @@ select.input-field {
 
 .map-wrapper {
   position: relative;
+  /* own stacking context: map controls (z 999/1000) stay inside the map, below the nav */
+  isolation: isolate;
   height: 520px;
   width: 100%;
   border-radius: 24px;
@@ -4206,7 +4217,7 @@ button.notification-bell {
 .header-more__backdrop {
   position: fixed;
   inset: 0;
-  z-index: 120;
+  z-index: var(--z-overlay, 1000);
   border: none;
   padding: 0;
   margin: 0;
@@ -4218,7 +4229,7 @@ button.notification-bell {
   position: absolute;
   top: calc(100% + 8px);
   inset-inline-end: 0;
-  z-index: 130;
+  z-index: calc(var(--z-overlay, 1000) + 1);
   min-width: 196px;
   padding: 6px;
   border-radius: 14px;

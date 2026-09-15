@@ -1246,7 +1246,7 @@
     width: 100%;
     max-width: var(--max-width, 500px);
     box-sizing: border-box;
-    z-index: 99998;
+    z-index: calc(var(--z-nav, 900) - 1);
     padding: 10px 16px;
     background: rgba(11, 8, 18, 0.92);
     backdrop-filter: blur(18px) saturate(160%);

@@ -135,7 +135,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    /* Tighter so up to five tools fit on one row within the card width. */
+    gap: 4px;
     margin-top: 2px;
 }
 
@@ -143,10 +144,10 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
     padding: 0;
-    border-radius: 11px;
+    border-radius: 9px;
     border: 1px solid var(--border-color);
     background: color-mix(in srgb, var(--bg-main) 55%, var(--bg-card));
     color: var(--text-main);
@@ -165,12 +166,12 @@
 }
 
 .user-directory-card__action-icon {
-    width: 0.95rem;
-    height: 0.95rem;
+    width: 0.88rem;
+    height: 0.88rem;
 }
 
 .user-directory-card__wave {
-    font-size: 1rem;
+    font-size: 0.9rem;
     line-height: 1;
 }
 

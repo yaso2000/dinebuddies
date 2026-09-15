@@ -48,7 +48,7 @@ export default function GameCardReport({ ownerId, ownerName, onBlocked }) {
 
             {menuOpen ? (
                 <div onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }}
-                    style={{ position: 'fixed', inset: 0, zIndex: 70 }}>
+                    style={{ position: 'fixed', inset: 0, zIndex: 1000 }}>
                     <div onClick={(e) => e.stopPropagation()}
                         style={{ position: 'absolute', top: 54, insetInlineEnd: 12, background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 14, overflow: 'hidden', minWidth: 180, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' }}>
                         <button type="button" onClick={() => { setMenuOpen(false); setReportOpen(true); }}

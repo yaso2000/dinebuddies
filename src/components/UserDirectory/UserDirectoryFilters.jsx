@@ -44,8 +44,9 @@ export default function UserDirectoryFilters({
   };
 
   const iconBtn = (active, activeColor) => ({
-    width: '36px',
+    width: '32px',
     height: '32px',
+    flexShrink: 0,
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -65,7 +66,7 @@ export default function UserDirectoryFilters({
       className="users-directory-filters users-directory-filters--toolbar"
       role="group"
       aria-label={t('user_directory_filters_aria', 'Filters')}
-      style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap', flexShrink: 0 }}>
 
       {/* Gender: two independent toggles */}
       <div style={{ display: 'inline-flex', gap: '4px' }}>
@@ -98,11 +99,13 @@ export default function UserDirectoryFilters({
           title={t('user_directory_age_filter_aria', 'Age category filter')}
           style={{
             height: '32px',
-            padding: '0 14px',
+            padding: '0 11px',
             borderRadius: '999px',
-            fontSize: '0.82rem',
+            fontSize: '0.8rem',
             fontWeight: 700,
             cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
             background: ageCategoryFilter !== 'all' ? 'var(--primary)' : 'var(--bg-elevated, var(--bg-card))',
             color: ageCategoryFilter !== 'all' ? '#fff' : 'var(--text-main)',
             border: `1px solid ${ageCategoryFilter !== 'all' ? 'var(--primary)' : 'var(--border-color)'}`,
@@ -142,7 +145,8 @@ export default function UserDirectoryFilters({
         </button>
       )}
 
-      {/* Online now: switch */}
+      {/* Online-now filter: one compact round button that toggles colour —
+          green = online-only on, red = off. Saves width on small phones. */}
       {onOnlineOnlyChange && (
         <button
           type="button"
@@ -152,45 +156,30 @@ export default function UserDirectoryFilters({
           aria-label={t('user_directory_online_filter_aria', 'Show only members online now')}
           title={t('user_directory_online_filter_aria', 'Show only members online now')}
           style={{
+            width: '32px',
             height: '32px',
-            padding: '0 6px',
-            borderRadius: '999px',
+            borderRadius: '50%',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '0',
+            justifyContent: 'center',
             cursor: 'pointer',
-            fontSize: '0.78rem',
-            fontWeight: 700,
-            background: onlineOnly ? 'rgba(34, 197, 94, 0.14)' : 'var(--bg-elevated, var(--bg-card))',
-            color: onlineOnly ? '#16a34a' : 'var(--text-muted)',
-            border: `1px solid ${onlineOnly ? '#22c55e' : 'var(--border-color)'}`,
+            flexShrink: 0,
+            padding: 0,
+            background: onlineOnly ? 'rgba(34, 197, 94, 0.16)' : 'rgba(239, 68, 68, 0.14)',
+            border: `1px solid ${onlineOnly ? '#22c55e' : '#ef4444'}`,
             transition: 'all 0.15s',
           }}>
           <span
             aria-hidden
             style={{
-              position: 'relative',
-              width: '30px',
-              height: '18px',
-              borderRadius: '999px',
-              background: onlineOnly ? '#22c55e' : 'var(--border-color)',
-              transition: 'background 0.15s',
-              flexShrink: 0,
-            }}>
-            <span
-              style={{
-                position: 'absolute',
-                top: '2px',
-                left: onlineOnly ? '14px' : '2px',
-                width: '14px',
-                height: '14px',
-                borderRadius: '50%',
-                background: '#fff',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
-                transition: 'left 0.15s',
-              }}
-            />
-          </span>
+              width: '10px',
+              height: '10px',
+              borderRadius: '50%',
+              background: onlineOnly ? '#22c55e' : '#ef4444',
+              boxShadow: onlineOnly ? '0 0 0 3px rgba(34, 197, 94, 0.25)' : 'none',
+              transition: 'all 0.15s',
+            }}
+          />
         </button>
       )}
     </div>

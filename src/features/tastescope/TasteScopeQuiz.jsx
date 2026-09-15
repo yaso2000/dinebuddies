@@ -192,7 +192,7 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
   };
 
   return createPortal(
-    <div ref={rootRef} style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'var(--bg-body)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+    <div ref={rootRef} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'var(--bg-body)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
       <style>{`
         @keyframes tsTiltPhone { 0%,12% { transform: rotate(0deg); } 45%,60% { transform: rotate(-90deg); } 92%,100% { transform: rotate(0deg); } }
         @keyframes tsNudgeFade { 0% { opacity: 0; } 8% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
@@ -254,7 +254,7 @@ export default function TasteScopeQuiz({ onComplete, onExit }) {
 
       {/* Centered rotate nudge — shows ~2s on entry (portrait), then fades away */}
       {showRotate && isPortrait && (
-        <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 60 }}>
+        <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 1001 }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '18px 22px', borderRadius: 18, background: 'rgba(0,0,0,0.72)', animation: 'tsNudgeFade 3s ease forwards' }}>
             <RotatePhoneIcon />
             <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 700 }}>

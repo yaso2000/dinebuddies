@@ -409,18 +409,18 @@ export default function DiscoveryCard({
           {tasteVisible ? (
             <div
               className="discovery-card__taste-corner"
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, marginInlineStart: 'auto' }}
+              style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, marginInlineStart: 'auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}
               onPointerDown={(e) => e.stopPropagation()}
             >
-              {/* Compatibility ring — only when the viewer also has a title. */}
-              {compat ? <TasteCompatRing percent={compat.percent} size={54} /> : null}
               {/* Title chip — tap shows the quick tagline (its description). */}
               <TasteScopeBadge variant="full" titleId={profile.tasteTitleId} gender={tasteGender} />
+              {/* Compatibility ring — only when the viewer also has a title. */}
+              {compat ? <TasteCompatRing percent={compat.percent} size={54} /> : null}
             </div>
           ) : null}
         </div>
 
-        <div className="discovery-card__identity">
+        <div className="discovery-card__identity" style={{ bottom: 'calc(1.35rem + env(safe-area-inset-bottom, 0px))' }}>
           <AppText as="h2" className="discovery-card__name-line">
             {profile.name}
           </AppText>
@@ -430,7 +430,7 @@ export default function DiscoveryCard({
             </AppText>
           ) : null}
           {locationLabel ? (
-            <div className="discovery-card__location-bar" style={{ marginTop: 8, alignSelf: 'center' }}>
+            <div className="discovery-card__location-bar" style={{ marginTop: 8, maxWidth: '100%', width: 'max-content' }}>
               <FaMapMarkerAlt className="discovery-card__location-pin" aria-hidden />
               <AppText as="span" className="discovery-card__location-text">
                 {locationLabel}

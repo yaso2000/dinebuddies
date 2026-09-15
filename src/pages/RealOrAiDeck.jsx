@@ -131,7 +131,7 @@ function DeckCard({ postId, isArabic, t, onDone, active }) {
 
       {/* Fresh guess → floating closable reveal → close = next card */}
       {floating && reveal ? (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.6)', display: 'grid', placeItems: 'center', padding: 18 }}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', display: 'grid', placeItems: 'center', padding: 18 }}
           onClick={() => { setFloating(false); onDone?.(); }}>
           <div className="gg-card" style={{ width: '100%', maxWidth: 420, padding: 18, position: 'relative' }} onClick={(e) => e.stopPropagation()}>
             <button type="button" aria-label={t('close', 'Close')} onClick={() => { setFloating(false); onDone?.(); }}
