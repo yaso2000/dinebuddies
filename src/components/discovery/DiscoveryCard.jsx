@@ -149,13 +149,24 @@ export default function DiscoveryCard({
     animate(x, 0, { type: 'spring', stiffness: 520, damping: 28 });
   }, [x]);
 
+  // Skip (next card) = swipe to the RIGHT → the card exits to the right.
   const triggerSkip = useCallback(() => {
     if (exitHandledRef.current) return;
     exitHandledRef.current = true;
-    animate(x, -560, { duration: 0.22, ease: 'easeIn' }).then(() => {
+    animate(x, 560, { duration: 0.22, ease: 'easeIn' }).then(() => {
       onSkip?.(profile);
     });
   }, [onSkip, profile, x]);
+
+  // Swipe to the LEFT → open this person's full profile.
+  const openProfile = useCallback(() => {
+    if (exitHandledRef.current) return;
+    if (!profile?.id) { animate(x, 0, { type: 'spring', stiffness: 520, damping: 28 }); return; }
+    exitHandledRef.current = true;
+    animate(x, -560, { duration: 0.2, ease: 'easeIn' }).then(() => {
+      navigate(`/profile/${profile.id}`);
+    });
+  }, [navigate, profile?.id, x]);
 
   const handleDragStart = () => {
     draggingRef.current = true;
@@ -169,8 +180,14 @@ export default function DiscoveryCard({
     if (!isTop) return;
     const { offset, velocity } = info;
 
-    if (offset.x < -SWIPE_X_SKIP_THRESHOLD || velocity.x < -450) {
+    // Swipe RIGHT → skip to the next card.
+    if (offset.x > SWIPE_X_SKIP_THRESHOLD || velocity.x > 450) {
       triggerSkip();
+      return;
+    }
+    // Swipe LEFT → open this person's profile.
+    if (offset.x < -SWIPE_X_SKIP_THRESHOLD || velocity.x < -450) {
+      openProfile();
       return;
     }
     // Magnetic snap back into place

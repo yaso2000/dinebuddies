@@ -29,7 +29,7 @@ import UserAvatar from '../UserAvatar';
 import './discovery.css';
 import { AppText } from '../base';
 
-export default function InvitationSwipeCard({ item, isTop = true, onSkip, listPath = '/invitations/list' }) {
+export default function InvitationSwipeCard({ item, isTop = true, onSkip, onBack = null, listPath = '/invitations/list' }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -49,6 +49,7 @@ export default function InvitationSwipeCard({ item, isTop = true, onSkip, listPa
   } = useMagneticCardDrag({
     isTop,
     onSkip,
+    onBack,
     item,
     axis: 'y',
   });

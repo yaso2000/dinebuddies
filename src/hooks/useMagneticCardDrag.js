@@ -15,6 +15,7 @@ const DRAG_SLOP_PX = 14;
 export function useMagneticCardDrag({
   isTop,
   onSkip,
+  onBack = null,
   item,
   axis = 'x',
   onPhotoActivate = null,
@@ -43,6 +44,15 @@ export function useMagneticCardDrag({
     [axis, item, onSkip, primary]
   );
 
+  // Swipe DOWN (vertical decks) → go back to the previous card. The current card
+  // stays in the deck (snaps back); the deck just decrements its index.
+  const triggerBack = useCallback(() => {
+    if (exitHandledRef.current) return;
+    if (typeof onBack !== 'function') { resetPosition(); return; }
+    animate(primary, 0, { type: 'spring', stiffness: 520, damping: 28 });
+    onBack(item);
+  }, [onBack, item, primary, resetPosition]);
+
   const handleDragStart = () => {
     draggingRef.current = true;
   };
@@ -55,12 +65,14 @@ export function useMagneticCardDrag({
     if (!isTop) return;
     const { offset, velocity } = info;
     if (axis === 'y') {
+      // Swipe UP → next card.
       if (offset.y < -SWIPE_SKIP_THRESHOLD || velocity.y < -SWIPE_VELOCITY) {
         triggerSkip(-1);
         return;
       }
+      // Swipe DOWN → back to the previous card.
       if (offset.y > SWIPE_SKIP_THRESHOLD || velocity.y > SWIPE_VELOCITY) {
-        triggerSkip(1);
+        triggerBack();
         return;
       }
     } else if (offset.x < -SWIPE_SKIP_THRESHOLD || velocity.x < -SWIPE_VELOCITY) {

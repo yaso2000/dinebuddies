@@ -35,7 +35,7 @@ import './discovery.css';
 import { AppText } from '../base';
 import { venueDisplayDescription } from '../../utils/venueSummary';
 
-export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath = '/restaurants/list' }) {
+export default function BusinessSwipeCard({ item, isTop = true, onSkip, onBack = null, listPath = '/restaurants/list' }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -78,6 +78,7 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, listPath
   } = useMagneticCardDrag({
     isTop,
     onSkip,
+    onBack,
     item,
     axis: 'y',
     onPhotoActivate: openProfile,

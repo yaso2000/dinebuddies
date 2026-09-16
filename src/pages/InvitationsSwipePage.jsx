@@ -13,8 +13,8 @@ export default function InvitationsSwipePage() {
   const { items, loading } = useInvitationSwipeDeck();
 
   const renderCard = useCallback(
-    ({ item, isTop, onSkip }) => (
-      <InvitationSwipeCard key={item.id} item={item} isTop={isTop} onSkip={onSkip} />
+    ({ item, isTop, onSkip, onBack }) => (
+      <InvitationSwipeCard key={item.id} item={item} isTop={isTop} onSkip={onSkip} onBack={onBack} />
     ),
     []
   );

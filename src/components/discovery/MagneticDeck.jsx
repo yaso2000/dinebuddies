@@ -86,6 +86,11 @@ export default function MagneticDeck({
     advance();
   }, [advance]);
 
+  // Swipe down → go back to the previously-skipped card (sequential history).
+  const handleBack = useCallback(() => {
+    setIndex((prev) => Math.max(0, prev - 1));
+  }, []);
+
   if (isEmpty) {
     return (
       <div className="discovery-feed discovery-feed__empty">
@@ -122,7 +127,7 @@ export default function MagneticDeck({
         </div>
       ) : null}
 
-      {renderCard({ item: activeItem, isTop: true, onSkip: handleSkip })}
+      {renderCard({ item: activeItem, isTop: true, onSkip: handleSkip, onBack: index > 0 ? handleBack : null })}
     </div>
   );
 }

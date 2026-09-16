@@ -5,6 +5,8 @@ import { LuSparkles } from 'react-icons/lu';
 import DiscoveryCard from './DiscoveryCard';
 import './discovery.css';
 import { AppText } from '../base';
+import { useAuth } from '../../context/AuthContext';
+import { markSeen, firstUnseenIndex, clearSeen } from '../../utils/discoverySeen';
 
 /** Immersive magnetic Connect feed — one full-portrait profile at a time. */
 export default function DiscoveryFeed({
@@ -18,6 +20,8 @@ export default function DiscoveryFeed({
   listPath = '/search/list',
 }) {
   const { t } = useTranslation();
+  const { currentUser } = useAuth();
+  const viewerUid = currentUser?.uid || currentUser?.id || null;
   const [index, setIndex] = useState(0);
   const activeIdRef = useRef(null);
   const hasStartedRef = useRef(false);
@@ -41,13 +45,17 @@ export default function DiscoveryFeed({
     }
 
     if (!hasStartedRef.current) {
-      setIndex(0);
-      activeIdRef.current = profiles[0]?.id ?? null;
+      // Fresh start (incl. returning to the deck): skip profiles already swiped
+      // past, continuing from the first unseen one. If every one is seen, reset.
+      let start = firstUnseenIndex(viewerUid, profiles);
+      if (start < 0) { clearSeen(viewerUid); start = 0; }
+      setIndex(start);
+      activeIdRef.current = profiles[start]?.id ?? null;
       return;
     }
 
     setIndex((prev) => Math.min(prev, profiles.length - 1));
-  }, [profiles]);
+  }, [profiles, viewerUid]);
 
   const activeProfile = profiles[index] ?? null;
   const nextProfile = profiles[index + 1] ?? null;
@@ -82,10 +90,11 @@ export default function DiscoveryFeed({
 
   const handleSkip = useCallback(
     (profile) => {
+      if (profile?.id) markSeen(viewerUid, profile.id);
       onSkip?.(profile);
       advance();
     },
-    [advance, onSkip]
+    [advance, onSkip, viewerUid]
   );
 
   const handlers = useMemo(

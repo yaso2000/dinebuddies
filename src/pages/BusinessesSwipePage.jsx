@@ -36,8 +36,8 @@ export default function BusinessesSwipePage() {
   }, [items, activeFilter]);
 
   const renderCard = useCallback(
-    ({ item, isTop, onSkip }) => (
-      <BusinessSwipeCard key={item.id} item={item} isTop={isTop} onSkip={onSkip} />
+    ({ item, isTop, onSkip, onBack }) => (
+      <BusinessSwipeCard key={item.id} item={item} isTop={isTop} onSkip={onSkip} onBack={onBack} />
     ),
     []
   );
