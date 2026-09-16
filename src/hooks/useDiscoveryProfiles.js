@@ -37,6 +37,7 @@ export function useDiscoveryProfiles({
     genderFilter = 'all',
     ageCategoryFilter = 'all',
     photoFilter = 'with_photo',
+    onlineOnly = false,
 } = {}) {
     const { currentUser, userProfile, isGuest, loading: authLoading } = useAuth();
     const viewerUid = currentUser?.uid || currentUser?.id;
@@ -89,12 +90,13 @@ export function useDiscoveryProfiles({
                 memberMatchesPhotoFilter(user, photoFilter) &&
                 memberMatchesGenderFilter(user, genderFilter) &&
                 memberMatchesAgeCategory(user, ageCategoryFilter) &&
+                (!onlineOnly || user?.isOnline === true) &&
                 isDiscoverySwipeMatch(viewer, user)
         );
         return sortDirectoryUsersByDistance(matched, userLocation)
             .map((user) => mapDirectoryUserToDiscoveryProfile(user, userLocation))
             .filter(Boolean);
-    }, [directory.users, userLocation, viewer, photoFilter, genderFilter, ageCategoryFilter]);
+    }, [directory.users, userLocation, viewer, photoFilter, genderFilter, ageCategoryFilter, onlineOnly]);
 
     useEffect(() => {
         // Wait until the viewer profile is ready (gender loaded) before auto-paging —

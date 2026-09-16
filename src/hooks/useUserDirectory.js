@@ -81,10 +81,21 @@ export function useUserDirectory({
         if (!enabled) {
             setUsers([]);
             setHasMore(false);
+            // Never strand a spinner: a pending browse's finally is skipped once
+            // the request id is bumped, so clear the flags here (fixes the swipe
+            // deck hanging on "Loading…" when auth/enabled flips on back-nav).
+            requestIdRef.current += 1;
+            setLoading(false);
+            setLoadingMore(false);
             return;
         }
 
-        if (isSearchMode) return undefined;
+        if (isSearchMode) {
+            requestIdRef.current += 1;
+            setLoading(false);
+            setLoadingMore(false);
+            return undefined;
+        }
 
         loadBrowse({ reset: true });
         return () => {

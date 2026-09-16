@@ -26,10 +26,12 @@ export default function DiscoveryPage() {
   const [genderFilter, setGenderFilter] = useState('all');
   const [ageCategoryFilter, setAgeCategoryFilter] = useState('all');
   const [photoFilter, setPhotoFilter] = useState('with_photo');
+  const [onlineOnly, setOnlineOnly] = useState(false);
   const { profiles, loading, loadingMore, hasMore, loadMore, canLoad } = useDiscoveryProfiles({
     genderFilter,
     ageCategoryFilter,
     photoFilter,
+    onlineOnly,
   });
   const { openGiftPicker, giftModal } = useProfileGiftPicker();
 
@@ -153,6 +155,8 @@ export default function DiscoveryPage() {
           onAgeCategoryFilterChange={setAgeCategoryFilter}
           photoFilter={photoFilter}
           onPhotoFilterChange={setPhotoFilter}
+          onlineOnly={onlineOnly}
+          onOnlineOnlyChange={setOnlineOnly}
         />
         <Link
           to="/search/list"
