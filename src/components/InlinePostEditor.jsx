@@ -30,6 +30,19 @@ import { handleEmojiButtonClick, shouldUseAppEmojiPicker, showComposerEmojiButto
 const POST_TITLE_MAX = 100;
 const POST_BODY_MAX = 300;
 
+// Direction from the first strong character; empty falls back to the UI language
+// (Arabic UI → RTL default, then flips to LTR the moment English is typed).
+const RTL_CHARS = /[֑-߿יִ-﷽ﹰ-ﻼ]/;
+const LTR_CHARS = /[A-Za-zÀ-ɏ]/;
+function textDir(value, fallback) {
+  const s = String(value || '');
+  for (const ch of s) {
+    if (RTL_CHARS.test(ch)) return 'rtl';
+    if (LTR_CHARS.test(ch)) return 'ltr';
+  }
+  return fallback;
+}
+
 const CUSTOM_EMOJIS = [
 '😀', '😂', '🤣', '😍', '🥰', '😘', '😋', '😎', '🥳', '🤩', '😡', '😭', '😱', '🤔', '😴',
 '🍔', '🍟', '🍕', '🌭', '🌮', '🌯', '🥗', '🍝', '🍜', '🍣', '🍤', '🍦', '🍩', '🍪', '🎂', '🍰', '🍫',
@@ -388,7 +401,8 @@ const InlinePostEditor = ({
           
                     <AppTextInput
             type="text"
-            dir="auto"
+            dir={textDir(title, isRtl ? 'rtl' : 'ltr')}
+            style={{ textAlign: 'start' }}
             className="composer-field__title"
             placeholder={t('post_headline_placeholder')}
             value={title}
@@ -397,7 +411,8 @@ const InlinePostEditor = ({
 
                     <AppTextInput as="textarea"
           ref={textareaRef}
-          dir="auto"
+          dir={textDir(text, isRtl ? 'rtl' : 'ltr')}
+          style={{ textAlign: 'start' }}
           className="composer-field__input"
           placeholder={t('whats_on_your_mind', "What's on your mind?")}
           value={text}
