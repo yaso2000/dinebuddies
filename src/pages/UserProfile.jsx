@@ -146,7 +146,8 @@ function ProfileHero({
   const clampPos = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Number(v))) : 50);
   const coverPosX = clampPos(profile.coverPosX);
   const coverPosY = clampPos(profile.coverPosY);
-  const headline = ageRange ? `${displayName}, ${ageRange}` : displayName;
+  // Age is kept in the background (matching/consent) but never shown publicly.
+  const headline = displayName;
 
   return (
     <>

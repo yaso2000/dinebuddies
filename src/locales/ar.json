@@ -6306,5 +6306,6 @@
   "venue_service_dinein": "الجلوس في المكان",
   "venue_service_delivery": "التوصيل",
   "venue_service_takeout": "الاستلام",
-  "venue_service_separator": "، "
+  "venue_service_separator": "، ",
+  "age_private_notice": "عمرك لا يظهر أبدًا على ملفك العام — نستخدمه فقط للمطابقة الآمنة المناسبة للعمر."
 }

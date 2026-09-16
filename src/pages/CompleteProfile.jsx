@@ -383,6 +383,9 @@ const CompleteProfile = () => {
                             {t('select_age_category', 'Select Age Category')}
                             {reqStar}
                         </label>
+                        <AppText as="p" style={{ margin: '-2px 0 10px', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                            🔒 {t('age_private_notice', 'Your age never appears on your public profile — we use it only for safe, age-appropriate matching.')}
+                        </AppText>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                             {ageOptions.map((option) => {
                 const isSelected = formData.ageCategory === option.value;

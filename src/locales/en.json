@@ -6283,5 +6283,6 @@
   "venue_service_dinein": "dine-in",
   "venue_service_delivery": "delivery",
   "venue_service_takeout": "takeout",
-  "venue_service_separator": ", "
+  "venue_service_separator": ", ",
+  "age_private_notice": "Your age never appears on your public profile — we use it only for safe, age-appropriate matching."
 }
