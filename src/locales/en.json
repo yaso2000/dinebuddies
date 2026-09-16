@@ -1520,7 +1520,9 @@
       "myFavorites": "Your favorites by category",
       "empty": "Not played"
     },
-    "rotateHint": "Rotate for a bigger view"
+    "rotateHint": "Rotate for a bigger view",
+    "retakeLocked": "You can replay this in {{days}} day(s)",
+    "retakeIn": "Replay in {{days}} day(s)"
   },
   "try_again": "Try again",
   "business_cannot_review": "Business accounts cannot submit reviews",

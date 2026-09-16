@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { uploadImage } from './imageUpload';
 import { ImageUploadZone } from '../services/imageUploadZones';
@@ -21,7 +21,7 @@ async function resolveStoryAuthor(currentUser) {
 }
 
 /** Uploads the given image blob and writes the story doc — shared by every auto-story path below. */
-async function publishStoryImageBlob({ currentUser, blob, sourceType, userName, userPhoto }) {
+async function publishStoryImageBlob({ currentUser, blob, sourceType, userName, userPhoto, replaceKey = null }) {
   if (!blob) return;
 
   const path = `stories/${currentUser.uid}/auto_${sourceType}_${Date.now()}.png`;
@@ -30,9 +30,23 @@ async function publishStoryImageBlob({ currentUser, blob, sourceType, userName, 
     userId: currentUser.uid,
   });
 
+  const batch = writeBatch(db);
+
+  // A single-slot source (e.g. one story per Pick One category): remove this
+  // user's previous story for the same slot so replays replace, never stack.
+  if (replaceKey) {
+    try {
+      // Query by userId only (no composite index needed); match the slot client-side.
+      const prev = await getDocs(query(
+        collection(db, 'stories'),
+        where('userId', '==', String(currentUser.uid)),
+      ));
+      prev.forEach((d) => { if (d.data()?.replaceKey === replaceKey) batch.delete(d.ref); });
+    } catch { /* best-effort; still publish the new one */ }
+  }
+
   const storyRef = doc(collection(db, 'stories'));
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  const batch = writeBatch(db);
   batch.set(storyRef, {
     userId: String(currentUser.uid),
     userPhoto,
@@ -47,6 +61,7 @@ async function publishStoryImageBlob({ currentUser, blob, sourceType, userName, 
     sessionId: storyRef.id,
     order: 0,
     mediaDurationMs: IMAGE_STORY_DURATION_MS,
+    replaceKey: replaceKey || null,
     views: {},
     likes: {},
     createdAt: serverTimestamp(),
@@ -59,10 +74,10 @@ async function publishStoryImageBlob({ currentUser, blob, sourceType, userName, 
  * Publish a ready-made image blob (e.g. a game result card) as a 24h story.
  * Reuses the exact story-doc shape above.
  */
-export async function publishImageBlobAsStory({ currentUser, blob, sourceType = 'pickone' }) {
+export async function publishImageBlobAsStory({ currentUser, blob, sourceType = 'pickone', replaceKey = null }) {
   if (!currentUser?.uid || !blob) return;
   const { userName, userPhoto } = await resolveStoryAuthor(currentUser);
-  await publishStoryImageBlob({ currentUser, blob, sourceType, userName, userPhoto });
+  await publishStoryImageBlob({ currentUser, blob, sourceType, userName, userPhoto, replaceKey });
 }
 
 /**

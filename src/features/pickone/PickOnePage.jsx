@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaChevronLeft } from 'react-icons/fa';
 import { AppText } from '../../components/base';
+import { useToast } from '../../context/ToastContext';
 import { getList, allLists, entryName, listTitle, listSub } from './pickoneData';
 import { runnerUp } from './duelEngine';
 import usePickOne from './usePickOne';
@@ -11,13 +12,15 @@ import PickOneResult from './PickOneResult';
 import './pickone.css';
 
 /** 2×2-ish collage (4 entries) for a list card. */
-function ListCard({ list, language, onClick }) {
+function ListCard({ list, language, onClick, lock }) {
   const { t } = useTranslation();
   const sample = list.entries.filter((e) => e.tier === 1).slice(0, 4);
   const title = listTitle(list, language);
   const sub = listSub(list, language);
+  const locked = lock && lock.playedBefore && !lock.canPlay;
+  const days = locked ? Math.max(1, Math.ceil((lock.nextAt - Date.now()) / (24 * 60 * 60 * 1000))) : 0;
   return (
-    <button type="button" className="po-listcard" onClick={onClick}>
+    <button type="button" className="po-listcard" onClick={onClick} style={locked ? { opacity: 0.75 } : undefined}>
       <div className="po-listcard__grid">
         {sample.map((e) => (
           <Cell key={e.id} entry={e} language={language} />
@@ -26,8 +29,13 @@ function ListCard({ list, language, onClick }) {
       <div style={{ padding: '12px 14px 14px' }}>
         <AppText as="div" style={{ fontWeight: 900, fontSize: '1.05rem' }}>{title}</AppText>
         <AppText as="div" style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #6b7280)' }}>
-          {sub} · {t('pickone.list.count', { n: list.entries.length, defaultValue: `${list.entries.length} names` })}
+          {sub} · {t('pickone.list.count', { n: list.entries.length, defaultValue: `${list.entries.length} dishes` })}
         </AppText>
+        {locked ? (
+          <AppText as="div" style={{ marginTop: 6, fontSize: '0.78rem', fontWeight: 800, color: 'var(--primary, #ef4444)' }}>
+            🔒 {t('pickone.retakeIn', { days, defaultValue: `Replay in ${days} day(s)` })}
+          </AppText>
+        ) : null}
       </div>
     </button>
   );
@@ -51,9 +59,10 @@ export default function PickOnePage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { t, i18n } = useTranslation();
+  const { showToast } = useToast();
   const rtl = i18n.dir() === 'rtl';
   const language = i18n.language;
-  const { lastResult, saveResult } = usePickOne();
+  const { lastResult, retakeInfo, saveResult } = usePickOne();
 
   const [phase, setPhase] = useState('pick'); // 'pick' | 'duel' | 'result'
   const [list, setList] = useState(null);
@@ -62,6 +71,12 @@ export default function PickOnePage() {
   const [sameAsLast, setSameAsLast] = useState(false);
 
   const start = (l) => {
+    const { canPlay, nextAt } = retakeInfo(l.id);
+    if (!canPlay) {
+      const days = Math.max(1, Math.ceil((nextAt - Date.now()) / (24 * 60 * 60 * 1000)));
+      showToast(t('pickone.retakeLocked', { days, defaultValue: `You can replay this in ${days} day(s)` }), 'info');
+      return;
+    }
     setList(l);
     setSeed((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
     setFinal(null);
@@ -109,7 +124,7 @@ export default function PickOnePage() {
           </AppText>
 
           {lists.map((l) => (
-            <ListCard key={l.id} list={l} language={language} onClick={() => start(l)} />
+            <ListCard key={l.id} list={l} language={language} lock={retakeInfo(l.id)} onClick={() => start(l)} />
           ))}
         </div>
       )}

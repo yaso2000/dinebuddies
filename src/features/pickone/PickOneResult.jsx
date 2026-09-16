@@ -128,7 +128,8 @@ export default function PickOneResult({ list, state, sameAsLast, onPlayAgain, on
     try {
       if (postStory) {
         const { blob } = await buildCard();
-        await publishImageBlobAsStory({ currentUser, blob });
+        // One story slot per category — replaying replaces it (max four stories).
+        await publishImageBlobAsStory({ currentUser, blob, replaceKey: `pickone-${list.id}` });
       }
       if (postFeed) {
         const authorName = userProfile?.display_name || currentUser?.displayName || 'User';

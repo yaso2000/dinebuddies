@@ -7,12 +7,27 @@ import { doc, increment, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 
+const RETAKE_MS = 7 * 24 * 60 * 60 * 1000; // a category can be replayed once a week
+
+function playedAtMs(r) {
+  const s = r?.playedAt?.seconds ?? r?.playedAt?._seconds ?? 0;
+  return s ? s * 1000 : 0;
+}
+
 export function usePickOne() {
   const { currentUser, userProfile } = useAuth();
   const results = userProfile?.pickOne || {};
 
   /** Last stored result for a list ({ championId, runnerUpId, seed, plays } | null). */
   const lastResult = useCallback((listId) => results?.[listId] || null, [results]);
+
+  /** First play is free; after that a category unlocks again a week later. */
+  const retakeInfo = useCallback((listId) => {
+    const at = playedAtMs(results?.[listId]);
+    if (!at) return { canPlay: true, nextAt: 0, playedBefore: false };
+    const nextAt = at + RETAKE_MS;
+    return { canPlay: Date.now() >= nextAt, nextAt, playedBefore: true };
+  }, [results]);
 
   /** Persist a finished duel. Merge-only; never overwrites other lists. */
   const saveResult = useCallback(async ({ listId, championId, runnerUpId, seed }) => {
@@ -32,7 +47,7 @@ export function usePickOne() {
     }
   }, [currentUser]);
 
-  return { lastResult, saveResult, signedIn: Boolean(currentUser?.uid) };
+  return { lastResult, retakeInfo, saveResult, signedIn: Boolean(currentUser?.uid) };
 }
 
 export default usePickOne;
