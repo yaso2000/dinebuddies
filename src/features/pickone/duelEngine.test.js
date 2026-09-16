@@ -13,7 +13,7 @@ describe('pickoneData', () => {
       for (const e of l.entries) {
         expect(e.name.en, e.id).toBeTruthy();
         expect(e.name.ar, e.id).toBeTruthy();
-        expect(e.image, e.id).toMatch(/^\/pickone\/singers\/[a-z0-9-]+\.webp$/);
+        expect(e.image, e.id).toMatch(/^\/pickone\/foods\/[a-z0-9-]+\.webp$/);
       }
       const tier1 = l.entries.filter((e) => e.tier === 1).length;
       expect(tier1, `${l.id} tier1`).toBeGreaterThanOrEqual(5);
