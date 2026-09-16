@@ -3955,6 +3955,10 @@ select.input-field {
   padding: 0 !important;
   margin-inline: 2px;
   flex-shrink: 0;
+  /* Filled AI pill — the white "AI" glyph needs a background to be visible on
+     the light theme (was transparent → invisible white-on-white). */
+  background: linear-gradient(135deg, #7c3aed 0%, #0ea5e9 100%) !important;
+  box-shadow: 0 2px 12px rgba(124, 58, 237, 0.38);
   transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 

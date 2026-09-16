@@ -28,7 +28,8 @@
   min-height: 0;
   width: 100%;
   display: flex;
-  flex-direction: column;
+  /* Two images side by side (left/right) in every orientation. */
+  flex-direction: row;
 }
 
 .po-half {
@@ -56,7 +57,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center top;
+  object-position: center;
   display: block;
   user-select: none;
   -webkit-user-drag: none;
@@ -69,9 +70,7 @@
   background: linear-gradient(to top, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.25) 38%, rgba(0, 0, 0, 0) 65%);
   pointer-events: none;
 }
-.po-half--top .po-half__shade {
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.25) 38%, rgba(0, 0, 0, 0) 65%);
-}
+/* Side-by-side: both halves are bottom-anchored (name + shade at the bottom). */
 
 .po-half__name {
   position: absolute;
@@ -82,10 +81,6 @@
   line-height: 1.15;
   text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
   pointer-events: none;
-}
-.po-half--top .po-half__name {
-  bottom: auto;
-  top: calc(22px + env(safe-area-inset-top, 0px));
 }
 
 /* No image: color block with a big faint initial behind the name. */
@@ -121,10 +116,11 @@
 .po-half[data-anim='in-bottom']  { animation: poInBottom 260ms cubic-bezier(.2,.8,.2,1) both; }
 .po-half[data-anim='win']        { animation: poWin 280ms ease-out; }
 
-@keyframes poOutTop    { to { transform: translateY(-104%); opacity: .4; } }
-@keyframes poOutBottom { to { transform: translateY(104%);  opacity: .4; } }
-@keyframes poInTop     { from { transform: translateY(-104%); } to { transform: none; } }
-@keyframes poInBottom  { from { transform: translateY(104%);  } to { transform: none; } }
+/* 'top' slot = left column, 'bottom' slot = right column → slide horizontally. */
+@keyframes poOutTop    { to { transform: translateX(-104%); opacity: .4; } }
+@keyframes poOutBottom { to { transform: translateX(104%);  opacity: .4; } }
+@keyframes poInTop     { from { transform: translateX(-104%); } to { transform: none; } }
+@keyframes poInBottom  { from { transform: translateX(104%);  } to { transform: none; } }
 @keyframes poWin       { 0% { transform: scale(1); } 40% { transform: scale(1.03); } 100% { transform: scale(1); } }
 
 @media (prefers-reduced-motion: reduce) {

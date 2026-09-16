@@ -48,11 +48,21 @@ export default function PickOneResult({ list, state, sameAsLast, onPlayAgain, on
       const { blob, dataUrl } = await buildCard();
       const file = new File([blob], `pickone-${champion.id}.png`, { type: 'image/png' });
       const text = t('pickone.share.textFood', { name, defaultValue: `My favorite dish is ${name}. What's yours? ${PLAY_URL}` });
-      const r = await shareNativeOrFallback({ file, title: t('pickone.title', 'Pick One'), text, url: PLAY_URL, skipExternalFallback: true });
-      if (r === 'no-api') {
-        // No file-share here (desktop web) → save the image instead.
+      const saveInstead = async () => {
         const s = await saveImageDataUrl(dataUrl, `pickone-${champion.id}.png`);
         if (s !== 'cancelled') showToast(t('pickone.result.saved', 'Image saved — post it to your story'), 'success');
+      };
+      // Only use the OS share sheet when this browser can actually share the
+      // IMAGE file; otherwise save it (a text-only share would look like the
+      // story never posted). This is the reliable path on mobile web.
+      const canShareFile = typeof navigator !== 'undefined'
+        && typeof navigator.canShare === 'function'
+        && navigator.canShare({ files: [file] });
+      if (canShareFile) {
+        const r = await shareNativeOrFallback({ file, title: t('pickone.title', 'Pick One'), text, url: PLAY_URL, skipExternalFallback: true });
+        if (r !== 'native' && r !== 'aborted') await saveInstead();
+      } else {
+        await saveInstead();
       }
     } catch {
       showToast(t('pickone.result.shareFailed', 'Could not build the card, try again'), 'error');
