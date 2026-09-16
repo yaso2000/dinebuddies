@@ -583,6 +583,9 @@
     pointer-events: none;
     display: flex;
     flex-direction: column;
+    /* Name, bio and location all hug the inline-start (right in Arabic, left in
+       English) so the block reads consistently in both directions. */
+    align-items: flex-start;
     gap: 0.4rem;
 }
 
