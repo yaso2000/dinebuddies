@@ -20,6 +20,14 @@ import '../components/venue-search.css';
 import { AppText } from '../components/base';
 import PullToRefresh from '../components/PullToRefresh';
 
+// How many VISIBLE cards each "Load more" tap should try to add, and a hard cap
+// on how many raw docs we page through chasing them. Pages fetched from
+// Firestore are thinned by the client filters (photo gate, gender, place…), so a
+// single page can yield zero visible cards; we keep paging until the visible
+// list grows by a step or the pool runs out.
+const BROWSE_VISIBLE_STEP = 12;
+const BROWSE_HARD_CAP = 240;
+
 export default function UsersDirectory() {
   const { t, i18n } = useTranslation();
   const { currentUser, userProfile, isGuest, isBusiness } = useAuth();
@@ -34,6 +42,8 @@ export default function UsersDirectory() {
   // Unified free search (name) + data-derived place chip (city/country).
   const [searchText, setSearchText] = useState('');
   const [placeFilter, setPlaceFilter] = useState(null);
+  // Target number of visible cards to keep on screen; grows on "Load more".
+  const [visibleTarget, setVisibleTarget] = useState(BROWSE_VISIBLE_STEP);
 
   const viewerUid = currentUser?.uid || currentUser?.id;
   const canBrowse = Boolean(viewerUid && !isGuest);
@@ -151,17 +161,24 @@ export default function UsersDirectory() {
     return opts;
   }, [users]);
 
-  // When a place is selected, keep loading a few more pages (capped) until we have matches.
+  // Changing any filter/search resets the visible target — otherwise a large
+  // target carried over from browsing would over-fetch the new result set.
   useEffect(() => {
-    const hasQuery = Boolean(placeFilter) || Boolean(searchText.trim());
-    if (!hasQuery || loading || loadingMore || !hasMore) return;
-    if (filteredUsers.length >= 8) return;
-    if (users.length >= 120) return;
+    setVisibleTarget(BROWSE_VISIBLE_STEP);
+  }, [genderFilter, ageCategoryFilter, photoFilter, onlineOnly, searchText, placeFilter]);
+
+  // Keep paging until the VISIBLE list reaches the target (or the pool is
+  // exhausted). A fetched page is thinned by the client filters, so a single
+  // page may add zero visible cards; without this, "Load more" would grow the
+  // raw list but leave the screen unchanged. Capped so it never runs away.
+  useEffect(() => {
+    if (loading || loadingMore || !hasMore) return;
+    if (filteredUsers.length >= visibleTarget) return;
+    if (users.length >= BROWSE_HARD_CAP) return;
     loadMore();
   }, [
-    placeFilter,
-    searchText,
     filteredUsers.length,
+    visibleTarget,
     users.length,
     hasMore,
     loading,
@@ -169,21 +186,28 @@ export default function UsersDirectory() {
     loadMore,
   ]);
 
+  // Sentinel near the end of the list → ask for another step of visible cards.
+  const requestMore = useCallback(() => {
+    setVisibleTarget((prev) =>
+      Math.max(prev, filteredUsers.length) + BROWSE_VISIBLE_STEP
+    );
+  }, [filteredUsers.length]);
+
   useEffect(() => {
-    if (!hasMore || loading || loadingMore) return undefined;
+    if (!hasMore) return undefined;
 
     const node = loadMoreRef.current;
     if (!node) return undefined;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) loadMore();
+        if (entries[0]?.isIntersecting) requestMore();
       },
-      { rootMargin: '160px' }
+      { rootMargin: '240px' }
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [hasMore, loadMore, loading, loadingMore]);
+  }, [hasMore, requestMore]);
 
   const handleRefresh = useCallback(async () => {
     document.querySelector('.app-main')?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -313,7 +337,7 @@ export default function UsersDirectory() {
               <button
                 type="button"
                 className="users-directory-load-more-btn"
-                onClick={loadMore}
+                onClick={requestMore}
                 disabled={loadingMore}>
                 {loadingMore
                   ? t('loading', 'Loading…')
