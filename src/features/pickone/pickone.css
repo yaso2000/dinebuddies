@@ -28,35 +28,51 @@
   min-height: 0;
   width: 100%;
   display: flex;
-  /* Two images side by side (left/right) in every orientation. */
+  /* Two framed images side by side (left/right) in every orientation, with a
+     small gap between them and a margin from the screen edges. */
   flex-direction: row;
+  gap: 12px;
+  padding: 12px;
+  padding-top: 16px;
+  box-sizing: border-box;
 }
 
 .po-half {
   position: relative;
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   min-height: 0;
-  width: 100%;
   border: none;
   padding: 0;
   margin: 0;
-  background: #111;
+  background: transparent;
   color: #fff;
   cursor: pointer;
-  overflow: hidden;
   display: block;
   text-align: center;
   -webkit-tap-highlight-color: transparent;
-  outline-offset: -4px;
 }
-.po-half:focus-visible { outline: 3px solid var(--primary, #ef4444); }
+
+/* Each dish sits inside its own rounded frame. */
+.po-half__frame {
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #0a0a12;
+  border: 2px solid rgba(255, 255, 255, 0.24);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+}
+.po-half:focus-visible .po-half__frame { outline: 3px solid var(--primary, #ef4444); outline-offset: 2px; }
 
 .po-half__img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* Keep the dish's real aspect ratio (no stretch/crop) — it shows smaller in
+     a narrow portrait column and larger when the phone is rotated. */
+  object-fit: contain;
   object-position: center;
   display: block;
   user-select: none;
@@ -125,6 +141,44 @@
 
 @media (prefers-reduced-motion: reduce) {
   .po-half[data-anim] { animation: none !important; }
+  .po-rotate-hint__icon { animation: none !important; }
+}
+
+/* Rotate-your-phone nudge — only useful (and shown) in portrait. */
+.po-rotate-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(10, 8, 16, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  z-index: 3;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+}
+.po-rotate-hint__icon {
+  display: inline-block;
+  font-size: 1rem;
+  transform-origin: center;
+  animation: poRotateWiggle 2s ease-in-out infinite;
+}
+@keyframes poRotateWiggle {
+  0%, 25% { transform: rotate(0deg); }
+  55%, 80% { transform: rotate(90deg); }
+  100% { transform: rotate(0deg); }
+}
+@media (orientation: landscape) {
+  .po-rotate-hint { display: none; }
 }
 
 /* Centre badge + progress. */

@@ -1523,8 +1523,11 @@
     "profile": {
       "cta": "Pick One: who is your 90s icon?",
       "ctaSub": "19 taps, one winner, share it to your story",
-      "ctaFood": "Pick One: what is your favorite dish?"
-    }
+      "ctaFood": "Pick One: what is your favorite dish?",
+      "favorite": "My favorite dish",
+      "playAgain": "Tap to play again"
+    },
+    "rotateHint": "Rotate for a bigger view"
   },
   "try_again": "Try again",
   "business_cannot_review": "Business accounts cannot submit reviews",

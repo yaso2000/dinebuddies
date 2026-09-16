@@ -33,20 +33,24 @@ function Half({ entry, slot, anim, language, disabled, onPick }) {
       onClick={() => !disabled && onPick()}
       disabled={disabled}
       aria-label={name}
-      style={showImage ? undefined : { background: `linear-gradient(160deg, ${entry.color} 0%, #111 140%)` }}
     >
-      {showImage ? (
-        <>
-          <img className="po-half__img" src={entry.image} alt="" draggable={false} onError={() => setBroken(true)} />
-          <div className="po-half__shade" />
-          <div className="po-half__name">{name}</div>
-        </>
-      ) : (
-        <div className="po-half__fallback">
-          <span className="po-half__initial" aria-hidden>{name.trim().charAt(0)}</span>
-          <div className="po-half__fallbackName">{name}</div>
-        </div>
-      )}
+      <div
+        className="po-half__frame"
+        style={showImage ? undefined : { background: `linear-gradient(160deg, ${entry.color} 0%, #111 140%)` }}
+      >
+        {showImage ? (
+          <>
+            <img className="po-half__img" src={entry.image} alt="" draggable={false} onError={() => setBroken(true)} />
+            <div className="po-half__shade" />
+            <div className="po-half__name">{name}</div>
+          </>
+        ) : (
+          <div className="po-half__fallback">
+            <span className="po-half__initial" aria-hidden>{name.trim().charAt(0)}</span>
+            <div className="po-half__fallbackName">{name}</div>
+          </div>
+        )}
+      </div>
     </button>
   );
 }
@@ -119,6 +123,12 @@ export default function PickOneDuel({ list, seed, onFinish, onExit }) {
           <span>{Math.min(state.round, state.total)}<small>/{state.total}</small></span>
         </div>
         <Half entry={view.bottom.entry} slot="bottom" anim={anim.bottom} language={language} disabled={busy || finished} onPick={() => handlePick('bottom')} />
+
+        {/* Portrait only (hidden in landscape via CSS): nudge to rotate for a bigger view. */}
+        <div className="po-rotate-hint" aria-hidden>
+          <span className="po-rotate-hint__icon">📱</span>
+          <span>{t('pickone.rotateHint', 'Rotate for a bigger view')}</span>
+        </div>
       </div>
 
       {askLeave && (
