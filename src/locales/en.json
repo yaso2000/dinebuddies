@@ -1518,7 +1518,12 @@
       "favorite": "My favorite dish",
       "playAgain": "Tap to play again",
       "myFavorites": "Your favorites by category",
-      "empty": "Not played"
+      "empty": "Not played",
+      "theirFavorites": "Favorite dishes",
+      "delete": "Remove",
+      "deleteTitle": "Remove this favorite?",
+      "deleteBody": "It disappears from your profile, but you still can't replay this category until a week has passed.",
+      "deleteFailed": "Could not remove, try again"
     },
     "rotateHint": "Rotate for a bigger view",
     "retakeLocked": "You can replay this in {{days}} day(s)",

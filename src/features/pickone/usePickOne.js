@@ -47,7 +47,27 @@ export function usePickOne() {
     }
   }, [currentUser]);
 
-  return { lastResult, retakeInfo, saveResult, signedIn: Boolean(currentUser?.uid) };
+  /**
+   * Remove a favorite from display WITHOUT resetting the weekly cooldown:
+   * clears the champion but keeps playedAt, so deleting can't be used to
+   * replay early (anti-cheat). It disappears from the public profile because
+   * the projection only mirrors entries that still have a championId.
+   */
+  const deleteFavorite = useCallback(async (listId) => {
+    const uid = currentUser?.uid;
+    if (!uid || !listId) return { ok: false };
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        [`pickOne.${listId}.championId`]: null,
+        [`pickOne.${listId}.runnerUpId`]: null,
+      });
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
+  }, [currentUser]);
+
+  return { lastResult, retakeInfo, saveResult, deleteFavorite, signedIn: Boolean(currentUser?.uid) };
 }
 
 export default usePickOne;

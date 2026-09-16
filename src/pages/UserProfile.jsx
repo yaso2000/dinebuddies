@@ -27,6 +27,7 @@ import {
 'react-icons/fa';
 import { getSafeAvatar, normalizeUserGender } from '../utils/avatarUtils';
 import TasteScopeBadge from '../features/tastescope/TasteScopeBadge';
+import PickOneFavoritesView from '../features/pickone/PickOneFavoritesView';
 import TasteCompatibility from '../features/tastescope/TasteCompatibility';
 import { getMutualFollowers } from '../utils/followHelpers';
 import {
@@ -140,7 +141,7 @@ function ProfileHero({
   menuPanel,
   showMenu
 }) {
-  const { displayName, ageRange, avatarUrl, coverPhotoUrl, tasteTitleId, tasteGender } = profile;
+  const { displayName, ageRange, avatarUrl, coverPhotoUrl, tasteTitleId, tasteGender, pickOne } = profile;
   const coverZoom = Number.isFinite(Number(profile.coverZoom)) ? Number(profile.coverZoom) : 1;
   const clampPos = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Number(v))) : 50);
   const coverPosX = clampPos(profile.coverPosX);
@@ -220,6 +221,11 @@ function ProfileHero({
             <TasteScopeBadge variant="full" titleId={tasteTitleId} gender={tasteGender} />
           </div>
         ) : null}
+        {pickOne ? (
+          <div style={{ marginTop: 14 }}>
+            <PickOneFavoritesView pickOne={pickOne} />
+          </div>
+        ) : null}
       </div>
     </>
   );
@@ -278,6 +284,7 @@ function mapUserDocToProfileModel(firestoreUser) {
       firestoreUser.userPublic?.tasteScope?.visibility ||
       'public',
     tasteGender: normalizeUserGender(firestoreUser),
+    pickOne: firestoreUser.userPublic?.pickOne || firestoreUser.pickOne || null,
     invitePreference:
     firestoreUser.invitePreference ??
     firestoreUser.privateInvitationPreference ??

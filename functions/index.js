@@ -769,6 +769,17 @@ function toPublicProfile(userDocData, uid) {
                         coverUrl: ts.coverUrl || null,
                         visibility: ts.visibility || 'public',
                     };
+                })(),
+                // Pick One favorites — public: just the champion id per category
+                // (the client resolves the dish from its own list data).
+                pickOne: (() => {
+                    const po = userData.pickOne;
+                    if (!po || typeof po !== 'object') return null;
+                    const out = {};
+                    for (const [listId, r] of Object.entries(po)) {
+                        if (r && r.championId) out[listId] = { championId: r.championId };
+                    }
+                    return Object.keys(out).length ? out : null;
                 })()
             }
             : null,
