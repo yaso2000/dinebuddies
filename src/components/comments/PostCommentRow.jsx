@@ -64,7 +64,7 @@ export default function PostCommentRow({
                             {t('comment_by_author', 'Author')}
                         </AppText> :
           null}
-                    <AppText as="span" className="fb-comment-bubble__text">{comment.text}</AppText>
+                    <AppText as="span" dir="auto" className="fb-comment-bubble__text">{comment.text}</AppText>
                 </div>
                 <div className="fb-comment-actions">
                     <button

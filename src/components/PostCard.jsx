@@ -73,7 +73,7 @@ function PostText({ text, style, t }) {
   const long = full.length > POST_TEXT_LIMIT;
   const shown = expanded || !long ? full : `${full.slice(0, POST_TEXT_LIMIT).trimEnd()}…`;
   return (
-    <div className="post-text" style={style}>
+    <div className="post-text" dir="auto" style={style}>
       {shown}
       {long ? (
         <button
@@ -940,6 +940,7 @@ const PostCard = ({ post, showInChat = false, defaultExpandComments = false }) =
                                     {displayPost.postTitle ?
             <div
               className="post-headline"
+              dir="auto"
               style={{
                 whiteSpace: 'pre-wrap',
                 fontSize: '1.2rem',

@@ -384,18 +384,20 @@ const InlinePostEditor = ({
             <div className="inline-post-editor__compose">
                 <div
           className="composer-field composer-field--post"
-          style={{ textAlign: isRtl ? 'right' : 'left', direction: isRtl ? 'rtl' : 'ltr' }}>
+          style={{ direction: isRtl ? 'rtl' : 'ltr' }}>
           
                     <AppTextInput
             type="text"
+            dir="auto"
             className="composer-field__title"
             placeholder={t('post_headline_placeholder')}
             value={title}
             onChange={handleTitleChange}
             maxLength={POST_TITLE_MAX} />
-          
+
                     <AppTextInput as="textarea"
           ref={textareaRef}
+          dir="auto"
           className="composer-field__input"
           placeholder={t('whats_on_your_mind', "What's on your mind?")}
           value={text}
