@@ -393,6 +393,13 @@ service cloud.firestore {
     // TasteScope (entertainment quiz result). When the owner writes `tasteScope`,
     // validate its shape: version 1, a known titleId, and exactly the 10 known axis
     // keys each holding one of that axis's two poles. Other updates are unaffected.
+    // Pick One (docs/games/PICKONE_SPEC.md §6): owner-only, one entry per list,
+    // fixed key set. Values are not enumerated (lists grow without a rules deploy).
+    function pickOneWriteOk() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pickOne'])
+        || (request.resource.data.pickOne is map
+            && request.resource.data.pickOne.keys().hasOnly(['foods-arab','foods-world','foods-desserts','foods-street']));
+    }
     function tasteScopeWriteOk() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['tasteScope'])
         || tasteScopeValid(request.resource.data.tasteScope);
@@ -464,6 +471,7 @@ service cloud.firestore {
                        request.resource.data.following is list;
       allow update: if isOwner(userId) && ownerAffiliateWriteGuards() &&
                        tasteScopeWriteOk() &&
+                       pickOneWriteOk() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'accountType']);
       // Admin panel (admin + moderator/support/staff/regional_manager): credits, moderation, etc.

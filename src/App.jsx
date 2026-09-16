@@ -82,6 +82,7 @@ const CreateZodiacPost = lazy(() => import('./pages/CreateZodiacPost'));
 const MyZodiacCard = lazy(() => import('./pages/MyZodiacCard'));
 const StagesHub = lazy(() => import('./pages/StagesHub'));
 const TasteScopePage = lazy(() => import('./features/tastescope/TasteScopePage'));
+const PickOnePage = lazy(() => import('./features/pickone/PickOnePage'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const HomeInvitations = lazy(() => import('./pages/Home'));
 
@@ -359,6 +360,7 @@ function App() {
                                                     <Route path="/suitability/:id" element={<GuestBlockedRoute><SuitabilityPostRoom /></GuestBlockedRoute>} />
                                                     <Route path="/stages" element={<GuestBlockedRoute><StagesHub /></GuestBlockedRoute>} />
                                                     <Route path="/tastescope" element={<GuestBlockedRoute><TasteScopePage /></GuestBlockedRoute>} />
+                                                    <Route path="/pickone" element={<GuestBlockedRoute><PickOnePage /></GuestBlockedRoute>} />
                                                     <Route path="/create-post" element={<GuestBlockedRoute><BusinessCreatePostGate /></GuestBlockedRoute>} />
                                                     <Route path="/create-featured-post" element={<GuestBlockedRoute><CreateFeaturedPost /></GuestBlockedRoute>} />
                                                     <Route path="/create-community-offer" element={<GuestBlockedRoute><CreateCommunityOffer /></GuestBlockedRoute>} />

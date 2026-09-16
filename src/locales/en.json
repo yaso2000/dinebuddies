@@ -1466,6 +1466,66 @@
     "generatingProfile": "Preparing your taste profile…",
     "generatingHint": "Painting your cover and writing your reading — a moment"
   },
+  "pickone": {
+    "title": "Pick One",
+    "hint": "Tap the one you prefer. Last one standing wins.",
+    "list": {
+      "singersM": "Singers — Men",
+      "singersF": "Singers — Women",
+      "globalSub": "Global stars of the 80s & 90s",
+      "arabSub": "Arab stars of the 80s & 90s",
+      "count": "{{n}} names"
+    },
+    "region": {
+      "global": "🌍 Global",
+      "arab": "🌙 Arab"
+    },
+    "leave": {
+      "title": "Leave the game?",
+      "body": "Your progress will be lost.",
+      "stay": "Keep playing",
+      "leave": "Leave"
+    },
+    "result": {
+      "titleM": "Your 90s icon",
+      "titleF": "Your 90s queen",
+      "beat": "Beat {{n}} legends",
+      "runnerUp": "Runner-up: {{name}}",
+      "sameAsLast": "You picked {{name}} last time too",
+      "share": "Share to story",
+      "building": "Preparing your card…",
+      "download": "Download image",
+      "copyLink": "Copy link",
+      "linkCopied": "Link copied",
+      "saved": "Image saved — post it to your story",
+      "shareFailed": "Could not build the card, try again",
+      "again": "Play again",
+      "otherM": "Now the men",
+      "otherF": "Now the women",
+      "done": "Done",
+      "history": "See how you voted",
+      "hideHistory": "Hide your picks",
+      "titleFood": "Your favorite dish",
+      "beatFood": "Beat {{n}} dishes"
+    },
+    "card": {
+      "captionM": "My 90s icon",
+      "captionF": "My 90s queen",
+      "beat": "Beat {{n}} legends",
+      "play": "Play: dinebuddies.com/pickone",
+      "captionFood": "My favorite dish",
+      "beatFood": "Beat {{n}} dishes"
+    },
+    "share": {
+      "text": "My 90s icon is {{name}}. Who's yours? https://dinebuddies.com/pickone",
+      "textFood": "My favorite dish is {{name}}. What's yours? dinebuddies.com/pickone"
+    },
+    "profile": {
+      "cta": "Pick One: who is your 90s icon?",
+      "ctaSub": "19 taps, one winner, share it to your story",
+      "ctaFood": "Pick One: what is your favorite dish?"
+    }
+  },
   "try_again": "Try again",
   "business_cannot_review": "Business accounts cannot submit reviews",
   "business_claim_account_cta": "Claim account via SMS",

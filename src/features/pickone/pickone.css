@@ -1,0 +1,257 @@
+/* Pick One — only what inline styles can't do: animations + reduced motion. */
+
+.po-duel {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay, 1000);
+  background: #0b0812;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Desktop: phone-width column in the middle, blurred dark backdrop (TikTok web style). */
+@media (min-width: 1024px) {
+  .po-duel {
+    background: radial-gradient(120% 80% at 50% 0%, #1a1230 0%, #07060a 70%);
+  }
+  .po-duel__stage {
+    width: min(480px, 100vw);
+    margin: 0 auto;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 30px 80px rgba(0, 0, 0, 0.6);
+  }
+}
+
+.po-duel__stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.po-half {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: #111;
+  color: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  display: block;
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
+  outline-offset: -4px;
+}
+.po-half:focus-visible { outline: 3px solid var(--primary, #ef4444); }
+
+.po-half__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.po-half__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.25) 38%, rgba(0, 0, 0, 0) 65%);
+  pointer-events: none;
+}
+.po-half--top .po-half__shade {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.25) 38%, rgba(0, 0, 0, 0) 65%);
+}
+
+.po-half__name {
+  position: absolute;
+  inset-inline: 16px;
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  font-size: clamp(1.4rem, 5.2vw, 2rem);
+  font-weight: 900;
+  line-height: 1.15;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+.po-half--top .po-half__name {
+  bottom: auto;
+  top: calc(22px + env(safe-area-inset-top, 0px));
+}
+
+/* No image: color block with a big faint initial behind the name. */
+.po-half__fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.po-half__initial {
+  font-size: clamp(9rem, 45vw, 16rem);
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.14);
+  line-height: 1;
+  user-select: none;
+}
+.po-half__fallbackName {
+  position: absolute;
+  inset-inline: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: clamp(1.8rem, 8vw, 2.8rem);
+  font-weight: 900;
+  line-height: 1.1;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
+}
+
+/* Slide animations. `data-anim` is set by the component for one frame set. */
+.po-half[data-anim='out-top']    { animation: poOutTop 220ms ease-in forwards; }
+.po-half[data-anim='out-bottom'] { animation: poOutBottom 220ms ease-in forwards; }
+.po-half[data-anim='in-top']     { animation: poInTop 260ms cubic-bezier(.2,.8,.2,1) both; }
+.po-half[data-anim='in-bottom']  { animation: poInBottom 260ms cubic-bezier(.2,.8,.2,1) both; }
+.po-half[data-anim='win']        { animation: poWin 280ms ease-out; }
+
+@keyframes poOutTop    { to { transform: translateY(-104%); opacity: .4; } }
+@keyframes poOutBottom { to { transform: translateY(104%);  opacity: .4; } }
+@keyframes poInTop     { from { transform: translateY(-104%); } to { transform: none; } }
+@keyframes poInBottom  { from { transform: translateY(104%);  } to { transform: none; } }
+@keyframes poWin       { 0% { transform: scale(1); } 40% { transform: scale(1.03); } 100% { transform: scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .po-half[data-anim] { animation: none !important; }
+}
+
+/* Centre badge + progress. */
+.po-vs {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(10, 8, 16, 0.92);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 0.8rem;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  z-index: 2;
+}
+.po-vs small { font-size: 0.62rem; font-weight: 800; opacity: 0.75; }
+
+.po-progress {
+  position: absolute;
+  top: 0;
+  inset-inline: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.18);
+  z-index: 3;
+}
+.po-progress > i {
+  display: block;
+  height: 100%;
+  background: var(--primary, #ef4444);
+  transition: width 220ms ease;
+}
+
+.po-close {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  inset-inline-end: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 4;
+}
+
+/* Leave dialog (fixed → overlay layer). */
+.po-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-overlay, 1000) + 1);
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.po-dialog__box {
+  width: 100%;
+  max-width: 360px;
+  background: var(--bg-card, #fff);
+  color: var(--text-main, #111);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 18px;
+  padding: 18px;
+}
+
+/* Category picker cards. */
+.po-listcard {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-card, #fff);
+  border-radius: 20px;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: start;
+  color: var(--text-main);
+  transition: transform .12s ease;
+}
+.po-listcard:active { transform: scale(.985); }
+.po-listcard__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  aspect-ratio: 4 / 1.35;
+  gap: 2px;
+  background: var(--bg-elevated, #111);
+}
+.po-listcard__cell {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 900;
+  font-size: 1.4rem;
+}
+.po-listcard__cell img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
+
+/* Result. */
+.po-result__hero {
+  position: relative;
+  width: min(260px, 64vw);
+  aspect-ratio: 3 / 4;
+  border-radius: 24px;
+  overflow: hidden;
+  margin: 0 auto 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+.po-result__hero img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
