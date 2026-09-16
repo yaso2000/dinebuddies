@@ -56,6 +56,16 @@ async function publishStoryImageBlob({ currentUser, blob, sourceType, userName, 
 }
 
 /**
+ * Publish a ready-made image blob (e.g. a game result card) as a 24h story.
+ * Reuses the exact story-doc shape above.
+ */
+export async function publishImageBlobAsStory({ currentUser, blob, sourceType = 'pickone' }) {
+  if (!currentUser?.uid || !blob) return;
+  const { userName, userPhoto } = await resolveStoryAuthor(currentUser);
+  await publishStoryImageBlob({ currentUser, blob, sourceType, userName, userPhoto });
+}
+
+/**
  * Publishes an invitation as a standalone 24h story: a branded image
  * rendered natively at the real 9:16 story aspect ratio (generateStoryCard —
  * full-bleed hero, large type sized for that canvas), including

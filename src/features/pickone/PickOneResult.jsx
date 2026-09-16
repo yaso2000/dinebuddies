@@ -1,14 +1,44 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { AppText } from '../../components/base';
 import { shareNativeOrFallback } from '../../utils/shareNativeOrFallback';
 import { saveImageDataUrl } from '../../utils/saveImageDataUrl';
-import { entryName, siblingList } from './pickoneData';
+import { getSafeAvatar } from '../../utils/avatarUtils';
+import { publishImageBlobAsStory } from '../../utils/publishAutoStory';
+import { entryName, siblingList, listTitle } from './pickoneData';
 import { renderStoryCard } from './renderStoryCard';
 import './pickone.css';
 
 const PLAY_URL = 'https://dinebuddies.com/pickone';
+
+/** A tappable checkbox row (Post to Story / Post to Feed). */
+function CheckRow({ checked, onChange, label, dir }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      dir={dir}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'start',
+        padding: '11px 13px', borderRadius: 12, cursor: 'pointer',
+        border: `1.5px solid ${checked ? 'var(--primary, #ef4444)' : 'var(--border-color, #e5e7eb)'}`,
+        background: checked ? 'rgba(239,68,68,0.08)' : 'transparent',
+      }}
+    >
+      <span style={{
+        width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+        border: `2px solid ${checked ? 'var(--primary, #ef4444)' : 'var(--border-color, #cbd5e1)'}`,
+        background: checked ? 'var(--primary, #ef4444)' : 'transparent',
+        color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900,
+      }}>{checked ? '✓' : ''}</span>
+      <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>{label}</span>
+    </button>
+  );
+}
 
 /**
  * Result: champion + "Share to story" (canvas card → native share / download),
@@ -17,11 +47,17 @@ const PLAY_URL = 'https://dinebuddies.com/pickone';
 export default function PickOneResult({ list, state, sameAsLast, onPlayAgain, onPlayList, onDone }) {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();
+  const { currentUser, userProfile } = useAuth();
+  const uid = currentUser?.uid;
   const rtl = i18n.dir() === 'rtl';
   const language = i18n.language;
   const [busy, setBusy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [broken, setBroken] = useState(false);
+  const [postStory, setPostStory] = useState(true);
+  const [postFeed, setPostFeed] = useState(true);
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState(false);
 
   const champion = state.champion;
   const name = entryName(champion, language);
@@ -84,6 +120,42 @@ export default function PickOneResult({ list, state, sameAsLast, onPlayAgain, on
     }
   };
 
+  // Publish to DineBuddies itself — a 24h Story and/or a Feed post.
+  const publish = async () => {
+    if (publishing || (!postStory && !postFeed)) return;
+    if (!uid) { showToast(t('pickone.result.signIn', 'Sign in to publish'), 'info'); return; }
+    setPublishing(true);
+    try {
+      if (postStory) {
+        const { blob } = await buildCard();
+        await publishImageBlobAsStory({ currentUser, blob });
+      }
+      if (postFeed) {
+        const authorName = userProfile?.display_name || currentUser?.displayName || 'User';
+        await addDoc(collection(db, 'communityPosts'), {
+          author: { id: uid, name: authorName, avatar: getSafeAvatar(userProfile || currentUser) },
+          authorId: uid,
+          postTitle: `${t('pickone.card.captionFood', 'My favorite dish')}: ${name}`,
+          content: t('pickone.result.beatFood', { n: state.total, defaultValue: `Beat ${state.total} dishes` }),
+          mediaUrl: champion.image || null,
+          mediaType: champion.image ? 'image' : null,
+          textStyle: { fontSize: 16, textAlign: rtl ? 'right' : 'left', fontWeight: 'normal', fontStyle: 'normal', color: 'var(--text-main)', backgroundColor: 'transparent', fontFamily: '"Inter", sans-serif' },
+          overlayText: '', overlayStyle: null,
+          createdAt: serverTimestamp(),
+          likes: [], comments: [], reposts: [],
+          attachedInvitation: null,
+          source: 'pickone',
+        });
+      }
+      setPublished(true);
+      showToast(t('pickone.result.published', 'Published ✓'), 'success');
+    } catch {
+      showToast(t('pickone.result.publishFailed', 'Could not publish, try again'), 'error');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   const copyLink = async () => {
     try {
       await navigator.clipboard?.writeText?.(`${PLAY_URL}?list=${list.id}`);
@@ -134,8 +206,18 @@ export default function PickOneResult({ list, state, sameAsLast, onPlayAgain, on
 
       <div style={{ height: 16 }} />
 
-      <button type="button" onClick={share} disabled={busy} style={btn(true)}>
-        {busy ? t('pickone.result.building', 'Preparing your card…') : t('pickone.result.share', 'Share to story')}
+      {/* Publish inside DineBuddies: a 24h Story and/or a Feed post. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+        <CheckRow checked={postStory} onChange={setPostStory} dir={i18n.dir()} label={t('pickone.result.toStory', 'Post to my Story')} />
+        <CheckRow checked={postFeed} onChange={setPostFeed} dir={i18n.dir()} label={t('pickone.result.toFeed', 'Post to the Feed')} />
+      </div>
+      <button type="button" onClick={publish} disabled={publishing || (!postStory && !postFeed)} style={btn(true)}>
+        {publishing ? t('pickone.result.publishing', 'Publishing…') : (published ? t('pickone.result.publishedBtn', 'Published ✓') : t('pickone.result.publish', 'Publish'))}
+      </button>
+
+      {/* External share (WhatsApp / Instagram / the OS share sheet). */}
+      <button type="button" onClick={share} disabled={busy} style={btn(false)}>
+        {busy ? t('pickone.result.building', 'Preparing your card…') : t('pickone.result.shareExternal', 'Share externally')}
       </button>
       <div style={{ display: 'flex', gap: 10 }}>
         <button type="button" onClick={download} disabled={busy} style={{ ...btn(false), flex: 1 }}>{t('pickone.result.download', 'Download image')}</button>
@@ -144,7 +226,7 @@ export default function PickOneResult({ list, state, sameAsLast, onPlayAgain, on
       <button type="button" onClick={onPlayAgain} style={btn(false)}>{t('pickone.result.again', 'Play again')}</button>
       {other && (
         <button type="button" onClick={() => onPlayList(other)} style={btn(false)}>
-          {other.gender === 'f' ? t('pickone.result.otherF', 'Now the women') : t('pickone.result.otherM', 'Now the men')}
+          {t('pickone.result.otherList', { title: listTitle(other, language), defaultValue: `Try: ${listTitle(other, language)}` })}
         </button>
       )}
       <button type="button" onClick={onDone} style={{ ...btn(false), border: 'none', color: 'var(--text-secondary, #6b7280)' }}>{t('pickone.result.done', 'Done')}</button>

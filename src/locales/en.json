@@ -1506,7 +1506,17 @@
       "history": "See how you voted",
       "hideHistory": "Hide your picks",
       "titleFood": "Your favorite dish",
-      "beatFood": "Beat {{n}} dishes"
+      "beatFood": "Beat {{n}} dishes",
+      "toStory": "Post to my Story",
+      "toFeed": "Post to the Feed",
+      "publish": "Publish",
+      "publishing": "Publishing…",
+      "publishedBtn": "Published ✓",
+      "published": "Published ✓",
+      "publishFailed": "Could not publish, try again",
+      "signIn": "Sign in to publish",
+      "shareExternal": "Share externally",
+      "otherList": "Try: {{title}}"
     },
     "card": {
       "captionM": "My 90s icon",

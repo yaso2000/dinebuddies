@@ -1463,7 +1463,17 @@
       "history": "شاهد كيف صوّت",
       "hideHistory": "إخفاء اختياراتك",
       "titleFood": "طبقك المفضّل",
-      "beatFood": "تغلّب على {{n}} طبقًا"
+      "beatFood": "تغلّب على {{n}} طبقًا",
+      "toStory": "نشر على قصّتي (ستوري)",
+      "toFeed": "نشر على الفيد",
+      "publish": "نشر",
+      "publishing": "جارٍ النشر…",
+      "publishedBtn": "تم النشر ✓",
+      "published": "تم النشر ✓",
+      "publishFailed": "تعذّر النشر، حاول مجددًا",
+      "signIn": "سجّل الدخول للنشر",
+      "shareExternal": "مشاركة خارجية",
+      "otherList": "جرّب: {{title}}"
     },
     "card": {
       "captionM": "مغنّيّ المفضّل من التسعينات",
