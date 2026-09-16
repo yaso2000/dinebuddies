@@ -71,19 +71,46 @@ export default function UsersDirectory() {
     enabled: canBrowse,
   });
 
-  const filteredUsers = useMemo(
-    () =>
-      filterDirectoryUsers(users, {
-        genderFilter,
-        ageCategoryFilter,
-        photoFilter,
-        onlineOnly,
-        searchText,
-        placeFilter,
-        userLocation,
-      }),
-    [users, genderFilter, ageCategoryFilter, photoFilter, onlineOnly, searchText, placeFilter, userLocation]
-  );
+  // Stable display order: once shown, members keep their place; loading more
+  // appends the new page BELOW (in distance order among themselves) instead of
+  // re-shuffling the whole list over the scroll position. Reset only when the
+  // filter or the viewer's location changes.
+  const displayOrderRef = useRef([]);
+  const filterKeyRef = useRef(null);
+  const filteredUsers = useMemo(() => {
+    const sorted = filterDirectoryUsers(users, {
+      genderFilter,
+      ageCategoryFilter,
+      photoFilter,
+      onlineOnly,
+      searchText,
+      placeFilter,
+      userLocation,
+    });
+    const filterKey = JSON.stringify([
+      genderFilter,
+      ageCategoryFilter,
+      photoFilter,
+      onlineOnly,
+      searchText,
+      placeFilter?.id || placeFilter || '',
+      userLocation ? `${userLocation.lat},${userLocation.lng}` : '',
+    ]);
+    const byId = new Map(sorted.map((u) => [u.id, u]));
+
+    if (filterKey !== filterKeyRef.current) {
+      filterKeyRef.current = filterKey;
+      displayOrderRef.current = sorted.map((u) => u.id);
+      return sorted;
+    }
+
+    const keptIds = displayOrderRef.current.filter((id) => byId.has(id));
+    const keptSet = new Set(keptIds);
+    const appended = sorted.filter((u) => !keptSet.has(u.id)).map((u) => u.id);
+    const order = [...keptIds, ...appended];
+    displayOrderRef.current = order;
+    return order.map((id) => byId.get(id)).filter(Boolean);
+  }, [users, genderFilter, ageCategoryFilter, photoFilter, onlineOnly, searchText, placeFilter, userLocation]);
 
   // Member-name suggestions for the unified search box.
   const memberItems = useMemo(() => {
