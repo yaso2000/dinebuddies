@@ -34,6 +34,7 @@ export const LISTS = [
     id: 'foods-arab',
     category: FOODS,
     title: { en: 'Arab & Middle-Eastern Dishes', ar: 'أطباق عربية وشرقية' },
+    short: { en: 'Arab', ar: 'عربية' },
     sub: { en: 'Which one wins your table?', ar: 'أيّها يفوز على مائدتك؟' },
     entries: build(FOODS, [
       ['kabsa', 'Kabsa', 'كبسة', 1],
@@ -62,6 +63,7 @@ export const LISTS = [
     id: 'foods-world',
     category: FOODS,
     title: { en: 'Global Favorites', ar: 'أطباق عالمية' },
+    short: { en: 'Global', ar: 'عالمية' },
     sub: { en: 'The world on one plate — pick one.', ar: 'العالم في طبق — اختر واحدًا.' },
     entries: build(FOODS, [
       ['pizza', 'Pizza', 'بيتزا', 1],
@@ -90,6 +92,7 @@ export const LISTS = [
     id: 'foods-desserts',
     category: FOODS,
     title: { en: 'Desserts & Sweets', ar: 'حلويات' },
+    short: { en: 'Desserts', ar: 'حلويات' },
     sub: { en: 'Save room — which one wins?', ar: 'اترك مكانًا — أيّها يفوز؟' },
     entries: build(FOODS, [
       ['kunafa', 'Kunafa', 'كنافة', 1],
@@ -118,6 +121,7 @@ export const LISTS = [
     id: 'foods-street',
     category: FOODS,
     title: { en: 'Street & Fast Food', ar: 'وجبات سريعة وشارع' },
+    short: { en: 'Street', ar: 'سريعة' },
     sub: { en: 'The craving showdown.', ar: 'مواجهة الشهيّة.' },
     entries: build(FOODS, [
       ['hot-dog', 'Hot Dog', 'هوت دوغ', 1],
@@ -177,6 +181,10 @@ export function listTitle(list, language) {
 export function listSub(list, language) {
   const ar = String(language || '').toLowerCase().startsWith('ar');
   return (ar ? list?.sub?.ar : list?.sub?.en) || list?.sub?.en || '';
+}
+export function listShort(list, language) {
+  const ar = String(language || '').toLowerCase().startsWith('ar');
+  return (ar ? list?.short?.ar : list?.short?.en) || list?.short?.en || listTitle(list, language);
 }
 
 /** The next list to offer as "try another" — cycles through LISTS. */

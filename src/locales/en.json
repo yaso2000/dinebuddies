@@ -1516,7 +1516,9 @@
       "ctaSub": "19 taps, one winner, share it to your story",
       "ctaFood": "Pick One: what is your favorite dish?",
       "favorite": "My favorite dish",
-      "playAgain": "Tap to play again"
+      "playAgain": "Tap to play again",
+      "myFavorites": "Your favorites by category",
+      "empty": "Not played"
     },
     "rotateHint": "Rotate for a bigger view"
   },
