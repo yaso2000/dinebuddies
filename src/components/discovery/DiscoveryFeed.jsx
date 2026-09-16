@@ -97,6 +97,11 @@ export default function DiscoveryFeed({
     [advance, onSkip, viewerUid]
   );
 
+  // Swipe down → step back to the previously-shown card (sequential history).
+  const handleBack = useCallback(() => {
+    setIndex((prev) => Math.max(0, prev - 1));
+  }, []);
+
   const handlers = useMemo(
     () => ({
       onSkip: handleSkip,
@@ -152,6 +157,7 @@ export default function DiscoveryFeed({
         profile={activeProfile}
         isTop
         listPath={listPath}
+        onBack={index > 0 ? handleBack : null}
         {...handlers}
       />
     </div>

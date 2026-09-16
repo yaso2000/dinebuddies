@@ -40,10 +40,9 @@ import './discovery.css';
 import './inbox.css';
 import { AppText } from '../base';
 
-const SWIPE_X_SKIP_THRESHOLD = 100;
+const SWIPE_THRESHOLD = 90;
+const SWIPE_VELOCITY = 420;
 const BURST_MS = 1400;
-const DOUBLE_ACTIVATE_MS = 320;
-const DOUBLE_ACTIVATE_PX = 22;
 
 function formatAgeLabel(profile) {
   const raw =
@@ -65,6 +64,7 @@ export default function DiscoveryCard({
   onLike,
   onSendGift,
   onGreeting,
+  onBack = null,
   isTop = true,
   listPath = '/search/list',
 }) {
@@ -92,10 +92,10 @@ export default function DiscoveryCard({
   const { liked, greetedToday } = useDiscoveryActionStatus(viewerUid, profile?.id);
 
   const x = useMotionValue(0);
+  const y = useMotionValue(0);
   const exitHandledRef = useRef(false);
   const draggingRef = useRef(false);
   const burstTimerRef = useRef(null);
-  const lastActivateRef = useRef({ at: 0, x: 0, y: 0 });
 
   const [likeBusy, setLikeBusy] = useState(false);
   const [likeBurst, setLikeBurst] = useState(false);
@@ -147,26 +147,48 @@ export default function DiscoveryCard({
 
   const resetPosition = useCallback(() => {
     animate(x, 0, { type: 'spring', stiffness: 520, damping: 28 });
-  }, [x]);
+    animate(y, 0, { type: 'spring', stiffness: 520, damping: 28 });
+  }, [x, y]);
 
-  // Skip (next card) = swipe to the RIGHT → the card exits to the right.
-  const triggerSkip = useCallback(() => {
+  // Next card = swipe RIGHT→LEFT (card exits to the left).
+  const triggerNext = useCallback(() => {
     if (exitHandledRef.current) return;
     exitHandledRef.current = true;
-    animate(x, 560, { duration: 0.22, ease: 'easeIn' }).then(() => {
+    animate(x, -560, { duration: 0.22, ease: 'easeIn' }).then(() => {
       onSkip?.(profile);
     });
   }, [onSkip, profile, x]);
 
-  // Swipe to the LEFT → open this person's full profile.
+  // Previous card = swipe LEFT→RIGHT. The card slides right and the deck steps
+  // back to the previously-shown profile (sequential history).
+  const triggerBack = useCallback(() => {
+    if (exitHandledRef.current) return;
+    if (typeof onBack !== 'function') { resetPosition(); return; }
+    exitHandledRef.current = true;
+    animate(x, 560, { duration: 0.22, ease: 'easeIn' }).then(() => {
+      onBack(profile);
+    });
+  }, [onBack, profile, resetPosition, x]);
+
+  // Swipe UP → open this person's full profile.
   const openProfile = useCallback(() => {
     if (exitHandledRef.current) return;
-    if (!profile?.id) { animate(x, 0, { type: 'spring', stiffness: 520, damping: 28 }); return; }
+    if (!profile?.id) { resetPosition(); return; }
     exitHandledRef.current = true;
-    animate(x, -560, { duration: 0.2, ease: 'easeIn' }).then(() => {
+    animate(y, -720, { duration: 0.2, ease: 'easeIn' }).then(() => {
       navigate(`/profile/${profile.id}`);
     });
-  }, [navigate, profile?.id, x]);
+  }, [navigate, profile?.id, resetPosition, y]);
+
+  // Swipe DOWN → leave the swipe deck for the list view.
+  const openList = useCallback(() => {
+    if (exitHandledRef.current) return;
+    if (!listPath) { resetPosition(); return; }
+    exitHandledRef.current = true;
+    animate(y, 720, { duration: 0.2, ease: 'easeIn' }).then(() => {
+      navigate(listPath);
+    });
+  }, [listPath, navigate, resetPosition, y]);
 
   const handleDragStart = () => {
     draggingRef.current = true;
@@ -179,59 +201,34 @@ export default function DiscoveryCard({
 
     if (!isTop) return;
     const { offset, velocity } = info;
+    const horizontal = Math.abs(offset.x) >= Math.abs(offset.y);
 
-    // Swipe RIGHT → skip to the next card.
-    if (offset.x > SWIPE_X_SKIP_THRESHOLD || velocity.x > 450) {
-      triggerSkip();
-      return;
-    }
-    // Swipe LEFT → open this person's profile.
-    if (offset.x < -SWIPE_X_SKIP_THRESHOLD || velocity.x < -450) {
-      openProfile();
-      return;
+    if (horizontal) {
+      // Swipe LEFT → next profile.
+      if (offset.x < -SWIPE_THRESHOLD || velocity.x < -SWIPE_VELOCITY) {
+        triggerNext();
+        return;
+      }
+      // Swipe RIGHT → previous profile.
+      if (offset.x > SWIPE_THRESHOLD || velocity.x > SWIPE_VELOCITY) {
+        triggerBack();
+        return;
+      }
+    } else {
+      // Swipe UP → open this person's profile.
+      if (offset.y < -SWIPE_THRESHOLD || velocity.y < -SWIPE_VELOCITY) {
+        openProfile();
+        return;
+      }
+      // Swipe DOWN → go to the list view.
+      if (offset.y > SWIPE_THRESHOLD || velocity.y > SWIPE_VELOCITY) {
+        openList();
+        return;
+      }
     }
     // Magnetic snap back into place
     resetPosition();
   };
-
-  const isInteractiveTarget = useCallback((target) => {
-    if (!target?.closest) return false;
-    return Boolean(
-      target.closest(
-        '.discovery-card__actions, .discovery-card__inbox, .discovery-card__close, button, a'
-      )
-    );
-  }, []);
-
-  const handleNavigateActivate = useCallback(
-    (clientX, clientY) => {
-      if (!isTop || exitHandledRef.current || draggingRef.current) return;
-
-      const now = Date.now();
-      const prev = lastActivateRef.current;
-      const dt = now - prev.at;
-      const dist = Math.hypot(clientX - prev.x, clientY - prev.y);
-
-      if (prev.at && dt <= DOUBLE_ACTIVATE_MS && dist <= DOUBLE_ACTIVATE_PX) {
-        lastActivateRef.current = { at: 0, x: 0, y: 0 };
-        triggerSkip();
-        return;
-      }
-
-      lastActivateRef.current = { at: now, x: clientX, y: clientY };
-    },
-    [isTop, triggerSkip]
-  );
-
-  const handleCardPointerUp = useCallback(
-    (e) => {
-      if (!isTop) return;
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
-      if (isInteractiveTarget(e.target)) return;
-      handleNavigateActivate(e.clientX, e.clientY);
-    },
-    [handleNavigateActivate, isInteractiveTarget, isTop]
-  );
 
   const handleToggleLike = async (e) => {
     e.stopPropagation();
@@ -390,9 +387,9 @@ export default function DiscoveryCard({
   return (
     <motion.article
       className="discovery-card discovery-card--magnetic discovery-card--connect"
-      style={{ ...cardThemeVars, x, zIndex: isTop ? 2 : 1, touchAction: 'pan-y' }}
-      drag={isTop ? 'x' : false}
-      dragConstraints={{ left: 0, right: 0 }}
+      style={{ ...cardThemeVars, x, y, zIndex: isTop ? 2 : 1, touchAction: 'none' }}
+      drag={isTop ? true : false}
+      dragConstraints={{ top: 0, bottom: 0, left: 0, right: 0 }}
       dragElastic={0.85}
       dragMomentum={false}
       initial={isTop ? { scale: 0.92, opacity: 0.65 } : false}
@@ -400,11 +397,10 @@ export default function DiscoveryCard({
       transition={{ type: 'spring', stiffness: 380, damping: 26 }}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onPointerUp={handleCardPointerUp}
-      title={isTop ? t('discovery_double_tap_next', 'Double-click or double-tap for next profile') : undefined}
+      title={isTop ? t('discovery_swipe_hint_person', 'Swipe left for next · right for previous · up to open profile · down for the list') : undefined}
       aria-label={
         isTop
-          ? t('discovery_double_tap_next', 'Double-click or double-tap for next profile')
+          ? t('discovery_swipe_hint_person', 'Swipe left for next · right for previous · up to open profile · down for the list')
           : undefined
       }
     >

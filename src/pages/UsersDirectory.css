@@ -10,6 +10,13 @@
     flex-direction: column;
     gap: 8px;
     padding: 8px 12px 6px;
+    /* Keep the search + sort controls pinned to the top while browsing the list
+       so they never scroll out of reach. */
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--bg-main);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .users-directory-field {

@@ -1,7 +1,9 @@
 import React, { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { IoSend } from 'react-icons/io5';
 import UserAvatar from '../UserAvatar';
 import { getSafeAvatar } from '../../utils/avatarUtils';
+import { textDir } from '../../utils/textDir';
 import { AppTextInput } from "../base";
 
 export default function PostCommentComposer({
@@ -18,10 +20,14 @@ export default function PostCommentComposer({
   autoFocus = false,
   nested = false
 }) {
+  const { i18n } = useTranslation();
   const inputRef = useRef(null);
   const avatarUser = userProfile || currentUser;
   const photo = getSafeAvatar(avatarUser || currentUser);
   const isInlineReply = variant === 'inline-reply';
+  // Default to the UI language when empty (Arabic UI → RTL), then follow the
+  // content: flips to LTR the moment English is typed, RTL for Arabic.
+  const inputDir = textDir(value, i18n.language === 'ar' ? 'rtl' : 'ltr');
 
   useEffect(() => {
     if (!autoFocus || !inputRef.current) return;
@@ -53,6 +59,8 @@ export default function PostCommentComposer({
           className="fb-comment-composer__input"
           placeholder={placeholder}
           value={value}
+          dir={inputDir}
+          style={{ textAlign: 'start' }}
           onChange={onChange}
           onClick={(e) => e.stopPropagation()} />
 
