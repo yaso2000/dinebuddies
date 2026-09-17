@@ -201,8 +201,9 @@ const CreateSocialInvitation = () => {
     description: '',
     privacy: 'social',
     // Preselect the member when arriving from the profile invite icon.
+    // invitedFriends is a list of user-ID strings (drives rsvps + the invitee panel).
     invitedFriends: location.state?.preselectedInvitee?.id
-      ? [location.state.preselectedInvitee]
+      ? [location.state.preselectedInvitee.id]
       : [],
     country: restaurantData?.country || '',
     lat: restaurantData?.lat || restaurantData?.coordinates?.lat,
