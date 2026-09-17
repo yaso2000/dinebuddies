@@ -147,10 +147,18 @@ export default function DiscoveryFeed({
 
   return (
     <div className="discovery-feed">
+      {/* The NEXT card is rendered ready beneath the active one (Tinder-style):
+          swiping the top card away reveals it instantly — no remount, no flash.
+          React keeps this instance by key, so when it becomes the active card it
+          just flips isTop (no entry animation, no flicker). */}
       {nextProfile ? (
-        <div className="discovery-feed__next-bg" aria-hidden>
-          <img src={nextProfile.profilePhoto} alt="" decoding="async" />
-        </div>
+        <DiscoveryCard
+          key={nextProfile.id}
+          profile={nextProfile}
+          isTop={false}
+          listPath={listPath}
+          {...handlers}
+        />
       ) : null}
 
       <DiscoveryCard

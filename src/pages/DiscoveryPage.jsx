@@ -118,9 +118,9 @@ export default function DiscoveryPage() {
   }, [hasMore, loadMore, loadingMore]);
 
   const handleRefresh = useCallback(() => {
-    showToast(t('refreshing', 'Refreshing…'), 'info');
+    // Silent — no toast/indicator (kept intentionally minimal for a clean swipe).
     refresh?.();
-  }, [refresh, showToast, t]);
+  }, [refresh]);
 
   const feedHandlers = useMemo(
     () => ({

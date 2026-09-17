@@ -393,14 +393,12 @@ export default function DiscoveryCard({
   return (
     <motion.article
       className="discovery-card discovery-card--magnetic discovery-card--connect"
-      style={{ ...cardThemeVars, x, y, zIndex: isTop ? 2 : 1, touchAction: 'none' }}
+      style={{ ...cardThemeVars, x, y, zIndex: isTop ? 2 : 1, touchAction: 'none', pointerEvents: isTop ? 'auto' : 'none' }}
       drag={isTop ? true : false}
       dragConstraints={{ top: 0, bottom: 0, left: 0, right: 0 }}
       dragElastic={0.6}
       dragMomentum={false}
-      initial={isTop ? { opacity: 0 } : false}
-      animate={isTop ? { opacity: 1 } : undefined}
-      transition={{ duration: 0.14, ease: 'easeOut' }}
+      initial={false}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onPointerUp={handlePointerUp}
