@@ -161,8 +161,22 @@ const CreateSocialInvitation = () => {
     editInvitation.cardGradientId ||
     null
   );
-  const [privateCoverTab, setPrivateCoverTab] = useState('template');
+  // Ready-made background suggestions ("Occasion artwork") are temporarily
+  // disabled for social invitations (owner request — to be reworked later).
+  // Flip this to true to bring the "Ready backgrounds" tab back.
+  const SHOW_READY_BACKGROUND_SUGGESTIONS = false;
+  const [privateCoverTab, setPrivateCoverTab] = useState(
+    SHOW_READY_BACKGROUND_SUGGESTIONS ? 'template' : 'upload'
+  );
   const [aiCoverSheetOpen, setAiCoverSheetOpen] = useState(false);
+
+  // While suggestions are off, never sit on the 'template' tab — several flows
+  // (category change, edit mode, draft restore) still set it; fall back to upload.
+  useEffect(() => {
+    if (!SHOW_READY_BACKGROUND_SUGGESTIONS && privateCoverTab === 'template') {
+      setPrivateCoverTab('upload');
+    }
+  }, [SHOW_READY_BACKGROUND_SUGGESTIONS, privateCoverTab]);
   const [aiCoverCommittingId, setAiCoverCommittingId] = useState(null);
   const [socialCardShowHostAndMessage, setPrivateCardShowHostAndMessage] = useState(true);
   const [socialCardTextBackdropTone, setPrivateCardTextBackdropTone] = useState(
@@ -1491,6 +1505,7 @@ const CreateSocialInvitation = () => {
 
                                     <FaUpload aria-hidden />
                                 </button>
+                                {SHOW_READY_BACKGROUND_SUGGESTIONS ? (
                                 <button
                   type="button"
                   role="tab"
@@ -1502,6 +1517,7 @@ const CreateSocialInvitation = () => {
 
                                     <FaImages aria-hidden />
                                 </button>
+                                ) : null}
                             </div>
                         </div>
 
