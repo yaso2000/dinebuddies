@@ -33,11 +33,15 @@ export default function SocialCardPreviewStage({
 }) {
     const { t } = useTranslation();
 
+    const showTextColor = showHostAndMessage && editorPhotoBackgroundActive;
+    const showAbove = !simplified || showTextColor;
+
     return (
         <div className="social-card-preview-bundle">
-            <div className="social-card-preview-stage">
-                {!simplified ? (
-                    <div className="social-card-preview-stage__top">
+            {/* Tools ABOVE the square image — kept off the artwork. */}
+            {showAbove ? (
+                <div className="social-card-preview-stage__above">
+                    {!simplified ? (
                         <button
                             type="button"
                             className="social-card-preview-stage__text-btn"
@@ -52,51 +56,42 @@ export default function SocialCardPreviewStage({
                                 ? t('social_card_hide_text', { defaultValue: 'Hide text' })
                                 : t('social_card_show_text', { defaultValue: 'Show text' })}
                         </button>
+                    ) : null}
 
-                        {showHostAndMessage && editorPhotoBackgroundActive ? (
-                            <SocialCardTextBackdropTonePicker
-                                variant="icons"
-                                toneOrder={SOCIAL_TEXT_BACKDROP_ICON_ORDER}
-                                tone={textBackdropTone}
-                                onToneChange={onTextBackdropToneChange}
-                            />
-                        ) : null}
-                    </div>
-                ) : null}
-
-                {simplified && showHostAndMessage && editorPhotoBackgroundActive ? (
-                    <div className="social-card-preview-stage__top social-card-preview-stage__top--simplified">
+                    {showTextColor ? (
                         <SocialCardTextBackdropTonePicker
                             variant="icons"
                             toneOrder={SOCIAL_TEXT_BACKDROP_ICON_ORDER}
                             tone={textBackdropTone}
                             onToneChange={onTextBackdropToneChange}
                         />
-                    </div>
-                ) : null}
+                    ) : null}
+                </div>
+            ) : null}
 
+            {/* The square artwork — completely clean, no tools overlaid. */}
+            <div className="social-card-preview-stage">
                 {children}
-
-                {showHostAndMessage ? (
-                    <>
-                        <div className="social-card-preview-stage__side-rail social-card-preview-stage__side-rail--font">
-                            <SocialCardCopyFontScaleRail
-                                copyFontScale={copyFontScale}
-                                onCopyFontScaleChange={onCopyFontScaleChange}
-                            />
-                        </div>
-                        <div className="social-card-preview-stage__side-rail">
-                            <SocialCardCopyLayoutRail
-                                copyOffsetY={copyOffsetY}
-                                copyWidthPct={copyWidthPct}
-                                onCopyOffsetYChange={onCopyOffsetYChange}
-                                onCopyWidthPctChange={onCopyWidthPctChange}
-                                showPosition={!simplified}
-                            />
-                        </div>
-                    </>
-                ) : null}
             </div>
+
+            {/* Tools BELOW the image — font size + text-box size, side by side. */}
+            {showHostAndMessage ? (
+                <div className="social-card-preview-stage__below-tools">
+                    <SocialCardCopyFontScaleRail
+                        className="social-card-preview-stage__below-rail"
+                        copyFontScale={copyFontScale}
+                        onCopyFontScaleChange={onCopyFontScaleChange}
+                    />
+                    <SocialCardCopyLayoutRail
+                        className="social-card-preview-stage__below-rail"
+                        copyOffsetY={copyOffsetY}
+                        copyWidthPct={copyWidthPct}
+                        onCopyOffsetYChange={onCopyOffsetYChange}
+                        onCopyWidthPctChange={onCopyWidthPctChange}
+                        showPosition={!simplified}
+                    />
+                </div>
+            ) : null}
 
             <PrivateCardTypographyBars
                 variant="below"

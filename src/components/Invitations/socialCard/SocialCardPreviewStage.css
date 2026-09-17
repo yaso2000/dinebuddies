@@ -64,25 +64,37 @@
     margin-bottom: 0;
 }
 
-.social-card-preview-stage__side-rail {
-    position: absolute;
-    z-index: 4;
-    inset-inline-end: 2px;
-    top: 50%;
-    transform: translateY(-50%);
+/* Tools ABOVE the square image (text-box colour), in normal flow. */
+.social-card-preview-stage__above {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: center;
     gap: 6px;
-    pointer-events: auto;
+    margin: 0 0 8px;
 }
 
-.social-card-preview-stage__side-rail--font {
-    inset-inline-end: auto;
-    inset-inline-start: 2px;
+/* Tools BELOW the square image — font size + text-box size, side by side. */
+.social-card-preview-stage__below-tools {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 10px 0 2px;
 }
 
-.social-card-preview-stage__side-rail .social-card-copy-layout-rail {
+.social-card-preview-stage__below-rail,
+.social-card-preview-stage__below-tools .private-card-copy-font-scale-rail,
+.social-card-preview-stage__below-tools .social-card-copy-layout-rail {
     position: static;
     margin: 0;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
 }
