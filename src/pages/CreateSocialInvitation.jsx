@@ -161,10 +161,9 @@ const CreateSocialInvitation = () => {
     editInvitation.cardGradientId ||
     null
   );
-  // Ready-made background suggestions ("Occasion artwork") are temporarily
-  // disabled for social invitations (owner request — to be reworked later).
-  // Flip this to true to bring the "Ready backgrounds" tab back.
-  const SHOW_READY_BACKGROUND_SUGGESTIONS = false;
+  // Ready-made background suggestions ("Occasion artwork") — re-enabled with the
+  // fresh 2026 styled set (5 AI art styles per category, square, neutral center).
+  const SHOW_READY_BACKGROUND_SUGGESTIONS = true;
   const [privateCoverTab, setPrivateCoverTab] = useState(
     SHOW_READY_BACKGROUND_SUGGESTIONS ? 'template' : 'upload'
   );

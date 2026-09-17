@@ -10,73 +10,25 @@ export const DARK_TEMPLATE_BACKGROUND_IDS = new Set([]);
 
 /** New social-invite create: default type + first social template art */
 export const DEFAULT_PRIVATE_OCCASION_LABEL = 'Social';
-export const DEFAULT_PRIVATE_CARD_BACKGROUND_ID = 'social-1';
+export const DEFAULT_PRIVATE_CARD_BACKGROUND_ID = 'social-cinema';
 
 /** Typographic apostrophe (U+2019) — matches Windows/macOS “smart quote” filenames on disk. */
 const CURLY_APOSTROPHE = '\u2019';
 
 // Social-invitation categories: friendship, social, family, work, acquaintance (legacy 'serious' → acquaintance).
 // Each folder lives at public/invitation-card-backgrounds/{category}/{id}.webp.
+// Fresh 2026 set — 5 AI art styles per category (square 1:1), files at
+// public/invitation-card-backgrounds/{category}/{category}-{style}.webp.
+// Styles: cinema (cinematic), cartoon, anime, 3d, classic (Victorian).
+const STYLE_SUFFIXES = ['cinema', 'cartoon', 'anime', '3d', 'classic'];
+const styledSet = (category) => STYLE_SUFFIXES.map((s) => ({ id: `${category}-${s}` }));
+
 export const CARD_BACKGROUNDS_BY_CATEGORY = {
-    friendship: [
-        { id: 'friendship-1' },
-        { id: 'friendship-2' },
-        { id: 'friendship-3' },
-        { id: 'friendship-4' },
-        { id: 'friendship-5' },
-        { id: 'friendship-6' },
-        { id: 'friendship-7' },
-        { id: 'friendship-8' },
-        { id: 'friendship-9' },
-        { id: 'friendship-10' }
-    ],
-    social: [
-        { id: 'social-1' },
-        { id: 'social-2' },
-        { id: 'social-3' },
-        { id: 'social-4' },
-        { id: 'social-5' },
-        { id: 'social-6' },
-        { id: 'social-7' },
-        { id: 'social-8' },
-        { id: 'social-9' },
-        { id: 'social-10' }
-    ],
-    family: [
-        { id: 'family-1' },
-        { id: 'family-2' },
-        { id: 'family-3' },
-        { id: 'family-4' },
-        { id: 'family-5' },
-        { id: 'family-6' },
-        { id: 'family-7' },
-        { id: 'family-8' },
-        { id: 'family-9' },
-        { id: 'family-10' }
-    ],
-    work: [
-        { id: 'work-1' },
-        { id: 'work-2' },
-        { id: 'work-3' },
-        { id: 'work-4' },
-        { id: 'work-5' },
-        { id: 'work-6' },
-        { id: 'work-7' },
-        { id: 'work-8' },
-        { id: 'work-9' },
-        { id: 'work-10' }
-    ],
-    acquaintance: [
-        { id: 'acquaintance-1' },
-        { id: 'acquaintance-2' },
-        { id: 'acquaintance-3' },
-        { id: 'acquaintance-4' },
-        { id: 'acquaintance-5' },
-        { id: 'acquaintance-6' },
-        { id: 'acquaintance-7' },
-        { id: 'acquaintance-8' },
-        { id: 'acquaintance-9' }
-    ]
+    friendship: styledSet('friendship'),
+    social: styledSet('social'),
+    family: styledSet('family'),
+    work: styledSet('work'),
+    acquaintance: styledSet('acquaintance')
 };
 
 /**
