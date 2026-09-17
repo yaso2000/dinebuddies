@@ -104,7 +104,6 @@ const FollowersList = lazy(() => import('./pages/FollowersList'));
 const CreateInvitation = lazy(() => import('./pages/CreateInvitation'));
 const CreateInvitationManualHub = lazy(() => import('./pages/CreateInvitationManualHub'));
 const CreateSocialInvitation = lazy(() => import('./pages/CreateSocialInvitation'));
-const CreatePrivateInvitation = lazy(() => import('./pages/CreatePrivateInvitation'));
 const BusinessCreatePostGate = lazy(() => import('./components/BusinessCreatePostGate'));
 const CreateFeaturedPost = lazy(() => import('./pages/business/CreateFeaturedPost'));
 const CreateCommunityOffer = lazy(() => import('./pages/CreateCommunityOffer'));
