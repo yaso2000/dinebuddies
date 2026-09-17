@@ -31,11 +31,27 @@ const BASE_OUT = resolve(__dirname, '../public/invitation-card-backgrounds');
 // Scenes are ambient (no identifiable real people needed — illustrative styles).
 const CATEGORIES = {
   social: 'a warm, lively social get-together of friends sharing food and laughter around a cozy restaurant table, welcoming celebratory evening ambiance',
-  friendship: 'two close friends reuniting happily over coffee and desserts at a bright inviting café, warm heartfelt friendship mood',
+  // friendship is handled specially below (10 images, varied group compositions).
   family: 'a loving family gathering around a generous dinner table at home, cozy warm candlelight, togetherness and comfort',
-  work: 'polished professional colleagues meeting over coffee in an elegant modern restaurant, confident collaborative business-dinner ambiance',
-  acquaintance: 'two new acquaintances meeting for the first time over coffee at a calm friendly café, light, open, welcoming first-meeting mood',
+  work: 'polished professional colleagues (men and women) meeting over coffee in an elegant modern restaurant, confident collaborative business-dinner ambiance',
+  acquaintance: 'two new acquaintances (a man and a woman) meeting for the first time over coffee at a calm friendly café, light, open, welcoming first-meeting mood',
 };
+
+// Friendship: 10 images, each a small group (~3 friends) with a DIFFERENT gender
+// mix so the set is diverse (not all women), rotating through the 5 art styles.
+const FRIENDSHIP_BASE = 'a warm, joyful group of young-adult friends hanging out together at a cozy café/restaurant, sharing food and laughter, heartfelt camaraderie';
+const FRIENDSHIP_GROUPS = [
+  'three friends: two young women and one young man',
+  'three friends: three young men (all male buddies)',
+  'three friends: three young women',
+  'three friends: two young men and one young woman',
+  'a mixed group of four friends: two men and two women',
+  'three friends: one young man and two young women, casually chatting',
+  'a lively group of four young men, close male friends',
+  'a mixed group of three friends: a man and two women toasting',
+  'three cheerful young women friends together',
+  'a diverse group of five friends, men and women mixed evenly',
+];
 
 // Art styles → filename/id suffix + style clause.
 const STYLES = {
@@ -63,13 +79,31 @@ const onlyCategory = takeVal('--category');
 const onlyStyle = takeVal('--style');
 const limit = Number(takeVal('--limit')) || 0;
 
+const STYLE_KEYS = Object.keys(STYLES);
 let jobs = [];
+
+// Standard categories: 5 styles each.
 for (const [category, scene] of Object.entries(CATEGORIES)) {
   if (onlyCategory && category !== onlyCategory) continue;
   for (const [style, styleClause] of Object.entries(STYLES)) {
     if (onlyStyle && style !== onlyStyle) continue;
     jobs.push({ category, style, scene, styleClause, id: `${category}-${style}` });
   }
+}
+
+// Friendship: 10 varied-composition images, styles rotated across the set.
+if (!onlyCategory || onlyCategory === 'friendship') {
+  FRIENDSHIP_GROUPS.forEach((group, i) => {
+    const style = STYLE_KEYS[i % STYLE_KEYS.length];
+    if (onlyStyle && style !== onlyStyle) return;
+    jobs.push({
+      category: 'friendship',
+      style,
+      scene: `${FRIENDSHIP_BASE} — ${group}`,
+      styleClause: STYLES[style],
+      id: `friendship-${i + 1}`,
+    });
+  });
 }
 let todo = jobs.filter((j) => FORCE || !existsSync(resolve(BASE_OUT, j.category, `${j.id}.webp`)));
 if (limit) todo = todo.slice(0, limit);

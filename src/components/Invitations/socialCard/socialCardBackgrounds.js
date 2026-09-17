@@ -22,9 +22,11 @@ const CURLY_APOSTROPHE = '\u2019';
 // Styles: cinema (cinematic), cartoon, anime, 3d, classic (Victorian).
 const STYLE_SUFFIXES = ['cinema', 'cartoon', 'anime', '3d', 'classic'];
 const styledSet = (category) => STYLE_SUFFIXES.map((s) => ({ id: `${category}-${s}` }));
+// Friendship has a richer set: 10 varied-composition images (mixed genders).
+const numberedSet = (category, n) => Array.from({ length: n }, (_, i) => ({ id: `${category}-${i + 1}` }));
 
 export const CARD_BACKGROUNDS_BY_CATEGORY = {
-    friendship: styledSet('friendship'),
+    friendship: numberedSet('friendship', 10),
     social: styledSet('social'),
     family: styledSet('family'),
     work: styledSet('work'),
