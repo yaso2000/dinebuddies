@@ -905,11 +905,22 @@ service cloud.firestore {
                       !convoParticipantIsBusiness(request.resource.data.participants[1]) &&
                       sameAgeClass(request.resource.data.participants[0], request.resource.data.participants[1]);
       
-      // Only participants can update (lastMessage, unreadBy, typing)
-      allow update: if isSignedIn() && request.auth.uid in resource.data.participants;
-      
-      // Participants or Admin can delete
-      allow delete: if isSignedIn() && (request.auth.uid in resource.data.participants || isAdmin());
+      // Participants may update conversation state (lastMessage, unreadBy, typing,
+      // lastRead) — but NEVER the membership/identity fields. Group membership,
+      // admin and name changes happen only through trusted callables (admin SDK).
+      allow update: if isSignedIn() &&
+                      request.auth.uid in resource.data.participants &&
+                      request.resource.data.participants == resource.data.participants &&
+                      request.resource.data.get('adminId', '') == resource.data.get('adminId', '') &&
+                      request.resource.data.get('isGroup', false) == resource.data.get('isGroup', false) &&
+                      request.resource.data.get('groupName', '') == resource.data.get('groupName', '');
+
+      // 1:1 — either participant may delete. Group — only its admin. Global admin always.
+      allow delete: if isSignedIn() && (
+        isAdmin() ||
+        (resource.data.get('isGroup', false) == false && request.auth.uid in resource.data.participants) ||
+        (resource.data.get('isGroup', false) == true && resource.data.get('adminId', '') == request.auth.uid)
+      );
       
       // MESSAGES SUBCOLLECTION
       match /messages/{messageId} {

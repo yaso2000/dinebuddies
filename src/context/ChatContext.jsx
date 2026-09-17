@@ -45,6 +45,10 @@ export const ChatProvider = ({ children }) => {
     if (!createOrGetConversationCallableRef.current) {
         createOrGetConversationCallableRef.current = httpsCallable(getFunctions(), 'createOrGetConversation');
     }
+    const createGroupConversationCallableRef = useRef(null);
+    if (!createGroupConversationCallableRef.current) {
+        createGroupConversationCallableRef.current = httpsCallable(getFunctions(), 'createGroupConversation');
+    }
     const [conversations, setConversations] = useState([]);
     const conversationsRef = useRef([]);
     const [loading, setLoading] = useState(true);
@@ -212,6 +216,19 @@ export const ChatProvider = ({ children }) => {
         return conversationId;
     }, [currentUser?.uid, userProfile, invitationUser?.joinedCommunities, showToast]);
 
+    // Create a normal group chat (WhatsApp-style, invite-only) via the trusted callable.
+    const createGroupConversation = useCallback(async ({ memberIds, name }) => {
+        if (!currentUser?.uid) return null;
+        try {
+            const result = await createGroupConversationCallableRef.current({ memberIds, name });
+            return result?.data?.conversationId || null;
+        } catch (error) {
+            console.error('createGroupConversation', error?.code, error?.message, error);
+            showToast(error?.message || 'Failed to create group. Try again.', 'error');
+            return null;
+        }
+    }, [currentUser?.uid, showToast]);
+
     // Send message
     const sendMessage = async (conversationId, messageData) => {
         if (!currentUser?.uid) return null;
@@ -374,6 +391,7 @@ export const ChatProvider = ({ children }) => {
         loading,
         unreadCount,
         getOrCreateConversation,
+        createGroupConversation,
         sendMessage,
         markAsRead,
         setTypingStatus,

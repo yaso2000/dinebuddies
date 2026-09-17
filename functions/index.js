@@ -1998,6 +1998,92 @@ exports.createOrGetConversation = functions.https.onCall(async (data, context) =
     return { success: true, conversationId, created: true };
 });
 
+// ─── Trusted callable: create a normal (WhatsApp-style) group chat ─────────
+// Invite-only, no public groups. Members must be the creator's mutual friends
+// and the SAME age class (16–17 minors and adults never share a private chat).
+exports.createGroupConversation = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+    const uid = context.auth.uid;
+    const rawMembers = Array.isArray(data?.memberIds) ? data.memberIds : [];
+    const memberIds = [...new Set(
+        rawMembers
+            .filter((id) => typeof id === 'string' && id.trim() && id.trim() !== uid)
+            .map((id) => id.trim())
+    )];
+    const name = typeof data?.name === 'string' ? data.name.trim().slice(0, 60) : '';
+
+    if (memberIds.length < 2) {
+        throw new functions.https.HttpsError('invalid-argument', 'A group needs at least two other members.');
+    }
+    if (memberIds.length > 50) {
+        throw new functions.https.HttpsError('invalid-argument', 'A group can have at most 50 members.');
+    }
+    if (!name) {
+        throw new functions.https.HttpsError('invalid-argument', 'A group name is required.');
+    }
+
+    const [reqSnap, ...memberSnaps] = await Promise.all([
+        db.collection('users').doc(uid).get(),
+        ...memberIds.map((id) => db.collection('users').doc(id).get()),
+    ]);
+    const reqData = reqSnap.data() || {};
+    if (isBusinessUserDoc(reqData)) {
+        throw new functions.https.HttpsError('failed-precondition', 'Business accounts cannot create group chats.');
+    }
+    const isMinor = (d) => (d?.ageCategory || '') === '16-17';
+    const creatorMinor = isMinor(reqData);
+    const reqBlocked = reqData.blockedUserIds || [];
+
+    for (let i = 0; i < memberIds.length; i++) {
+        const mId = memberIds[i];
+        const mSnap = memberSnaps[i];
+        if (!mSnap.exists) {
+            throw new functions.https.HttpsError('failed-precondition', 'One of the members could not be found.');
+        }
+        const mData = mSnap.data() || {};
+        if (isBusinessUserDoc(mData)) {
+            throw new functions.https.HttpsError('failed-precondition', 'Business accounts cannot be added to a group.');
+        }
+        // 16+ safety: everyone in the group must be the same age class.
+        if (isMinor(mData) !== creatorMinor) {
+            throw new functions.https.HttpsError('failed-precondition', 'All members must be in the same age group.');
+        }
+        if (reqBlocked.includes(mId) || (mData.blockedUserIds || []).includes(uid) || (mData.mutedUserIds || []).includes(uid)) {
+            throw new functions.https.HttpsError('failed-precondition', 'You cannot add one of these members.');
+        }
+        // Mutual friends (mutual follow) only.
+        const connected = await hasConnectConnection(uid, mId, reqData, mData);
+        if (!connected) {
+            throw new functions.https.HttpsError('failed-precondition', 'You can only add mutual friends to a group.');
+        }
+    }
+
+    await enforceCallableRateLimit(uid, 'create_group_conversation', {
+        perMinute: 5,
+        perHour: 30,
+        perDay: 100,
+        cooldownMs: 1000,
+    });
+
+    const participants = [uid, ...memberIds];
+    const ref = db.collection('conversations').doc();
+    await ref.set({
+        participants,
+        isGroup: true,
+        groupName: name,
+        adminId: uid,
+        createdBy: uid,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastMessageTime: admin.firestore.FieldValue.serverTimestamp(),
+        lastMessage: null,
+        unreadBy: [],
+    });
+
+    return { success: true, conversationId: ref.id };
+});
+
 // ─── Trusted callable: community membership (join/leave) ───────────────────
 // Keep one warm instance so joining a community is instant (no cold start).
 exports.setCommunityMembership = functions.runWith({ minInstances: 1 }).https.onCall(async (data, context) => {
