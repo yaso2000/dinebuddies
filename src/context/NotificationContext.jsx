@@ -39,18 +39,11 @@ function shouldSuppressInAppToastForPath(pathname, notif) {
 
     const type = String(notif.type || '');
 
-    if (
-        type === 'social_invitation' ||
-        type === 'social_invitation_response' ||
-        type === 'reminder' ||
-        type === 'join_request' ||
-        type === 'request_approved' ||
-        type === 'invitation_accepted' ||
-        type === 'invitation_rejected'
-    ) {
-        // Private invites are shown only on app entry (/invite/received), not as in-app toasts.
-        return true;
-    }
+    // Invitations (and their responses/requests) must surface LIVE as an in-app
+    // toast the moment they arrive while the user is online — not only on app
+    // entry. So they are NOT blanket-suppressed here; the only suppression is the
+    // "already on the target screen" checks above (messages/notifications, or a
+    // path that equals the notification's actionUrl).
 
     if (type !== 'message') return false;
 
