@@ -116,18 +116,6 @@ export const AI_DESIGN_USE_DESTINATIONS = [
         forConsumer: true,
         forBusiness: false,
     },
-    {
-        id: 'invitation_dating',
-        kind: 'navigate',
-        labelKey: 'ai_design_use_invitation_private',
-        defaultLabel: 'Private Invite cover',
-        defaultLabelAr: 'غلاف دعوة خاصة',
-        icon: '🍽️',
-        folder: 'invitations',
-        route: '/create-private',
-        forConsumer: true,
-        forBusiness: false,
-    },
 ];
 
 /**

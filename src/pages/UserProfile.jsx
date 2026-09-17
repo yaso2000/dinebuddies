@@ -896,8 +896,11 @@ const UserProfile = () => {
         defaultValue: `Send a Private Invite invitation to ${displayName}?`
       }), tone: 'default' }));
     if (!confirmed) return;
-    navigate('/create-private', {
+    // Private one-on-one invite removed — open a social "Getting acquainted"
+    // invitation with this member preselected.
+    navigate('/create-social', {
       state: {
+        occasionType: 'Getting acquainted',
         preselectedInvitee: {
           id: user.id,
           display_name: displayName,
@@ -905,8 +908,7 @@ const UserProfile = () => {
           photo_url: user.photo_url || user.photoURL || user.avatar || '',
           photoURL: user.photoURL || user.photo_url || user.avatar || '',
           avatar: user.avatar || user.photo_url || user.photoURL || '',
-          gender: user.gender || null,
-          availableForPrivateInvite: user.availableForPrivateInvite
+          gender: user.gender || null
         },
         tasteScopeSuggestedInvite
       }

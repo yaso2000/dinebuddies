@@ -345,7 +345,8 @@ function App() {
                                                     <Route path="/ai-text-studio" element={<GuestBlockedRoute><AiTextStudio /></GuestBlockedRoute>} />
                                                     <Route path="/create" element={<BusinessBlockedRoute><CreateInvitation /></BusinessBlockedRoute>} />
                                                     <Route path="/create-social" element={<BusinessBlockedRoute><CreateSocialInvitation /></BusinessBlockedRoute>} />
-                                                    <Route path="/create-private" element={<BusinessBlockedRoute><CreatePrivateInvitation /></BusinessBlockedRoute>} />
+                                                    {/* One-on-one "private" invite removed (dating cleanup) — send them to the social flow. */}
+                                                    <Route path="/create-private" element={<Navigate to="/create-social" replace />} />
                                                     <Route path="/create-stage" element={<GuestBlockedRoute><CreateStage /></GuestBlockedRoute>} />
                                                     <Route path="/create-group-game" element={<GuestBlockedRoute><CreateGroupGame /></GuestBlockedRoute>} />
                                                     <Route path="/group-game/:gameId" element={<GuestBlockedRoute><GroupGameRoom /></GuestBlockedRoute>} />

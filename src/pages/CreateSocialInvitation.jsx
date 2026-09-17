@@ -200,13 +200,16 @@ const CreateSocialInvitation = () => {
     paymentType: 'Split',
     description: '',
     privacy: 'social',
-    invitedFriends: [],
+    // Preselect the member when arriving from the profile invite icon.
+    invitedFriends: location.state?.preselectedInvitee?.id
+      ? [location.state.preselectedInvitee]
+      : [],
     country: restaurantData?.country || '',
     lat: restaurantData?.lat || restaurantData?.coordinates?.lat,
     lng: restaurantData?.lng || restaurantData?.coordinates?.lng,
     userLat: null,
     userLng: null,
-    occasionType: editInvitation?.occasionType || DEFAULT_PRIVATE_OCCASION_LABEL,
+    occasionType: editInvitation?.occasionType || location.state?.occasionType || DEFAULT_PRIVATE_OCCASION_LABEL,
     // Establishment type (one of the five) picked BEFORE searching, so the venue
     // search is directed to that category (café, bar, hotel…). Separate from the
     // social occasion; drives only the venue search, not the card theme.

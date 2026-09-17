@@ -16,20 +16,19 @@ export const SOCIAL_INVITE_TYPES = [
 export const DEFAULT_SOCIAL_INVITE_TYPE_LABEL = 'Social';
 
 /**
- * Occasion types that are strictly one-on-one: تعارف (Getting acquainted) invites exactly
- * ONE person. Legacy "Serious relationship" labels are kept here only so old records keep
- * their invitee limit. Matched by both stored label and category id for safety.
+ * No occasion is capped at a single invitee anymore. Two-person meet-ups are
+ * still allowed (the host just invites one guest), but nothing FORCES a 1/1
+ * invite — that one-on-one "private" shape was a dating leftover and is removed.
+ * Kept as an empty set so existing imports keep working.
  */
-export const SINGLE_INVITEE_OCCASIONS = new Set([
-    'Serious relationship', 'Getting acquainted', 'serious', 'acquaintance',
-]);
+export const SINGLE_INVITEE_OCCASIONS = new Set();
 
-/** Upper bound on invitees for a normal (multi-guest) social invitation. */
+/** Upper bound on invitees for a social invitation. */
 export const SOCIAL_MAX_INVITEES = 100;
 
-/** Max invitees allowed for a given occasionType label/id (1 for تعارف/علاقة جدية). */
-export function maxInviteesForOccasion(occasionType) {
-    return SINGLE_INVITEE_OCCASIONS.has(occasionType) ? 1 : SOCIAL_MAX_INVITEES;
+/** Max invitees allowed for a given occasionType — always the multi-guest max. */
+export function maxInviteesForOccasion() {
+    return SOCIAL_MAX_INVITEES;
 }
 
 const BY_LABEL = new Map(SOCIAL_INVITE_TYPES.map((tpe) => [tpe.label, tpe]));

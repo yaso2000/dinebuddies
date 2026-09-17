@@ -64,8 +64,12 @@ export default function PrivateInviteProfileBadge({
                 }), tone: 'default' }));
             if (!confirmed) return;
 
-            navigate('/create-private', {
+            // The one-on-one "private" invite is removed. The invite icon now opens
+            // a normal SOCIAL invitation pre-set to the "Getting acquainted" occasion
+            // with this member preselected (host can still add more guests).
+            navigate('/create-social', {
                 state: {
+                    occasionType: 'Getting acquainted',
                     preselectedInvitee: {
                         id: user.id,
                         display_name: displayName,
@@ -74,7 +78,6 @@ export default function PrivateInviteProfileBadge({
                         photoURL: user.photoURL || user.photo_url || user.avatar || '',
                         avatar: user.avatar || user.photo_url || user.photoURL || '',
                         gender: user.gender || null,
-                        availableForPrivateInvite: user.availableForPrivateInvite,
                     },
                 },
             });
