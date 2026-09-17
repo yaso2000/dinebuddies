@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaComments, FaLock, FaTrash } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
@@ -405,17 +405,19 @@ const SocialInvitationDetails = () => {
 
   // No special invitation chat: a 1-invitee invitation opens the normal 1:1
   // member chat directly; 3+ (multiple invitees) opens the group "stage" room.
-  const oneToOnePartnerId = useMemo(() => {
+  // NOTE: plain values (not hooks) — this runs AFTER the early returns above, so
+  // it must not be a hook (that caused a conditional-hook crash + feed redirect).
+  const oneToOnePartnerId = (() => {
     const invitees = (invitation.invitedFriends || []).map(normUid).filter(Boolean);
     if (invitees.length !== 1) return null;
     const hostId = normUid(invitation.authorId || invitation.author?.id);
     return isHost ? invitees[0] : hostId;
-  }, [invitation, isHost]);
+  })();
 
-  const handleOpenInvitationChat = useCallback(() => {
+  const handleOpenInvitationChat = () => {
     if (oneToOnePartnerId) navigate(`/chat/${oneToOnePartnerId}`);
     else navigate(getHostedInvitationChatPath(invitation));
-  }, [oneToOnePartnerId, invitation, navigate]);
+  };
 
   // Edit is allowed only if NO ONE has accepted yet
   const hasAccepted = Object.values(invitation.rsvps || {}).some((s) => s === 'accepted');
