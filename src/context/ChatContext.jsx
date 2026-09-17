@@ -49,6 +49,10 @@ export const ChatProvider = ({ children }) => {
     if (!createGroupConversationCallableRef.current) {
         createGroupConversationCallableRef.current = httpsCallable(getFunctions(), 'createGroupConversation');
     }
+    const invitationConversationCallableRef = useRef(null);
+    if (!invitationConversationCallableRef.current) {
+        invitationConversationCallableRef.current = httpsCallable(getFunctions(), 'getOrCreateInvitationConversation');
+    }
     const [conversations, setConversations] = useState([]);
     const conversationsRef = useRef([]);
     const [loading, setLoading] = useState(true);
@@ -250,6 +254,21 @@ export const ChatProvider = ({ children }) => {
         }
     }, [currentUser?.uid, showToast]);
 
+    // Invitation-driven chat: the server decides 1:1 vs group from the invitee
+    // count and returns where to route. { type:'direct', otherUserId } or
+    // { type:'group', conversationId }.
+    const getOrCreateInvitationConversation = useCallback(async (invitationId) => {
+        if (!currentUser?.uid || !invitationId) return null;
+        try {
+            const result = await invitationConversationCallableRef.current({ invitationId });
+            return result?.data || null;
+        } catch (error) {
+            console.error('getOrCreateInvitationConversation', error?.code, error?.message, error);
+            showToast(error?.message || 'Failed to open chat. Try again.', 'error');
+            return null;
+        }
+    }, [currentUser?.uid, showToast]);
+
     // Send message
     const sendMessage = async (conversationId, messageData) => {
         if (!currentUser?.uid) return null;
@@ -429,6 +448,7 @@ export const ChatProvider = ({ children }) => {
         unreadCount,
         getOrCreateConversation,
         createGroupConversation,
+        getOrCreateInvitationConversation,
         sendMessage,
         markAsRead,
         setTypingStatus,

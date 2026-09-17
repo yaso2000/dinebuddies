@@ -2084,6 +2084,118 @@ exports.createGroupConversation = functions.https.onCall(async (data, context) =
     return { success: true, conversationId: ref.id };
 });
 
+// ─── Trusted callable: invitation-driven chat ─────────────────────────────
+// The chat TYPE is fixed by how many people the host invited (not by who
+// joined): 1 invitee → 1:1 DM; 2+ invitees → a group whose members are the
+// host + all invitees. The invitation itself is the connection, so the group
+// bypasses the mutual-follow rule (16+ age-class safety is still enforced).
+// One group per invitation (deduped by invitationId), membership reconciled to
+// the current invitee list on every call.
+exports.getOrCreateInvitationConversation = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+    const uid = context.auth.uid;
+    const invitationId = typeof data?.invitationId === 'string' ? data.invitationId.trim() : '';
+    if (!invitationId) {
+        throw new functions.https.HttpsError('invalid-argument', 'invitationId is required.');
+    }
+
+    // Load the hosted invitation (social = multi-guest, private = 1-on-1).
+    let invSnap = await db.collection('social_invitations').doc(invitationId).get();
+    if (!invSnap.exists) {
+        invSnap = await db.collection('private_invitations').doc(invitationId).get();
+    }
+    if (!invSnap.exists) {
+        throw new functions.https.HttpsError('not-found', 'Invitation not found.');
+    }
+    const inv = invSnap.data() || {};
+
+    const hostId = String(inv.authorId || (inv.author && inv.author.id) || '').trim();
+    if (!hostId) {
+        throw new functions.https.HttpsError('failed-precondition', 'Invitation has no host.');
+    }
+    const invitees = [...new Set(
+        (Array.isArray(inv.invitedFriends) ? inv.invitedFriends : [])
+            .map((x) => (typeof x === 'string' ? x : (x && (x.id || x.uid)) || ''))
+            .map((s) => String(s).trim())
+            .filter((s) => s && s !== hostId)
+    )];
+
+    // Caller must be the host or one of the invitees.
+    if (uid !== hostId && !invitees.includes(uid)) {
+        throw new functions.https.HttpsError('permission-denied', 'You are not part of this invitation.');
+    }
+
+    // 1 invitee → 1:1. The client opens the normal member chat (/chat/:id).
+    if (invitees.length <= 1) {
+        const otherUserId = uid === hostId ? (invitees[0] || null) : hostId;
+        return { type: 'direct', otherUserId };
+    }
+
+    // 2+ invitees → group. Members = host + all invitees, filtered for 16+
+    // safety (same age class as host) and no business accounts.
+    const memberIdsAll = [hostId, ...invitees];
+    const snaps = await Promise.all(memberIdsAll.map((id) => db.collection('users').doc(id).get()));
+    const hostData = snaps[0] && snaps[0].exists ? snaps[0].data() : {};
+    const isMinor = (d) => (d?.ageCategory || '') === '16-17';
+    const hostMinor = isMinor(hostData);
+    const members = [];
+    snaps.forEach((s, i) => {
+        if (!s || !s.exists) return;
+        const d = s.data() || {};
+        if (isBusinessUserDoc(d)) return;      // business accounts never join a group
+        if (isMinor(d) !== hostMinor) return;  // 16+ safety: no minor/adult mixing
+        members.push(memberIdsAll[i]);
+    });
+    if (!members.includes(hostId)) members.unshift(hostId);
+    if (members.length < 2) {
+        throw new functions.https.HttpsError('failed-precondition', 'Not enough eligible members for a group.');
+    }
+
+    const groupName = (String(inv.title || '').trim() || 'Group').slice(0, 60);
+
+    // One group per invitation — reconcile membership/name on every call.
+    const existing = await db.collection('conversations')
+        .where('invitationId', '==', invitationId)
+        .limit(5)
+        .get();
+    const existingGroup = existing.docs.find((d) => (d.data() || {}).isGroup === true);
+    if (existingGroup) {
+        const cur = existingGroup.data() || {};
+        const curParts = Array.isArray(cur.participants) ? cur.participants : [];
+        const same = curParts.length === members.length && curParts.every((p) => members.includes(p));
+        const updates = {};
+        if (!same) updates.participants = members;
+        if ((cur.groupName || '') !== groupName) updates.groupName = groupName;
+        if (Object.keys(updates).length) await existingGroup.ref.update(updates);
+        return { type: 'group', conversationId: existingGroup.id };
+    }
+
+    await enforceCallableRateLimit(uid, 'invitation_group_conversation', {
+        perMinute: 10,
+        perHour: 60,
+        perDay: 300,
+        cooldownMs: 500,
+    });
+
+    const ref = db.collection('conversations').doc();
+    await ref.set({
+        participants: members,
+        isGroup: true,
+        groupName,
+        adminId: hostId,
+        createdBy: hostId,
+        source: 'invitation',
+        invitationId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastMessageTime: admin.firestore.FieldValue.serverTimestamp(),
+        lastMessage: null,
+        unreadBy: [],
+    });
+    return { type: 'group', conversationId: ref.id };
+});
+
 // ─── Trusted callable: community membership (join/leave) ───────────────────
 // Keep one warm instance so joining a community is instant (no cold start).
 exports.setCommunityMembership = functions.runWith({ minInstances: 1 }).https.onCall(async (data, context) => {

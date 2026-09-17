@@ -6,6 +6,7 @@ import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
+import { useChat } from '../context/ChatContext';
 import { getTemplateStyle } from '../utils/invitationTemplates';
 import { getSafeAvatar, pickSafeDisplayImageUrl, enrichUserWithAvatarFields, hydrateUsersAvatarFields, getAvatarUrlOrNull } from '../utils/avatarUtils';
 import SocialInvitationInfoGrid from '../components/Invitation/SocialInvitationInfoGrid';
@@ -19,7 +20,6 @@ import { getPrivateInvitationHeroCoverFromInvitation } from '../components/Invit
 import { getSocialInvitationHeroCoverFromInvitation } from '../components/Invitations/socialCard/socialCardBackgrounds';
 import { isPrivateHostedInvitation } from '../utils/inviteCategory';
 import {
-  getHostedInvitationChatPath,
   getHostedInvitationDetailsPath,
   getHostedInvitationPreviewPath } from
 '../utils/hostedInvitationRoutes';
@@ -51,6 +51,8 @@ const SocialInvitationDetails = () => {
   const navigate = useNavigate();
   const { currentUser, userProfile, loading: authLoading } = useAuth();
   const { respondToPrivateInvitation, deleteInvitation } = useInvitations();
+  const { getOrCreateInvitationConversation } = useChat();
+  const [openingChat, setOpeningChat] = useState(false);
 
   const cardCaptureRef = useRef(null);
   const listenerKeyRef = useRef('');
@@ -414,9 +416,27 @@ const SocialInvitationDetails = () => {
     return isHost ? invitees[0] : hostId;
   })();
 
-  const handleOpenInvitationChat = () => {
-    if (oneToOnePartnerId) navigate(`/chat/${oneToOnePartnerId}`);
-    else navigate(getHostedInvitationChatPath(invitation));
+  const handleOpenInvitationChat = async () => {
+    // 1 invitee → 1:1 member chat directly (fast path, no server round-trip).
+    if (oneToOnePartnerId) {
+      navigate(`/chat/${oneToOnePartnerId}`);
+      return;
+    }
+    // 2+ invitees → the invitation's normal group chat (host + all invitees,
+    // no follow requirement between members). The server creates/reconciles it.
+    if (openingChat) return;
+    setOpeningChat(true);
+    try {
+      const result = await getOrCreateInvitationConversation(invitation.id);
+      if (result?.type === 'group' && result.conversationId) {
+        navigate(`/group/${result.conversationId}`);
+      } else if (result?.type === 'direct' && result.otherUserId) {
+        navigate(`/chat/${result.otherUserId}`);
+      }
+      // On failure the context already surfaced a toast; stay on the page.
+    } finally {
+      setOpeningChat(false);
+    }
   };
 
   // Edit is allowed only if NO ONE has accepted yet
@@ -593,15 +613,16 @@ const SocialInvitationDetails = () => {
                                 <AppText as="p" style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>{t('invitation_accepted_hint')}</AppText>
                                     <button
               onClick={handleOpenInvitationChat}
+              disabled={openingChat}
               className="vip-btn vip-btn-primary"
               style={{
                 width: '100%', height: '54px', borderRadius: '16px', border: 'none',
                 background: 'var(--primary)', color: 'white',
                 fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                boxShadow: '0 10px 20px rgba(139, 92, 246, 0.3)', cursor: 'pointer'
+                boxShadow: '0 10px 20px rgba(139, 92, 246, 0.3)', cursor: openingChat ? 'wait' : 'pointer', opacity: openingChat ? 0.7 : 1
               }}>
-              
-                                    <FaComments /> {t('chat', 'Chat')}
+
+                                    <FaComments /> {openingChat ? t('opening', 'Opening…') : t('chat', 'Chat')}
                                 </button>
                             </> :
 
@@ -672,16 +693,17 @@ const SocialInvitationDetails = () => {
         <div style={{ display: 'flex', gap: '12px', marginTop: '8px', marginBottom: '2rem' }}>
                         <button
             onClick={handleOpenInvitationChat}
+            disabled={openingChat}
             className="vip-btn vip-btn-primary"
             style={{
               flex: 1, height: '54px', borderRadius: '18px', border: 'none',
               background: 'var(--primary)', color: 'white',
               fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
               boxShadow: '0 10px 20px rgba(139, 92, 246, 0.3)',
-              cursor: 'pointer'
+              cursor: openingChat ? 'wait' : 'pointer', opacity: openingChat ? 0.7 : 1
             }}>
-            
-                            <FaComments /> {t('chat', 'Chat')}
+
+                            <FaComments /> {openingChat ? t('opening', 'Opening…') : t('chat', 'Chat')}
                         </button>
 
                         {canEdit &&
