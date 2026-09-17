@@ -72,6 +72,13 @@ export function useInviteCreateNavigation({
     async (kind) => {
       if (!kind) return;
 
+      // Normal (WhatsApp-style) group chat — invite-only, mutual friends.
+      if (kind === 'group_chat') {
+        navigate('/create-group-chat');
+        onAfterNavigate?.();
+        return;
+      }
+
       // Group games: one at a time. If the user already hosts one, enter it;
       // otherwise open the create flow.
       if (kind === 'group_game') {

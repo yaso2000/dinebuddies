@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaChevronRight, FaGlobe, FaGamepad, FaMicrophone, FaUserFriends, FaQuestion, FaTheaterMasks } from 'react-icons/fa';
+import { FaChevronRight, FaGlobe, FaGamepad, FaMicrophone, FaUserFriends, FaQuestion, FaTheaterMasks, FaUsers } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { AppText } from './base';
 import { useInviteCreateNavigation } from '../hooks/useInviteCreateNavigation';
@@ -51,6 +51,20 @@ export default function InviteCreateTypePicker({
   const includeLiveGames = !invitationsOnly;
 
   const options = [
+    // Normal group chat (invite-only, mutual friends) — not an invitation, not a
+    // game; suppressed on invitations-only host surfaces.
+    ...(!invitationsOnly
+      ? [
+          {
+            kind: 'group_chat',
+            className: 'social',
+            sheetIconClass: 'business-create-option__icon--motion',
+            icon: FaUsers,
+            title: t('group_chat_new', 'New group chat'),
+            desc: t('group_chat_create_desc', 'Start a private group with your friends.'),
+          },
+        ]
+      : []),
     {
       kind: 'public',
       className: 'public',
@@ -151,10 +165,12 @@ export default function InviteCreateTypePicker({
   // Group the options into their own sections so the "+" menu doesn't jumble
   // invitations with games/quizzes. Headings only show when >1 group is present.
   const GROUP_OF = {
+    group_chat: 'chat',
     public: 'invitations', social: 'invitations', stage: 'invitations',
     group_game: 'games', suitability: 'games', realornai: 'games', zodiac: 'games',
   };
   const GROUPS = [
+    { id: 'chat', label: t('invite_group_chat', 'محادثات') },
     { id: 'invitations', label: t('invite_group_invitations', 'دعوات') },
     { id: 'games', label: t('invite_group_games', 'ألعاب') },
   ];

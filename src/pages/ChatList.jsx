@@ -314,7 +314,25 @@ const ChatList = () => {
           <AppText as="h1" className="messages-page__title">
             {t('inbox_hub_title', 'Inbox')}
           </AppText>
-          <span className="messages-page__header-spacer" aria-hidden />
+          {activePanel === PANEL_MESSAGES && !isBusiness ? (
+            <button
+              type="button"
+              className="messages-page__new-group"
+              aria-label={t('group_chat_new', 'New group chat')}
+              title={t('group_chat_new', 'New group chat')}
+              onClick={() => navigate('/create-group-chat')}
+              style={{
+                width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: '1px solid var(--border-color)', background: 'var(--bg-card)',
+                color: 'var(--primary)', cursor: 'pointer', position: 'relative',
+              }}>
+              <FaUsers size={17} />
+              <FaPlus size={9} style={{ position: 'absolute', top: 6, insetInlineEnd: 6, background: 'var(--bg-card)', borderRadius: '50%' }} />
+            </button>
+          ) : (
+            <span className="messages-page__header-spacer" aria-hidden />
+          )}
         </header>
 
         <div className="messages-page__hub-tabs" role="tablist" aria-label={t('inbox_hub_title', 'Inbox')}>
@@ -418,35 +436,6 @@ const ChatList = () => {
         {body}
       </div>
 
-      {activePanel === PANEL_MESSAGES && activeTab === TAB_CHATS && !isBusiness ? (
-        <button
-          type="button"
-          className="messages-page__fab"
-          aria-label={t('group_chat_new', 'New group chat')}
-          onClick={() => navigate('/create-group-chat')}
-          style={{
-            position: 'fixed',
-            insetInlineEnd: '18px',
-            bottom: 'calc(var(--nav-height, 65px) + 18px + env(safe-area-inset-bottom, 0px))',
-            width: '56px',
-            height: '56px',
-            borderRadius: '50%',
-            border: 'none',
-            background: 'var(--primary)',
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
-            cursor: 'pointer',
-            zIndex: 'calc(var(--z-nav, 900) - 1)',
-          }}>
-          <span style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <FaUsers size={22} />
-            <FaPlus size={11} style={{ position: 'absolute', top: '-6px', insetInlineEnd: '-8px', background: 'var(--primary)', borderRadius: '50%' }} />
-          </span>
-        </button>
-      ) : null}
     </div>
     </PullToRefresh>
   );
