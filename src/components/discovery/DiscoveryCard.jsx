@@ -108,6 +108,18 @@ export default function DiscoveryCard({
   useEffect(() => {
     setPhotoFailed(false);
   }, [profile?.profilePhoto]);
+
+  // A card instance is kept by key as it moves between the top slot and the
+  // beneath (next) slot. When it drops to the beneath slot, reset its transient
+  // swipe state — position and the one-shot exit guard — so it is clean and
+  // responsive when it returns to the top (fixes the freeze when going back).
+  useEffect(() => {
+    if (!isTop) {
+      exitHandledRef.current = false;
+      x.set(0);
+      y.set(0);
+    }
+  }, [isTop, x, y]);
   const isFollowingUser = checkIsFollowing(viewerFollowing, profile?.id);
   const showPrivateInviteBadge = Boolean(profile?.id && profile.id !== viewerUid && isFollowingUser);
   const locationLabel = [profile?.city, profile?.country].filter(Boolean).join(', ') || profile?.city || '';
