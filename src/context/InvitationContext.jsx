@@ -899,6 +899,23 @@ export const InvitationProvider = ({ children }) => {
                 };
             });
 
+            // Requesting to join = the member follows the host. When the host
+            // approves and follows back, the mutual follow opens the chat.
+            if (hostId && hostId !== uid && !(currentUser?.following || []).includes(hostId)) {
+                try {
+                    const hostSnap = await getDoc(doc(db, 'users', hostId));
+                    if (hostSnap.exists() && hostSnap.data()?.role !== 'business') {
+                        await followUser(uid, hostId, {
+                            id: uid,
+                            name: currentUser?.name || currentUser?.displayName || currentUser?.display_name || 'Someone',
+                            avatar: getSafeAvatar(currentUser),
+                        }, { skipDailyLimit: true });
+                    }
+                } catch (followErr) {
+                    console.warn('requestToJoin: follow host failed', followErr);
+                }
+            }
+
             if (hostId && hostId !== uid) {
                 const requesterName =
                     currentUser.name ||
@@ -969,6 +986,20 @@ export const InvitationProvider = ({ children }) => {
                     joined: prevJoined.includes(userId) ? prevJoined : [...prevJoined, userId],
                 };
             });
+
+            // Approving = the host follows the member back → mutual follow → chat opens.
+            const approverUid = currentUser?.uid || currentUser?.id;
+            if (approverUid && userId && approverUid !== userId && !(currentUser?.following || []).includes(userId)) {
+                try {
+                    await followUser(approverUid, userId, {
+                        id: approverUid,
+                        name: currentUser?.name || currentUser?.displayName || currentUser?.display_name || 'Host',
+                        avatar: getSafeAvatar(currentUser),
+                    }, { skipDailyLimit: true });
+                } catch (followErr) {
+                    console.warn('approveUser: follow member failed', followErr);
+                }
+            }
 
             // System chat broadcast for user joining
             try {

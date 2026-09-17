@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaComments, FaLock, FaTrash } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
@@ -403,6 +403,20 @@ const SocialInvitationDetails = () => {
 
   const canChat = isHost || myRSVP === 'accepted';
 
+  // No special invitation chat: a 1-invitee invitation opens the normal 1:1
+  // member chat directly; 3+ (multiple invitees) opens the group "stage" room.
+  const oneToOnePartnerId = useMemo(() => {
+    const invitees = (invitation.invitedFriends || []).map(normUid).filter(Boolean);
+    if (invitees.length !== 1) return null;
+    const hostId = normUid(invitation.authorId || invitation.author?.id);
+    return isHost ? invitees[0] : hostId;
+  }, [invitation, isHost]);
+
+  const handleOpenInvitationChat = useCallback(() => {
+    if (oneToOnePartnerId) navigate(`/chat/${oneToOnePartnerId}`);
+    else navigate(getHostedInvitationChatPath(invitation));
+  }, [oneToOnePartnerId, invitation, navigate]);
+
   // Edit is allowed only if NO ONE has accepted yet
   const hasAccepted = Object.values(invitation.rsvps || {}).some((s) => s === 'accepted');
   const canEdit = isHost && !hasAccepted;
@@ -576,7 +590,7 @@ const SocialInvitationDetails = () => {
                                 <AppText as="h4" style={{ color: 'var(--text-main)', marginBottom: '10px', fontWeight: '800' }}>{t('you_are_going!')}</AppText>
                                 <AppText as="p" style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>{t('invitation_accepted_hint')}</AppText>
                                     <button
-              onClick={() => navigate(getHostedInvitationChatPath(invitation))}
+              onClick={handleOpenInvitationChat}
               className="vip-btn vip-btn-primary"
               style={{
                 width: '100%', height: '54px', borderRadius: '16px', border: 'none',
@@ -655,7 +669,7 @@ const SocialInvitationDetails = () => {
                 {isHost &&
         <div style={{ display: 'flex', gap: '12px', marginTop: '8px', marginBottom: '2rem' }}>
                         <button
-            onClick={() => navigate(getHostedInvitationChatPath(invitation))}
+            onClick={handleOpenInvitationChat}
             className="vip-btn vip-btn-primary"
             style={{
               flex: 1, height: '54px', borderRadius: '18px', border: 'none',
