@@ -135,14 +135,23 @@ export const notifyInvitationRejected = (hostUserId, guestUser, invitationId) =>
     });
 };
 
-export const notifyNewMessage = (recipientUserId, senderUser, messagePreview) =>
-    createNotification({
+export const notifyNewMessage = (recipientUserId, senderUser, messagePreview, options = {}) => {
+    // A group message must deep-link to the GROUP, not to a 1:1 with the sender.
+    // For a 1:1, /chat/:senderId is correct (from the recipient's view that IS
+    // the conversation with the sender).
+    const isGroup = Boolean(options.isGroup && options.conversationId);
+    const actionUrl = isGroup ? `/group/${options.conversationId}` : `/chat/${senderUser.id}`;
+    return createNotification({
         userId: recipientUserId,
         type: 'message',
-        title: 'New Message',
+        title: isGroup ? (options.groupName || 'New Message') : 'New Message',
         message: `${senderUser.name || 'Someone'}: ${messagePreview}`,
-        actionUrl: `/chat/${senderUser.id}`
+        actionUrl,
+        metadata: options.conversationId
+            ? { conversationId: options.conversationId, isGroup }
+            : {},
     });
+};
 
 export const notifyInvitationReminder = (userId, invitation) => {
     fireNotification({

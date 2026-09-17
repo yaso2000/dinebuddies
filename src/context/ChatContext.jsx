@@ -356,16 +356,18 @@ export const ChatProvider = ({ children }) => {
             if (recipients.length) {
                 const senderName = userProfile?.display_name || userProfile?.displayName || 'Someone';
                 const groupName = isGroupConvo ? (convoData.groupName || 'Group') : null;
-                const rawPreview = messageData.type === 'text'
+                const preview = messageData.type === 'text'
                     ? (messageData.text || '').slice(0, 80)
                     : '📎 Media';
-                // In a group, prefix the sender so the notification reads like a group chat.
-                const preview = groupName ? `${senderName}: ${rawPreview}` : rawPreview;
-                const sender = groupName
-                    ? { name: groupName, id: currentUser.uid }
-                    : { name: senderName, id: currentUser.uid };
+                const sender = { name: senderName, id: currentUser.uid };
+                // For a group, the notification must deep-link to /group/:id (not a
+                // 1:1 with the sender). notifyNewMessage builds the actionUrl and
+                // title from these options; the message body stays "sender: preview".
+                const options = isGroupConvo
+                    ? { isGroup: true, conversationId, groupName }
+                    : { conversationId };
                 recipients.forEach((rid) => {
-                    notifyNewMessage(rid, sender, preview).catch(() => { });
+                    notifyNewMessage(rid, sender, preview, options).catch(() => { });
                 });
             }
 
