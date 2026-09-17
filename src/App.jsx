@@ -103,6 +103,7 @@ const FollowersList = lazy(() => import('./pages/FollowersList'));
 const CreateInvitation = lazy(() => import('./pages/CreateInvitation'));
 const CreateInvitationManualHub = lazy(() => import('./pages/CreateInvitationManualHub'));
 const CreateSocialInvitation = lazy(() => import('./pages/CreateSocialInvitation'));
+const CreateGroupChat = lazy(() => import('./pages/CreateGroupChat'));
 const BusinessCreatePostGate = lazy(() => import('./components/BusinessCreatePostGate'));
 const CreateFeaturedPost = lazy(() => import('./pages/business/CreateFeaturedPost'));
 const CreateCommunityOffer = lazy(() => import('./pages/CreateCommunityOffer'));
@@ -322,6 +323,8 @@ function App() {
                                                     {/* Business may open the hub for NOTIFICATIONS only; ChatList hides the DM tab for business. */}
                                                     <Route path="/messages" element={<GuestBlockedRoute><ChatList /></GuestBlockedRoute>} />
                                                     <Route path="/chat/:userId" element={<BusinessBlockedRoute><Chat /></BusinessBlockedRoute>} />
+                                                    <Route path="/group/:groupId" element={<BusinessBlockedRoute><Chat /></BusinessBlockedRoute>} />
+                                                    <Route path="/create-group-chat" element={<BusinessBlockedRoute><CreateGroupChat /></BusinessBlockedRoute>} />
 
                                                     <Route path="/profile" element={<GuestBlockedRoute><Profile /></GuestBlockedRoute>} />
                                                     <Route path="/profile/:userId" element={<UserProfile />} />
