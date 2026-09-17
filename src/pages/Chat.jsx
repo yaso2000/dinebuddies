@@ -172,20 +172,6 @@ const Chat = () => {
       : null;
   const relationshipBadge = connectionKind ? RELATIONSHIP_BADGE[connectionKind] : null;
 
-  // Compatibility Journey summary for the center of the top panel.
-  const [compatSummary, setCompatSummary] = useState({ phase: 'none' });
-  useEffect(() => {
-    const myUid = currentUser?.uid;
-    if (!myUid || !userId) return undefined;
-    const jid = [myUid, userId].sort().join('_');
-    const unsub = onSnapshot(doc(db, 'compat_journeys', jid), (s) => {
-      if (!s.exists()) { setCompatSummary({ phase: 'none' }); return; }
-      const j = s.data() || {};
-      const phase = j.status === 'completed' ? 'completed' : j.status === 'level_failed' ? 'failed' : 'active';
-      setCompatSummary({ phase, level: j.currentLevel || 1, compatPct: j.overallCompat });
-    }, () => setCompatSummary({ phase: 'none' }));
-    return () => unsub();
-  }, [currentUser?.uid, userId]);
 
   useEffect(() => {
     if (connectionCheckLoading) return;
@@ -962,30 +948,7 @@ const Chat = () => {
                 onResetMyPanel={handleResetMyPanelImage}
                 connectionKind={connectionKind}
                 relationshipBadge={relationshipBadge}
-                compat={compatSummary}
-                onOpenCompat={() => navigate(`/compat/${userId}`)}
               />
-            ) : null}
-
-            {otherUser && compatSummary && (compatSummary.phase === 'active' || compatSummary.phase === 'failed') ? (
-              <button
-                type="button"
-                onClick={() => navigate(`/compat/${userId}`)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'start',
-                  padding: '10px 14px', border: 'none', cursor: 'pointer',
-                  background: 'linear-gradient(90deg, rgba(236,72,153,0.15), rgba(236,72,153,0.05))',
-                  borderBottom: '1px solid var(--border-color)',
-                }}>
-                <FaHeart style={{ color: '#ec4899', fontSize: 20, flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.9rem' }}>{t('compat_title', 'Compatibility Journey')}</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{t('compat_card_subtitle', 'Tap to play the next question together')}</div>
-                </div>
-                <span style={{ background: '#ec4899', color: '#fff', borderRadius: 20, padding: '5px 14px', fontWeight: 800, fontSize: '0.82rem', flexShrink: 0 }}>
-                  {t('compat_center_start', 'Play')}
-                </span>
-              </button>
             ) : null}
 
             <div className="chat-body-column">
