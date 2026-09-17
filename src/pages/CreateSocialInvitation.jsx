@@ -859,7 +859,12 @@ const CreateSocialInvitation = () => {
   const applySessionDraftPayload = useCallback(async (draft) => {
     if (draft.existingDraftId) setExistingDraftId(draft.existingDraftId);
     if (draft.formData && typeof draft.formData === 'object') {
-      setFormData((prev) => ({ ...prev, ...draft.formData }));
+      const incoming = { ...draft.formData };
+      // Arriving from the profile invite icon forces the occasion (Getting
+      // acquainted) and a preselected guest — a stale draft must not override them.
+      if (location.state?.occasionType) delete incoming.occasionType;
+      if (location.state?.preselectedInvitee?.id) delete incoming.invitedFriends;
+      setFormData((prev) => ({ ...prev, ...incoming }));
     }
     if (draft.cardFontId) setCardFontId(draft.cardFontId);
     if (draft.cardFrameColorId) setCardFrameColorId(draft.cardFrameColorId);
