@@ -584,26 +584,33 @@ const Chat = () => {
   const handleSendMessage = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (composerBlocked) return;
-    if (!newMessage.trim()) return;
-    if (!conversationId) return;
+    const text = newMessage.trim();
+    if (!text || !conversationId) return;
     // Sending must not switch the composer's input mode: if the emoji picker
     // was open, it stays open (and visually unchanged) after send — the user
     // returns to the OS keyboard only by explicitly tapping the keyboard icon.
     const wasEmojiPickerOpen = emojiPickerOpen;
+    const currentReplyTo = replyTo || null;
 
-    const messageData = {
-      type: 'text',
-      text: newMessage.trim(),
-      replyTo: replyTo || null
-    };
+    // Clear the field and KEEP FOCUS synchronously — still inside the user's tap
+    // gesture, before any await — so the OS keyboard stays open for continuous
+    // typing (WhatsApp/Telegram behaviour). Doing this after `await` fails on
+    // mobile because focus() only raises the keyboard within the original gesture.
+    setNewMessage('');
+    setReplyTo(null);
+    if (!wasEmojiPickerOpen) inputRef.current?.focus();
 
-    const messageId = await sendMessage(conversationId, messageData);
-    if (messageId) {
-      setNewMessage('');
-      setReplyTo(null);
-      if (!wasEmojiPickerOpen) {
-        setTimeout(() => inputRef.current?.focus(), 100);
+    try {
+      const messageId = await sendMessage(conversationId, {
+        type: 'text',
+        text,
+        replyTo: currentReplyTo,
+      });
+      if (!messageId) {
+        setNewMessage((cur) => cur || text); // restore only if the field is still empty
       }
+    } catch {
+      setNewMessage((cur) => cur || text);
     }
     setTypingStatus(conversationId, false);
   };
@@ -1305,6 +1312,8 @@ const Chat = () => {
               className={`chat-send-btn${isRecording ? ' chat-send-btn--recording' : ''}`}
               type="button"
               aria-label={isRecording ? t('chat_voice_stop', 'Stop') : (newMessage.trim() ? t('send', { defaultValue: 'Send' }) : t('record_voice', { defaultValue: 'Record voice' }))}
+              // Sending must not steal focus from the input — keep the keyboard open.
+              onPointerDown={(e) => { if (!isRecording && newMessage.trim()) e.preventDefault(); }}
               onClick={isRecording ? stopRecording : (newMessage.trim() ? handleSendMessage : startRecording)}>
               
                     {isRecording ? <FaPaperPlane /> : newMessage.trim() ? <FaPaperPlane /> : <FaMicrophone />}
