@@ -92,7 +92,7 @@ export default function CreateGroupChat() {
   if (isBusiness) return <Navigate to="/business-dashboard" replace />;
 
   return (
-    <div className="page-container" style={{ maxWidth: 560, margin: '0 auto', padding: '0 0 96px', minHeight: '100%' }}>
+    <div className="page-container" style={{ maxWidth: 560, margin: '0 auto', padding: 0, minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', position: 'sticky', top: 0, background: 'var(--bg-main)', zIndex: 5 }}>
         <button type="button" onClick={() => navigate(-1)} aria-label={t('back', 'Back')}
@@ -104,7 +104,7 @@ export default function CreateGroupChat() {
         </AppText>
       </div>
 
-      <div style={{ padding: '0 16px' }}>
+      <div style={{ padding: '0 16px', flex: 1 }}>
         {/* Group name */}
         <AppText as="label" style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>
           {t('group_name', 'Group name')}
@@ -168,8 +168,9 @@ export default function CreateGroupChat() {
         )}
       </div>
 
-      {/* Create */}
-      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, padding: '12px 16px calc(12px + env(safe-area-inset-bottom, 0px))', background: 'var(--bg-main)', borderTop: '1px solid var(--border-color)', maxWidth: 560, margin: '0 auto' }}>
+      {/* Create — sticky within the scroll flow so it's always tappable
+          (a fixed bar could sit behind app chrome on some devices). */}
+      <div style={{ position: 'sticky', bottom: 0, zIndex: 5, padding: '12px 16px calc(12px + env(safe-area-inset-bottom, 0px))', background: 'var(--bg-main)', borderTop: '1px solid var(--border-color)' }}>
         <button
           type="button"
           onClick={handleCreate}
