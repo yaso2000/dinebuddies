@@ -157,8 +157,7 @@ export function mapDirectoryUserToDiscoveryProfile(user, userLocation = null) {
 
     const name = getPrivateInviteeDisplayName(user) || 'User';
     const joinReasons = normalizeJoinReasons(user.joinReasons);
-    const includeDating = true;
-    const lookingFor = normalizeLookingFor(user.lookingFor, { includeDating });
+    const lookingFor = normalizeLookingFor(user.lookingFor);
     const personaTags = normalizeDiningPersona(user.diningPersona);
     const interestTags = Array.isArray(user.interests)
         ? user.interests.map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 4)
@@ -331,13 +330,13 @@ export async function likeDiscoveryProfile(likerId, targetUser, likerProfile, op
                 console.warn('[discoveryProfile] reverse mutual update', e?.message || e);
             }
         }
-        notifyConnectConnectionComplete(targetId, likerPayload, CONNECTION_KIND.DATING);
+        notifyConnectConnectionComplete(targetId, likerPayload, CONNECTION_KIND.FRIENDSHIP);
         notifyConnectConnectionComplete(likerId, {
             id: targetId,
             name: getPrivateInviteeDisplayName(targetUser) || 'Someone',
             avatar: getSafeAvatar(targetUser),
-        }, CONNECTION_KIND.DATING);
-        return { ok: true, already: false, mutual: true, match: true, connectionKind: CONNECTION_KIND.DATING };
+        }, CONNECTION_KIND.FRIENDSHIP);
+        return { ok: true, already: false, mutual: true, match: true, connectionKind: CONNECTION_KIND.FRIENDSHIP };
     }
 
     return { ok: true, already: false, mutual: false };

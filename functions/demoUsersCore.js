@@ -22,40 +22,37 @@ const DINING_PERSONA_PRESETS = [
 ];
 
 const JOIN_REASON_PAIRS = [
-    ['open_to_dating', 'new_friends'],
-    ['open_to_dating', 'fun_hangouts'],
-    ['open_to_dating', 'explore_places'],
-    ['open_to_dating', 'activity_partner'],
+    ['explore_places', 'new_friends'],
+    ['fun_hangouts', 'new_friends'],
+    ['explore_places', 'activity_partner'],
+    ['expand_network', 'fun_hangouts'],
 ];
 
 const INVITE_PREFS = ['any', 'any', 'any', 'male_only', 'female_only'];
 
-const LOOKING_FOR_VALID = new Set(['dating', 'friendship', 'social']);
+const LOOKING_FOR_VALID = new Set(['friendship', 'social', 'family', 'work', 'acquaintance']);
 
-function normalizeLookingFor(raw, { includeDating = true } = {}) {
+function normalizeLookingFor(raw) {
     if (!Array.isArray(raw)) return [];
     const out = [];
     for (const item of raw) {
         let id = String(item || '').trim().toLowerCase();
         if (id === 'icebreaker') id = 'social';
+        if (id === 'dating' || id === 'serious') id = 'acquaintance'; // legacy
         if (!LOOKING_FOR_VALID.has(id) || out.includes(id)) continue;
-        if (id === 'dating' && !includeDating) continue;
         out.push(id);
         if (out.length >= LOOKING_FOR_VALID.size) break;
     }
     return out;
 }
 
-function normalizeOpenToDating(raw) {
-    return raw === true;
+// Dating removed — always false; lookingFor is stored as-is (normalized).
+function normalizeOpenToDating() {
+    return false;
 }
 
-function syncLookingForWithOpenToDating(lookingFor, openToDating) {
-    const normalized = normalizeLookingFor(lookingFor, { includeDating: true });
-    if (openToDating) {
-        return normalized.includes('dating') ? normalized : [...normalized, 'dating'];
-    }
-    return normalized.filter((id) => id !== 'dating');
+function syncLookingForWithOpenToDating(lookingFor) {
+    return normalizeLookingFor(lookingFor);
 }
 
 /** Curated Unsplash sets — avatar (square), cover (landscape), gallery ×3 (portrait 9:16). */
@@ -200,10 +197,9 @@ const JOIN_REASON_IDS = new Set([
     'new_friends',
     'expand_network',
     'fun_hangouts',
-    'open_to_dating',
 ]);
 
-const AGE_CATEGORIES_ALLOWED = new Set(['18-24', '25-34', '35-44', '45-54', '55+']);
+const AGE_CATEGORIES_ALLOWED = new Set(['16-17', '18-24', '25-34', '35-44', '45-54', '55+']);
 
 function deriveAgeFromCategory(ageCategory) {
     const raw = String(ageCategory || '').trim();
@@ -239,7 +235,7 @@ function normalizeAiUser(raw, index = 0) {
         .filter((r) => JOIN_REASON_IDS.has(r))
         .slice(0, 2);
     const safeJoinReasons =
-        joinReasons.length > 0 ? joinReasons : ['open_to_dating', 'new_friends'];
+        joinReasons.length > 0 ? joinReasons : ['explore_places', 'new_friends'];
     const firstDatePlaceHint = String(raw.firstDatePlaceHint || '').trim().slice(0, 30);
     const invitePref = String(raw.invitePreference || 'any').toLowerCase();
     const invitePreference =

@@ -49,15 +49,6 @@ import {
 } from
 '../constants/privateProfileOptions';
 import { normalizeLookingFor } from '../constants/personalInviteCategories';
-import {
-  isUserOpenToDating,
-  normalizeOpenToDating,
-  syncLookingForWithOpenToDating,
-} from '../utils/openToDating';
-import {
-  getDatingToggleLock,
-  datingToggleLockMessage,
-} from '../utils/datingToggleLock';
 import { buildDefaultProfileMediaPatch } from '../constants/defaultProfileMedia';
 import { getPurchaseCredits, getSavedCredits } from '../utils/walletCredits';
 import LookingForChips from '../components/profile/LookingForChips';
@@ -222,10 +213,7 @@ const Profile = () => {
         invitePreference: readInvitePreferenceForForm(currentData),
         firstDatePlaceHint: normalizeFirstDatePlaceHint(currentData.firstDatePlaceHint),
         joinReasons: normalizeJoinReasons(currentData.joinReasons),
-        lookingFor: normalizeLookingFor(currentData.lookingFor, {
-          includeDating: true
-        }),
-        openToDating: isUserOpenToDating(currentData),
+        lookingFor: normalizeLookingFor(currentData.lookingFor),
         profileGallery: media.profileGallery,
         directoryCoverIndex: media.directoryCoverIndex,
         cover_photo: media.cover_photo || ''
@@ -278,10 +266,7 @@ const Profile = () => {
     invitePreference: readInvitePreferenceForForm(userProfile),
     firstDatePlaceHint: normalizeFirstDatePlaceHint(userProfile?.firstDatePlaceHint),
     joinReasons: normalizeJoinReasons(userProfile?.joinReasons),
-    lookingFor: normalizeLookingFor(userProfile?.lookingFor, {
-      includeDating: true
-    }),
-    openToDating: isUserOpenToDating(userProfile),
+    lookingFor: normalizeLookingFor(userProfile?.lookingFor),
     profileGallery: normalizeProfileGallery(userProfile?.profileGallery),
     directoryCoverIndex: normalizeDirectoryCoverIndex(userProfile?.directoryCoverIndex),
     cover_photo: userProfile?.cover_photo || ''
@@ -486,10 +471,7 @@ const Profile = () => {
       invitePreference: readInvitePreferenceForForm(source),
       firstDatePlaceHint: normalizeFirstDatePlaceHint(source.firstDatePlaceHint ?? prev.firstDatePlaceHint),
       joinReasons: normalizeJoinReasons(source.joinReasons ?? prev.joinReasons),
-      lookingFor: normalizeLookingFor(source.lookingFor ?? prev.lookingFor, {
-        includeDating: true
-      }),
-      openToDating: isUserOpenToDating(source),
+      lookingFor: normalizeLookingFor(source.lookingFor ?? prev.lookingFor),
       profileGallery: media.profileGallery,
       directoryCoverIndex: media.directoryCoverIndex,
       cover_photo: media.cover_photo || ''
@@ -534,11 +516,6 @@ const Profile = () => {
       setAvatarSaving(false);
     }
   };
-
-  const datingToggleLock = useMemo(
-    () => getDatingToggleLock({ authUser, profile: realtimeUser || userProfile }),
-    [authUser, realtimeUser, userProfile]
-  );
 
   /* A generated initials/placeholder avatar is not a photo — nothing to remove. */
   const savedAvatarUrl = getAvatarUrlOrNull(realtimeUser || userProfile) || '';
@@ -638,30 +615,9 @@ const Profile = () => {
         joinReasons: normalizeJoinReasons(formData.joinReasons, {
           includePrivateOnly: true,
         }),
-        lookingFor: syncLookingForWithOpenToDating(
-          formData.lookingFor,
-          normalizeOpenToDating(formData.openToDating)
-        ),
-        openToDating: normalizeOpenToDating(formData.openToDating),
+        lookingFor: normalizeLookingFor(formData.lookingFor),
         invitePreference: normalizeInvitePreference(formData.invitePreference),
       };
-
-      // The dating switch decides who sees a heart and which relationship a pair
-      // can form, so it is not a toggle to flip back and forth: free for the
-      // first day, then once a week.
-      const nextOpenToDating = payload.openToDating;
-      const datingChanged = nextOpenToDating !== isUserOpenToDating(userProfile || currentUser);
-      if (datingChanged) {
-        if (datingToggleLock.locked) {
-          showToast(datingToggleLockMessage(t, datingToggleLock, i18n.language), 'error');
-          setIsSaving(false);
-          return;
-        }
-        // Only start the weekly clock once the opening day is over.
-        if (!datingToggleLock.inGrace) {
-          payload.openToDatingChangedAt = new Date().toISOString();
-        }
-      }
       if (photoIsReal) {
         Object.assign(payload, buildAvatarPersistFields(finalAvatar) || { avatar: finalAvatar });
       }
@@ -676,7 +632,6 @@ const Profile = () => {
       const mediaPatch = buildDefaultProfileMediaPatch({
         uid: currentUser?.uid,
         gender: formData.gender || userProfile?.gender,
-        openToDating: payload.openToDating,
         lookingFor: payload.lookingFor,
         email: currentUser?.email,
         photo_url: finalAvatar,
@@ -714,7 +669,6 @@ const Profile = () => {
         firstDatePlaceHint: payload.firstDatePlaceHint ?? prev.firstDatePlaceHint,
         joinReasons: payload.joinReasons ?? prev.joinReasons,
         lookingFor: payload.lookingFor ?? prev.lookingFor,
-        openToDating: payload.openToDating ?? prev.openToDating,
         invitePreference: payload.invitePreference ?? prev.invitePreference,
         profileGallery: nextMedia.profileGallery,
         directoryCoverIndex: nextMedia.directoryCoverIndex,
@@ -950,11 +904,6 @@ const Profile = () => {
                   firstDatePlaceHint={formData.firstDatePlaceHint}
                   joinReasons={formData.joinReasons}
                   lookingFor={formData.lookingFor}
-                  openToDating={formData.openToDating}
-                  datingToggleLock={datingToggleLock}
-                  datingToggleLockMessage={
-                  datingToggleLock.locked ? datingToggleLockMessage(t, datingToggleLock, i18n.language) : ''
-                  }
                   showInvitePreference
                   requireInviteFields
                   onChange={({
@@ -962,8 +911,7 @@ const Profile = () => {
                     invitePreference,
                     firstDatePlaceHint,
                     joinReasons,
-                    lookingFor,
-                    openToDating
+                    lookingFor
                   }) =>
                   setFormData((prev) => ({
                     ...prev,
@@ -971,8 +919,7 @@ const Profile = () => {
                     invitePreference,
                     firstDatePlaceHint,
                     joinReasons,
-                    lookingFor,
-                    openToDating
+                    lookingFor
                   }))
                   } />
                 
@@ -1026,7 +973,6 @@ const Profile = () => {
                                         </div>
                                         <LookingForChips
                     ids={realtimeUser.lookingFor}
-                    includeDating
                     className="profile-looking-for-chips"
                     chipClassName="profile-looking-for-chip" />
                                     </div>

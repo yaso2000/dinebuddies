@@ -7,16 +7,15 @@ import {
 import { AppText } from '../base';
 
 /**
- * Read-only chips for relationship intentions (dating / friendship / social).
+ * Read-only chips for what a member is here for (friendship / social / family / work / getting acquainted).
  */
 export default function LookingForChips({
     ids,
     className = '',
     chipClassName = '',
-    includeDating = true,
 }) {
     const { t } = useTranslation();
-    const items = normalizeLookingFor(ids, { includeDating });
+    const items = normalizeLookingFor(ids);
     if (!items.length) return null;
 
     return (

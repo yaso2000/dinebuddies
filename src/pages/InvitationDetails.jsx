@@ -1151,7 +1151,7 @@ const InvitationDetails = () => {
                             </AppText>
 
                             <div style={{ display: 'grid', gap: '8px', marginBottom: '20px' }}>
-                                {['18-24', '25-34', '35-44', '45-54', '55+'].map((age) =>
+                                {['16-17', '18-24', '25-34', '35-44', '45-54', '55+'].map((age) =>
               <button
                 key={age}
                 onClick={() => handleSaveAgeCategory(age)}

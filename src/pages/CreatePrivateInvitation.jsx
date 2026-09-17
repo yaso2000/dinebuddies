@@ -97,6 +97,7 @@ import {
   isUserAvailableForPrivateInvite,
   senderFollowsInvitee } from
 '../utils/privateInviteAvailability';
+import { canInteractPrivately } from '../utils/minorSafety';
 import '../components/Invitations/socialCard/SocialInvitationEditorFooter.css';
 import { scheduleScrollPageToTop } from '../utils/scrollPageToTop';
 import { resolveCardStructureFromBackgroundId } from '../utils/cardStructure';
@@ -312,6 +313,21 @@ const CreatePrivateInvitation = () => {
         if (cancelled) return;
         if (snap.exists()) {
           const data = snap.data();
+          if (!canInteractPrivately(userProfile, data)) {
+            setDatingInviteeProfile(null);
+            setFormData((prev) =>
+            prev.invitedFriends?.[0] === inviteeId ?
+            { ...prev, invitedFriends: [] } :
+            prev
+            );
+            showToast(
+              t('private_invitee_age_class', {
+                defaultValue: 'Private invitations are only available between members of a similar age group.'
+              }),
+              'warning'
+            );
+            return;
+          }
           if (!isUserAvailableForPrivateInvite(data)) {
             setDatingInviteeProfile(null);
             setFormData((prev) =>

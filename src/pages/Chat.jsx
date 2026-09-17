@@ -57,10 +57,10 @@ import { useChatTheme } from '../hooks/useChatTheme';
 import ChatThemePicker from '../components/chat/ChatThemePicker';
 import PrivateChatTopPanels from '../components/chat/PrivateChatTopPanels';
 import { resolveConnectionKind } from '../utils/connectConnection';
-import { FaHeart, FaHandshake, FaUserFriends } from 'react-icons/fa';
+import { FaHandshake, FaUserFriends } from 'react-icons/fa';
 
 const RELATIONSHIP_BADGE = {
-  dating: { icon: FaHeart, labelKey: 'chat_relationship_dating', label: 'Dating' },
+  dating: { icon: FaUserFriends, labelKey: 'chat_relationship_friendship', label: 'Friendship' }, // legacy kind
   friendship: { icon: FaUserFriends, labelKey: 'chat_relationship_friendship', label: 'Friendship' },
   acquaintance: { icon: FaHandshake, labelKey: 'chat_relationship_acquaintance', label: 'Acquaintance' },
 };

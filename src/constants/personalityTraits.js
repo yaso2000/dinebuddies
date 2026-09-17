@@ -6,7 +6,7 @@
  */
 export const PERSONALITY_TRAITS = [
     { id: 'generous', emoji: '🎁', ar: 'كريم', en: 'Generous' },
-    { id: 'romantic', emoji: '🌹', ar: 'رومانسي', en: 'Romantic' },
+    { id: 'romantic', emoji: '🌹', ar: 'ودود', en: 'Warm' }, // id kept for stored data; label no longer romantic
     { id: 'funny', emoji: '😄', ar: 'مرح', en: 'Fun' },
     { id: 'ambitious', emoji: '🚀', ar: 'طموح', en: 'Ambitious' },
     { id: 'kind', emoji: '🤍', ar: 'حنون', en: 'Kind-hearted' },

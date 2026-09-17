@@ -122,7 +122,7 @@ export const AI_DESIGN_USE_DESTINATIONS = [
         labelKey: 'ai_design_use_invitation_private',
         defaultLabel: 'Private Invite cover',
         defaultLabelAr: 'غلاف دعوة خاصة',
-        icon: '💑',
+        icon: '🍽️',
         folder: 'invitations',
         route: '/create-private',
         forConsumer: true,

@@ -25,6 +25,7 @@ function buildSwipeViewer(userProfile, currentUser) {
         id: uid,
         gender: userProfile?.gender || currentUser?.gender || null,
         invitePreference: normalizeInvitePreference(userProfile?.invitePreference),
+        ageCategory: userProfile?.ageCategory || userProfile?.age_category || '',
     };
 }
 
@@ -74,6 +75,7 @@ export function useDiscoveryProfiles({
         excludeUid: viewerUid,
         enabled: canLoad,
         pageSize: DISCOVERY_PAGE_SIZE,
+        viewerProfile: userProfile,
     });
 
     const viewer = useMemo(

@@ -278,7 +278,7 @@ export default function DiscoveryCard({
       if (result.mutual || result.match) {
         setCanChat(true);
         celebrateMatch({
-          type: connectionKindToCelebrationType(result.connectionKind || 'dating'),
+          type: connectionKindToCelebrationType(result.connectionKind || 'friendship'),
           otherUser: targetUser,
           otherId: profile.id,
           otherName: profile.name,

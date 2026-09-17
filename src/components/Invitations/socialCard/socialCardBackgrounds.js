@@ -15,7 +15,7 @@ export const DEFAULT_PRIVATE_CARD_BACKGROUND_ID = 'social-1';
 /** Typographic apostrophe (U+2019) — matches Windows/macOS “smart quote” filenames on disk. */
 const CURLY_APOSTROPHE = '\u2019';
 
-// Social-invitation categories: friendship, social, family, work, serious, acquaintance.
+// Social-invitation categories: friendship, social, family, work, acquaintance (legacy 'serious' → acquaintance).
 // Each folder lives at public/invitation-card-backgrounds/{category}/{id}.webp.
 export const CARD_BACKGROUNDS_BY_CATEGORY = {
     friendship: [
@@ -65,17 +65,6 @@ export const CARD_BACKGROUNDS_BY_CATEGORY = {
         { id: 'work-8' },
         { id: 'work-9' },
         { id: 'work-10' }
-    ],
-    serious: [
-        { id: 'serious-1' },
-        { id: 'serious-2' },
-        { id: 'serious-3' },
-        { id: 'serious-4' },
-        { id: 'serious-5' },
-        { id: 'serious-6' },
-        { id: 'serious-7' },
-        { id: 'serious-8' },
-        { id: 'serious-9' }
     ],
     acquaintance: [
         { id: 'acquaintance-1' },

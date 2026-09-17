@@ -210,7 +210,7 @@ const generateDemoInvitation = (creator) => {
         type: isBusiness ? 'Restaurant' : 'Social',
         paymentType: faker.helpers.arrayElement(['Split', 'Host Pays', 'Each Pays Own']),
         genderGroups: ['male', 'female', 'unspecified'],
-        ageGroups: ['18-24', '25-34', '35-44', '45-54', '55+'],
+        ageGroups: ['16-17', '18-24', '25-34', '35-44', '45-54', '55+'],
         isDemo: true,
         createdAt: serverTimestamp(),
         image: isBusiness ? creator.businessInfo.coverImage : `https://images.unsplash.com/photo-1529333166437-7750a6dd5a70?w=800`

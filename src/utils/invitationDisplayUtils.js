@@ -12,7 +12,7 @@
  * @returns {string} Formatted string
  */
 export const formatAgeGroupsSmart = (selectedGroups, t) => {
-    const ALL_AGE_GROUPS = ['18-24', '25-34', '35-44', '45-54', '55+'];
+    const ALL_AGE_GROUPS = ['16-17', '18-24', '25-34', '35-44', '45-54', '55+'];
 
     if (!selectedGroups || selectedGroups.length === 0) return '18+';
 

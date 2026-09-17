@@ -4,6 +4,7 @@ import {
     buildSuggestedFriendViewerProfile,
     pickSuggestedFriends,
 } from '../utils/suggestedFriendsMatch';
+import { filterSameAgeClass } from '../utils/minorSafety';
 
 const BROWSE_PAGES = 3;
 const PAGE_SIZE = 24;
@@ -52,7 +53,7 @@ export function useSuggestedFriends({ userProfile, currentUser, enabled = true }
                 ].filter(Boolean));
 
                 setSuggested(
-                    pickSuggestedFriends(pool, viewer, {
+                    pickSuggestedFriends(filterSameAgeClass(userProfile, pool), viewer, {
                         limit: SUGGESTED_LIMIT,
                         excludeIds: following,
                     })

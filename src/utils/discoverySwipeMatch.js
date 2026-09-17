@@ -1,4 +1,5 @@
 import { normalizeInvitePreference } from '../constants/privateProfileOptions';
+import { sameAgeClass } from './minorSafety';
 
 /** @returns {'male' | 'female' | null} */
 export function normalizeSwipeGender(gender) {
@@ -39,6 +40,8 @@ export function swipeVisibleGendersForViewer(invitePreference) {
  */
 export function isDiscoverySwipeMatch(viewer, target) {
     if (!viewer?.id || !target?.id || viewer.id === target.id) return false;
+    // 16–17 and adults are never shown to each other.
+    if (!sameAgeClass(viewer, target)) return false;
 
     const targetGender = normalizeSwipeGender(target?.gender);
     const viewerGender = normalizeSwipeGender(viewer?.gender);

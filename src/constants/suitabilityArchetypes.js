@@ -1,7 +1,7 @@
 /**
- * "Who suits you?" (مَن يناسبك؟) — a fixed set of warm, flattering PARTNER
- * ARCHETYPES. A person publishes their card on the stories rail; the crowd votes
- * which of these types would suit them best. The types describe personality and
+ * "Who suits you?" (مَن يناسبك؟) — a fixed set of warm, flattering TABLE-BUDDY
+ * ARCHETYPES (the kind of dining companion that suits a person). A person publishes
+ * their card on the stories rail; the crowd votes which of these types would suit them best. The types describe personality and
  * vibe only — never looks — so the result always reads as kind, never a judgment
  * of the person themselves.
  *
@@ -15,7 +15,7 @@ export const SUITABILITY_ARCHETYPES = [
     { id: 'playful', emoji: '😄', color: '#f59e0b', ar: 'المرح', en: 'The Playful', descAr: 'خفيف الظل ويحوّل اليوم لمتعة', descEn: 'Light-hearted, turns the day into fun' },
     { id: 'calm', emoji: '🌿', color: '#10b981', ar: 'الهادئ', en: 'The Calm', descAr: 'متزن وصبور ومريح للقلب', descEn: 'Grounded, patient, easy on the heart' },
     { id: 'intellectual', emoji: '📚', color: '#6366f1', ar: 'المثقف', en: 'The Thinker', descAr: 'فضولي ويحب الحوار العميق', descEn: 'Curious, loves deep conversation' },
-    { id: 'romantic', emoji: '🌹', color: '#e11d48', ar: 'الرومانسي', en: 'The Romantic', descAr: 'يعبّر عن مشاعره ويهتم باللحظات', descEn: 'Expressive, treasures the little moments' },
+    { id: 'romantic', emoji: '🌹', color: '#e11d48', ar: 'المُعبِّر', en: 'The Expressive', descAr: 'يعبّر عمّا يشعر به ويهتم بالتفاصيل الصغيرة', descEn: 'Expressive, treasures the little moments' },
     { id: 'dependable', emoji: '🛡️', color: '#0d9488', ar: 'السند', en: 'The Rock', descAr: 'يُعتمد عليه وواقعي وصادق', descEn: 'Dependable, grounded and honest' },
 ];
 

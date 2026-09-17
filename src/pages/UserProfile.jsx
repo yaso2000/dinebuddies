@@ -268,7 +268,7 @@ function mapUserDocToProfileModel(firestoreUser) {
     directoryCoverIndex: firestoreUser.directoryCoverIndex ?? 0,
     diningPersona,
     joinReasons: normalizeJoinReasons(firestoreUser.joinReasons),
-    lookingFor: normalizeLookingFor(firestoreUser.lookingFor, { includeDating: true }),
+    lookingFor: normalizeLookingFor(firestoreUser.lookingFor),
     firstDatePlaceHint: normalizeFirstDatePlaceHint(firestoreUser.firstDatePlaceHint),
     shortBio: String(firestoreUser.bio || firestoreUser.shortBio || '').slice(0, 150),
     acceptsPrivateInvite,
@@ -296,6 +296,7 @@ function mapUserDocToProfileModel(firestoreUser) {
 function formatAgeRange(age) {
   const n = Number(age);
   if (!Number.isFinite(n) || n <= 0) return '';
+  if (n < 18) return '16-17';
   if (n < 25) return '18-24';
   if (n < 30) return '25-29';
   if (n < 35) return '30-34';
@@ -322,7 +323,6 @@ function ProfilePreferencesCard({ profile, t }) {
           </AppText>
           <LookingForChips
             ids={lookingFor}
-            includeDating
             className="flex flex-wrap gap-2"
             chipClassName="user-profile-looking-pill" />
         </div> :

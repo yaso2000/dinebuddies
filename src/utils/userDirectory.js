@@ -13,7 +13,6 @@ import { isConsumerDirectoryMember } from './consumerDirectory';
 import { mapPublicProfileDocToUserShape } from './publicProfileMap';
 import { normalizeLookingFor } from '../constants/personalInviteCategories';
 import { normalizeInvitePreference } from '../constants/privateProfileOptions';
-import { isUserOpenToDating } from './openToDating';
 import { resolveProfileAvatarUrl, resolveProfileCoverUrl, resolveSwipeProfilePhotoUrl } from './profileGallery';
 import { getUserDocLatLng } from './userDocCoords';
 
@@ -21,7 +20,7 @@ import { DEFAULT_PROFILE_COVER_FALLBACK } from '../constants/defaultProfileMedia
 
 export const USER_DIRECTORY_DEFAULT_COVER = DEFAULT_PROFILE_COVER_FALLBACK;
 
-/** Neutral portrait fallback for dating swipe cards (never food/venue). */
+/** Neutral portrait fallback for people swipe cards (never food/venue). */
 export const USER_DIRECTORY_DEFAULT_SWIPE_PHOTO =
     'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=540&h=960&fit=crop';
 
@@ -62,11 +61,8 @@ export function mapDirectoryUser(publicDoc, userDoc = null) {
         countryCode: userPublic.countryCode || u.countryCode || u.country_code || '',
         diningPersona: Array.isArray(u.diningPersona) ? u.diningPersona.slice(0, 3) : [],
         joinReasons: Array.isArray(u.joinReasons) ? u.joinReasons.slice(0, 2) : [],
-        lookingFor: normalizeLookingFor(u.lookingFor, {
-            includeDating: true,
-        }).slice(0, 3),
+        lookingFor: normalizeLookingFor(u.lookingFor).slice(0, 3),
         invitePreference: normalizeInvitePreference(u.invitePreference),
-        openToDating: isUserOpenToDating(u),
         gender: u.gender || null,
         // TasteScope icon on the card: titleId from the users doc when present,
         // else from the public_profiles projection. See TASTESCOPE_SPEC §6.

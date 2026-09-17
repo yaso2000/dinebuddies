@@ -7,7 +7,7 @@ export function getDirectConversationId(uidA, uidB) {
 }
 
 /**
- * Whether two members may DM — unified gate for dating, acquaintance, and friendship. *
+ * Whether two members may DM — a mutual Follow (friends) is the only gate. *
  * @param {string} currentUserId
  * @param {string} targetUserId
  * @param {string[]} [currentUserFollowing]
@@ -36,7 +36,7 @@ export async function checkCanMessage(
  * Resolve chat permission for conversation list rows.
  *
  * @param {string} currentUserId
- * @param {Array<{ id: string, following?: string[], openToDating?: boolean, lookingFor?: string[] }>} targets
+ * @param {Array<{ id: string, following?: string[], lookingFor?: string[] }>} targets
  * @param {string[]} currentUserFollowing
  * @param {{ followerIdsOfViewer?: string[], currentUserProfile?: object }} [options]
  * @returns {Promise<Record<string, boolean>>}

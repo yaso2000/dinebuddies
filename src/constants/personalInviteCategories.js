@@ -1,9 +1,9 @@
 /**
  * Unified relationship categories — the single source of truth for BOTH the profile
  * "Looking for" (أبحث عن) chips (`users.lookingFor`) and the social-invitation
- * category (`social_invitations.personalInviteCategory`). Six warm intents; dating was
- * removed entirely — "serious" (علاقة جدية) is a committed relationship, NOT dating, and
- * "acquaintance" (تعارف) is a light getting-to-know. No hearts.
+ * category (`social_invitations.personalInviteCategory`). Five warm intents around meals
+ * and company — no dating or relationship intents of any kind. Legacy values
+ * ("dating", "serious") normalise to "acquaintance" (تعارف), a light getting-to-know.
  */
 export const PERSONAL_INVITE_CATEGORIES = [
     {
@@ -31,12 +31,6 @@ export const PERSONAL_INVITE_CATEGORIES = [
         defaultLabel: 'Work',
     },
     {
-        id: 'serious',
-        icon: '💫',
-        labelKey: 'personal_invite_cat_serious',
-        defaultLabel: 'Serious relationship',
-    },
-    {
         id: 'acquaintance',
         icon: '👋',
         labelKey: 'personal_invite_cat_acquaintance',
@@ -51,8 +45,8 @@ const VALID = new Set(PERSONAL_INVITE_CATEGORIES.map((c) => c.id));
 /** @param {unknown} value */
 export function normalizePersonalInviteCategory(value) {
     const id = String(value || '').trim().toLowerCase();
-    // Legacy remaps: dating → serious; icebreaker → social; private → default.
-    if (id === 'dating') return 'serious';
+    // Legacy remaps: dating / serious → acquaintance; icebreaker → social; private → default.
+    if (id === 'dating' || id === 'serious') return 'acquaintance';
     if (id === 'icebreaker') return 'social';
     if (VALID.has(id)) return id;
     if (id === 'private') return DEFAULT_PERSONAL_INVITE_CATEGORY;
@@ -88,7 +82,7 @@ export function normalizeLookingFor(raw) {
     return out;
 }
 
-/** All six relationship categories (kept the opts arg for call-site compatibility). */
+/** All five categories (kept the opts arg for call-site compatibility). */
 export function getLookingForOptions() {
     return PERSONAL_INVITE_CATEGORIES;
 }

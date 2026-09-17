@@ -6,6 +6,7 @@ import {
     USER_DIRECTORY_PAGE_SIZE,
 } from '../utils/userDirectory';
 import { isExcludedDirectoryUser } from '../utils/consumerSearchExclusions';
+import { filterSameAgeClass } from '../utils/minorSafety';
 
 const MIN_SEARCH_CHARS = 2;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -17,6 +18,7 @@ export function useUserDirectory({
     excludeUid,
     enabled = true,
     pageSize = USER_DIRECTORY_PAGE_SIZE,
+    viewerProfile = null,
 } = {}) {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -57,8 +59,11 @@ export function useUserDirectory({
                 lastDocRef.current = result.lastDoc;
                 setHasMore(result.hasMore);
                 setUsers((prev) =>
-                    (reset ? result.users : [...prev, ...result.users]).filter(
-                        (u) => !isExcludedDirectoryUser(u)
+                    filterSameAgeClass(
+                        viewerProfile,
+                        (reset ? result.users : [...prev, ...result.users]).filter(
+                            (u) => !isExcludedDirectoryUser(u)
+                        )
                     )
                 );
             } catch (err) {
@@ -74,7 +79,7 @@ export function useUserDirectory({
                 }
             }
         },
-        [enabled, excludeUid, pageSize]
+        [enabled, excludeUid, pageSize, viewerProfile]
     );
 
     useEffect(() => {

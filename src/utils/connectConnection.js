@@ -1,95 +1,44 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { isUserOpenToDating } from './openToDating';
-import { isFollowing, isMutualFollow } from './followHelpers';
-import { getDiscoveryLikeRef } from './discoveryProfile';
+import { isMutualFollow } from './followHelpers';
+import { sameAgeClass } from './minorSafety';
 
-/** @typedef {'dating' | 'acquaintance' | 'friendship'} ConnectionKind */
-/** @typedef {'dating' | 'acquaintance' | 'friendship'} CelebrationType */
+/** @typedef {'friendship'} ConnectionKind */
+/** @typedef {'friendship'} CelebrationType */
 
+/** There is exactly one way to connect: a mutual Follow makes two members friends. */
 export const CONNECTION_KIND = {
-    DATING: 'dating',
-    ACQUAINTANCE: 'acquaintance',
     FRIENDSHIP: 'friendship',
 };
 
 /**
  * Primary action on a profile card, anywhere it appears — swipe deck, list card
- * or profile page.
- *
- * The heart is the dating action, so it only makes sense when BOTH sides are
- * open to dating; if either has dating switched off the pair can only be a
- * friendship or an acquaintance, and the follow icon is the correct action.
- *
- * @param {object | null | undefined} viewerProfile
- * @param {object | null | undefined} targetProfile
+ * or profile page. There is no heart/like action: every card shows Follow.
  */
 export function profileShowsLikeButton() {
-    // Dating removed: there is no heart/like action anywhere — everyone connects
-    // through a single Follow. This always returns false so every card, list and
-    // profile shows the Follow button instead of the (dating) heart.
     return false;
 }
 
-/**
- * Relationship label between two members (for notifications / celebration visuals).
- * @param {object | null | undefined} profileA
- * @param {object | null | undefined} profileB
- * @returns {ConnectionKind}
- */
+/** @returns {ConnectionKind} */
 export function resolveConnectionKind() {
-    // Dating removed: every connection is a friendship, so chat unlocks on a
-    // mutual Follow (see isConnectionCompleteSync). No dating/acquaintance tiers.
     return CONNECTION_KIND.FRIENDSHIP;
 }
 
-/** @param {ConnectionKind} kind */
-export function connectionKindToCelebrationType(kind) {
-    if (kind === CONNECTION_KIND.DATING) return 'dating';
-    if (kind === CONNECTION_KIND.FRIENDSHIP) return 'friendship';
-    return 'acquaintance';
+/** @param {ConnectionKind} _kind */
+export function connectionKindToCelebrationType() {
+    return 'friendship';
 }
 
 /**
- * Whether a completed connection exists (chat allowed) for this pair.
- * @param {ConnectionKind} kind
+ * Whether a completed connection exists (chat allowed) for this pair:
+ * a mutual Follow.
  */
 export function isConnectionCompleteSync(
-    kind,
-    {
-        viewerId,
-        targetId,
-        viewerFollowing = [],
-        targetFollowing = [],
-        likedViewerToTarget = false,
-        likedTargetToViewer = false,
-    }
+    _kind,
+    { viewerId, targetId, viewerFollowing = [], targetFollowing = [] }
 ) {
     if (!viewerId || !targetId || viewerId === targetId) return false;
-
-    const mutualFollow = isMutualFollow(viewerFollowing, targetFollowing, viewerId, targetId);
-    const mutualLike = likedViewerToTarget && likedTargetToViewer;
-    const viewerFollows = isFollowing(viewerFollowing, targetId);
-    const targetFollows = isFollowing(targetFollowing, viewerId);
-
-    if (kind === CONNECTION_KIND.DATING) return mutualLike;
-    if (kind === CONNECTION_KIND.FRIENDSHIP) return mutualFollow;
-
-    if (mutualFollow) return true;
-    if (viewerFollows && likedTargetToViewer) return true;
-    if (targetFollows && likedViewerToTarget) return true;
-    return false;
-}
-
-export async function fetchLikePair(viewerId, targetId) {
-    const [viewerToTargetSnap, targetToViewerSnap] = await Promise.all([
-        getDoc(getDiscoveryLikeRef(targetId, viewerId)),
-        getDoc(getDiscoveryLikeRef(viewerId, targetId)),
-    ]);
-    return {
-        likedViewerToTarget: viewerToTargetSnap.exists(),
-        likedTargetToViewer: targetToViewerSnap.exists(),
-    };
+    return isMutualFollow(viewerFollowing, targetFollowing, viewerId, targetId);
 }
 
 async function resolveProfileShape(userId, profileHint) {
@@ -101,7 +50,7 @@ async function resolveProfileShape(userId, profileHint) {
 }
 
 /**
- * Live connection gate — chat opens when this returns true for all three kinds.
+ * Live connection gate — chat opens when this returns true.
  */
 export async function isConnectionComplete(
     viewerId,
@@ -113,24 +62,23 @@ export async function isConnectionComplete(
 ) {
     if (!viewerId || !targetId || viewerId === targetId) return false;
 
-    const [viewerShape, targetShape, likes] = await Promise.all([
+    const [viewerShape, targetShape] = await Promise.all([
         resolveProfileShape(viewerId, viewerProfile),
         resolveProfileShape(targetId, targetProfile),
-        fetchLikePair(viewerId, targetId),
     ]);
+    // 16–17 and adults never chat directly.
+    if (!sameAgeClass(viewerShape, targetShape)) return false;
 
     let tf = targetFollowing;
     if (tf === null) {
         tf = Array.isArray(targetShape.following) ? targetShape.following : [];
     }
 
-    const kind = resolveConnectionKind(viewerShape, targetShape);
-    return isConnectionCompleteSync(kind, {
+    return isConnectionCompleteSync(CONNECTION_KIND.FRIENDSHIP, {
         viewerId,
         targetId,
         viewerFollowing,
         targetFollowing: tf,
-        ...likes,
     });
 }
 
@@ -153,9 +101,8 @@ export async function tryCelebrateConnectionComplete({
     );
     if (!complete) return false;
 
-    const kind = resolveConnectionKind(viewerProfile, targetUser);
     celebrateMatch({
-        type: connectionKindToCelebrationType(kind),
+        type: 'friendship',
         otherUser: targetUser,
         otherId: targetUser.id,
         otherName: displayName || targetUser.display_name || targetUser.name,

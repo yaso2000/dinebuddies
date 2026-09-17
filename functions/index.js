@@ -1871,20 +1871,10 @@ function areMutuallyFollowing(reqData, othData, uid, otherUserId) {
     return reqFollowing.includes(otherUserId) && othFollowing.includes(uid);
 }
 
-function isUserOpenToDatingData(data) {
-    if (!data || typeof data !== 'object') return false;
-    if (data.openToDating === true) return true;
-    if (data.openToDating === false) return false;
-    const lookingFor = Array.isArray(data.lookingFor) ? data.lookingFor : [];
-    return lookingFor.includes('dating');
-}
-
-function resolveConnectionKindFromData(a, b) {
-    const aOpen = isUserOpenToDatingData(a);
-    const bOpen = isUserOpenToDatingData(b);
-    if (aOpen && bOpen) return 'dating';
-    if (!aOpen && !bOpen) return 'friendship';
-    return 'acquaintance';
+// Dating removed: every connection is a friendship (mutual Follow). The
+// `openToDating` / `lookingFor: 'dating'` fields are legacy and ignored.
+function resolveConnectionKindFromData() {
+    return 'friendship';
 }
 
 async function hasMutualDiscoveryMatch(uid, otherUserId) {

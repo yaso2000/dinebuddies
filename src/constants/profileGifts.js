@@ -73,7 +73,7 @@ export const PROFILE_GIFTS = [
     descKey: 'gift_rose_desc',
     previewDescKey: 'gift_rose_preview',
     defaultName: 'Rose',
-    defaultDesc: 'A classic romantic gesture',
+    defaultDesc: 'A classic friendly gesture',
     defaultPreview: 'A classic romantic gesture 🌹',
   },
   {

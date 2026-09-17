@@ -79,6 +79,7 @@ export default function UsersDirectory() {
   } = useUserDirectory({
     excludeUid: viewerUid,
     enabled: canBrowse,
+    viewerProfile: userProfile,
   });
 
   // Stable display order: once shown, members keep their place; loading more

@@ -19,7 +19,7 @@ const EMPTY_GEO = {
   readyForBusinessSearch: false,
 };
 
-const AGE_CATEGORIES = ['18-24', '25-34', '35-44', '45-54', '55+'];
+const AGE_CATEGORIES = ['16-17', '18-24', '25-34', '35-44', '45-54', '55+'];
 
 const EMPTY_PROFILE = {
   displayName: '',
@@ -35,7 +35,6 @@ const EMPTY_PROFILE = {
   invitePreference: 'any',
   availableForPrivateInvite: true,
   lookingFor: [],
-  openToDating: false,
 };
 
 export default function DemoUsersPage() {
@@ -211,7 +210,6 @@ export default function DemoUsersPage() {
           invitePreference: profile.invitePreference,
           availableForPrivateInvite: profile.availableForPrivateInvite,
           lookingFor: profile.lookingFor,
-          openToDating: profile.openToDating,
         },
       });
       setMsg(
@@ -423,7 +421,6 @@ export default function DemoUsersPage() {
             firstDatePlaceHint={profile.firstDatePlaceHint}
             joinReasons={profile.joinReasons}
             lookingFor={profile.lookingFor}
-            openToDating={profile.openToDating}
             availableForPrivateInvite={profile.availableForPrivateInvite}
             showAvailableForPrivateInviteToggle
             showInvitePreference={profile.availableForPrivateInvite}

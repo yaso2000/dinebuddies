@@ -13,6 +13,21 @@ service cloud.firestore {
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
+
+    // Age classes: members aged 16–17 ("minor") and adults never interact
+    // privately (private invitations, direct chat). Mirrors src/utils/minorSafety.js.
+    function userAgeIsMinor(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)) &&
+             get(/databases/$(database)/documents/users/$(uid)).data.get('ageCategory', '') == '16-17';
+    }
+    function sameAgeClass(uidA, uidB) {
+      return userAgeIsMinor(uidA) == userAgeIsMinor(uidB);
+    }
+    // A social_invitations doc is a personal one-to-one invite when it targets exactly one member.
+    function personalInviteSameAgeClass(d) {
+      return d.get('invitedFriends', []).size() != 1 ||
+             sameAgeClass(request.auth.uid, d.get('invitedFriends', [])[0]);
+    }
     
     function isAdmin() {
       return isSignedIn() &&
@@ -771,7 +786,8 @@ service cloud.firestore {
                        (request.resource.data.authorId == request.auth.uid ||
                         (request.resource.data.author is map &&
                          request.resource.data.author.get('id', '') == request.auth.uid)) &&
-                       socialInviteWithinCap(request.resource.data);
+                       socialInviteWithinCap(request.resource.data) &&
+                       personalInviteSameAgeClass(request.resource.data);
 
       allow update: if isSignedIn() &&
                        ((isPrivateInvitationHost(resource.data) &&
@@ -886,7 +902,8 @@ service cloud.firestore {
                       request.resource.data.participants.size() == 2 &&
                       request.auth.uid in request.resource.data.participants &&
                       !convoParticipantIsBusiness(request.resource.data.participants[0]) &&
-                      !convoParticipantIsBusiness(request.resource.data.participants[1]);
+                      !convoParticipantIsBusiness(request.resource.data.participants[1]) &&
+                      sameAgeClass(request.resource.data.participants[0], request.resource.data.participants[1]);
       
       // Only participants can update (lastMessage, unreadBy, typing)
       allow update: if isSignedIn() && request.auth.uid in resource.data.participants;

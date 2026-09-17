@@ -4,9 +4,10 @@
 const functions = require('firebase-functions');
 
 const CONNECT_COPY = {
+    // Legacy kind — rendered exactly like a friendship (no dating copy anywhere).
     dating: {
-        title: 'Dating match!',
-        message: (name) => `You and ${name} connected for dating`,
+        title: 'New friendship!',
+        message: (name) => `You and ${name} became friends`,
     },
     acquaintance: {
         title: 'New acquaintance!',

@@ -10,7 +10,7 @@ const GENDER_OPTIONS = [
   { id: 'unspecified', labelKey: 'unspecified' },
 ];
 
-const AGE_OPTIONS = ['18-24', '25-34', '35-44', '45-54', '55+'];
+const AGE_OPTIONS = ['16-17', '18-24', '25-34', '35-44', '45-54', '55+'];
 
 const VENUE_TYPES = ['Restaurant', 'Cafe', 'Bar', 'Night Club', 'Hotel'];
 const INVITE_MOODS = ['social', 'family', 'celebratory', 'friends', 'new_friends', 'formal'];

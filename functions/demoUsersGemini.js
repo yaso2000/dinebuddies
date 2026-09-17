@@ -13,7 +13,6 @@ const JOIN_REASON_IDS = [
     'new_friends',
     'expand_network',
     'fun_hangouts',
-    'open_to_dating',
 ];
 
 function resolveGeminiApiKey() {
@@ -93,7 +92,7 @@ OTHER RULES:
 6. "ageCategory" must be one of: '18-24', '25-34', '35-44', '45-54', '55+'.
 7. "bio" max 100 characters, in ${primaryLanguage}, mention local food or social vibes in ${city}.
 8. "diningPersona" must be exactly 3 short tags (food/vibe, emoji allowed).
-9. "joinReasons" must be 1 to 3 ids chosen ONLY from: ${joinList}. Include "open_to_dating" for most profiles.
+9. "joinReasons" must be 1 to 3 ids chosen ONLY from: ${joinList}..
 10. "firstDatePlaceHint" max 80 chars, in ${primaryLanguage} — a casual, real-sounding meetup spot in ${city}.
 
 Return ONLY a JSON array of objects. No markdown. Each object:

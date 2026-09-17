@@ -34,7 +34,7 @@ const PrivacyPolicy = () => {
                 <FaShieldAlt size={40} color="var(--primary)" />
                 <div>
                     <AppText as="h1" style={{ margin: 0, fontSize: '2rem', fontWeight: '900' }}>{t('privacy_policy', 'Privacy Policy')}</AppText>
-                    <AppText as="p" style={{ margin: '0.25rem 0 0', opacity: 0.6 }}>{t('last_updated', 'Last Updated')}: March 8, 2025</AppText>
+                    <AppText as="p" style={{ margin: '0.25rem 0 0', opacity: 0.6 }}>{t('last_updated', 'Last Updated')}: September 2026</AppText>
                 </div>
             </div>
 
@@ -50,7 +50,7 @@ const PrivacyPolicy = () => {
                     <section style={{ marginBottom: '2rem' }}>
                         <AppText as="h2" style={{ fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>1. من نحن</AppText>
                         <AppText as="p">
-                            DineBuddies هي عبارة عن منصة اجتماعية لتناول الطعام تتيح للمستخدمين إنشاء دعوات لتناول الطعام والانضمام إليها وتسمح للشركات (مثل المطاعم أو أماكن تقديم الطعام) بإنشاء ملفات تعريف والتواصل مع المستخدمين.
+                            تُشغَّل الخدمة من قبل DineBuddies Pty Ltd (ABN 76 700 910 916)، وهي شركة أسترالية، وهي الجهة المسؤولة عن معلوماتك الشخصية. DineBuddies منصة اجتماعية لتناول الطعام تتيح للأعضاء إنشاء دعوات الطعام والانضمام إليها ومتابعة بعضهم واكتشاف المطاعم والمقاهي والفنادق، وتتيح للشركات إنشاء ملفات تعريف والتواصل مع الأعضاء. ويسجل الأعضاء الدخول بالبريد الإلكتروني أو Google أو Apple.
                         </AppText>
                         <AppText as="p">
                             إذا كانت لديك أسئلة حول سياسة الخصوصية هذه، يمكنك الاتصال بنا على:
@@ -90,7 +90,7 @@ const PrivacyPolicy = () => {
                         <AppText as="p">قد تكون بعض هذه المعلومات مرئية بشكل عام للمستخدمين الآخرين داخل المنصة.</AppText>
 
                         <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>2.3 معلومات الموقع</AppText>
-                        <AppText as="p">قد تجمع DineBuddies معلومات تقريبية عن الموقع من أجل:</AppText>
+                        <AppText as="p">بإذنك، يجمع DineBuddies موقع جهازك الدقيق أثناء استخدامك للتطبيق، لعرض الدعوات والأشخاص والأماكن القريبة ولتحديد موقع الدعوات التي تنشئها. ولا نتتبع موقعك في الخلفية. ويمكنك سحب الإذن في أي وقت من إعدادات جهازك، ويعمل التطبيق حينها بمدينة تختارها يدوياً. ويُستخدم الموقع من أجل:</AppText>
                         <ul style={{ paddingLeft: '0', paddingRight: '1.5rem' }}>
                             <li>إظهار دعوات تناول الطعام القريبة</li>
                             <li>تحسين اكتشاف المطاعم والأحداث</li>
@@ -119,6 +119,9 @@ const PrivacyPolicy = () => {
                             <li>سجلات الأعطال وبيانات الأداء</li>
                         </ul>
                         <AppText as="p">تساعدنا هذه البيانات في الحفاظ على الخدمة وتحسينها.</AppText>
+
+                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>2.7 المشتريات والرصيد</AppText>
+                        <AppText as="p">بعض الميزات مدفوعة: عضويات الأعمال والرصيد داخل التطبيق. على iOS وأندرويد تُعالج المدفوعات عبر أبل أو غوغل من خلال نظام الشراء داخل التطبيق لديهما؛ ولا نرى بيانات بطاقتك ولا نخزّنها أبداً. وعلى الموقع الإلكتروني تُعالج المدفوعات عبر مزودي الدفع لدينا (Stripe أو PayPal) الذين يتعاملون مع بيانات بطاقتك أو حسابك وفق سياسات الخصوصية الخاصة بهم؛ ولا نخزّنها نحن. ونحتفظ بسجل لما اشتريته ومتى والمبلغ ورصيدك واستخدامه، حتى نقدم الميزة ونعالج الاسترداد والدعم ونفي بالالتزامات الضريبية والمحاسبية.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
@@ -139,14 +142,21 @@ const PrivacyPolicy = () => {
                         <AppText as="p"><a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener noreferrer" data-external-allow="system" style={{ color: 'var(--primary)' }}>https://firebase.google.com/support/privacy</a></AppText>
 
                         <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.2 منصة خرائط Google</AppText>
-                        <AppText as="p">قد تستخدم DineBuddies واجهات برمجة تطبيقات خرائط Google لعرض المواقع أو المطاعم أو الدعوات على الخرائط. يخضع استخدام خرائط Google لسياسة خصوصية Google وشروط خدمة خرائط Google.</AppText>
+                        <AppText as="p">تستخدم DineBuddies واجهات Google Maps وGoogle Places لعرض المواقع أو المطاعم أو الدعوات على الخرائط ولتحميل تفاصيل الأماكن (الاسم والعنوان وساعات العمل والصور). يخضع استخدام خرائط Google لسياسة خصوصية Google وشروط خدمة خرائط Google.</AppText>
                         <AppText as="p"><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" data-external-allow="system" style={{ color: 'var(--primary)' }}>https://policies.google.com/privacy</a></AppText>
 
-                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.3 خدمات التحليلات</AppText>
+                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.3 خدمات YouTube API</AppText>
+                        <AppText as="p">يستخدم DineBuddies خدمات YouTube API لتمكين الأعضاء من البحث عن مقاطع فيديو وبث مباشر وموسيقى من YouTube وتضمينها في المنشورات وغرف "Stage" المشتركة. وباستخدامك لهذه الميزة فإنك توافق على الالتزام بشروط خدمة YouTube، وتخضع البيانات المعالجة عبرها لسياسة خصوصية Google. لا يطلب DineBuddies تسجيل الدخول بحساب Google للبحث أو التضمين، ولا يصل إلى بيانات حسابك على YouTube أو يخزّنها. ونخزّن فقط معرّفات المقاطع التي تختار تضمينها، ويمكنك حذفها في أي وقت بإزالة المنشور أو اللافتة.</AppText>
+                        <AppText as="p"><a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" data-external-allow="system" style={{ color: 'var(--primary)' }}>https://www.youtube.com/t/terms</a></AppText>
+
+                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.4 خدمات التحليلات</AppText>
                         <AppText as="p">قد نستخدم خدمات التحليلات مثل تحليلات Google وتحليلات Firebase. تساعدنا هذه الخدمات على فهم كيفية تفاعل المستخدمين مع المنصة. عادة ما يتم تجميع بيانات التحليلات ولا تحدد هوية المستخدمين الفرديين بشكل مباشر.</AppText>
 
-                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.4 دفع الإشعارات</AppText>
+                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.5 دفع الإشعارات</AppText>
                         <AppText as="p">قد نرسل إشعارات الدفع المتعلقة بالدعوات والرسائل وتحديثات المنصة ونشاط الحساب. يمكن للمستخدمين تعطيل الإشعارات من خلال إعدادات الجهاز.</AppText>
+
+                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.6 المحتوى المولّد بالذكاء الاصطناعي</AppText>
+                        <AppText as="p">تستخدم بعض الميزات خدمات ذكاء اصطناعي لتوليد نص أو صورة، مثل قراءة TasteScope وغلافها، وصياغة الدعوات المقترحة، ورسومات الملف الشخصي الاختيارية. عند استخدامك لميزة كهذه، تُرسل المدخلات اللازمة لها فقط (مثل إجاباتك في الاختبار، أو المناسبة التي اخترتها، أو وصف قصير كتبته) إلى مزودي الذكاء الاصطناعي لدينا، Anthropic (Claude) للنصوص وGoogle (Gemini) للصور، بغرض إنتاج النتيجة التي طلبتها لا غير. ولا نرسل رسائلك أو بيانات تواصلك أو موقعك لهذا الغرض، وبموجب اتفاقياتنا لا يستخدم هؤلاء المزودون مدخلاتك لتدريب نماذجهم. وتُخزَّن النتائج المولّدة مع حسابك حتى تحذفها.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
@@ -224,13 +234,19 @@ const PrivacyPolicy = () => {
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
+                        <AppText as="h2" style={{ fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>9A. حذف حسابك، والإبلاغ والحظر</AppText>
+                        <AppText as="p">يمكنك حذف حسابك في أي وقت من داخل التطبيق (الإعدادات ← حذف الحساب) أو عبر dinebuddies.com/account-deletion. يُجدوَل الحذف ويكتمل بعد 30 يوماً، وتسجيل الدخول مجدداً خلال هذه المدة يلغيه. بعد ذلك يُزال ملفك الشخصي وصورك ودعواتك ورسائلك ونتائج اختباراتك من الأنظمة النشطة؛ وقد نحتفظ بسجلات محدودة حيث يفرض القانون ذلك (مثل سجلات الشراء) أو في النسخ الاحتياطية لفترة قصيرة. وحذف التطبيق من هاتفك وحده لا يحذف حسابك.</AppText>
+                        <AppText as="p">وحفاظاً على سلامة المجتمع، يمكن الإبلاغ عن أي شيء على المنصة، ملفاً شخصياً كان أو دعوة أو منشوراً أو رسالة أو تعليقاً، وحظر أي عضو. وتُفحص الصور تلقائياً قبل نشرها، ويراجع فريقنا البلاغات وقد يزيل المحتوى أو يعلّق الحسابات المخالفة لشروط الاستخدام. ونحتفظ بالبلاغات وقرارات الإشراف ما دام ذلك لازماً لتطبيق قواعدنا.</AppText>
+                    </section>
+
+                    <section style={{ marginBottom: '2rem' }}>
                         <AppText as="h2" style={{ fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>10. حقوق الخصوصية الأسترالية</AppText>
                         <AppText as="p">بالنسبة للمستخدمين المقيمين في أستراليا، يتم التعامل مع المعلومات الشخصية وفقًا لمبادئ الخصوصية الأسترالية (APPs) بموجب قانون الخصوصية لعام 1988. يحق للمستخدمين طلب الوصول إلى المعلومات الشخصية التي تحتفظ بها DineBuddies أو تصحيحها.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>11. خصوصية الأطفال</AppText>
-                        <AppText as="p">تطبيق DineBuddies مخصص للمستخدمين الذين يبلغون من العمر 18 عامًا أو أكثر. لا نجمع بيانات شخصية من أطفال دون سن 18 عامًا عن قصد. وإذا تم اكتشاف بيانات من هذا القبيل، سيتم إزالة الحساب.</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>11. الأعضاء من 16 إلى 17 عاماً والأطفال</AppText>
+                        <AppText as="p">يتاح DineBuddies لمن بلغوا 16 عاماً فأكثر. ويستخدم الأعضاء بين 16 و17 عاماً الخدمة بحماية إضافية: لا يمكنهم إرسال دعوات خاصة أو رسائل مباشرة إلى الأعضاء البالغين أو تلقيها منهم، ولا يظهرون للبالغين في اكتشاف الأشخاص أو الأصدقاء المقترحين. وتبقى دعوات الطعام العامة وصفحات الأماكن واختبارات الطعام متاحة لهم. ولا نجمع عن قصد معلومات شخصية من أي شخص دون 16 عاماً؛ وإذا علمنا أن طفلاً دون 16 أنشأ حساباً، نقوم بإزالته.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
@@ -262,7 +278,7 @@ const PrivacyPolicy = () => {
                     <section style={{ marginBottom: '2rem' }}>
                         <AppText as="h2" style={{ fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>1. Who We Are</AppText>
                         <AppText as="p">
-                            DineBuddies is a social dining platform that allows users to create and join dining invitations and allows businesses (such as restaurants or food venues) to create profiles and connect with users.
+                            The Service is operated by DineBuddies Pty Ltd (ABN 76 700 910 916), an Australian company, which is the controller of your personal information. DineBuddies is a social dining platform that lets members create and join dining invitations, follow each other, discover restaurants, cafés and hotels, and lets businesses create profiles and connect with members. Members sign in with email, Google or Apple.
                         </AppText>
                         <AppText as="p">
                             If you have questions about this Privacy Policy, you may contact us at:
@@ -302,7 +318,7 @@ const PrivacyPolicy = () => {
                         <AppText as="p">Some of this information may be publicly visible to other users within the platform.</AppText>
 
                         <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>2.3 Location Information</AppText>
-                        <AppText as="p">DineBuddies may collect approximate location information to:</AppText>
+                        <AppText as="p">With your permission, DineBuddies collects your device's precise location while you use the app, to show nearby invitations, people and venues and to set the location of invitations you create. We do not track your location in the background. You can withdraw permission at any time in your device settings; the app then works with a city you choose manually. Location is used to:</AppText>
                         <ul style={{ paddingLeft: '1.5rem', paddingRight: '0' }}>
                             <li>Show nearby dining invitations</li>
                             <li>Improve discovery of restaurants and events</li>
@@ -331,6 +347,9 @@ const PrivacyPolicy = () => {
                             <li>Crash logs and performance data</li>
                         </ul>
                         <AppText as="p">This data helps us maintain and improve the Service.</AppText>
+
+                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>2.7 Purchases and Credits</AppText>
+                        <AppText as="p">Some features are paid: business memberships and in‑app credits. On iOS and Android, payments are processed by Apple or Google through their in‑app purchase systems; we never see or store your card details. On the website, payments are processed by our payment providers (Stripe or PayPal), which handle your card or account details under their own privacy policies; we do not store them. We keep a record of what you bought, when, the amount, and your credit balance and usage, so we can deliver the feature, handle refunds and support, and meet tax and accounting obligations.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
@@ -351,7 +370,7 @@ const PrivacyPolicy = () => {
                         <AppText as="p"><a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener noreferrer" data-external-allow="system" style={{ color: 'var(--primary)' }}>https://firebase.google.com/support/privacy</a></AppText>
 
                         <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.2 Google Maps Platform</AppText>
-                        <AppText as="p">DineBuddies may use Google Maps APIs to display locations, restaurants, or invitations on maps. Use of Google Maps is subject to Google Privacy Policy and Google Maps Terms of Service.</AppText>
+                        <AppText as="p">DineBuddies uses Google Maps and Google Places APIs to display locations, restaurants, or invitations on maps and to load venue details (name, address, opening hours, photos). Use of Google Maps is subject to Google Privacy Policy and Google Maps Terms of Service.</AppText>
                         <AppText as="p"><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" data-external-allow="system" style={{ color: 'var(--primary)' }}>https://policies.google.com/privacy</a></AppText>
 
                         <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.3 YouTube API Services</AppText>
@@ -366,6 +385,9 @@ const PrivacyPolicy = () => {
 
                         <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.5 Push Notifications</AppText>
                         <AppText as="p">We may send push notifications related to invitations, messages, platform updates, and account activity. Users may disable notifications through device settings.</AppText>
+
+                        <AppText as="h3" style={{ fontSize: '1.1rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>3.6 AI‑generated content</AppText>
+                        <AppText as="p">Some features use artificial‑intelligence services to generate text or images, for example the TasteScope reading and cover, suggested invitation wording, and optional profile artwork. When you use such a feature, the inputs needed for it (for example your quiz answers, your chosen occasion, or a short description you typed) are sent to our AI providers — Anthropic (Claude) for text and Google (Gemini) for images — solely to produce the result you requested. We do not send your messages, contact details or location for this purpose, and under our agreements these providers do not use your inputs to train their models. Generated results are stored with your account until you delete them.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
@@ -443,13 +465,19 @@ const PrivacyPolicy = () => {
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
+                        <AppText as="h2" style={{ fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>9A. Deleting Your Account, Reporting and Blocking</AppText>
+                        <AppText as="p">You can delete your account at any time from inside the app (Settings → Delete Account) or at dinebuddies.com/account-deletion. Deletion is scheduled and completed after 30 days; signing back in during that period cancels it. After that, your profile, photos, invitations, messages and quiz results are removed from active systems; limited records may be retained where the law requires it (for example purchase records) or in backups for a short period. Deleting the app from your phone alone does not delete your account.</AppText>
+                        <AppText as="p">To keep the community safe, anything on the platform — a profile, an invitation, a post, a message or a comment — can be reported, and any member can be blocked. Photos are screened automatically before they are published, and reports are reviewed by our team, who may remove content or suspend accounts that violate our Terms of Service. We keep reports and moderation decisions for as long as needed to enforce our rules.</AppText>
+                    </section>
+
+                    <section style={{ marginBottom: '2rem' }}>
                         <AppText as="h2" style={{ fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>10. Australian Privacy Rights</AppText>
                         <AppText as="p">For users located in Australia, personal information is handled in accordance with the Australian Privacy Principles (APPs) under the Privacy Act 1988. Users may request access to or correction of personal information held by DineBuddies.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
-                        <AppText as="h2" style={{ fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>11. Children's Privacy</AppText>
-                        <AppText as="p">DineBuddies is intended for users 18 years or older. We do not knowingly collect personal data from children under 18. If such data is discovered, the account may be removed.</AppText>
+                        <AppText as="h2" style={{ fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>11. Members Aged 16–17 and Children</AppText>
+                        <AppText as="p">DineBuddies is available to people aged 16 and over. Members aged 16–17 use the Service with additional protections: they cannot send or receive private invitations or direct messages to or from adult members, and they are not shown to adults in people discovery or suggested friends. Public dining invitations, venue pages and food quizzes remain available to them. We do not knowingly collect personal information from anyone under 16; if we learn that a child under 16 has created an account, we remove it.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
@@ -472,7 +500,7 @@ const PrivacyPolicy = () => {
       }
 
             <div style={{ marginTop: '2.5rem', padding: '1.5rem', background: 'var(--bg-card)', borderRadius: '20px', border: '1px solid var(--border-color)', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }}>
-                <AppText as="p" style={{ margin: 0, fontSize: '0.85rem', opacity: 0.8 }}>{t('last_updated', 'Last Updated')}: March 8, 2025</AppText>
+                <AppText as="p" style={{ margin: 0, fontSize: '0.85rem', opacity: 0.8 }}>{t('last_updated', 'Last Updated')}: September 2026</AppText>
             </div>
         </div>);
 

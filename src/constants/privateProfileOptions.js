@@ -127,7 +127,7 @@ export function readInvitePreferenceForForm(user) {
  * @returns {{ ok: true } | { ok: false, code: 'invite_preference_required' | 'looking_for_required' }}
  */
 export function validatePrivateInviteProfileFields({ invitePreference, lookingFor }) {
-    const normalizedLookingFor = normalizeLookingFor(lookingFor, { includeDating: true });
+    const normalizedLookingFor = normalizeLookingFor(lookingFor);
     if (!normalizedLookingFor.length) {
         return { ok: false, code: 'looking_for_required' };
     }

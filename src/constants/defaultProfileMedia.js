@@ -2,9 +2,7 @@
  * Default avatar + cover pools for regular consumer accounts.
  * — Avatars match gender (unspecified → female).
  * — Covers are never food/restaurant themed.
- * — Dating mode uses romantic / lifestyle covers instead of social scenes.
  */
-import { isUserOpenToDating } from '../utils/openToDating';
 
 const unsplash = (id, { w = 400, h = 400, fit = 'crop', crop } = {}) => {
     const params = new URLSearchParams({ w: String(w), h: String(h), fit });
@@ -42,16 +40,6 @@ export const DEFAULT_PROFILE_COVERS_SOCIAL = [
     unsplash('photo-1464822759023-fed622ff2c3b', { w: 1200, h: 600, fit: 'crop' }),
 ];
 
-/** Dating openness — romantic mood, evenings, soft landscapes (no food). */
-export const DEFAULT_PROFILE_COVERS_DATING = [
-    unsplash('photo-1518199264681-4ff0cfe069c4', { w: 1200, h: 600, fit: 'crop' }),
-    unsplash('photo-1514525253161-7a46d19cd819', { w: 1200, h: 600, fit: 'crop' }),
-    unsplash('photo-1492684223066-8137ee7bb2d7', { w: 1200, h: 600, fit: 'crop' }),
-    unsplash('photo-1516589178551-44ed474174fb', { w: 1200, h: 600, fit: 'crop' }),
-    unsplash('photo-1502680390779-177b92e8a32e', { w: 1200, h: 600, fit: 'crop' }),
-    unsplash('photo-1529333166437-7750a6dd5a70', { w: 1200, h: 600, fit: 'crop' }),
-];
-
 const ALL_BUNDLED_AVATARS = new Set([
     ...DEFAULT_PROFILE_AVATARS.male,
     ...DEFAULT_PROFILE_AVATARS.female,
@@ -59,7 +47,6 @@ const ALL_BUNDLED_AVATARS = new Set([
 
 const ALL_BUNDLED_COVERS = new Set([
     ...DEFAULT_PROFILE_COVERS_SOCIAL,
-    ...DEFAULT_PROFILE_COVERS_DATING,
     // Legacy food cover — treat as replaceable default
     'https://images.unsplash.com/photo-1414235077428-338989a2e8c0',
 ]);
@@ -89,10 +76,8 @@ export function pickDefaultProfileAvatar(user = {}) {
 }
 
 export function pickDefaultProfileCover(user = {}) {
-    const dating = isUserOpenToDating(user);
-    const pool = dating ? DEFAULT_PROFILE_COVERS_DATING : DEFAULT_PROFILE_COVERS_SOCIAL;
-    const seed = `${user.uid || user.id || user.email || 'cover'}:${dating ? 'dating' : 'social'}`;
-    return pickFromMediaPool(pool, seed);
+    const seed = `${user.uid || user.id || user.email || 'cover'}:social`;
+    return pickFromMediaPool(DEFAULT_PROFILE_COVERS_SOCIAL, seed);
 }
 
 export function isBundledDefaultProfileAvatar(url) {
@@ -121,7 +106,7 @@ function isEmptyMediaUrl(url) {
  * Merge default cover into a profile patch when the user has not uploaded custom media.
  * Does NOT write stock Unsplash avatars — consumer avatar priority is:
  * uploaded → Google/Facebook → letter/initial.
- * @param {object} user — uid, gender, openToDating, photo_url, cover_photo, …
+ * @param {object} user — uid, gender, photo_url, cover_photo, …
  * @returns {{ cover_photo?: string }}
  */
 export function buildDefaultProfileMediaPatch(user = {}) {

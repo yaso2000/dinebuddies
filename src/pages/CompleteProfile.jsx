@@ -11,6 +11,7 @@ import { HiUser } from 'react-icons/hi2';
 import { FaUser, FaCheckCircle, FaVenusMars, FaBirthdayCake, FaCamera } from 'react-icons/fa';
 import { updateProfile as updateAuthProfile } from 'firebase/auth';
 import ImageUpload from '../components/ImageUpload';
+import { AGE_CATEGORY_OPTIONS, ageFromCategory } from '../constants/ageCategories';
 import { uploadProfilePicture, validateImageFile } from '../utils/imageUpload';
 import { buildAvatarPersistFields } from '../utils/avatarUtils';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
@@ -91,13 +92,7 @@ const CompleteProfile = () => {
 
     try {
       // Derive legacy age for compatibility
-      let derivedAge = 18;
-      if (formData.ageCategory) {
-        const parts = formData.ageCategory.split('-');
-        if (parts[0]) {
-          derivedAge = parseInt(parts[0].replace(/\D/g, '')) || 18;
-        }
-      }
+      const derivedAge = ageFromCategory(formData.ageCategory);
 
       // Prepare complete data payload
       const updateData = {
@@ -172,12 +167,7 @@ const CompleteProfile = () => {
     }
   };
 
-  const ageOptions = [
-  { value: '18-24', label: '18-24' },
-  { value: '25-34', label: '25-34' },
-  { value: '35-44', label: '35-44' },
-  { value: '45-54', label: '45-54' },
-  { value: '55+', label: '55+' }];
+  const ageOptions = AGE_CATEGORY_OPTIONS;
 
 
   const genderOptions = [
@@ -384,7 +374,7 @@ const CompleteProfile = () => {
                             {reqStar}
                         </label>
                         <AppText as="p" style={{ margin: '-2px 0 10px', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                            🔒 {t('age_private_notice', 'Your age never appears on your public profile — we use it only for safe, age-appropriate matching.')}
+                            🔒 {t('age_private_notice', 'Your age group never appears on your profile — we use it only to show you people and invitations suited to your age.')}
                         </AppText>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                             {ageOptions.map((option) => {

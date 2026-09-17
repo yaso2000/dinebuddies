@@ -34,15 +34,15 @@ export default function MatchCelebrationOverlay({
   const label = otherName.trim() || t('user', 'User');
 
   const titleByType = {
-    dating: t('discovery_match_dating_title', 'Dating match!'),
+    dating: t('discovery_match_friendship_title', 'New friendship!'),
     acquaintance: t('discovery_match_acquaintance_title', 'New acquaintance!'),
     friendship: t('discovery_match_friendship_title', 'New friendship!'),
   };
 
   const subtitleByType = {
-    dating: t('discovery_match_dating_subtitle', {
+    dating: t('discovery_match_friendship_subtitle', {
       name: label,
-      defaultValue: `You and ${label} connected for dating`,
+      defaultValue: `You and ${label} now follow each other`,
     }),
     acquaintance: t('discovery_match_acquaintance_subtitle', {
       name: label,

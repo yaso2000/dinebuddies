@@ -84,7 +84,7 @@ export default function PickOnePage() {
     setPhase('duel');
   };
 
-  // Deep link: /pickone?list=singers-arab-f
+  // Deep link: /pickone?list=foods-arab
   useEffect(() => {
     const id = params.get('list');
     if (!id) return;

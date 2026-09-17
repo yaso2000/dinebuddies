@@ -1,3 +1,4 @@
+import { AGE_CATEGORY_OPTIONS, ageFromCategory } from '../constants/ageCategories';
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -54,13 +55,7 @@ export default function ProfileCompletionModal() {
     setIsSubmitting(true);
 
     try {
-      let derivedAge = 18;
-      if (formData.ageCategory) {
-        const parts = formData.ageCategory.split('-');
-        if (parts[0]) {
-          derivedAge = parseInt(parts[0].replace(/\D/g, ''), 10) || 18;
-        }
-      }
+      const derivedAge = ageFromCategory(formData.ageCategory);
 
       const updateData = {
         displayName: formData.displayName,
@@ -116,12 +111,7 @@ export default function ProfileCompletionModal() {
     }
   };
 
-  const ageOptions = [
-  { value: '18-24', label: '18-24' },
-  { value: '25-34', label: '25-34' },
-  { value: '35-44', label: '35-44' },
-  { value: '45-54', label: '45-54' },
-  { value: '55+', label: '55+' }];
+  const ageOptions = AGE_CATEGORY_OPTIONS;
 
 
   const genderOptions = [

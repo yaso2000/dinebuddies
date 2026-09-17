@@ -35,9 +35,6 @@ export default function PrivateProfileFields({
   firstDatePlaceHint = '',
   joinReasons = [],
   lookingFor = [],
-  openToDating = false,
-  datingToggleLock = null,
-  datingToggleLockMessage = '',
   availableForPrivateInvite = true,
   showAvailableForPrivateInviteToggle = false,
   showInvitePreference = true,
@@ -58,7 +55,6 @@ export default function PrivateProfileFields({
     firstDatePlaceHint,
     joinReasons,
     lookingFor,
-    openToDating,
     availableForPrivateInvite,
     ...patch
   });

@@ -38,7 +38,7 @@ const TermsOfService = () => {
                 <FaFileContract size={40} color="var(--primary)" />
                 <div>
                     <AppText as="h1" style={{ margin: 0, fontSize: '2rem', fontWeight: '900' }}>{t('terms_of_service', 'Terms of Service')}</AppText>
-                    <AppText as="p" style={{ margin: '0.25rem 0 0', opacity: 0.6 }}>{t('last_updated', 'Last Updated')}: July 31, 2026</AppText>
+                    <AppText as="p" style={{ margin: '0.25rem 0 0', opacity: 0.6 }}>{t('last_updated', 'Last Updated')}: September 2026</AppText>
                 </div>
             </div>
 
@@ -51,7 +51,7 @@ const TermsOfService = () => {
 
                     <section style={{ marginBottom: '2rem' }}>
                         <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaUserCheck /> 2. الأهلية</AppText>
-                        <AppText as="p">يجب أن يكون عمرك 18 عامًا أو أكثر لاستخدام خدماتنا. باستخدامك للتطبيق، فإنك تضمن أن جميع المعلومات التي تقدمها دقيقة وأنك لا تنتهك أي قوانين معمول بها.</AppText>
+                        <AppText as="p">يجب أن يكون عمرك 16 عامًا أو أكثر لاستخدام خدماتنا. ويستخدم الأعضاء بين 16 و17 عامًا الخدمة بحماية إضافية: لا يمكنهم إرسال دعوات خاصة أو رسائل مباشرة إلى الأعضاء البالغين أو تلقيها منهم، ولا يظهرون للبالغين في اكتشاف الأشخاص. باستخدامك للتطبيق، فإنك تضمن أن جميع المعلومات التي تقدمها دقيقة (بما فيها فئتك العمرية) وأنك لا تنتهك أي قوانين معمول بها.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
@@ -210,7 +210,7 @@ const TermsOfService = () => {
 
                     <section style={{ marginBottom: '2rem' }}>
                         <AppText as="h2" style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}><FaUserCheck /> 2. Eligibility</AppText>
-                        <AppText as="p">You must be 18 years or older to use our services. By using the app, you warrant that all information you provide is accurate and that you are not violating any applicable laws.</AppText>
+                        <AppText as="p">You must be 16 years or older to use our services. Members aged 16–17 use the Service with additional protections: they cannot send or receive private invitations or direct messages to or from adult members, and they are not shown to adults in people discovery. By using the app, you warrant that all information you provide (including your age group) is accurate and that you are not violating any applicable laws.</AppText>
                     </section>
 
                     <section style={{ marginBottom: '2rem' }}>
@@ -361,7 +361,7 @@ const TermsOfService = () => {
       }
 
             <div style={{ marginTop: '2.5rem', padding: '1.5rem', background: 'var(--bg-card)', borderRadius: '20px', border: '1px solid var(--border-color)', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }}>
-                <AppText as="p" style={{ margin: 0, fontSize: '0.85rem', opacity: 0.8 }}>{t('last_updated', 'Last Updated')}: July 31, 2026</AppText>
+                <AppText as="p" style={{ margin: 0, fontSize: '0.85rem', opacity: 0.8 }}>{t('last_updated', 'Last Updated')}: September 2026</AppText>
             </div>
         </div>);
 

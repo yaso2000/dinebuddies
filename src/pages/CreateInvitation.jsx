@@ -267,12 +267,12 @@ const CreateInvitation = () => {
     if (editingInvitation.ageGroups && editingInvitation.ageGroups.length > 0) return editingInvitation.ageGroups;
     // Legacy handling
     if (!editingInvitation.ageRange || editingInvitation.ageRange === 'any') {
-      return ['18-24', '25-34', '35-44', '45-54', '55+'];
+      return ['16-17', '18-24', '25-34', '35-44', '45-54', '55+'];
     }
     // If specific legacy range, we try to match or default to all to be safe (preventing removal of potentially huge groups)
     // For now, if it's not 'any', we assume it maps to 'all' to prevent accidental restriction, or just let them edit.
     // User specific case: "Defined all ages".
-    return ['18-24', '25-34', '35-44', '45-54', '55+'];
+    return ['16-17', '18-24', '25-34', '35-44', '45-54', '55+'];
   }, [editingInvitation]);
 
   const initialVenueCoords =
@@ -337,7 +337,7 @@ const CreateInvitation = () => {
         Math.max(1, Number(editingInvitation.guestsNeeded) || 3)
       ),
       genderGroups: editingInvitation.genderGroups || ['male', 'female', 'unspecified'],
-      ageGroups: editingInvitation.ageGroups || ['18-24', '25-34', '35-44', '45-54', '55+'],
+      ageGroups: editingInvitation.ageGroups || ['16-17', '18-24', '25-34', '35-44', '45-54', '55+'],
       colorScheme: editingInvitation.colorScheme || 'oceanBlue',
       templateType: 'classic',
       cardFontFamily: editingInvitation.cardFontFamily || '',
@@ -1441,6 +1441,7 @@ const CreateInvitation = () => {
                     </label>
                     <div className="public-invite-pref-grid public-invite-pref-grid--age">
                         {[
+              { value: '16-17', label: '16-17' },
               { value: '18-24', label: '18-24' },
               { value: '25-34', label: '25-34' },
               { value: '35-44', label: '35-44' },

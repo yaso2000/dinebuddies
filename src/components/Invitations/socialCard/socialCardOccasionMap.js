@@ -8,7 +8,7 @@ export const OCCASION_TYPE_TO_CATEGORY_ID = {
     Social: 'social',
     Family: 'family',
     Work: 'work',
-    'Serious relationship': 'serious',
+    'Serious relationship': 'acquaintance', // legacy — category removed
     'Getting acquainted': 'acquaintance',
 };
 
