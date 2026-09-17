@@ -87,10 +87,25 @@ export const ChatProvider = ({ children }) => {
                         continue;
                     }
 
-                    const otherUserId = data.participants.find(id => id !== currentUser.uid);
+                    const isGroupConvo = data.isGroup === true;
+                    const otherUserId = isGroupConvo
+                        ? null
+                        : data.participants.find(id => id !== currentUser.uid);
 
                     if (otherUserId && (myBlocked.has(otherUserId) || myMuted.has(otherUserId))) {
                         continue;
+                    }
+
+                    // Normal (WhatsApp-style) group: no single "other user" — carry a
+                    // lightweight group descriptor the inbox row renders instead.
+                    let group = null;
+                    if (isGroupConvo) {
+                        group = {
+                            id: docSnap.id,
+                            name: data.groupName || 'Group',
+                            memberIds: Array.isArray(data.participants) ? data.participants : [],
+                            adminId: data.adminId || null,
+                        };
                     }
 
                     // Get other user's data (cache to avoid N getDocs per snapshot fire)
@@ -129,6 +144,7 @@ export const ChatProvider = ({ children }) => {
                         id: docSnap.id,
                         ...data,
                         otherUser,
+                        group,
                         isUnread
                     });
                 }
@@ -144,6 +160,11 @@ export const ChatProvider = ({ children }) => {
                     viewerFollowing
                 );
                 const gatedConvos = convos.filter((c) => {
+                    // Groups are membership-gated server-side; keep any group the
+                    // viewer is a participant of.
+                    if (c.isGroup) {
+                        return Array.isArray(c.participants) && c.participants.includes(currentUser.uid);
+                    }
                     const otherId = c.otherUser?.uid;
                     if (!otherId) return false;
                     if (c.otherUser?.isSystemAccount || c.isSupportThread) return true;
@@ -237,7 +258,17 @@ export const ChatProvider = ({ children }) => {
             const convoRefPre = doc(db, 'conversations', conversationId);
             const convoSnapPre = await getDoc(convoRefPre);
             const convoDataPre = convoSnapPre.data();
-            const otherUserIdPre = convoDataPre?.participants?.find((id) => id !== currentUser.uid);
+            const isGroupConvo = convoDataPre?.isGroup === true;
+            // Group membership gate (normal WhatsApp-style group). The 1:1
+            // mutual-follow gate below does not apply to groups.
+            if (isGroupConvo) {
+                const members = Array.isArray(convoDataPre?.participants) ? convoDataPre.participants : [];
+                if (!members.includes(currentUser.uid)) {
+                    showToast('You are not a member of this group.', 'error');
+                    return null;
+                }
+            }
+            const otherUserIdPre = isGroupConvo ? null : convoDataPre?.participants?.find((id) => id !== currentUser.uid);
             if (otherUserIdPre) {
                 const otherSnap = await getDoc(doc(db, 'users', otherUserIdPre));
                 const otherData = otherSnap.data() || {};
@@ -276,6 +307,7 @@ export const ChatProvider = ({ children }) => {
                 collection(db, 'conversations', conversationId, 'messages'),
                 {
                     senderId: currentUser.uid,
+                    senderName: userProfile?.display_name || userProfile?.displayName || 'Someone',
                     ...messageData,
                     createdAt: serverTimestamp(),
                     status: 'sent', // sent, delivered, read
@@ -289,28 +321,33 @@ export const ChatProvider = ({ children }) => {
             const convoRef = doc(db, 'conversations', conversationId);
             const convoSnap = await getDoc(convoRef);
             const convoData = convoSnap.data();
-            const otherUserId = convoData.participants.find(id => id !== currentUser.uid);
+            const participants = Array.isArray(convoData.participants) ? convoData.participants : [];
+            // Everyone except the sender gets marked unread (works for 1:1 and groups).
+            const recipients = participants.filter((id) => id && id !== currentUser.uid);
 
             await updateDoc(convoRef, {
                 lastMessage: messageData.type === 'text' ? messageData.text : `📎 ${messageData.type}`,
                 lastMessageTime: serverTimestamp(),
-                unreadBy: arrayUnion(otherUserId)
+                unreadBy: arrayUnion(...(recipients.length ? recipients : [currentUser.uid]))
             });
 
-            // Send push notification to the recipient (fire-and-forget)
+            // Send push notification to each recipient (fire-and-forget)
             // (Creates a notification doc, which then triggers the single onNotificationCreated Cloud Function
             // that correctly extracts the sender's avatar and respects user preferences)
-            if (otherUserId) {
+            if (recipients.length) {
                 const senderName = userProfile?.display_name || userProfile?.displayName || 'Someone';
-                const preview = messageData.type === 'text'
+                const groupName = isGroupConvo ? (convoData.groupName || 'Group') : null;
+                const rawPreview = messageData.type === 'text'
                     ? (messageData.text || '').slice(0, 80)
                     : '📎 Media';
-                
-                notifyNewMessage(
-                    otherUserId,
-                    { name: senderName, id: currentUser.uid },
-                    preview
-                ).catch(() => { });
+                // In a group, prefix the sender so the notification reads like a group chat.
+                const preview = groupName ? `${senderName}: ${rawPreview}` : rawPreview;
+                const sender = groupName
+                    ? { name: groupName, id: currentUser.uid }
+                    : { name: senderName, id: currentUser.uid };
+                recipients.forEach((rid) => {
+                    notifyNewMessage(rid, sender, preview).catch(() => { });
+                });
             }
 
             return messageRef.id;

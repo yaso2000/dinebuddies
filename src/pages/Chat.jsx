@@ -14,7 +14,8 @@ import { useTheme } from '../context/ThemeContext';
 import {
   FaArrowLeft, FaCamera, FaMicrophone,
   FaPaperPlane, FaPlay, FaPause, FaFile,
-  FaDownload, FaStop, FaPlus, FaArrowDown, FaTimes, FaReply } from
+  FaDownload, FaStop, FaPlus, FaArrowDown, FaTimes, FaReply,
+  FaImage, FaEyeSlash } from
 'react-icons/fa';
 import { FaLock, FaBan } from 'react-icons/fa6';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -122,7 +123,8 @@ function ChatBubbleGestures({ isOwn, onLongPress, onSwipeReply, onContextMenu, c
 const Chat = () => {
   const { t, i18n } = useTranslation();
   const { goBack: goBackFromChat } = useAppBackNavigation({ fallback: '/messages' });
-  const { userId } = useParams();
+  const { userId, groupId } = useParams();
+  const isGroup = Boolean(groupId);
   const navigate = useNavigate();
   const { currentUser, userProfile } = useAuth();
   const { currentUser: invitationUser } = useInvitations();
@@ -153,6 +155,24 @@ const Chat = () => {
 
   const [isSupportPeer, setIsSupportPeer] = useState(false);
 
+  // Group mode (WhatsApp-style normal group). Kept separate from the 1:1 path;
+  // all group logic is guarded behind `isGroup` so the 1:1 chat is untouched.
+  const [groupInfo, setGroupInfo] = useState(null);
+  const [memberProfiles, setMemberProfiles] = useState({});
+
+  // Banner (two top photo panels) visibility toggle for the 1:1 chat — sits next
+  // to the theme picker. Groups never show the banners (they get a group header).
+  const [showTopPanels, setShowTopPanels] = useState(() => {
+    try { return localStorage.getItem('chat_hide_banner') !== '1'; } catch { return true; }
+  });
+  const toggleTopPanels = useCallback(() => {
+    setShowTopPanels((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('chat_hide_banner', next ? '0' : '1'); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
   // Stable identity — a fresh [] each render used to restart the connection
   // gate's listeners before it could settle.
   const viewerFollowing = useMemo(
@@ -174,16 +194,21 @@ const Chat = () => {
 
 
   useEffect(() => {
+    if (isGroup) { setConnectionLocked(false); return; }
     if (connectionCheckLoading) return;
     if (messagingRestricted || isSupportPeer) {
       setConnectionLocked(false);
       return;
     }
     setConnectionLocked(!connectionAllowed);
-  }, [connectionAllowed, connectionCheckLoading, messagingRestricted, isSupportPeer]);
+  }, [isGroup, connectionAllowed, connectionCheckLoading, messagingRestricted, isSupportPeer]);
 
-  const composerBlocked = messagingRestricted || connectionLocked;
-  const blockedVariant = messagingRestricted ? 'restricted' : connectionLocked ? 'connection' : null;
+  const composerBlocked = isGroup
+    ? Boolean(groupInfo && groupInfo.isMember === false)
+    : (messagingRestricted || connectionLocked);
+  const blockedVariant = isGroup
+    ? (composerBlocked ? 'connection' : null)
+    : (messagingRestricted ? 'restricted' : connectionLocked ? 'connection' : null);
 
   const NEAR_BOTTOM_PX = 120;
 
@@ -431,6 +456,66 @@ const Chat = () => {
     connectionAllowed,
     connectionCheckLoading,
   ]);
+
+  // Group mode: bind straight to the group conversation doc. No 1:1 init/gating.
+  useEffect(() => {
+    if (!isGroup || !groupId || !currentUser?.uid) return undefined;
+    let cancelled = false;
+    let lastParticipantsKey = '';
+    setConversationId(groupId);
+    setConversationError(false);
+
+    const unsub = onSnapshot(
+      doc(db, 'conversations', groupId),
+      async (snap) => {
+        if (cancelled) return;
+        if (!snap.exists()) {
+          setGroupInfo(null);
+          setConversationError(true);
+          setLoading(false);
+          return;
+        }
+        const data = snap.data() || {};
+        const participants = Array.isArray(data.participants) ? data.participants : [];
+        setGroupInfo({
+          id: groupId,
+          name: data.groupName || t('group', 'Group'),
+          adminId: data.adminId || null,
+          participants,
+          isMember: participants.includes(currentUser.uid),
+        });
+        setConversationError(false);
+        setLoading(false);
+
+        // Load member profiles once per participants change (names + avatars for
+        // the header and per-message sender labels).
+        const key = [...participants].sort().join(',');
+        if (key !== lastParticipantsKey) {
+          lastParticipantsKey = key;
+          const snaps = await Promise.all(
+            participants.map((id) => getDoc(doc(db, 'users', id)).catch(() => null))
+          );
+          if (cancelled) return;
+          const profs = {};
+          snaps.forEach((s, i) => {
+            const ud = s && s.exists() ? s.data() : {};
+            profs[participants[i]] = {
+              name: ud.display_name || ud.displayName || ud.email || t('user', 'User'),
+              avatar: getSafeAvatar(ud),
+            };
+          });
+          setMemberProfiles(profs);
+        }
+      },
+      () => {
+        if (cancelled) return;
+        setConversationError(true);
+        setLoading(false);
+      }
+    );
+
+    return () => { cancelled = true; unsub(); };
+  }, [isGroup, groupId, currentUser?.uid, t]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -939,12 +1024,55 @@ const Chat = () => {
                         </div>
                     </>
         }
+                {isGroup && groupInfo &&
+        <div
+          className="header-info"
+          style={{ textAlign: 'start', minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: '10px' }}
+        >
+                        <div style={{ display: 'flex', flexDirection: 'row-reverse', alignItems: 'center' }}>
+                            {(groupInfo.participants || []).slice(0, 3).map((mid, idx) => (
+                              <img
+                                key={mid}
+                                src={memberProfiles[mid]?.avatar || getSafeAvatar({})}
+                                alt=""
+                                style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--header-bg, #fff)', marginInlineStart: idx === 0 ? 0 : '-10px' }}
+                              />
+                            ))}
+                        </div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                            <AppText as="h3" style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {groupInfo.name}
+                            </AppText>
+                            <AppText as="p" className="status" style={{ fontSize: '0.78rem', opacity: 0.7, margin: 0 }}>
+                                {(groupInfo.participants || []).length} {t('members', 'members')}
+                            </AppText>
+                        </div>
+                    </div>
+        }
+                {!isGroup &&
+        <button
+          type="button"
+          onClick={toggleTopPanels}
+          title={showTopPanels ? t('hide_banner', 'Hide banner') : t('show_banner', 'Show banner')}
+          aria-pressed={!showTopPanels}
+          style={{
+            background: showTopPanels ? (isDark ? 'rgba(255,255,255,0.06)' : '#ffffff') : 'var(--primary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '50%', width: '36px', height: '36px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: showTopPanels ? 'var(--text-main)' : '#fff',
+            marginInlineEnd: '8px', cursor: 'pointer', flexShrink: 0,
+          }}
+        >
+                    {showTopPanels ? <FaImage size={15} /> : <FaEyeSlash size={15} />}
+                </button>
+        }
                 <ChatThemePicker value={chatThemeId} onChange={setChatThemeId} />
             </div>
             )}
 
             {/* Top panels — one per participant, defaults to profile photo */}
-            {otherUser ? (
+            {!isGroup && showTopPanels && otherUser ? (
               <PrivateChatTopPanels
                 myImageUrl={myPanelImage || getSafeAvatar(userProfile) || currentUser?.photoURL}
                 theirImageUrl={theirPanelImage || otherUser.photoURL}
@@ -1013,6 +1141,11 @@ const Chat = () => {
                 onSwipeReply={() => setReplyTo(msg)}
               >
                             <div className="message-content-wrapper">
+                                {isGroup && !isOwn && (groupPosition === 'single' || groupPosition === 'first') && (
+                                  <AppText as="span" style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--primary)', margin: '0 6px 2px', display: 'block', textAlign: 'start' }}>
+                                    {memberProfiles[msg.senderId]?.name || msg.senderName || t('user', 'User')}
+                                  </AppText>
+                                )}
                                 <div className="message-bubble" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
                                     {/* Quoted reply sits inside the bubble: same fill, split by a divider */}
                                     {msg.replyTo &&

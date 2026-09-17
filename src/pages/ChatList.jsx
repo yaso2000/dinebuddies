@@ -16,6 +16,7 @@ import { useJoinedStages } from '../hooks/useJoinedStages';
 import AppBackButton from '../components/AppBackButton';
 import { APP_HOME_PATH } from '../utils/appRouteShell';
 import { LuBell, LuMessageCircle, LuSearch } from 'react-icons/lu';
+import { FaUsers, FaPlus } from 'react-icons/fa';
 import './ChatList.css';
 import { goToLogin } from '../utils/goToLogin';
 import { AppText, AppTextInput } from '../components/base';
@@ -60,26 +61,38 @@ function MessagesEmpty({ title, message, ctaLabel, ctaTo }) {
 
 function ConversationRow({ convo, onOpen, formatTime, t }) {
   const otherUser = convo.otherUser;
+  const isGroup = convo.isGroup && convo.group;
   const isOnline = useUserPresence(otherUser?.uid, { fallback: Boolean(otherUser?.isOnline) });
 
-  if (!otherUser) return null;
+  if (!otherUser && !isGroup) return null;
+
+  const title = isGroup ? convo.group.name : otherUser.displayName;
+  const handleOpen = () => (isGroup ? onOpen({ groupId: convo.id }) : onOpen({ userId: otherUser.uid }));
 
   return (
     <div
       className={`messages-page__item${convo.isUnread ? ' unread' : ''}`}
-      onClick={() => onOpen(otherUser.uid)}>
+      onClick={handleOpen}>
       <div className="messages-page__avatar">
-        <UserAvatar user={otherUser} alt={otherUser.displayName} style={{ objectFit: 'cover' }} />
-        {isOnline ? <div className="messages-page__online" /> : null}
+        {isGroup ? (
+          <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+            <FaUsers />
+          </div>
+        ) : (
+          <>
+            <UserAvatar user={otherUser} alt={otherUser.displayName} style={{ objectFit: 'cover' }} />
+            {isOnline ? <div className="messages-page__online" /> : null}
+          </>
+        )}
       </div>
 
       <div className="messages-page__content">
         <div className="messages-page__row-top">
           <div className="messages-page__name-row">
             <AppText as="h3" className="messages-page__name">
-              {otherUser.displayName}
+              {title}
             </AppText>
-            {isOnline ? <OnlineStatusBadge isOnline size="sm" className="messages-page__online-badge" /> : null}
+            {!isGroup && isOnline ? <OnlineStatusBadge isOnline size="sm" className="messages-page__online-badge" /> : null}
           </div>
           <AppText as="span" className="messages-page__time">
             {formatTime(convo.lastMessageTime)}
@@ -190,8 +203,9 @@ const ChatList = () => {
     () =>
       conversations.filter((convo) => {
         if (!searchQuery) return true;
-        const otherUser = convo.otherUser;
-        return otherUser?.displayName?.toLowerCase().includes(searchQuery.toLowerCase());
+        const q = searchQuery.toLowerCase();
+        if (convo.isGroup && convo.group) return convo.group.name?.toLowerCase().includes(q);
+        return convo.otherUser?.displayName?.toLowerCase().includes(q);
       }),
     [conversations, searchQuery]
   );
@@ -245,7 +259,9 @@ const ChatList = () => {
             <ConversationRow
               key={convo.id}
               convo={convo}
-              onOpen={(uid) => navigate(`/chat/${uid}`)}
+              onOpen={(target) =>
+                navigate(target.groupId ? `/group/${target.groupId}` : `/chat/${target.userId}`)
+              }
               formatTime={formatTime}
               t={t}
             />
@@ -401,6 +417,36 @@ const ChatList = () => {
         className={`messages-page__body${activePanel === PANEL_NOTIFICATIONS ? ' messages-page__body--notifications' : ''}`}>
         {body}
       </div>
+
+      {activePanel === PANEL_MESSAGES && activeTab === TAB_CHATS && !isBusiness ? (
+        <button
+          type="button"
+          className="messages-page__fab"
+          aria-label={t('group_chat_new', 'New group chat')}
+          onClick={() => navigate('/create-group-chat')}
+          style={{
+            position: 'fixed',
+            insetInlineEnd: '18px',
+            bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))',
+            width: '56px',
+            height: '56px',
+            borderRadius: '50%',
+            border: 'none',
+            background: 'var(--primary)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
+            cursor: 'pointer',
+            zIndex: 50,
+          }}>
+          <span style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <FaUsers size={22} />
+            <FaPlus size={11} style={{ position: 'absolute', top: '-6px', insetInlineEnd: '-8px', background: 'var(--primary)', borderRadius: '50%' }} />
+          </span>
+        </button>
+      ) : null}
     </div>
     </PullToRefresh>
   );

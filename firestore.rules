@@ -928,7 +928,7 @@ service cloud.firestore {
         // Security: constrain message create schema and sender ownership
         allow create: if isSignedIn() &&
                          request.resource.data.senderId == request.auth.uid &&
-                         request.resource.data.keys().hasOnly(['senderId', 'text', 'type', 'createdAt', 'status', 'deliveredTo', 'readBy', 'reactions', 'replyTo', 'audioUrl', 'imageUrl', 'fileUrl', 'duration', 'sharedContent', 'forwardedFrom']) &&
+                         request.resource.data.keys().hasOnly(['senderId', 'senderName', 'text', 'type', 'createdAt', 'status', 'deliveredTo', 'readBy', 'reactions', 'replyTo', 'audioUrl', 'imageUrl', 'fileUrl', 'duration', 'sharedContent', 'forwardedFrom']) &&
                          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
         allow update: if isSignedIn() &&
                          resource.data.senderId == request.auth.uid;
