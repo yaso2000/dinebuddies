@@ -1334,7 +1334,10 @@ const CreateSocialInvitation = () => {
                         </div>
                     </div>
 
-                    <div className="form-group public-invite-prefs" style={{ marginBottom: '1rem' }}>
+                    {/* create-public-invitation scope: reuse the polished venue-chip
+                        grid styling (icon-over-label cards), which is defined under
+                        that class. No color-swatch/page-container here, so nothing else leaks. */}
+                    <div className="create-public-invitation form-group public-invite-prefs" style={{ marginBottom: '1rem' }}>
                         <label style={{ fontSize: '0.9rem', marginBottom: '8px', display: 'block' }}>
                             {t('venue_category_label', { defaultValue: 'Venue category' })}
                         </label>
