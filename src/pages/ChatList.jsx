@@ -427,7 +427,7 @@ const ChatList = () => {
           style={{
             position: 'fixed',
             insetInlineEnd: '18px',
-            bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))',
+            bottom: 'calc(var(--nav-height, 65px) + 18px + env(safe-area-inset-bottom, 0px))',
             width: '56px',
             height: '56px',
             borderRadius: '50%',
@@ -439,7 +439,7 @@ const ChatList = () => {
             justifyContent: 'center',
             boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
             cursor: 'pointer',
-            zIndex: 50,
+            zIndex: 'calc(var(--z-nav, 900) - 1)',
           }}>
           <span style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <FaUsers size={22} />
