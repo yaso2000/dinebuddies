@@ -12,7 +12,12 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
 
   const isDirectChatRoute =
     path.startsWith('/chat/') ||
+    path.startsWith('/group/') ||
     (path.startsWith('/invitation/') && path.endsWith('/chat'));
+
+  /** Create-group flow — focused screen; hide the tab bar so its fixed
+   *  "Create group" button isn't covered. */
+  const isCreateGroupRoute = path === '/create-group-chat';
 
   /** Business Inbox thread (user↔business support/offers) — its own chat screen. */
   const isBusinessThreadRoute = path.startsWith('/business-thread/');
@@ -86,7 +91,7 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
     /** Hide mobile app header (conversation / deck / browse screens have their own bar). */
     hideMobileAppHeader: (isConversationScreen && !isCommunityFullscreen) || isSuitabilityDeckRoute || isRealOrAiCreateRoute || isBrowseHeaderlessRoute || isTasteScopeRoute,
     /** Hide bottom tab bar — chat rooms + suitability deck only; browse screens keep it. */
-    hideBottomNav: isConversationScreen || isSuitabilityDeckRoute || isRealOrAiCreateRoute || isTasteScopeRoute,
+    hideBottomNav: isConversationScreen || isSuitabilityDeckRoute || isRealOrAiCreateRoute || isTasteScopeRoute || isCreateGroupRoute,
     /** app-main--chat: fixed height / no outer scroll for threads + deck. */
     useChatMainLayout: isConversationScreen || isSuitabilityDeckRoute,
   };
