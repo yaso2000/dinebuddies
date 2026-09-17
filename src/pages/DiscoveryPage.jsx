@@ -27,7 +27,7 @@ export default function DiscoveryPage() {
   const [ageCategoryFilter, setAgeCategoryFilter] = useState('all');
   const [photoFilter, setPhotoFilter] = useState('with_photo');
   const [onlineOnly, setOnlineOnly] = useState(false);
-  const { profiles, loading, loadingMore, hasMore, loadMore, canLoad } = useDiscoveryProfiles({
+  const { profiles, loading, loadingMore, hasMore, loadMore, refresh, canLoad } = useDiscoveryProfiles({
     genderFilter,
     ageCategoryFilter,
     photoFilter,
@@ -117,14 +117,20 @@ export default function DiscoveryPage() {
     if (hasMore && !loadingMore) loadMore();
   }, [hasMore, loadMore, loadingMore]);
 
+  const handleRefresh = useCallback(() => {
+    showToast(t('refreshing', 'Refreshing…'), 'info');
+    refresh?.();
+  }, [refresh, showToast, t]);
+
   const feedHandlers = useMemo(
     () => ({
       onLike: handleLike,
       onGreeting: handleGreeting,
       onSendGift: handleGift,
       onNearEnd: handleNearEnd,
+      onRefresh: handleRefresh,
     }),
-    [handleGift, handleGreeting, handleLike, handleNearEnd]
+    [handleGift, handleGreeting, handleLike, handleNearEnd, handleRefresh]
   );
 
   // Businesses may not discover / like / contact regular users.

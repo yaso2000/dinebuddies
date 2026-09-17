@@ -17,6 +17,7 @@ export default function DiscoveryFeed({
   onGreeting,
   onDeckEmpty,
   onNearEnd,
+  onRefresh,
   listPath = '/search/list',
 }) {
   const { t } = useTranslation();
@@ -158,6 +159,7 @@ export default function DiscoveryFeed({
         isTop
         listPath={listPath}
         onBack={index > 0 ? handleBack : null}
+        onRefresh={onRefresh}
         {...handlers}
       />
     </div>

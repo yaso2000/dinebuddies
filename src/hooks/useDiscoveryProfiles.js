@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useUserDirectory } from './useUserDirectory';
 import { mapDirectoryUserToDiscoveryProfile } from '../utils/discoveryProfile';
@@ -83,6 +83,13 @@ export function useDiscoveryProfiles({
         [currentUser, userProfile]
     );
 
+    // Stable deck order: once a card is shown it keeps its place; new pages append
+    // BELOW (never reshuffle the deck under the user). This kills the shaking/flicker
+    // that came from re-sorting on every geo update / load-more. Reset only when a
+    // filter changes (a genuinely new deck). Note: userLocation is deliberately NOT
+    // in the reset key — geo arriving must not reorder the visible deck.
+    const orderRef = useRef([]);
+    const filterKeyRef = useRef('');
     const profiles = useMemo(() => {
         if (!viewer) return [];
         // Apply the same toolbar filters as the list (photo default = with_photo),
@@ -95,10 +102,33 @@ export function useDiscoveryProfiles({
                 (!onlineOnly || user?.isOnline === true) &&
                 isDiscoverySwipeMatch(viewer, user)
         );
-        return sortDirectoryUsersByDistance(matched, userLocation)
+        const sorted = sortDirectoryUsersByDistance(matched, userLocation)
             .map((user) => mapDirectoryUserToDiscoveryProfile(user, userLocation))
             .filter(Boolean);
+
+        const filterKey = JSON.stringify([genderFilter, ageCategoryFilter, photoFilter, onlineOnly]);
+        const byId = new Map(sorted.map((p) => [p.id, p]));
+
+        if (filterKey !== filterKeyRef.current) {
+            filterKeyRef.current = filterKey;
+            orderRef.current = sorted.map((p) => p.id);
+            return sorted;
+        }
+
+        const kept = orderRef.current.filter((id) => byId.has(id));
+        const keptSet = new Set(kept);
+        const appended = sorted.filter((p) => !keptSet.has(p.id)).map((p) => p.id);
+        const order = [...kept, ...appended];
+        orderRef.current = order;
+        return order.map((id) => byId.get(id));
     }, [directory.users, userLocation, viewer, photoFilter, genderFilter, ageCategoryFilter, onlineOnly]);
+
+    // Refresh = rebuild the deck fresh from the server (used by the swipe-to-refresh gesture).
+    const refresh = useCallback(async () => {
+        orderRef.current = [];
+        filterKeyRef.current = '';
+        await directory.refresh?.();
+    }, [directory]);
 
     useEffect(() => {
         // Wait until the viewer profile is ready (gender loaded) before auto-paging —
@@ -128,6 +158,7 @@ export function useDiscoveryProfiles({
         error: directory.error,
         hasMore: directory.hasMore,
         loadMore: directory.loadMore,
+        refresh,
         canLoad,
     };
 }

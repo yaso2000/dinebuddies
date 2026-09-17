@@ -65,6 +65,7 @@ export default function DiscoveryCard({
   onSendGift,
   onGreeting,
   onBack = null,
+  onRefresh = null,
   isTop = true,
   listPath = '/search/list',
 }) {
@@ -170,25 +171,11 @@ export default function DiscoveryCard({
     });
   }, [onBack, profile, resetPosition, x]);
 
-  // Swipe UP → open this person's full profile.
+  // Double-tap → open this person's full profile (no exit animation — it's a tap).
   const openProfile = useCallback(() => {
-    if (exitHandledRef.current) return;
-    if (!profile?.id) { resetPosition(); return; }
-    exitHandledRef.current = true;
-    animate(y, -720, { duration: 0.2, ease: 'easeIn' }).then(() => {
-      navigate(`/profile/${profile.id}`);
-    });
-  }, [navigate, profile?.id, resetPosition, y]);
-
-  // Swipe DOWN → leave the swipe deck for the list view.
-  const openList = useCallback(() => {
-    if (exitHandledRef.current) return;
-    if (!listPath) { resetPosition(); return; }
-    exitHandledRef.current = true;
-    animate(y, 720, { duration: 0.2, ease: 'easeIn' }).then(() => {
-      navigate(listPath);
-    });
-  }, [listPath, navigate, resetPosition, y]);
+    if (exitHandledRef.current || !profile?.id) return;
+    navigate(`/profile/${profile.id}`);
+  }, [navigate, profile?.id]);
 
   const handleDragStart = () => {
     draggingRef.current = true;
@@ -214,21 +201,40 @@ export default function DiscoveryCard({
         triggerBack();
         return;
       }
-    } else {
-      // Swipe UP → open this person's profile.
-      if (offset.y < -SWIPE_THRESHOLD || velocity.y < -SWIPE_VELOCITY) {
-        openProfile();
-        return;
-      }
-      // Swipe DOWN → go to the list view.
-      if (offset.y > SWIPE_THRESHOLD || velocity.y > SWIPE_VELOCITY) {
-        openList();
-        return;
-      }
+    } else if (
+      // Swipe UP or DOWN → refresh the deck.
+      Math.abs(offset.y) > SWIPE_THRESHOLD || Math.abs(velocity.y) > SWIPE_VELOCITY
+    ) {
+      resetPosition();
+      onRefresh?.();
+      return;
     }
     // Magnetic snap back into place
     resetPosition();
   };
+
+  // Tap detection: a control tap (buttons/links) is ignored; a double-tap on the
+  // photo opens the profile. A drag is not a tap.
+  const isInteractiveTarget = useCallback((target) => {
+    if (!target?.closest) return false;
+    return Boolean(
+      target.closest('.discovery-card__actions, .discovery-card__inbox, .discovery-card__close, .discovery-card__taste-corner, button, a')
+    );
+  }, []);
+  const lastTapRef = useRef(0);
+  const handlePointerUp = useCallback((e) => {
+    if (!isTop || draggingRef.current) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (Math.abs(x.get()) > 10 || Math.abs(y.get()) > 10) return; // was a drag
+    if (isInteractiveTarget(e.target)) return;
+    const now = Date.now();
+    if (now - lastTapRef.current <= 300) {
+      lastTapRef.current = 0;
+      openProfile();
+    } else {
+      lastTapRef.current = now;
+    }
+  }, [isInteractiveTarget, isTop, openProfile, x, y]);
 
   const handleToggleLike = async (e) => {
     e.stopPropagation();
@@ -390,17 +396,18 @@ export default function DiscoveryCard({
       style={{ ...cardThemeVars, x, y, zIndex: isTop ? 2 : 1, touchAction: 'none' }}
       drag={isTop ? true : false}
       dragConstraints={{ top: 0, bottom: 0, left: 0, right: 0 }}
-      dragElastic={0.85}
+      dragElastic={0.6}
       dragMomentum={false}
-      initial={isTop ? { scale: 0.92, opacity: 0.65 } : false}
-      animate={isTop ? { scale: 1, opacity: 1 } : undefined}
-      transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+      initial={isTop ? { opacity: 0 } : false}
+      animate={isTop ? { opacity: 1 } : undefined}
+      transition={{ duration: 0.14, ease: 'easeOut' }}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      title={isTop ? t('discovery_swipe_hint_person', 'Swipe left for next · right for previous · up to open profile · down for the list') : undefined}
+      onPointerUp={handlePointerUp}
+      title={isTop ? t('discovery_swipe_hint_person', 'Swipe left for next · right for previous · double-tap to open profile · swipe up or down to refresh') : undefined}
       aria-label={
         isTop
-          ? t('discovery_swipe_hint_person', 'Swipe left for next · right for previous · up to open profile · down for the list')
+          ? t('discovery_swipe_hint_person', 'Swipe left for next · right for previous · double-tap to open profile · swipe up or down to refresh')
           : undefined
       }
     >
