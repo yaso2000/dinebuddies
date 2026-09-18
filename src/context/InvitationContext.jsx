@@ -46,6 +46,7 @@ import {
 } from '../utils/connectConnection';
 import { notifyConnectConnectionComplete } from '../utils/notificationHelpers';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import { DEFAULT_BUSINESS_COVER } from '../utils/businessCoverImage';
 import { fetchIpLocation, detectUserLocationContext, detectLiveUserGps } from '../utils/locationUtils';
 import { deleteInvitationAndStorage } from '../utils/storageCleanup';
@@ -80,13 +81,6 @@ async function readLiveFollowing(viewerUid, profileFallback = []) {
         console.warn('[toggleFollow] readLiveFollowing', err?.message || err);
     }
     return fallback;
-}
-
-function canTargetAcceptFollows(targetData) {
-    if (!targetData || typeof targetData !== 'object') return false;
-    const role = String(targetData.role || 'user').toLowerCase();
-    if (role === 'business' || role === 'partner' || targetData.isBusiness === true) return false;
-    return targetData.privacySettings?.allowFollowing !== false;
 }
 
 const InvitationContext = createContext(null);
@@ -903,8 +897,8 @@ export const InvitationProvider = ({ children }) => {
             // approves and follows back, the mutual follow opens the chat.
             if (hostId && hostId !== uid && !(currentUser?.following || []).includes(hostId)) {
                 try {
-                    const hostSnap = await getDoc(doc(db, 'users', hostId));
-                    if (hostSnap.exists() && hostSnap.data()?.role !== 'business') {
+                    const hostSnap = await getDoc(doc(db, 'public_profiles', hostId));
+                    if (hostSnap.exists() && hostSnap.data()?.profileType !== 'business') {
                         await followUser(uid, hostId, {
                             id: uid,
                             name: currentUser?.name || currentUser?.displayName || currentUser?.display_name || 'Someone',
@@ -1003,8 +997,8 @@ export const InvitationProvider = ({ children }) => {
 
             // System chat broadcast for user joining
             try {
-                const userDoc = await getDoc(doc(db, 'users', userId));
-                const userData = userDoc.exists() ? userDoc.data() : {};
+                const userDoc = await getDoc(doc(db, 'public_profiles', userId));
+                const userData = userDoc.exists() ? mapPublicProfileDocToUserShape({ id: userId, ...userDoc.data() }) : {};
                 const userName = userData.display_name || userData.displayName || userData.name || 'A guest';
                 const collectionName = invData.privacy === 'social' ? 'social_invitations' : 'invitations';
                 
@@ -1381,7 +1375,8 @@ export const InvitationProvider = ({ children }) => {
             let hostGender = 'neutral';
             if (hostId) {
                 try {
-                    const hostSnap = await getDoc(doc(db, 'users', hostId));
+                    // Public projection carries top-level gender.
+                    const hostSnap = await getDoc(doc(db, 'public_profiles', hostId));
                     if (hostSnap.exists()) {
                         hostGender = normalizeUserGender(hostSnap.data());
                     }
@@ -1474,9 +1469,11 @@ export const InvitationProvider = ({ children }) => {
                         const inviteeFollowing =
                             optimisticFollowing ?? firebaseProfile?.following ?? currentUser?.following ?? [];
                         if (!inviteeFollowing.includes(hostId)) {
-                            const hostSnap = await getDoc(doc(db, 'users', hostId));
+                            // Public projection only for the host (role/name); "host follows
+                            // me?" comes from the invitee's own followers[] reverse index.
+                            const hostSnap = await getDoc(doc(db, 'public_profiles', hostId));
                             if (hostSnap.exists()) {
-                                const hostData = hostSnap.data() || {};
+                                const hostData = mapPublicProfileDocToUserShape({ id: hostId, ...hostSnap.data() });
                                 if (hostData.role !== 'business') {
                                     const followResult = await followUser(me, hostId, {
                                         id: me,
@@ -1486,7 +1483,10 @@ export const InvitationProvider = ({ children }) => {
                                     if (followResult.success) {
                                         const nextFollowing = [...inviteeFollowing, hostId];
                                         setOptimisticFollowing(nextFollowing);
-                                        const hostFollowsInvitee = (hostData.following || []).includes(me);
+                                        const myFollowers = Array.isArray(firebaseProfile?.followers)
+                                            ? firebaseProfile.followers
+                                            : (Array.isArray(currentUser?.followers) ? currentUser.followers : []);
+                                        const hostFollowsInvitee = myFollowers.includes(hostId);
                                         if (hostFollowsInvitee) {
                                             const viewerProfile = { id: me, ...firebaseProfile, ...currentUser };
                                             const targetProfile = { id: hostId, ...hostData };
@@ -1496,7 +1496,8 @@ export const InvitationProvider = ({ children }) => {
                                                 viewerProfile,
                                                 targetProfile,
                                                 nextFollowing,
-                                                hostData.following || []
+                                                null,
+                                                myFollowers
                                             );
                                             if (connectionComplete) {
                                                 const connectionKind = resolveConnectionKind(
@@ -1723,8 +1724,11 @@ export const InvitationProvider = ({ children }) => {
                 return { ok: true };
             }
 
-            const targetUserDoc = await getDoc(doc(db, 'users', userId));
-            if (!targetUserDoc.exists()) {
+            // Public projection only. The business gate gives immediate feedback here;
+            // the privacySettings.allowFollowing gate is enforced authoritatively by the
+            // followUser callable below (never reads the target's users doc).
+            const targetPubDoc = await getDoc(doc(db, 'public_profiles', userId));
+            if (!targetPubDoc.exists()) {
                 setOptimisticFollowing(null);
                 showToast(
                     i18n.t('follow_target_not_found', 'This account cannot be followed right now.'),
@@ -1732,24 +1736,20 @@ export const InvitationProvider = ({ children }) => {
                 );
                 return { ok: false };
             }
-            const targetData = targetUserDoc.data() || {};
-            if (!canTargetAcceptFollows(targetData)) {
+            const targetData = mapPublicProfileDocToUserShape({ id: userId, ...targetPubDoc.data() });
+            if (targetData.role === 'business' || targetData.isBusiness === true) {
                 setOptimisticFollowing(null);
-                if ((targetData.role || 'user') === 'business') {
-                    showToast(
-                        i18n.t('follow_business_not_allowed', 'Business accounts cannot be followed.'),
-                        'info'
-                    );
-                } else {
-                    showToast(
-                        i18n.t('follow_not_allowed_privacy', 'This member is not accepting new followers.'),
-                        'info'
-                    );
-                }
-                return { ok: false, reason: 'privacy' };
+                showToast(
+                    i18n.t('follow_business_not_allowed', 'Business accounts cannot be followed.'),
+                    'info'
+                );
+                return { ok: false, reason: 'target_business' };
             }
 
-            const targetAlreadyFollowsViewer = (targetData.following || []).includes(viewerUid);
+            const viewerFollowersList = Array.isArray(firebaseProfile?.followers)
+                ? firebaseProfile.followers
+                : (Array.isArray(currentUser?.followers) ? currentUser.followers : []);
+            const targetAlreadyFollowsViewer = viewerFollowersList.includes(userId);
 
             const result = await followUser(
                 viewerUid,
@@ -1801,7 +1801,8 @@ export const InvitationProvider = ({ children }) => {
                 viewerProfile,
                 targetProfile,
                 nextFollowing,
-                targetData.following || []
+                null,
+                viewerFollowersList
             );
 
             let connectionKind = null;
