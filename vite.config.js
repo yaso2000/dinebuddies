@@ -1,7 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fetchPlaceAutocompleteWithFallback } from './api/_googlePlacesAutocompleteCore.js'
-import { runDevApiHandler } from './scripts/dev-api-local.mjs'
 import fs from 'fs'
 import path from 'path'
 import dns from 'dns'
@@ -114,31 +113,8 @@ const devOperations = () => ({
         }
 
         server.middlewares.use(async (req, res, next) => {
-            let devUrl = null
-            try {
-                devUrl = new URL(req.url, `http://${req.headers.host}`)
-            } catch {
-                devUrl = null
-            }
-
-            if (devUrl?.pathname === '/api/business-login-resolver' && req.method === 'POST') {
-                try {
-                    const handler = await import('./api/auth/login-resolver.js')
-                    await runDevApiHandler(handler, req, res)
-                } catch (err) {
-                    console.error('Dev business-login-resolver error:', err)
-                    res.statusCode = 500
-                    res.setHeader('Content-Type', 'application/json')
-                    const hint =
-                        err instanceof Error &&
-                        /Firebase Admin credentials/i.test(err.message)
-                            ? 'Firebase Admin غير مُعد محلياً — أضف FIREBASE_SERVICE_ACCOUNT_JSON في .env'
-                            : 'حدث خطأ في خادم حل الهوية.'
-                    res.end(JSON.stringify({ message: hint }))
-                }
-                return
-            }
-
+            // Note: the /api/business-login-resolver dev proxy was removed — phone-number
+            // login was deleted for security (2.8); the app is email + password only now.
             if (req.method === 'GET') {
                 let url
                 try {
