@@ -2390,7 +2390,7 @@
       },
       {
         "q": "Qual é a diferença entre convites públicos, privados e de encontro?",
-        "a": "• Público: visível no mapa principal para qualquer pessoa solicitar entrada.\n• Privado: convite oculto enviado exclusivamente por um elegante link de convite eletrônico para pessoas específicas.\n• Encontro: encontros românticos especialmente selecionados que exigem assinatura Premium, com filtros avançados e avaliações confiáveis."
+        "a": "• Público: visível no mapa principal para qualquer pessoa solicitar entrada.\n• Privado: convite oculto enviado exclusivamente por um elegante link de convite eletrônico para pessoas específicas."
       },
       {
         "q": "Como aceito solicitações de entrada no meu convite?",
@@ -3758,7 +3758,7 @@
   "privacy_settings": "Configurações de privacidade",
   "privacy_settings_desc": "Controle quem pode ver suas informações e interagir com você",
   "private": "Privado",
-  "Private": "Encontros",
+  "Private": "Privado",
   "private_ai_all_fields_required": "Preencha data, hora, local e mensagem antes de usar a IA.",
   "private_ai_description_missing": "Adicione uma descrição curta ou use a IA para redigir sua mensagem primeiro.",
   "private_ai_fields_applied": "Sugestões da IA aplicadas — revise antes de enviar.",

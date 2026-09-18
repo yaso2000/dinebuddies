@@ -2219,7 +2219,7 @@
       },
       {
         "q": "Herkese Açık, Özel ve Flört davetiyeleri arasındaki fark nedir?",
-        "a": "• Herkese Açık: Ana haritada görünür, herkes katılmak için istek gönderebilir.\n• Özel: Belirli kişilere zarif bir e-davetiye bağlantısıyla gönderilen gizli davetiye.\n• Flört: Premium abonelik gerektiren, gelişmiş filtreler ve güvenilir yorumlar sunan özel romantik buluşmalar."
+        "a": "• Herkese Açık: Ana haritada görünür, herkes katılmak için istek gönderebilir.\n• Özel: Belirli kişilere zarif bir e-davetiye bağlantısıyla gönderilen gizli davetiye."
       },
       {
         "q": "Davetiyeme gelen katılım isteklerini nasıl kabul ederim?",
@@ -3532,7 +3532,7 @@
   "privacy_settings": "Gizlilik Ayarları",
   "privacy_settings_desc": "Bilgilerini kimlerin görebileceğini ve seninle nasıl etkileşime geçebileceğini kontrol et",
   "private": "Özel",
-  "Private": "Flört",
+  "Private": "Özel",
   "private_ai_all_fields_required": "Yapay zekayı kullanmadan önce tarih, saat, konum ve mesajı doldur.",
   "private_ai_description_missing": "Önce kısa bir açıklama ekle veya yapay zekayla mesajını taslakla.",
   "private_ai_fields_applied": "Yapay zeka önerileri uygulandı — göndermeden önce kontrol et.",

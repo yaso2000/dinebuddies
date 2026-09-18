@@ -2390,7 +2390,7 @@
       },
       {
         "q": "¿Cuál es la diferencia entre invitaciones públicas, privadas y de citas?",
-        "a": "• Pública: visible en el mapa principal para que cualquiera pueda solicitar unirse.\n• Privada: invitación oculta enviada exclusivamente mediante un elegante enlace de invitación electrónica a personas concretas.\n• Citas: encuentros románticos especialmente seleccionados que requieren suscripción Premium, con filtros avanzados y reseñas de confianza."
+        "a": "• Pública: visible en el mapa principal para que cualquiera pueda solicitar unirse.\n• Privada: invitación oculta enviada exclusivamente mediante un elegante enlace de invitación electrónica a personas concretas."
       },
       {
         "q": "¿Cómo acepto solicitudes para unirme a mi invitación?",
@@ -3758,7 +3758,7 @@
   "privacy_settings": "Configuración de privacidad",
   "privacy_settings_desc": "Controla quién puede ver tu información e interactuar contigo",
   "private": "Privado",
-  "Private": "Citas",
+  "Private": "Privada",
   "private_ai_all_fields_required": "Completa la fecha, hora, ubicación y mensaje antes de usar la IA.",
   "private_ai_description_missing": "Añade una descripción breve o usa la IA para redactar tu mensaje primero.",
   "private_ai_fields_applied": "Sugerencias de IA aplicadas — revísalas antes de enviar.",

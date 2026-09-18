@@ -2219,7 +2219,7 @@
       },
       {
         "q": "Quelle est la différence entre les invitations publiques, privées et de rencontre ?",
-        "a": "• Publique : visible sur la carte principale, tout le monde peut demander à rejoindre.\n• Privée : invitation masquée envoyée exclusivement via un lien d'invitation électronique élégant à des personnes précises.\n• Rencontre : rencontres romantiques spécialement organisées, nécessitant un abonnement Premium, avec des filtres avancés et des avis de confiance."
+        "a": "• Publique : visible sur la carte principale, tout le monde peut demander à rejoindre.\n• Privée : invitation masquée envoyée exclusivement via un lien d'invitation électronique élégant à des personnes précises."
       },
       {
         "q": "Comment accepter les demandes de participation à mon invitation ?",
@@ -3532,7 +3532,7 @@
   "privacy_settings": "Paramètres de confidentialité",
   "privacy_settings_desc": "Contrôlez qui peut voir vos informations et interagir avec vous",
   "private": "Privé",
-  "Private": "Rencontre",
+  "Private": "Privée",
   "private_ai_all_fields_required": "Remplis la date, l'heure, le lieu et le message avant d'utiliser l'IA.",
   "private_ai_description_missing": "Ajoute une courte description ou utilise l'IA pour rédiger ton message d'abord.",
   "private_ai_fields_applied": "Suggestions IA appliquées — vérifie avant d'envoyer.",
