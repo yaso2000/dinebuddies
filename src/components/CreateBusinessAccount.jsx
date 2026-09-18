@@ -178,7 +178,9 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
         email: formData.email,
         display_name: formData.businessName,
         role: 'business',
-        subscriptionTier: formData.subscriptionTier,
+        // New business accounts always start free. The paid tier is granted
+        // server-side (Admin SDK) only after a verified IAP/Stripe/PayPal payment.
+        subscriptionTier: 'free',
         created_at: serverTimestamp(),
         last_active_time: serverTimestamp(),
         location: formData.lat && formData.lng ? {
@@ -575,35 +577,6 @@ const CreateBusinessAccount = ({ onClose, onSuccess }) => {
                                 </div>
                             </div>
 
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label style={{
-                display: 'block',
-                fontSize: '0.9rem',
-                fontWeight: '600',
-                color: 'var(--text-secondary)',
-                marginBottom: '0.5rem'
-              }}>
-                                    Initial Plan
-                                </label>
-                                <select
-                name="subscriptionTier"
-                value={formData.subscriptionTier}
-                onChange={handleChange}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  background: 'var(--bg-body)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.95rem',
-                  cursor: 'pointer'
-                }}>
-
-                                    <option value="free">Free</option>
-                                    <option value="paid">Paid</option>
-                                </select>
-                            </div>
                         </>
           }
                 </form>

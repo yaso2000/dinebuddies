@@ -43,9 +43,10 @@ function resolveAppleEnvironment() {
     const mode = String(process.env.APPLE_IAP_MODE || '').trim().toLowerCase();
     if (mode === 'production') return Environment.PRODUCTION;
     if (mode === 'sandbox') return Environment.SANDBOX;
-    // No explicit mode set — default to Sandbox until the app is live on the Store,
-    // matching how STRIPE_MODE / PAYPAL_MODE default to test-like behavior.
-    return Environment.SANDBOX;
+    // No explicit mode set: FAIL SAFE. In production, require PRODUCTION receipts
+    // so free StoreKit *sandbox* transactions can never verify and grant real
+    // credits; only a non-production runtime falls back to Sandbox for testing.
+    return process.env.NODE_ENV === 'production' ? Environment.PRODUCTION : Environment.SANDBOX;
 }
 
 /** @type {SignedDataVerifier | null} */

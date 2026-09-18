@@ -322,28 +322,11 @@ async function savePayPalCheckoutOrder(orderId, payload) {
  * user's paid order and grant the credits to themselves.
  */
 async function resolveCreditsOrderMeta(orderId, orderData, authUid) {
-    const { customId } = extractPayPalCapture(orderData);
-    const parsed = parsePayPalCustomId(customId);
-    if (
-        parsed.userId &&
-        parsed.userId === authUid &&
-        parsed.packageId &&
-        CREDIT_PACKAGES[parsed.packageId] &&
-        parsed.credits > 0
-    ) {
-        // Prefer server catalog credits over client-influenced custom_id credit counts.
-        return {
-            userId: parsed.userId,
-            packageId: parsed.packageId,
-            credits: CREDIT_PACKAGES[parsed.packageId].credits,
-        };
-    }
-
-    // custom_id present but belongs to someone else → hard deny (do not fall through).
-    if (parsed.userId && parsed.userId !== authUid) {
-        return { userId: '', packageId: '', credits: 0, kind: '', planId: '' };
-    }
-
+    // SECURITY: only fulfill orders OUR server created. `paypal_checkout_orders`
+    // is written solely by createPayPalCreditsOrder (Admin SDK, not client-
+    // writable), and it fixes the packageId + amount server-side. Never trust the
+    // PayPal custom_id — a client can create a PayPal order directly (with only
+    // the public Client ID), set an arbitrary custom_id, and pay 1 cent.
     const pending = await loadPayPalCheckoutOrder(orderId);
     if (
         pending &&
@@ -355,10 +338,12 @@ async function resolveCreditsOrderMeta(orderId, orderData, authUid) {
             userId: authUid,
             packageId: String(pending.packageId).trim(),
             credits: CREDIT_PACKAGES[pending.packageId].credits,
+            expectedAmount: String(pending.amount || getCreditPackagePrice(pending.packageId)),
+            expectedCurrency: String(pending.currency || '').trim().toUpperCase(),
         };
     }
 
-    return { userId: '', packageId: '', credits: 0, kind: '', planId: '' };
+    return { userId: '', packageId: '', credits: 0, expectedAmount: '', expectedCurrency: '' };
 }
 
 async function fetchPayPalOrder(orderId, clientMode = null) {
@@ -428,6 +413,29 @@ async function fulfillPayPalCreditsOrder(orderId, authUid, clientMode = null) {
         throw new functions.https.HttpsError(
             'failed-precondition',
             'PayPal order metadata is invalid. Contact support with your PayPal receipt.'
+        );
+    }
+
+    // SECURITY: the captured money must equal the price of the package we created
+    // the order for. Blocks paying 1 cent for a large credit pack.
+    const paidValue = String(capture?.amount?.value || purchaseUnit?.amount?.value || '');
+    const paidCurrency = String(
+        capture?.amount?.currency_code || purchaseUnit?.amount?.currency_code || ''
+    ).toUpperCase();
+    if (
+        paidValue !== meta.expectedAmount ||
+        (meta.expectedCurrency && paidCurrency !== meta.expectedCurrency)
+    ) {
+        console.error('PayPal credits amount mismatch', {
+            orderId,
+            paidValue,
+            paidCurrency,
+            expected: meta.expectedAmount,
+            expectedCurrency: meta.expectedCurrency,
+        });
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'PayPal payment amount does not match the order. Contact support.'
         );
     }
 
@@ -788,6 +796,41 @@ exports.capturePayPalBusinessPlanOrder = functions.https.onCall(async (data, con
     }
     if (meta.kind !== 'business_plan' || !meta.planId) {
         throw new functions.https.HttpsError('failed-precondition', 'PayPal order metadata is invalid.');
+    }
+
+    // SECURITY: require an order our server created (paypal_checkout_orders is
+    // Admin-SDK-only) and that the captured money equals the business plan price.
+    // Blocks a client-created 1-cent order granting 30 days of Paid Business.
+    const pendingBiz = await loadPayPalCheckoutOrder(orderId);
+    if (
+        !pendingBiz ||
+        String(pendingBiz.userId || '').trim() !== context.auth.uid ||
+        String(pendingBiz.kind || '') !== 'business_plan'
+    ) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'PayPal order was not created by DineBuddies. Contact support.'
+        );
+    }
+    const expectedBizAmount = String(pendingBiz.amount || getBusinessPlanPrice());
+    const expectedBizCurrency = String(pendingBiz.currency || '').trim().toUpperCase();
+    const paidBizValue = String(capture?.amount?.value || '');
+    const paidBizCurrency = String(capture?.amount?.currency_code || '').toUpperCase();
+    if (
+        paidBizValue !== expectedBizAmount ||
+        (expectedBizCurrency && paidBizCurrency !== expectedBizCurrency)
+    ) {
+        console.error('PayPal business plan amount mismatch', {
+            orderId,
+            paidBizValue,
+            paidBizCurrency,
+            expectedBizAmount,
+            expectedBizCurrency,
+        });
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'PayPal payment amount does not match the plan price. Contact support.'
+        );
     }
 
     const captureStatus = String(capture?.status || result.data?.status || '').toUpperCase();

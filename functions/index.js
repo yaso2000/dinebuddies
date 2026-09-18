@@ -884,7 +884,11 @@ async function resolveBlockedMemberProfiles(db, ids) {
 }
 
 // ─── Stripe Functions ───────────────────────────────────
-exports.createCheckoutSession = stripeModule.createCheckoutSession;
+// SECURITY: the generic createCheckoutSession is intentionally NOT exported. It
+// let the client pick the granted plan via `planId`/`subscriptionKind` metadata
+// (decoupled from the price actually paid). Subscriptions go only through the
+// dedicated, server-priced createBusinessSubscriptionCheckout; credits through
+// createCreditsCheckoutSession.
 exports.createPortalSession = stripeModule.createPortalSession;
 exports.createCreditsCheckoutSession = stripeModule.createCreditsCheckoutSession;
 exports.createBusinessSubscriptionCheckout = stripeModule.createBusinessSubscriptionCheckout;

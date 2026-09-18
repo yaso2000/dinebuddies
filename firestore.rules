@@ -416,6 +416,40 @@ service cloud.firestore {
         && request.resource.data.get('pendingCashoutRequestId', '') == resource.data.get('pendingCashoutRequestId', '');
     }
 
+    // Paid business entitlement is server-authoritative: the paid tier is granted
+    // only by a Cloud Function (Admin SDK) after a verified IAP/Stripe/PayPal
+    // payment. A client CREATE may only make a 'free' account and may not set the
+    // server-managed subscription fields.
+    function subscriptionCreateClientSafe() {
+      return request.resource.data.get('subscriptionTier', 'free') == 'free'
+        && request.resource.data.get('currentPlan', 'free') in ['free', '']
+        && !request.resource.data.keys().hasAny([
+             'businessPaidUntil', 'subscriptionStatus', 'subscriptionSource',
+             'businessProLiteUntil', 'businessProLiteActivatedAt', 'businessTrialUsedAt',
+             'compPlanExpiresAt', 'compPlanMonths'
+           ]);
+    }
+
+    // A client UPDATE may keep the existing tier (a server-granted paid user
+    // editing their profile) or downgrade to 'free', but may never escalate to a
+    // paid tier or touch the server-managed businessPaidUntil / subscriptionStatus.
+    function subscriptionUpdateClientSafe() {
+      return (request.resource.data.get('subscriptionTier', 'free') == resource.data.get('subscriptionTier', 'free')
+              || request.resource.data.get('subscriptionTier', 'free') == 'free')
+        && (request.resource.data.get('currentPlan', 'free') == resource.data.get('currentPlan', 'free')
+              || request.resource.data.get('currentPlan', 'free') in ['free', ''])
+        && request.resource.data.get('businessPaidUntil', '') == resource.data.get('businessPaidUntil', '')
+        && request.resource.data.get('subscriptionStatus', '') == resource.data.get('subscriptionStatus', '')
+        && request.resource.data.get('subscriptionSource', '') == resource.data.get('subscriptionSource', '')
+        && request.resource.data.get('weeklyPrivateQuota', 0) == resource.data.get('weeklyPrivateQuota', 0)
+        && request.resource.data.get('usedPrivateCreditsThisWeek', 0) == resource.data.get('usedPrivateCreditsThisWeek', 0)
+        && request.resource.data.get('businessProLiteUntil', '') == resource.data.get('businessProLiteUntil', '')
+        && request.resource.data.get('businessProLiteActivatedAt', '') == resource.data.get('businessProLiteActivatedAt', '')
+        && request.resource.data.get('businessTrialUsedAt', '') == resource.data.get('businessTrialUsedAt', '')
+        && request.resource.data.get('compPlanExpiresAt', '') == resource.data.get('compPlanExpiresAt', '')
+        && request.resource.data.get('compPlanMonths', 0) == resource.data.get('compPlanMonths', 0);
+    }
+
     // Clients cannot self-assign affiliate_agent (or staff/admin) on first create — use Cloud Function.
     function userCreateRoleOkForClient() {
       return !request.resource.data.keys().hasAny(['role']) ||
@@ -473,6 +507,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.auth.uid == userId &&
                        userCreateHasNoServerAffiliateFields() &&
                        userCreateReferredByOk() &&
+                       subscriptionCreateClientSafe() &&
                        userCreateRoleOkForClient();
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
@@ -481,19 +516,21 @@ service cloud.firestore {
       allow update: if isOwner(userId) &&
                        ownerAffiliateWriteGuards() &&
                        creditFieldsUnchanged() &&
+                       subscriptionUpdateClientSafe() &&
                        userDocHasNoRoleField() &&
                        request.resource.data.role == 'user';
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        ownerAffiliateWriteGuards() &&
                        creditFieldsUnchanged() &&
+                       subscriptionUpdateClientSafe() &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
                        request.resource.data.keys().hasAny(['businessInfo']);
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && isBusinessSignupCompletionFromIntent();
+      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && subscriptionUpdateClientSafe() && isBusinessSignupCompletionFromIntent();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && isUpgradingStubToBusinessProfile();
+      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && subscriptionUpdateClientSafe() && isUpgradingStubToBusinessProfile();
       // Follow / unfollow: owner may update only their following[] list.
       // Businesses do not follow users (no social interaction).
       allow update: if isOwner(userId) &&
@@ -503,6 +540,7 @@ service cloud.firestore {
                        request.resource.data.following is list;
       allow update: if isOwner(userId) && ownerAffiliateWriteGuards() &&
                        creditFieldsUnchanged() &&
+                       subscriptionUpdateClientSafe() &&
                        tasteScopeWriteOk() &&
                        pickOneWriteOk() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
@@ -513,6 +551,7 @@ service cloud.firestore {
       // trusted server callables (Admin SDK, which bypasses these rules).
       allow update: if isAdminOrPanelStaff() &&
                        creditFieldsUnchanged() &&
+                       subscriptionUpdateClientSafe() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'region', 'accountType']);
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
@@ -726,6 +765,21 @@ service cloud.firestore {
     // PRIVATE INVITATIONS COLLECTION (separate from public)
     // ============================================
 
+    // SECURITY: publishing a hosted invite (status 'published' + shareToken) is
+    // what costs 90/185 credits, and it happens ONLY inside the
+    // publishPrivateInvitationDraft callable (Admin SDK, which bypasses these
+    // rules and charges the credits first). A client write may never mark an
+    // invite 'published' — otherwise a host could self-publish for free.
+    function invitationCreateStatusClientSafe() {
+      return request.resource.data.get('status', 'draft') != 'published';
+    }
+    function invitationUpdateStatusClientSafe() {
+      // Editing an already-published invite (status stays 'published') is fine;
+      // only the free draft→published transition by a client is denied.
+      return request.resource.data.get('status', 'draft') != 'published'
+        || resource.data.get('status', 'draft') == 'published';
+    }
+
     match /private_invitations/{invitationId} {
       // Single-doc reads: host, invitees, RSVP holders, or admin-panel staff
       allow get: if isSignedIn() && canReadPrivateInvitationDoc(resource.data);
@@ -735,15 +789,16 @@ service cloud.firestore {
         request.auth.uid in resource.data.get('invitedFriends', [])
       );
 
-      // Any signed-in user can create (author must be self)
+      // Any signed-in user can create (author must be self, as a draft)
       allow create: if isSignedIn() &&
+                       invitationCreateStatusClientSafe() &&
                        (request.resource.data.authorId == request.auth.uid ||
                         (request.resource.data.author is map &&
                          request.resource.data.author.get('id', '') == request.auth.uid));
 
-      // Host can update freely; invited friends can update only their RSVP
+      // Host can update (but cannot self-publish); invited friends update only their RSVP
       allow update: if isSignedIn() &&
-                       (isPrivateInvitationHost(resource.data) ||
+                       ((isPrivateInvitationHost(resource.data) && invitationUpdateStatusClientSafe()) ||
                         (isUidInPrivateInviteList(resource.data.get('invitedFriends', [])) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['rsvps', 'updatedAt']) &&
@@ -796,6 +851,7 @@ service cloud.firestore {
       );
 
       allow create: if isSignedIn() &&
+                       invitationCreateStatusClientSafe() &&
                        (request.resource.data.authorId == request.auth.uid ||
                         (request.resource.data.author is map &&
                          request.resource.data.author.get('id', '') == request.auth.uid)) &&
@@ -804,6 +860,7 @@ service cloud.firestore {
 
       allow update: if isSignedIn() &&
                        ((isPrivateInvitationHost(resource.data) &&
+                         invitationUpdateStatusClientSafe() &&
                          socialInviteWithinCap(request.resource.data)) ||
                         (isUidInPrivateInviteList(resource.data.get('invitedFriends', [])) &&
                          request.resource.data.diff(resource.data).affectedKeys()
