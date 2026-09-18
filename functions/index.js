@@ -485,9 +485,23 @@ function denyRegionalManager(adminCtx) {
     }
 }
 
+// Destructive / financial admin actions (role changes, user/partner deletion,
+// subscription + credit grants) are limited to a FULL admin — the super-owner or
+// a token.admin — never a lower panel role (moderator/support/staff/
+// regional_manager). assertAdminContext returns role 'owner'/'admin' only for
+// those two tiers; panel staff get their own role string.
+function assertFullAdmin(adminCtx) {
+    if (!adminCtx || (adminCtx.role !== 'owner' && adminCtx.role !== 'admin')) {
+        throw new functions.https.HttpsError(
+            'permission-denied',
+            'This action is restricted to the owner or an admin.',
+        );
+    }
+}
+
 registerAdminSearchUsers(exports, { db, admin, assertAdminContext });
 registerAdminBrowseUsers(exports, { db, admin, assertAdminContext });
-registerAdminDashboard(exports, { db, admin, assertAdminContext, denyRegionalManager });
+registerAdminDashboard(exports, { db, admin, assertAdminContext, denyRegionalManager, assertFullAdmin });
 const { registerRegionalManagerCallables } = require('./adminRegionalManagers');
 registerRegionalManagerCallables(exports, { db, admin, assertAdminContext });
 const { registerAdminAccessAudit } = require('./adminAccessAudit');
@@ -2916,6 +2930,7 @@ exports.adminSetUserBanStatus = functions.https.onCall(async (data, context) => 
 exports.adminSetUserRole = functions.https.onCall(async (data, context) => {
     const adminCtx = await assertAdminContext(context);
     denyRegionalManager(adminCtx);
+    assertFullAdmin(adminCtx); // role changes are owner/admin only (no self-promotion by staff)
     const { requesterUid, isSuperOwner } = adminCtx;
 
     const targetUid = data?.targetUid;
@@ -2970,6 +2985,7 @@ exports.adminSetUserRole = functions.https.onCall(async (data, context) => {
 exports.adminSetUserSubscriptionTier = functions.https.onCall(async (data, context) => {
     const adminCtx = await assertAdminContext(context);
     denyRegionalManager(adminCtx);
+    assertFullAdmin(adminCtx); // granting a paid tier is owner/admin only
     const targetUid = data?.targetUid;
     const subscriptionTier = data?.subscriptionTier;
     const isBusinessUser = data?.isBusinessUser === true;
@@ -3662,6 +3678,7 @@ exports.convertPersonalToBusinessIntent = functions.https.onCall(async (data, co
 exports.adminDeleteUser = functions.https.onCall(async (data, context) => {
     const adminCtx = await assertAdminContext(context);
     denyRegionalManager(adminCtx);
+    assertFullAdmin(adminCtx); // deleting users is owner/admin only
     const { isSuperOwner } = adminCtx;
     const targetUid = data?.targetUid;
     if (!targetUid || typeof targetUid !== 'string') {
@@ -3678,7 +3695,9 @@ exports.adminDeleteUser = functions.https.onCall(async (data, context) => {
 
 // ─── Trusted admin callable: delete partner (destructive) ───────────────────
 exports.adminDeletePartner = functions.https.onCall(async (data, context) => {
-    denyRegionalManager(await assertAdminContext(context));
+    const adminCtx = await assertAdminContext(context);
+    denyRegionalManager(adminCtx);
+    assertFullAdmin(adminCtx); // deleting partners is owner/admin only
     const targetUid = data?.targetUid;
     if (!targetUid || typeof targetUid !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'targetUid is required.');

@@ -102,7 +102,7 @@ async function listInvitationsPage(db, col, collectionKind, predicate, startAfte
  * @param {typeof import('firebase-admin')} admin
  * @param {(ctx: import('firebase-functions').https.CallableContext) => Promise<{requesterUid: string}>} assertAdminContext
  */
-function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext, denyRegionalManager }) {
+function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext, denyRegionalManager, assertFullAdmin }) {
     exportsObj.adminSetUserFreezeStatus = functions.https.onCall(async (data, context) => {
         const { regionScope } = await assertAdminContext(context, data);
         const targetUid = asTrimmedString(data?.targetUid);
@@ -138,7 +138,9 @@ function registerAdminDashboard(exportsObj, { db, admin, assertAdminContext, den
     });
 
     exportsObj.adminGrantFreeCredits = functions.https.onCall(async (data, context) => {
-        const { requesterUid } = await assertAdminContext(context, data);
+        const adminCtx = await assertAdminContext(context, data);
+        assertFullAdmin(adminCtx); // granting credits is owner/admin only
+        const requesterUid = adminCtx.requesterUid;
         const targetUid = asTrimmedString(data?.targetUid);
         const amount = Math.floor(Number(data?.amount));
         const note = asTrimmedString(data?.note).slice(0, 200);
