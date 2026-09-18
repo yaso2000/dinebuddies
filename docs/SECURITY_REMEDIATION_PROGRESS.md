@@ -24,6 +24,7 @@ Resume point for continuing the audit remediation in a later session.
 - **2.4** `expireCompBusinessPlans` now also expires Apple/PayPal subs on `businessPaidUntil`.
 - **2.5** Apple business subscription bound to one account (fulfillment tx.get check).
 - **2.6** Removed the insecure generic `createCheckoutSession` endpoint.
+- **2.8** Phone-number login removed entirely (email+password only); login-resolver endpoints deleted — root-fixes the identity-disclosure oracle.
 - **2.9** Apple IAP verify fail-safe to PRODUCTION when `NODE_ENV=production`.
 
 ### Safe hardening done while user was away (validated, deployed)
