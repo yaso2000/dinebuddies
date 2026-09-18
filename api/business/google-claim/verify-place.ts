@@ -10,6 +10,7 @@ import {
     loadGoogleBusinessClaimSession,
     markGoogleBusinessClaimVerified,
 } from '../../_googleBusinessClaimSessions.js';
+import { requireAuth } from '../../_auth.js';
 
 type VercelRequest = {
     method?: string;
@@ -44,6 +45,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(429).json({ status: 'error', code: 'rate-limited', message: 'Too many requests' });
     }
 
+    const auth = await requireAuth(req);
+    if (!auth.ok) {
+        return res.status(auth.status).json({ status: 'error', code: 'unauthorized', message: auth.message || auth.error });
+    }
+
     const body = readJsonBody(req);
     const sessionId = String(body.sessionId || '').trim();
     if (!sessionId) {
@@ -61,6 +67,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             code: 'session-not-found',
             message: 'Verification session expired or not found',
         });
+    }
+    // SECURITY: the session must belong to the caller (blocks verifying/claiming
+    // a place through someone else's OAuth session — the core takeover vector).
+    if (session.firebaseUid !== auth.uid) {
+        return res.status(403).json({ status: 'error', code: 'forbidden', message: 'This session does not belong to you' });
     }
 
     if (!session.accessToken) {

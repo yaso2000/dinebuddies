@@ -1,4 +1,16 @@
 import { resolveApiUrl } from '../utils/resolveApiUrl';
+import { auth } from '../firebase/config';
+
+/**
+ * Authorization header for the current signed-in user. The google-claim
+ * endpoints now require it and bind the OAuth session to this uid (prevents
+ * session-fixation takeover of a Google Business listing).
+ */
+async function authHeaders() {
+    const user = auth?.currentUser;
+    const token = user ? await user.getIdToken().catch(() => '') : '';
+    return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 /**
  * Start Google Business Profile OAuth (business.manage scope).
@@ -7,7 +19,7 @@ import { resolveApiUrl } from '../utils/resolveApiUrl';
 export async function startGoogleBusinessClaimAuth(params) {
     const res = await fetch(resolveApiUrl('/api/business/google-claim/auth-url'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify(params),
     });
     const data = await res.json().catch(() => ({}));
@@ -21,7 +33,7 @@ export async function startGoogleBusinessClaimAuth(params) {
 export async function verifyGoogleBusinessPlace(params) {
     const res = await fetch(resolveApiUrl('/api/business/google-claim/verify-place'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({
             sessionId: params.sessionId,
             placeId: params.placeId,
@@ -37,7 +49,9 @@ export async function verifyGoogleBusinessPlace(params) {
  */
 export async function fetchGoogleBusinessManagedLocations(sessionId) {
     const q = new URLSearchParams({ sessionId: String(sessionId || '') });
-    const res = await fetch(resolveApiUrl(`/api/business/google-claim/managed-locations?${q}`));
+    const res = await fetch(resolveApiUrl(`/api/business/google-claim/managed-locations?${q}`), {
+        headers: { ...(await authHeaders()) },
+    });
     const data = await res.json().catch(() => ({}));
     return { ok: res.ok, status: res.status, data };
 }

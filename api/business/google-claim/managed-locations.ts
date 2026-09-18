@@ -6,6 +6,7 @@ import { applyApiCors, handleCorsPreflight } from '../../_cors.js';
 import { takeRateLimit } from '../../_rateLimit.js';
 import { listManagedGoogleBusinessLocations } from '../../_googleBusinessProfileLocations.js';
 import { loadGoogleBusinessClaimSession } from '../../_googleBusinessClaimSessions.js';
+import { requireAuth } from '../../_auth.js';
 
 type VercelRequest = {
     method?: string;
@@ -38,6 +39,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(429).json({ status: 'error', code: 'rate-limited', message: 'Too many requests' });
     }
 
+    const auth = await requireAuth(req);
+    if (!auth.ok) {
+        return res.status(auth.status).json({ status: 'error', code: 'unauthorized', message: auth.message || auth.error });
+    }
+
     const sessionId = readQueryParam(req.query?.sessionId);
     if (!sessionId) {
         return res.status(400).json({
@@ -54,6 +60,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             code: 'session-not-found',
             message: 'Verification session expired or not authenticated',
         });
+    }
+    // SECURITY: the session must belong to the caller (blocks using someone
+    // else's OAuth session to read their Google Business locations).
+    if (session.firebaseUid !== auth.uid) {
+        return res.status(403).json({ status: 'error', code: 'forbidden', message: 'This session does not belong to you' });
     }
 
     try {

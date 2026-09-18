@@ -10,6 +10,7 @@ import {
     resolveGoogleBusinessOAuthRedirectUri,
 } from '../../_googleBusinessProfileOAuth.js';
 import { createGoogleBusinessClaimSession } from '../../_googleBusinessClaimSessions.js';
+import { requireAuth } from '../../_auth.js';
 
 type VercelRequest = {
     method?: string;
@@ -57,6 +58,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(429).json({ status: 'error', code: 'rate-limited', message: 'Too many requests' });
     }
 
+    // SECURITY: bind the claim session to the AUTHENTICATED user, never a
+    // client-supplied firebaseUid (that allowed OAuth session fixation — an
+    // attacker binding a Google-Business claim to a victim's account).
+    const auth = await requireAuth(req);
+    if (!auth.ok) {
+        return res.status(auth.status).json({
+            status: 'error',
+            code: 'unauthorized',
+            message: auth.message || auth.error,
+        });
+    }
+
     const body = readJsonBody(req);
     const restaurantId = String(body.restaurantId || '').trim();
     const googlePlaceId = String(body.googlePlaceId || body.restaurantId || '').trim();
@@ -76,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             restaurantId,
             googlePlaceId,
             returnPath,
-            body.firebaseUid ? String(body.firebaseUid) : null,
+            auth.uid,
         );
         const authUrl = buildGoogleBusinessAuthorizationUrl({ state: sessionId, redirectUri });
 
