@@ -412,6 +412,39 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['followers']);
     }
 
+    // Consolidated, CHEAP guard for the common owner profile update. The old rule
+    // called creditFieldsUnchanged + subscriptionUpdateClientSafe + trustFlags +
+    // followers + affiliate separately (~30 value comparisons + several diffs) on
+    // EVERY update rule; summed across the ~8 users update rules that blew past
+    // Firestore's 1000-expression evaluation budget, so EVERY client profile write
+    // (avatar, bio, settings) was denied. One diff + one hasAny keeps it well under
+    // budget. A client profile edit may never change any of these server-managed
+    // fields (credits, subscription, trust flags, followers, role, affiliate).
+    function serverManagedFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'role', 'accountType', 'followers',
+        'paidCredits', 'savedCredits', 'freeCredits', 'totalCreditsPurchased',
+        'totalCreditsSpent', 'totalSavedCreditsEarned', 'pendingCashoutRequestId',
+        'banned', 'emailVerified',
+        'subscriptionTier', 'currentPlan', 'businessPaidUntil', 'subscriptionStatus',
+        'subscriptionSource', 'weeklyPrivateQuota', 'usedPrivateCreditsThisWeek',
+        'businessProLiteUntil', 'businessProLiteActivatedAt', 'businessTrialUsedAt',
+        'compPlanExpiresAt', 'compPlanMonths',
+        'current_balance', 'total_earned', 'pending_referrals_count',
+        'successful_referrals_count', 'pending_payouts', 'total_clicks',
+        'referral_code', 'referral_link', 'affiliateLastCommissionSessionId',
+        'registrationChannel'
+      ]);
+    }
+    // Business verified badges are server-authoritative: block false -> true
+    // escalation via a client write (dropping/keeping is fine — a normal edit).
+    function businessBadgeNotEscalated() {
+      return (request.resource.data.get(['businessInfo', 'google_business_verified'], false) == false
+              || resource.data.get(['businessInfo', 'google_business_verified'], false) == true)
+        && (request.resource.data.get(['businessInfo', 'verified'], false) == false
+              || resource.data.get(['businessInfo', 'verified'], false) == true);
+    }
+
     // A CLIENT-created user doc must start with ZERO credit balances. Real credits
     // are granted only by Cloud Functions (Admin SDK). Without this, a user could
     // create (or delete + re-create) their doc with paidCredits: 10000000.
@@ -580,16 +613,18 @@ service cloud.firestore {
                        ownerAffiliateWriteGuards() &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['following']) &&
                        request.resource.data.following is list;
-      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() &&
-                       creditFieldsUnchanged() &&
-                       subscriptionUpdateClientSafe() &&
-                       ageCategoryImmutableOnceSet() &&
-                       trustFlagsUnchanged() &&
-                       tasteScopeWriteOk() &&
-                       pickOneWriteOk() &&
-                       followersUnchanged() &&
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'accountType']);
+      // Consolidated guards (serverManagedFieldsUnchanged) so the whole users update
+      // ruleset stays under Firestore's 1000-expression evaluation budget — otherwise
+      // EVERY client profile write is denied. Same protections as before: credits,
+      // subscription, trust flags, followers, role/accountType, affiliate all locked;
+      // ageCategory immutable-once-set; referred_by set-once; tasteScope/pickOne shape.
+      allow update: if isOwner(userId)
+                       && serverManagedFieldsUnchanged()
+                       && businessBadgeNotEscalated()
+                       && ageCategoryImmutableOnceSet()
+                       && tasteScopeWriteOk()
+                       && pickOneWriteOk()
+                       && referredByClientUpdateOk();
       // Admin panel (admin + moderator/support/staff/regional_manager): credits, moderation, etc.
       // SECURITY: panel staff may NOT change role / region / accountType via a direct client
       // write — that would let a regional_manager self-promote. Those fields change only through
