@@ -2,6 +2,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { CREDIT_PACKAGES, getBusinessMonthlyPriceId } = require('./creditsCore');
+const { enforcePurchaseRateLimit } = require('./purchaseRateLimit');
 const {
     isStripeTestMode,
     stripeCustomerModeLabel,
@@ -188,6 +189,8 @@ exports.createCreditsCheckoutSession = functions.https.onCall(async (data, conte
     }
 
     const userId = context.auth.uid;
+    // Anti-fraud velocity guard: slows stolen-card testing / purchase abuse.
+    await enforcePurchaseRateLimit(userId, 'credits_checkout', { perHour: 10, perDay: 30 });
 
     try {
         const userRef = db.collection('users').doc(userId);

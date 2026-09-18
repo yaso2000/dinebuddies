@@ -5,6 +5,7 @@ const {
     grantPaidCreditsInTransaction,
     isBusinessUserDoc,
 } = require('./creditsCore');
+const { enforcePurchaseRateLimit } = require('./purchaseRateLimit');
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -575,6 +576,8 @@ exports.createPayPalCreditsOrder = functions.https.onCall(async (data, context) 
     }
 
     const userId = context.auth.uid;
+    // Anti-fraud velocity guard: slows stolen-card testing / purchase abuse.
+    await enforcePurchaseRateLimit(userId, 'credits_paypal', { perHour: 10, perDay: 30 });
     const clientMode = normalizePayPalMode(data?.clientMode);
     // SECURITY: currency is server-fixed. Never trust a client-supplied currency —
     // a fixed price ('2.00') charged in a weak currency = near-free credits.
