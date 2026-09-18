@@ -85,6 +85,15 @@ export async function completeBusinessEmailSignup(input) {
     if ('standardized_phone' in mergedBusinessInfo) {
         delete mergedBusinessInfo.standardized_phone;
     }
+    // SECURITY: email signup is NOT a Google-ownership verification. Strip any
+    // client-supplied verification badge from businessInfo (this server write
+    // bypasses Firestore rules) — the badge is granted only by the Google-claim /
+    // verify-my-business flows.
+    delete mergedBusinessInfo.google_business_verified;
+    delete mergedBusinessInfo.verified;
+    delete mergedBusinessInfo.isVerified;
+    delete mergedBusinessInfo.googleVerified;
+    mergedBusinessInfo.google_business_verified = false;
     mergedBusinessInfo.createdAt = FieldValue.serverTimestamp();
 
     const userPayload = {
