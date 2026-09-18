@@ -1,6 +1,6 @@
 # Security Remediation — Progress & Resume Point
 
-**Last updated:** 2026-09-18 · **Branch:** `remove-affiliate-system` (NOT merged to main yet)
+**Last updated:** 2026-09-18 (dating cleanup A–D done + web-deployed) · **Branch:** `remove-affiliate-system` (NOT merged to main yet)
 **Driving audit:** `docs/AUDIT_REPORT_2026-09-18.md` (9 critical, 21 high, ~35 medium, ~30 low)
 
 Resume point for continuing the audit remediation in a later session.
@@ -65,7 +65,13 @@ Resume point for continuing the audit remediation in a later session.
   - 2.12 business directory: aggregate ratings server-side + route-scoped hook.
   - 2.14 native push + deep links (`@capacitor/push-notifications` missing).
   - 2.16 delete ~91 dead files; 3.27 split giant contexts.
-- **2.18–2.24 + 3.35** More dating remnants (credit copy, match-heart celebration, auto-accept 💕 message, `PRIVATE_INVITE_DATE_TEMPLATES` + `privateCardBackgrounds.js:293` zero-templates bug) + locale key sync (8 langs missing ~416 used keys; hi variable-name translation bug).
+- **2.18–2.24 + 3.35 (dating remnants) — ✅ DONE (committed, web-deployed 2026-09-18; NOT on native).** 5 commits (A–D) on `remove-affiliate-system`:
+  - (A) Live romantic UI: match-celebration heart→friends icon; PairShowcase 💕 fallback removed; retired romantic `PRIVATE_INVITE_DATE_TEMPLATES` art and fixed the `privateCardBackgrounds.js` zero-templates bug (family/work/acquaintance now map to neutral friendship/social art — **verified live in the invite creator**); InvitationContext isDating→isPersonalInvite.
+  - (B) AI prompts: restored the deleted `privateInvitationAiPrompt.js` (its missing import was silently breaking `api/ai/generate.ts`) as non-romantic; neutralized supportAgent, parseAiRequest, GeminiService tone.
+  - (C) All 10 locales swept for romantic wording (wallet/credit copy, invite subtitles, FAQ, toasts, "your date"→"your guest", base private_pair_*); also fixed non-dating glitches (dup "private or private", wrong `${DATING_INVITATION_PUBLISH_CREDITS}` placeholder, calendar-date mistranslations).
+  - (D) notificationHelpers "Dating match!"→"New friendship!"; CommunityGuidelines (en+ar) dropped "dating space"; profileGifts/OfferTemplateRenderer/motion-post copy; deleted dead relationshipAdvice modules.
+  - LEFT intentionally: internal enum values (`mode/cardTemplateSet:'dating'`), dead `social_tpl_*`/`private_tpl_*` label keys, zodiac "Romantic" trait — none user-visible/behavioral.
+- **STILL OPEN — locale key sync (separate from dating):** 8 langs missing ~416 used keys; hi has variable-name translation bug (`{{अवधि}}` etc.). Not romantic — a completeness/i18n issue.
 - **Medium/Low (~65)** per the audit report.
 
 ## Open follow-ups
