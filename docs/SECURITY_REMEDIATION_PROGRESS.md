@@ -19,6 +19,7 @@ Resume point for continuing the audit remediation in a later session.
 - **1.9** Both leaked service-account keys revoked in GCP (`23b4e21e9b45`, `fe17903de003`); key file removed from `public/`+`dist`+native bundles; backfill scripts no longer read from `public/`.
 
 ### High (done)
+- **3.1** Destructive/financial admin callables (role change, delete user/partner, subscription + free-credit grants) now require a full admin (owner/token.admin) via assertFullAdmin — panel staff can no longer self-promote or grant.
 - **2.2** Google-claim OAuth endpoints require auth + bind session to caller uid (`api/business/google-claim/*`, `googleBusinessClaimApi.js`).
 - **2.3** `trustFlagsUnchanged()` — no self-granted verified badge / ban / emailVerified.
 - **2.4** `expireCompBusinessPlans` now also expires Apple/PayPal subs on `businessPaidUntil`.
