@@ -27,13 +27,6 @@ function hostThanksPhrase(hostGender, locale) {
     return 'شكراً على الدعوة';
 }
 
-function hostMeetPhrase(hostGender, locale) {
-    if (!isArabicLocale(locale)) return 'see you';
-    if (hostGender === 'female') return 'للقائكِ';
-    if (hostGender === 'male') return 'للقائك';
-    return 'للقاء';
-}
-
 function hostWishPhrase(hostGender, locale) {
     if (!isArabicLocale(locale)) return 'Wishing you a wonderful time';
     if (hostGender === 'female') return 'أتمنى لكِ وقتاً جميلاً';
@@ -48,25 +41,14 @@ export function buildPrivateInvitationResponseChatMessage(opts) {
         responderGender = 'neutral',
         hostGender = 'neutral',
         invitationTitle = '',
-        isDating = false,
         locale = 'en',
     } = opts;
     const title = trimTitle(invitationTitle, locale);
     const thanks = hostThanksPhrase(hostGender, locale);
     const wish = hostWishPhrase(hostGender, locale);
-    const meet = hostMeetPhrase(hostGender, locale);
 
     if (isArabicLocale(locale)) {
         if (status === 'accepted') {
-            if (isDating) {
-                if (responderGender === 'female') {
-                    return `${thanks}! قبلت «${title}» وأنا متحمسة ${meet} 💕`;
-                }
-                if (responderGender === 'male') {
-                    return `${thanks}! قبلت «${title}» وأنا متحمس ${meet} 💕`;
-                }
-                return `${thanks}! قبلت «${title}» وإن شاء الله أكون هناك 💕`;
-            }
             if (responderGender === 'female') {
                 return `${thanks}! قبلت «${title}» ومتحمسة للحضور 🎉`;
             }
@@ -86,19 +68,16 @@ export function buildPrivateInvitationResponseChatMessage(opts) {
     }
 
     if (status === 'accepted') {
-        if (isDating) {
-            return `Thank you for the invitation! I'd love to join you for "${title}" 💕`;
-        }
         return `Thank you! I've accepted "${title}" and I'm looking forward to it 🎉`;
     }
     return `I'm sorry, I won't be able to make it this time. Wishing you a wonderful "${title}" 🌸`;
 }
 
 export function buildPrivateInvitationResponseNotificationTitle(opts) {
-    const { status, locale = 'en', isDating = false } = opts;
+    const { status, locale = 'en' } = opts;
     if (isArabicLocale(locale)) {
         if (status === 'accepted') {
-            return isDating ? '💕 تم قبول موعد الدعوة' : '✅ تم قبول الدعوة';
+            return '✅ تم قبول الدعوة';
         }
         return '🌸 اعتذار عن الدعوة';
     }

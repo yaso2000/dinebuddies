@@ -13,11 +13,23 @@ import {
 } from '../../../constants/personalInviteCategories';
 import {
     PERSONAL_INVITE_CATEGORY_DIRS,
-    PRIVATE_INVITE_DATE_TEMPLATES,
     PRIVATE_INVITE_FRIENDSHIP_TEMPLATES,
     PRIVATE_INVITE_SOCIAL_TEMPLATES,
     encodePersonalInviteAssetUrl,
 } from '../../../constants/privateInviteTemplateAssets';
+
+/**
+ * Maps a personal-invite category to the neutral art set backing it. Only two art
+ * sets ship now — `friendship` (work/professional imagery) and `social` (warm group
+ * imagery). The retired romantic "dating" art is never referenced. work → friendship;
+ * family / acquaintance / social → social.
+ * @param {unknown} personalInviteCategory
+ */
+function artCategoryForInvite(personalInviteCategory) {
+    const cat = normalizePersonalInviteCategory(personalInviteCategory);
+    if (cat === 'friendship' || cat === 'work') return 'friendship';
+    return 'social';
+}
 
 /** @deprecated Use PERSONAL_INVITE_CATEGORY_DIRS — kept for callers expecting `backgrounds/` dir names. */
 export const PERSONAL_INVITE_BACKGROUND_DIRS = {
@@ -78,13 +90,11 @@ const LEGACY_PERSONAL_TEMPLATES = [
 ];
 
 export const PRIVATE_CARD_BACKGROUNDS = [
-    ...PRIVATE_INVITE_DATE_TEMPLATES,
     ...PRIVATE_INVITE_FRIENDSHIP_TEMPLATES,
     ...PRIVATE_INVITE_SOCIAL_TEMPLATES,
     ...LEGACY_PERSONAL_TEMPLATES,
 ];
 
-export const DEFAULT_DATING_CARD_BACKGROUND_ID = 'private-luxury-floral';
 export const DEFAULT_FRIENDSHIP_CARD_BACKGROUND_ID = 'private-friend-work-4';
 export const DEFAULT_SOCIAL_CARD_BACKGROUND_ID = 'private-social-1';
 
@@ -93,8 +103,8 @@ const LEGACY_FLAT_BACKGROUND_DIR = '';
 
 /** @param {unknown} personalInviteCategory */
 export function getPersonalInviteBackgroundDir(personalInviteCategory) {
-    const cat = normalizePersonalInviteCategory(personalInviteCategory);
-    return PERSONAL_INVITE_CATEGORY_DIRS[cat] || PERSONAL_INVITE_CATEGORY_DIRS.dating;
+    const artCat = artCategoryForInvite(personalInviteCategory);
+    return PERSONAL_INVITE_CATEGORY_DIRS[artCat] || PERSONAL_INVITE_CATEGORY_DIRS.social;
 }
 
 function templateSuffixFromId(canonical) {
@@ -142,16 +152,15 @@ export function isPrivateBackgroundIdForCategory(assetId, personalInviteCategory
     const canonical = resolveCanonicalPrivateBackgroundId(assetId);
     if (!canonical) return false;
     const opt = PRIVATE_CARD_BACKGROUNDS.find((o) => o.id === canonical);
-    const cat = normalizePersonalInviteCategory(personalInviteCategory);
-    return (opt?.category || 'dating') === cat;
+    return opt?.category === artCategoryForInvite(personalInviteCategory);
 }
 
 /** @param {unknown} [personalInviteCategory] */
 export function getDefaultPrivateCardBackgroundId(personalInviteCategory = DEFAULT_PERSONAL_INVITE_CATEGORY) {
-    const cat = normalizePersonalInviteCategory(personalInviteCategory);
-    if (cat === 'friendship') return DEFAULT_FRIENDSHIP_CARD_BACKGROUND_ID;
-    if (cat === 'social') return DEFAULT_SOCIAL_CARD_BACKGROUND_ID;
-    return DEFAULT_DATING_CARD_BACKGROUND_ID;
+    if (artCategoryForInvite(personalInviteCategory) === 'friendship') {
+        return DEFAULT_FRIENDSHIP_CARD_BACKGROUND_ID;
+    }
+    return DEFAULT_SOCIAL_CARD_BACKGROUND_ID;
 }
 
 function resolveLegacyBackgroundDirForAsset(canonical) {
@@ -291,9 +300,9 @@ export function getDatingHeroCoverFromMediaData(mediaData) {
 
 /** @param {unknown} [personalInviteCategory] */
 export function getPrivateCardBackgroundOptions(personalInviteCategory = DEFAULT_PERSONAL_INVITE_CATEGORY) {
-    const cat = normalizePersonalInviteCategory(personalInviteCategory);
+    const artCat = artCategoryForInvite(personalInviteCategory);
     return PRIVATE_CARD_BACKGROUNDS.filter(
-        (o) => !o.legacyOnly && (o.category || 'dating') === cat
+        (o) => !o.legacyOnly && o.category === artCat
     );
 }
 

@@ -1373,7 +1373,9 @@ export const InvitationProvider = ({ children }) => {
                 currentUser.name ||
                 'Guest';
             const locale = i18n.language || 'en';
-            const isDating = invData.type === 'Private' || String(invData.occasionType || '').toLowerCase() === 'dating';
+            // Any 1-on-1 personal invite (legacy "dating"/Private types included) uses the
+            // decline-cooldown path below. Not a romantic signal — just personal-invite scope.
+            const isPersonalInvite = invData.type === 'Private' || String(invData.occasionType || '').toLowerCase() === 'dating';
             const responderGender = normalizeUserGender(firebaseProfile || currentUser);
 
             let hostGender = 'neutral';
@@ -1393,12 +1395,10 @@ export const InvitationProvider = ({ children }) => {
                 responderGender,
                 hostGender,
                 invitationTitle: invData.title,
-                isDating,
                 locale,
             });
             const notifyTitle = buildPrivateInvitationResponseNotificationTitle({
                 status,
-                isDating,
                 locale,
             });
 
@@ -1429,7 +1429,7 @@ export const InvitationProvider = ({ children }) => {
                 updatedAt: serverTimestamp(),
             });
 
-            if (status === 'declined' && isDating && hostId) {
+            if (status === 'declined' && isPersonalInvite && hostId) {
                 try {
                     await recordPrivateInviteDecline(hostId, me);
                 } catch (declineErr) {

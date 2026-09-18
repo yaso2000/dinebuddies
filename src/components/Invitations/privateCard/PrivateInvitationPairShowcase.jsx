@@ -12,15 +12,17 @@ function displayName(user, fallback = '') {
     fallback);
 }
 
+// One variant per real personal-invite category (social, friendship, family,
+// work, acquaintance). No dating/romantic category exists — every icon is neutral.
 const CATEGORY_VARIANT = {
-  dating: {
-    connector: '♥',
-    headingKey: 'private_pair_heading_dating',
-    headingDefault: 'Your date',
-    ariaKey: 'private_pair_aria_dating',
-    ariaDefault: 'Date pairing',
-    acceptedKey: 'private_pair_accepted_dating',
-    acceptedDefault: 'Date confirmed',
+  social: {
+    connector: '✨',
+    headingKey: 'private_pair_heading_social',
+    headingDefault: 'Social hangout',
+    ariaKey: 'private_pair_aria_social',
+    ariaDefault: 'Social pairing',
+    acceptedKey: 'private_pair_accepted_social',
+    acceptedDefault: 'Hangout confirmed',
   },
   friendship: {
     connector: '🤝',
@@ -31,14 +33,32 @@ const CATEGORY_VARIANT = {
     acceptedKey: 'private_pair_accepted_friendship',
     acceptedDefault: 'Meetup confirmed',
   },
-  social: {
-    connector: '✨',
-    headingKey: 'private_pair_heading_social',
-    headingDefault: 'Social hangout',
-    ariaKey: 'private_pair_aria_social',
-    ariaDefault: 'Social pairing',
-    acceptedKey: 'private_pair_accepted_social',
-    acceptedDefault: 'Hangout confirmed',
+  family: {
+    connector: '👨‍👩‍👧',
+    headingKey: 'private_pair_heading_family',
+    headingDefault: 'Family gathering',
+    ariaKey: 'private_pair_aria_family',
+    ariaDefault: 'Family pairing',
+    acceptedKey: 'private_pair_accepted_family',
+    acceptedDefault: 'Gathering confirmed',
+  },
+  work: {
+    connector: '💼',
+    headingKey: 'private_pair_heading_work',
+    headingDefault: 'Work meetup',
+    ariaKey: 'private_pair_aria_work',
+    ariaDefault: 'Work pairing',
+    acceptedKey: 'private_pair_accepted_work',
+    acceptedDefault: 'Meetup confirmed',
+  },
+  acquaintance: {
+    connector: '👋',
+    headingKey: 'private_pair_heading_acquaintance',
+    headingDefault: 'Getting acquainted',
+    ariaKey: 'private_pair_aria_acquaintance',
+    ariaDefault: 'Acquaintance pairing',
+    acceptedKey: 'private_pair_accepted_acquaintance',
+    acceptedDefault: 'Meetup confirmed',
   },
 };
 
@@ -60,12 +80,11 @@ export default function PrivateInvitationPairShowcase({
   const guestName = displayName(guest, t('guest', 'Guest'));
 
   const statusMeta = useMemo(() => {
-    const acceptedIcon =
-      categoryId === 'friendship' ? '🤝' : categoryId === 'social' ? '✨' : '💕';
     if (guestRsvpStatus === 'accepted') {
       return {
         className: 'private-invite-pair__status--accepted',
-        icon: acceptedIcon,
+        // Use the category's own neutral icon — never a romantic heart.
+        icon: variant.connector,
         label: t(variant.acceptedKey, { defaultValue: variant.acceptedDefault })
       };
     }
@@ -81,7 +100,7 @@ export default function PrivateInvitationPairShowcase({
       icon: '⏳',
       label: t('private_pair_pending', { defaultValue: 'Awaiting response' })
     };
-  }, [guestRsvpStatus, t, variant.acceptedKey, variant.acceptedDefault, categoryId]);
+  }, [guestRsvpStatus, t, variant.acceptedKey, variant.acceptedDefault, variant.connector]);
 
   if (!host && !guest) return null;
 

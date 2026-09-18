@@ -2,24 +2,26 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FaComments, FaHeart, FaHandshake, FaTimes, FaUserFriends } from 'react-icons/fa';
+import { FaComments, FaHandshake, FaTimes, FaUserFriends } from 'react-icons/fa';
 import { getSafeAvatar } from '../../utils/avatarUtils';
 import { AppText } from '../base';
 import './MatchCelebrationOverlay.css';
 
 function normalizeCelebrationType(type) {
-  if (type === 'like') return 'dating';
-  if (type === 'follow') return 'friendship';
-  if (type === 'dating' || type === 'acquaintance' || type === 'friendship') return type;
+  // Dating removed: a mutual like/"dating" match celebrates as a friendship
+  // (friends icon), never a romantic heart.
+  if (type === 'like' || type === 'dating' || type === 'follow' || type === 'friendship') {
+    return 'friendship';
+  }
   return 'acquaintance';
 }
 
 /**
- * Full-screen connection celebration — dating, acquaintance, or friendship.
+ * Full-screen connection celebration — friendship or acquaintance.
  */
 export default function MatchCelebrationOverlay({
   open,
-  type = 'dating',
+  type = 'friendship',
   selfUser,
   otherUser,
   otherName = '',
@@ -34,16 +36,11 @@ export default function MatchCelebrationOverlay({
   const label = otherName.trim() || t('user', 'User');
 
   const titleByType = {
-    dating: t('discovery_match_friendship_title', 'New friendship!'),
     acquaintance: t('discovery_match_acquaintance_title', 'New acquaintance!'),
     friendship: t('discovery_match_friendship_title', 'New friendship!'),
   };
 
   const subtitleByType = {
-    dating: t('discovery_match_friendship_subtitle', {
-      name: label,
-      defaultValue: `You and ${label} now follow each other`,
-    }),
     acquaintance: t('discovery_match_acquaintance_subtitle', {
       name: label,
       defaultValue: `You and ${label} connected`,
@@ -58,16 +55,6 @@ export default function MatchCelebrationOverlay({
   const subtitle = subtitleByType[celebrationType];
 
   const renderBadgeIcon = () => {
-    if (celebrationType === 'dating') {
-      return (
-        <motion.span
-          animate={{ scale: [1, 1.14, 1] }}
-          transition={{ duration: 0.9, repeat: Infinity, repeatDelay: 0.6 }}
-        >
-          <FaHeart className="match-celebration__badge-icon" />
-        </motion.span>
-      );
-    }
     if (celebrationType === 'friendship') {
       return <FaUserFriends className="match-celebration__badge-icon" />;
     }
