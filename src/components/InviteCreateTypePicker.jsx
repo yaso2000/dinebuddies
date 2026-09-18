@@ -165,8 +165,10 @@ export default function InviteCreateTypePicker({
   // Group the options into their own sections so the "+" menu doesn't jumble
   // invitations with games/quizzes. Headings only show when >1 group is present.
   const GROUP_OF = {
-    group_chat: 'chat',
-    public: 'invitations', social: 'invitations', stage: 'invitations',
+    // Group chat + Stage share the "chat" shelf — both are group rooms of the
+    // same nature (and it keeps every shelf with 2+ cards, so all swipe).
+    group_chat: 'chat', stage: 'chat',
+    public: 'invitations', social: 'invitations',
     group_game: 'games', suitability: 'games', realornai: 'games', zodiac: 'games',
   };
   const GROUPS = [
@@ -204,7 +206,8 @@ export default function InviteCreateTypePicker({
     };
 
     // Mobile: vertical shelves — each section's heading sits ABOVE a horizontal
-    // scroll row of that section's cards (not inline between the cards).
+    // scroll row of that section's cards (not inline between the cards). The
+    // shelves container scrolls vertically so no shelf is ever cut off.
     if (horizontal) {
       return (
         <div className={`business-create-sheet__shelves${className ? ` ${className}` : ''}`}>
