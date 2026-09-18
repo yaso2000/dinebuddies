@@ -20,15 +20,19 @@ export async function checkCanMessage(
     targetUserId,
     currentUserFollowing = [],
     targetUserFollowing = [],
-    { currentUserProfile = null, targetUserProfile = null } = {}
+    { currentUserProfile = null, targetUserProfile = null, viewerFollowers = null } = {}
 ) {
+    // When viewerFollowers (the viewer's own reverse follow index) is provided,
+    // isConnectionComplete answers "does target follow me?" from it and never reads
+    // the target's users doc; targetUserFollowing is then ignored.
     return isConnectionComplete(
         currentUserId,
         targetUserId,
         currentUserProfile,
         targetUserProfile,
         currentUserFollowing,
-        targetUserFollowing
+        targetUserFollowing,
+        viewerFollowers
     );
 }
 
@@ -51,7 +55,10 @@ export async function resolveCanMessageMap(
         return {};
     }
 
-    const followerSet = new Set(followerIdsOfViewer.filter(Boolean));
+    // Reverse follow index: "does target follow me?" is answered from the viewer's
+    // own followers[] (followerIdsOfViewer) — never a read of the target's users doc.
+    // Callers MUST pass followerIdsOfViewer (the viewer's users/{uid}.followers[]).
+    const viewerFollowers = Array.isArray(followerIdsOfViewer) ? followerIdsOfViewer : [];
     const map = {};
 
     await Promise.all(
@@ -59,18 +66,12 @@ export async function resolveCanMessageMap(
             const targetId = target?.id;
             if (!targetId || targetId === currentUserId) return;
 
-            const targetFollowing = Array.isArray(target.following) ? target.following : [];
-            const enrichedFollowing =
-                followerSet.has(targetId) && !targetFollowing.includes(currentUserId)
-                    ? [...targetFollowing, currentUserId]
-                    : targetFollowing;
-
             map[targetId] = await checkCanMessage(
                 currentUserId,
                 targetId,
                 currentUserFollowing,
-                enrichedFollowing,
-                { currentUserProfile, targetUserProfile: target }
+                [],
+                { currentUserProfile, targetUserProfile: target, viewerFollowers }
             );
         })
     );

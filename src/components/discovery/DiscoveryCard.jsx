@@ -127,16 +127,18 @@ export default function DiscoveryCard({
   const refreshCanChat = useCallback(async () => {
     if (!viewerUid || !profile?.id) return;
     try {
-      const snap = await getDoc(doc(db, 'users', profile.id));
-      const targetFollowing = snap.exists() ? snap.data()?.following || [] : [];
+      // "Does this member follow me?" — from the viewer's own followers[] reverse
+      // index, not a read of the member's users doc.
+      const viewerFollowers = Array.isArray(viewerProfile?.followers) ? viewerProfile.followers : [];
       const allowed = await checkCanMessage(
         viewerUid,
         profile.id,
         viewerFollowing,
-        targetFollowing,
+        [],
         {
           currentUserProfile: viewerProfile,
           targetUserProfile: targetUser,
+          viewerFollowers,
         }
       );
       setCanChat(allowed);

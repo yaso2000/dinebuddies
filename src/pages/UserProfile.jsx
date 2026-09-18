@@ -584,8 +584,8 @@ const UserProfile = () => {
       myUid,
       userId,
       currentUser?.following || [],
-      user?.following || [],
-      { currentUserProfile: viewerProfile, targetUserProfile: user }
+      [],
+      { currentUserProfile: viewerProfile, targetUserProfile: user, viewerFollowers: viewerProfile?.followers || [] }
     ).
     then((allowed) => {
       if (!cancelled) {
@@ -612,8 +612,8 @@ const UserProfile = () => {
         myUid,
         userId,
         currentUser?.following || [],
-        user?.following || [],
-        { currentUserProfile: viewerProfile, targetUserProfile: user }
+        [],
+        { currentUserProfile: viewerProfile, targetUserProfile: user, viewerFollowers: viewerProfile?.followers || [] }
       );
       setCanChat(allowed);
     } catch {
@@ -676,6 +676,7 @@ const UserProfile = () => {
           targetUser: user,
           viewerProfile,
           viewerFollowing: currentUser?.following || [],
+          viewerFollowers: viewerProfile?.followers || [],
           celebrateMatch,
           displayName: getPrivateInviteeDisplayName(user) || profileModel.displayName,
         });

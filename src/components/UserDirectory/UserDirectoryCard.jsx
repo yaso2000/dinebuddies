@@ -93,16 +93,18 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
   const refreshCanChat = useCallback(async () => {
     if (!viewerUid || !profileUid) return;
     try {
-      const snap = await getDoc(doc(db, 'users', profileUid));
-      const targetFollowing = snap.exists() ? snap.data()?.following || [] : [];
+      // "Does this member follow me?" — from the viewer's own followers[] reverse
+      // index, not a read of the member's users doc.
+      const viewerFollowers = Array.isArray(userProfile?.followers) ? userProfile.followers : [];
       const allowed = await checkCanMessage(
         viewerUid,
         profileUid,
         viewerFollowing,
-        targetFollowing,
+        [],
         {
           currentUserProfile: userProfile || invitationUser || currentUser,
           targetUserProfile: user,
+          viewerFollowers,
         }
       );
       setCanChat(allowed);
@@ -192,6 +194,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
             targetUser: user,
             viewerProfile,
             viewerFollowing,
+            viewerFollowers: Array.isArray(userProfile?.followers) ? userProfile.followers : [],
             celebrateMatch,
             displayName,
           });

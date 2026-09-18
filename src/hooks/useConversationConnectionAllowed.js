@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { onSnapshot } from 'firebase/firestore';
 import { checkCanMessage } from '../utils/chatHelpers';
 import { getDiscoveryLikeRef } from '../utils/discoveryProfile';
+import { useAuth } from '../context/AuthContext';
 
 const CHECK_DEBOUNCE_MS = 400;
 /** The permission check awaits Firestore reads that can stall indefinitely on a
@@ -11,7 +11,10 @@ const CHECK_DEBOUNCE_MS = 400;
 const CHECK_WATCHDOG_MS = 6000;
 
 /**
- * Live connection gate for 1:1 DMs — debounced to avoid spamming checks on every Firestore tick.
+ * Live connection gate for 1:1 DMs — debounced to avoid spamming checks on every
+ * Firestore tick. Privacy: "does the other member follow me?" is answered from the
+ * viewer's OWN users/{uid}.followers[] reverse index (live via AuthContext), so this
+ * never reads the target member's users/{uid} doc.
  */
 export function useConversationConnectionAllowed(
     viewerUid,
@@ -19,23 +22,29 @@ export function useConversationConnectionAllowed(
     viewerFollowing = [],
     { enabled = true, isSupportPeer = false } = {}
 ) {
+    const { userProfile } = useAuth();
+    const viewerFollowers = Array.isArray(userProfile?.followers) ? userProfile.followers : [];
+
     const [allowed, setAllowed] = useState(isSupportPeer);
     const [loading, setLoading] = useState(Boolean(enabled && viewerUid && targetUserId && !isSupportPeer));
-    const [targetProfile, setTargetProfile] = useState(null);
 
-    // Depend on the contents, not the array identity: callers build this list
-    // inline with a `|| []` fallback, so a fresh empty array on every render
-    // would tear the listeners down and restart the debounce before it could
-    // ever fire — leaving the chat on its loading screen for good.
+    // Consumers use targetProfile only as a truthiness gate + resolveConnectionKind()
+    // (which returns 'friendship' regardless). Minimal shape — no target-doc read.
+    const targetProfile = useMemo(() => (targetUserId ? { id: targetUserId } : null), [targetUserId]);
+
+    // Depend on the contents, not array identity: callers build these inline with a
+    // `|| []` fallback, so a fresh array each render would tear listeners down and
+    // restart the debounce before it fires — leaving the chat stuck on its spinner.
     const followingKey = useMemo(
         () => (Array.isArray(viewerFollowing) ? viewerFollowing.join('|') : ''),
         [viewerFollowing]
     );
+    const followersKey = useMemo(() => viewerFollowers.join('|'), [viewerFollowers]);
+
     const viewerFollowingRef = useRef(viewerFollowing);
     viewerFollowingRef.current = viewerFollowing;
-
-    const targetFollowingRef = useRef([]);
-    const targetProfileRef = useRef(null);
+    const viewerFollowersRef = useRef(viewerFollowers);
+    viewerFollowersRef.current = viewerFollowers;
     const debounceRef = useRef(null);
 
     useEffect(() => {
@@ -64,8 +73,8 @@ export function useConversationConnectionAllowed(
                         viewerUid,
                         targetUserId,
                         viewerFollowingRef.current,
-                        targetFollowingRef.current,
-                        { targetUserProfile: targetProfileRef.current }
+                        [],
+                        { viewerFollowers: viewerFollowersRef.current }
                     );
                     if (!cancelled) {
                         setAllowed(ok);
@@ -80,50 +89,28 @@ export function useConversationConnectionAllowed(
             }, CHECK_DEBOUNCE_MS);
         };
 
-        // Every listener needs an error handler: onSnapshot without one dies
-        // silently on a denied or dropped read, and `loading` would never be
-        // cleared — the chat would sit on its spinner with nothing to retry.
         const onListenerError = (error) => {
             console.warn('[useConversationConnectionAllowed] listener failed:', error?.code || error);
             runCheck();
         };
 
-        const userUnsub = onSnapshot(
-            doc(db, 'users', targetUserId),
-            (snap) => {
-                if (snap.exists()) {
-                    const data = snap.data();
-                    targetFollowingRef.current = Array.isArray(data?.following) ? data.following : [];
-                    targetProfileRef.current = { id: targetUserId, ...data };
-                } else {
-                    targetFollowingRef.current = [];
-                    targetProfileRef.current = { id: targetUserId };
-                }
-                if (!cancelled) setTargetProfile(targetProfileRef.current);
-                runCheck();
-            },
-            onListenerError
-        );
-
-        const onLikeChange = () => runCheck();
-
+        // Re-check when either side toggles a discovery like (a like ref, not a users
+        // doc). The follow-back signal itself arrives via viewerFollowers (deps below).
         const likeUnsubs = [
-            onSnapshot(getDiscoveryLikeRef(targetUserId, viewerUid), onLikeChange, onListenerError),
-            onSnapshot(getDiscoveryLikeRef(viewerUid, targetUserId), onLikeChange, onListenerError),
+            onSnapshot(getDiscoveryLikeRef(targetUserId, viewerUid), () => runCheck(), onListenerError),
+            onSnapshot(getDiscoveryLikeRef(viewerUid, targetUserId), () => runCheck(), onListenerError),
         ];
 
-        // Nothing above is guaranteed to fire — a listener can simply never call
-        // back while offline. Resolve the gate rather than hang on it.
+        // Nothing above is guaranteed to fire while offline — resolve rather than hang.
         runCheck();
 
         return () => {
             cancelled = true;
             clearTimeout(watchdog);
             if (debounceRef.current) clearTimeout(debounceRef.current);
-            userUnsub();
             likeUnsubs.forEach((unsub) => unsub());
         };
-    }, [enabled, isSupportPeer, targetUserId, followingKey, viewerUid]);
+    }, [enabled, isSupportPeer, targetUserId, followingKey, followersKey, viewerUid]);
 
     return { allowed, loading, targetProfile };
 }

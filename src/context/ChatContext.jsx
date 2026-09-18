@@ -22,6 +22,7 @@ import { useAuth } from './AuthContext';
 import { useInvitations } from './InvitationContext';
 import { useToast } from './ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import { notifyNewMessage } from '../utils/notificationHelpers';
 import { asUidArray, messagingRestrictedBetweenUsers } from '../utils/userSocialLists';
 import { checkCanMessage, resolveCanMessageMap } from '../utils/chatHelpers';
@@ -112,31 +113,40 @@ export const ChatProvider = ({ children }) => {
                         };
                     }
 
-                    // Get other user's data (cache to avoid N getDocs per snapshot fire)
+                    // Chat-list peer card: name/avatar/online from the PUBLIC projection —
+                    // never the peer's users doc. The mutual-follow gate below uses the
+                    // viewer's own followers[] reverse index, so the peer's following is
+                    // not needed. (cache to avoid N reads per snapshot fire)
                     let otherUser = null;
                     if (otherUserId) {
                         const cached = userProfileCache.current.get(otherUserId);
                         if (cached) {
                             otherUser = cached;
+                        } else if (data.isSupportThread === true) {
+                            otherUser = {
+                                uid: otherUserId,
+                                displayName: data.supportDisplayName || 'DineBuddies Support',
+                                photoURL: getSafeAvatar(null),
+                                isOnline: false,
+                                lastSeen: null,
+                                isSystemAccount: true,
+                            };
+                            userProfileCache.current.set(otherUserId, otherUser);
                         } else {
-                            const userDoc = await getDoc(doc(db, 'users', otherUserId));
-                            if (userDoc.exists()) {
-                                const userData = userDoc.data();
-                                const isSupport =
-                                    userData.isSystemAccount === true || data.isSupportThread === true;
-                                otherUser = {
-                                    uid: otherUserId,
-                                    displayName: isSupport
-                                        ? data.supportDisplayName || 'DineBuddies Support'
-                                        : userData.display_name || userData.displayName || userData.email || 'User',
-                                    photoURL: getSafeAvatar(userData),
-                                    isOnline: userData.isOnline || false,
-                                    lastSeen: userData.lastSeen || null,
-                                    isSystemAccount: isSupport,
-                                    following: userData.following || [],
-                                };
-                                userProfileCache.current.set(otherUserId, otherUser);
-                            }
+                            const pubDoc = await getDoc(doc(db, 'public_profiles', otherUserId));
+                            const shaped = pubDoc.exists()
+                                ? mapPublicProfileDocToUserShape({ id: otherUserId, ...pubDoc.data() })
+                                : null;
+                            const up = pubDoc.exists() ? (pubDoc.data().userPublic || {}) : {};
+                            otherUser = {
+                                uid: otherUserId,
+                                displayName: shaped?.displayName || 'User',
+                                photoURL: getSafeAvatar(shaped || { id: otherUserId }),
+                                isOnline: up.isOnline === true,
+                                lastSeen: null,
+                                isSystemAccount: false,
+                            };
+                            userProfileCache.current.set(otherUserId, otherUser);
                         }
                     }
 
@@ -155,13 +165,15 @@ export const ChatProvider = ({ children }) => {
 
                 const viewerFollowing =
                     invitationUser?.following || userProfile?.following || [];
+                const viewerFollowers = Array.isArray(userProfile?.followers) ? userProfile.followers : [];
                 const permissionTargets = convos
                     .filter((c) => c.otherUser?.uid && !c.otherUser?.isSystemAccount && !c.isSupportThread)
-                    .map((c) => ({ id: c.otherUser.uid, following: c.otherUser.following || [] }));
+                    .map((c) => ({ id: c.otherUser.uid }));
                 const permissionMap = await resolveCanMessageMap(
                     currentUser.uid,
                     permissionTargets,
-                    viewerFollowing
+                    viewerFollowing,
+                    { followerIdsOfViewer: viewerFollowers, currentUserProfile: userProfile }
                 );
                 const gatedConvos = convos.filter((c) => {
                     // Groups are membership-gated server-side; keep any group the

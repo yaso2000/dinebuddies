@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
 import { checkCanMessage } from '../utils/chatHelpers';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * Whether the viewer may DM this member (dating, acquaintance, or friendship connection).
@@ -21,15 +20,23 @@ export function useCanMessageMember(
     options = {}
 ) {
     const enabled = options.enabled !== false;
+    const { userProfile } = useAuth();
+    // The viewer is the current user, so their reverse follow index is their own
+    // users/{uid}.followers[] — no read of the target's doc needed.
+    const viewerFollowers = Array.isArray(userProfile?.followers) ? userProfile.followers : [];
     const viewerProfileRef = useRef(options.viewerProfile);
     const targetProfileRef = useRef(options.targetProfile);
-    viewerProfileRef.current = options.viewerProfile;
+    viewerProfileRef.current = options.viewerProfile || userProfile || null;
     targetProfileRef.current = options.targetProfile;
 
     const [canMessage, setCanMessage] = useState(false);
     const followingKey = useMemo(
         () => (Array.isArray(viewerFollowing) ? viewerFollowing.join('|') : ''),
         [viewerFollowing]
+    );
+    const followersKey = useMemo(
+        () => viewerFollowers.join('|'),
+        [viewerFollowers]
     );
 
     useEffect(() => {
@@ -44,23 +51,17 @@ export function useCanMessageMember(
 
         (async () => {
             try {
-                let targetFollowing = Array.isArray(targetProfile?.following)
-                    ? targetProfile.following
-                    : null;
-
-                if (targetFollowing == null) {
-                    const snap = await getDoc(doc(db, 'users', targetUserId));
-                    targetFollowing = snap.exists() ? snap.data()?.following || [] : [];
-                }
-
+                // Reverse-index path: "does target follow me?" comes from the viewer's
+                // own followers[]. No read of the target's users/{uid} doc.
                 const allowed = await checkCanMessage(
                     viewerUid,
                     targetUserId,
                     viewerFollowing,
-                    targetFollowing,
+                    [],
                     {
                         currentUserProfile: viewerProfile,
                         targetUserProfile: targetProfile,
+                        viewerFollowers,
                     }
                 );
                 if (!cancelled) setCanMessage(allowed);
@@ -72,7 +73,7 @@ export function useCanMessageMember(
         return () => {
             cancelled = true;
         };
-    }, [viewerUid, targetUserId, followingKey, enabled, viewerFollowing]);
+    }, [viewerUid, targetUserId, followingKey, followersKey, enabled, viewerFollowing, viewerFollowers]);
 
     return canMessage;
 }

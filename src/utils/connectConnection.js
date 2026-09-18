@@ -50,7 +50,15 @@ async function resolveProfileShape(userId, profileHint) {
 }
 
 /**
- * Live connection gate — chat opens when this returns true.
+ * Live connection gate — chat opens when this returns true (a mutual Follow).
+ *
+ * Privacy: pass `viewerFollowers` (the viewer's own users/{uid}.followers[] reverse
+ * index) and the gate answers "does target follow me?" from the VIEWER's OWN doc —
+ * no read of the target's users/{uid} doc. The 16–17↔adult minor-safety gate is
+ * enforced authoritatively server-side (createOrGetConversation + firestore.rules
+ * `sameAgeClass`); on this path the client applies it only when both profiles are
+ * already in hand (no extra read). When `viewerFollowers` is omitted, the legacy
+ * path is used (may read the target doc) — kept for callers not yet migrated.
  */
 export async function isConnectionComplete(
     viewerId,
@@ -58,10 +66,20 @@ export async function isConnectionComplete(
     viewerProfile,
     targetProfile,
     viewerFollowing = [],
-    targetFollowing = null
+    targetFollowing = null,
+    viewerFollowers = null
 ) {
     if (!viewerId || !targetId || viewerId === targetId) return false;
+    if (!Array.isArray(viewerFollowing) || !viewerFollowing.includes(targetId)) return false;
 
+    // Preferred path: reverse follow index from the viewer's own doc (no target read).
+    if (Array.isArray(viewerFollowers)) {
+        if (!viewerFollowers.includes(targetId)) return false;
+        if (viewerProfile && targetProfile && !sameAgeClass(viewerProfile, targetProfile)) return false;
+        return true;
+    }
+
+    // Legacy path: resolve shapes (may read the target users doc).
     const [viewerShape, targetShape] = await Promise.all([
         resolveProfileShape(viewerId, viewerProfile),
         resolveProfileShape(targetId, targetProfile),
@@ -87,6 +105,7 @@ export async function tryCelebrateConnectionComplete({
     targetUser,
     viewerProfile,
     viewerFollowing,
+    viewerFollowers = null,
     celebrateMatch,
     displayName,
 }) {
@@ -97,7 +116,9 @@ export async function tryCelebrateConnectionComplete({
         targetUser.id,
         viewerProfile,
         targetUser,
-        viewerFollowing
+        viewerFollowing,
+        null,
+        viewerFollowers
     );
     if (!complete) return false;
 
