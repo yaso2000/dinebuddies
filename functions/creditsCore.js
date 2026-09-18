@@ -192,6 +192,83 @@ function grantPaidCreditsInTransaction(tx, userRef, userData, args) {
 }
 
 /**
+ * Reclaim purchase (paid) credits that were granted by a fulfillment record, after the
+ * underlying payment was reversed (Stripe refund/dispute, Apple/Play refund/void). Shared
+ * by every provider so the clawback rules stay identical:
+ *  - runs its OWN transaction — never call inside another tx;
+ *  - idempotent per fulfillment (a `refundedAt` marker short-circuits repeats);
+ *  - clamps to the user's available paidCredits (balance never goes negative), so a
+ *    buy → spend → refund abuser loses whatever purchase credits remain;
+ *  - writes a `refund_clawback` ledger row and stamps the fulfillment doc;
+ *  - never throws (callers are webhooks that must still 200 the provider).
+ *
+ * @param {FirebaseFirestore.DocumentReference} fulfillmentRef doc with { userId, credits }
+ * @param {{ reason: string, relatedId?: string|null }} opts
+ * @returns {Promise<{ deducted: number, alreadyDone?: boolean, missing?: boolean }>}
+ */
+async function clawbackFulfillmentCredits(fulfillmentRef, opts = {}) {
+    const reason = String(opts.reason || 'refund').slice(0, 200);
+    const relatedId = opts.relatedId ? String(opts.relatedId).slice(0, 200) : null;
+    try {
+        return await db.runTransaction(async (tx) => {
+            const fSnap = await tx.get(fulfillmentRef);
+            if (!fSnap.exists) return { deducted: 0, missing: true };
+            const f = fSnap.data() || {};
+            if (f.refundedAt) return { deducted: 0, alreadyDone: true };
+
+            const userId = String(f.userId || '');
+            const credits = Math.max(0, Math.floor(Number(f.credits) || 0));
+            if (!userId || credits <= 0) {
+                tx.update(fulfillmentRef, {
+                    refundedAt: FieldValue.serverTimestamp(),
+                    refundedCredits: 0,
+                    refundReason: reason,
+                });
+                return { deducted: 0 };
+            }
+
+            const userRef = db.collection('users').doc(userId);
+            const uSnap = await tx.get(userRef);
+            const u = uSnap.exists ? uSnap.data() || {} : {};
+            const paid = Math.max(0, Math.floor(Number(u.paidCredits) || 0));
+            const deducted = Math.min(paid, credits); // never negative
+
+            if (uSnap.exists && deducted > 0) {
+                tx.update(userRef, {
+                    paidCredits: paid - deducted,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+                const ledgerRef = db.collection('credit_transactions').doc();
+                tx.set(ledgerRef, {
+                    userId,
+                    accountRole: isBusinessUserDoc(u) ? 'business' : 'user',
+                    type: 'refund_clawback',
+                    amount: -deducted,
+                    balanceType: 'paid',
+                    wallet: 'purchase',
+                    reason,
+                    relatedId,
+                    createdAt: FieldValue.serverTimestamp(),
+                    paidUsed: deducted,
+                    savedUsed: 0,
+                    freeUsed: 0,
+                });
+            }
+
+            tx.update(fulfillmentRef, {
+                refundedAt: FieldValue.serverTimestamp(),
+                refundedCredits: deducted,
+                refundReason: reason,
+            });
+            return { deducted };
+        });
+    } catch (e) {
+        console.error('[clawbackFulfillmentCredits] non-fatal error', e?.message || e);
+        return { deducted: 0 };
+    }
+}
+
+/**
  * Credit savings wallet from a received gift (50% of sent amount).
  * @param {FirebaseFirestore.Transaction} tx
  * @param {FirebaseFirestore.DocumentReference} userRef
@@ -315,6 +392,7 @@ module.exports = {
     grantPaidCreditsInTransaction,
     grantSavedCreditsInTransaction,
     grantAdminPaidCreditsInTransaction,
+    clawbackFulfillmentCredits,
     isRegularUserDoc,
     isBusinessUserDoc,
     creditBalanceResetPatch,

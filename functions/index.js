@@ -994,11 +994,13 @@ exports.getPayPalCommerceStatus = paypalModule.getPayPalCommerceStatus;
 const googlePlayModule = require('./googlePlayBilling');
 exports.verifyGooglePlayCreditsPurchase = googlePlayModule.verifyGooglePlayCreditsPurchase;
 exports.getGooglePlayCommerceStatus = googlePlayModule.getGooglePlayCommerceStatus;
+exports.googlePlayVoidedPurchasesSweep = googlePlayModule.googlePlayVoidedPurchasesSweep;
 
 const appStoreModule = require('./appStoreBilling');
 exports.verifyAppleCreditsPurchase = appStoreModule.verifyAppleCreditsPurchase;
 exports.verifyAppleBusinessSubscription = appStoreModule.verifyAppleBusinessSubscription;
 exports.getAppleCommerceStatus = appStoreModule.getAppleCommerceStatus;
+exports.appStoreServerNotifications = appStoreModule.appStoreServerNotifications;
 
 // ─── Webhook Handler ────────────────────────────────────
 exports.stripeWebhook = webhookModule.stripeWebhook;

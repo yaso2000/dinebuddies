@@ -9,6 +9,7 @@ const admin = require('firebase-admin');
 const { google } = require('googleapis');
 const {
     grantPaidCreditsInTransaction,
+    clawbackFulfillmentCredits,
     isBusinessUserDoc,
     CREDIT_PACKAGES,
 } = require('./creditsCore');
@@ -192,3 +193,85 @@ exports.verifyGooglePlayCreditsPurchase = functions.https.onCall(async (data, co
 });
 
 exports.getGooglePlayCommerceStatus = functions.https.onCall(async () => googlePlayCommerceStatus());
+
+/**
+ * Scheduled clawback for Google Play refunds / chargebacks / revocations. Google has no
+ * signed webhook we verify like Apple/Stripe; instead we poll the Voided Purchases API
+ * (the Play service account already holds the androidpublisher scope) and reclaim credits
+ * for any purchase that was voided after our last sweep. Idempotent (shared clawback +
+ * a stored cursor), so overlap or retries are safe. No Play Console config needed beyond
+ * the existing billing service account.
+ */
+exports.googlePlayVoidedPurchasesSweep = functions.pubsub
+    .schedule('every 6 hours')
+    .onRun(async () => {
+        if (!hasGooglePlayServiceAccount()) {
+            console.log('[googlePlayVoidedPurchasesSweep] Play billing not configured — skipping.');
+            return null;
+        }
+
+        let androidpublisher;
+        let packageName;
+        try {
+            androidpublisher = getAndroidPublisher();
+            packageName = resolveGooglePlayPackageName();
+        } catch (e) {
+            console.error('[googlePlayVoidedPurchasesSweep] setup failed', e?.message || e);
+            return null;
+        }
+
+        const cursorRef = db.collection('billing_cursors').doc('google_play_voided');
+        const cursorSnap = await cursorRef.get();
+        // First run: look back 30 days. Afterwards resume from the stored cursor.
+        const defaultStart = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        const startTime = Number(cursorSnap.exists ? cursorSnap.data()?.startTimeMillis || 0 : 0) || defaultStart;
+
+        let maxVoided = startTime;
+        let processed = 0;
+        let pageToken;
+
+        try {
+            do {
+                const resp = await androidpublisher.purchases.voidedpurchases.list({
+                    packageName,
+                    startTime: String(startTime),
+                    type: 1, // voided one-time purchases AND subscriptions
+                    token: pageToken,
+                    maxResults: 1000,
+                });
+                const items = resp?.data?.voidedPurchases || [];
+                for (const vp of items) {
+                    const token = String(vp?.purchaseToken || '');
+                    const voidedAt = Number(vp?.voidedTimeMillis || 0);
+                    if (voidedAt > maxVoided) maxVoided = voidedAt;
+                    if (!token) continue;
+                    const ref = db
+                        .collection('google_play_credit_fulfillments')
+                        .doc(fulfillmentDocId(token));
+                    await clawbackFulfillmentCredits(ref, {
+                        reason: 'google_play_void',
+                        relatedId: String(vp?.orderId || '').slice(0, 200) || fulfillmentDocId(token),
+                    });
+                    processed += 1;
+                }
+                pageToken = resp?.data?.tokenPagination?.nextPageToken || undefined;
+            } while (pageToken);
+        } catch (e) {
+            console.error('[googlePlayVoidedPurchasesSweep] list/void error', e?.message || e);
+            // Don't advance the cursor on failure — retry the same window next run.
+            return null;
+        }
+
+        // Advance past the newest voided entry (+1ms) so we never rescan it; clawback is
+        // idempotent regardless, so a small overlap is harmless.
+        await cursorRef.set(
+            {
+                startTimeMillis: Math.max(startTime, maxVoided + 1),
+                lastSweepAt: admin.firestore.FieldValue.serverTimestamp(),
+                lastProcessed: processed,
+            },
+            { merge: true }
+        );
+        console.log(`[googlePlayVoidedPurchasesSweep] processed ${processed} voided purchase(s).`);
+        return null;
+    });

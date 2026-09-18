@@ -18,6 +18,7 @@ const {
 } = require('@apple/app-store-server-library');
 const {
     grantPaidCreditsInTransaction,
+    clawbackFulfillmentCredits,
     isBusinessUserDoc,
     CREDIT_PACKAGES,
 } = require('./creditsCore');
@@ -300,6 +301,75 @@ exports.verifyAppleBusinessSubscription = functions.https.onCall(async (data, co
 });
 
 exports.getAppleCommerceStatus = functions.https.onCall(async () => appleCommerceStatus());
+
+/**
+ * App Store Server Notifications V2 endpoint — Apple POSTs a signed payload here when a
+ * purchase state changes. We use it to claw back Dine Credits on REFUND / REVOKE (blocks
+ * buy → spend → Apple-refund abuse; the callable grant path only refuses an *already*
+ * refunded transaction, so a refund that lands AFTER the grant needs this).
+ *
+ * Configure the URL in App Store Connect → App → App Store Server Notifications (V2):
+ *   https://us-central1-<project>.cloudfunctions.net/appStoreServerNotifications
+ * Signature is cryptographically verified against Apple's root certs before we act; a
+ * forged/unverifiable payload is rejected with 400. Processing errors still return 200
+ * (the clawback is idempotent + self-logging) so Apple does not retry-storm us.
+ */
+exports.appStoreServerNotifications = functions.https.onRequest(async (req, res) => {
+    if (req.method !== 'POST') {
+        res.status(405).send('Method Not Allowed');
+        return;
+    }
+
+    const signedPayload = req.body?.signedPayload;
+    if (!signedPayload || typeof signedPayload !== 'string') {
+        res.status(400).send('Missing signedPayload');
+        return;
+    }
+
+    let verifier;
+    try {
+        verifier = getSignedDataVerifier();
+    } catch (e) {
+        console.error('[appStoreServerNotifications] verifier unavailable', e?.message || e);
+        res.status(500).send('Apple verification not configured');
+        return;
+    }
+
+    let payload;
+    try {
+        payload = await verifier.verifyAndDecodeNotification(signedPayload);
+    } catch (e) {
+        // Unverifiable signature — reject (could be forged or a config mismatch).
+        console.error('[appStoreServerNotifications] signature verification failed', e?.message || e);
+        res.status(400).send('Invalid signature');
+        return;
+    }
+
+    try {
+        const notificationType = String(payload?.notificationType || '');
+        if (notificationType === 'REFUND' || notificationType === 'REVOKE') {
+            const signedTx = payload?.data?.signedTransactionInfo;
+            if (signedTx) {
+                const decoded = await verifier.verifyAndDecodeTransaction(signedTx);
+                const transactionId = fulfillmentDocId(decoded?.transactionId);
+                if (transactionId) {
+                    const ref = db.collection('apple_iap_credit_fulfillments').doc(transactionId);
+                    const result = await clawbackFulfillmentCredits(ref, {
+                        reason: `apple_${notificationType.toLowerCase()}`,
+                        relatedId: transactionId,
+                    });
+                    console.log(
+                        `[appStoreServerNotifications] ${notificationType} tx=${transactionId} clawed=${result?.deducted || 0}`
+                    );
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[appStoreServerNotifications] processing error (non-fatal)', e?.message || e);
+    }
+
+    res.status(200).json({ received: true });
+});
 
 // Exported for future use (e.g. a periodic refresh job re-checking subscription status
 // via the App Store Server API instead of waiting for the client to re-verify).
