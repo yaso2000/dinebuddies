@@ -26,6 +26,11 @@ Resume point for continuing the audit remediation in a later session.
 - **2.6** Removed the insecure generic `createCheckoutSession` endpoint.
 - **2.9** Apple IAP verify fail-safe to PRODUCTION when `NODE_ENV=production`.
 
+### Safe hardening done while user was away (validated, deployed)
+- **3.5** `api/cron/ingest-pending-venues.js` fails CLOSED (503) when `CRON_SECRET` unset — ⚠️ confirm `CRON_SECRET` IS set in Vercel or venue ingestion 503s.
+- Removed dead `affiliateAgentContactFieldsOnlyUpdate()` from `firestore.rules` (cleared deploy lint warnings).
+- **Self-review of deployed rules:** confirmed no legit-flow regression from the new guards (credit sync writes same values; ageCategory first-set allowed; `emailVerified`/`banned`/quota fields are NOT client-written — the `useBusinessProfile.js:86 emailVerified:true` is an in-memory projection, not a Firestore write).
+
 ### Also done earlier
 - Store anti-steering: external payment (Stripe/PayPal/saved cards/billing/cash-out) hidden on native iOS/Android; only Apple IAP / Google Play shown.
 - Cash-out (jars) disabled server+client (`CASHOUT_ENABLED`/`VITE_CASHOUT_ENABLED=false`, native-hidden).
