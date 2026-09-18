@@ -119,6 +119,7 @@
     "@capacitor/android": "^8.5.0",
     "@capacitor/cli": "^8.5.0",
     "@faker-js/faker": "^10.3.0",
+    "@firebase/rules-unit-testing": "^3.0.4",
     "@types/node": "^26.1.1",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
