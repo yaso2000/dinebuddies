@@ -25,12 +25,16 @@ const SCAN_LIMIT = 60;
 const MAX_INGESTS_PER_RUN = 6;
 
 export default async function handler(req, res) {
+  // SECURITY: fail CLOSED. An unset CRON_SECRET previously left this endpoint
+  // open to anyone (Google Places quota drain / forced ingestion). Requires the
+  // secret to be configured in the deploy env (Vercel).
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const header = String(req.headers.authorization || '');
-    if (header !== `Bearer ${secret}`) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+  if (!secret) {
+    return res.status(503).json({ error: 'Cron not configured (CRON_SECRET missing)' });
+  }
+  const header = String(req.headers.authorization || '');
+  if (header !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {

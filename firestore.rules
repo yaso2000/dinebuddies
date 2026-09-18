@@ -361,17 +361,6 @@ service cloud.firestore {
       ];
     }
 
-    // Affiliate agents may edit contact/payout identity fields only (not balances or referral codes).
-    function affiliateAgentContactFieldsOnlyUpdate(userId) {
-      return isOwner(userId) &&
-             resource.data.get('role', '') == 'affiliate_agent' &&
-             request.resource.data.get('role', '') == resource.data.get('role', '') &&
-             request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly([
-                 'affiliate_phone', 'affiliate_paypal_email', 'affiliate_address',
-                 'affiliate_country', 'affiliate_city'
-               ]);
-    }
 
     function userCreateHasNoServerAffiliateFields() {
       return !request.resource.data.keys().hasAny(affiliateServerOnlyUserKeys());
