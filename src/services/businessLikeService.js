@@ -82,10 +82,10 @@ export function getBusinessRef(businessId) {
  */
 export async function incrementBusinessShareCount(businessId) {
     if (!businessId) return;
-    const businessRef = getBusinessRef(businessId);
     try {
-        const snap = await getDoc(businessRef);
-        if (snap.exists()) await updateDoc(businessRef, { 'businessInfo.profileShares': increment(1) });
+        // Direct counter bump — the rules allow this public engagement update, and a
+        // missing doc just throws (caught). No cross-user read needed.
+        await updateDoc(getBusinessRef(businessId), { 'businessInfo.profileShares': increment(1) });
     } catch (err) {
         console.warn('[share] profileShares increment failed', { businessId, err });
     }

@@ -791,6 +791,12 @@ function toPublicProfile(userDocData, uid) {
                     ? userData.lookingFor.filter((x) => typeof x === 'string' && x.trim()).slice(0, 5)
                     : [],
                 invitePreference: asTrimmedString(userData.invitePreference) || null,
+                // Whether this member accepts private invites (drives the invitee
+                // picker's eligibility). A preference, not sensitive.
+                availableForPrivateInvite:
+                    typeof userData.availableForPrivateInvite === 'boolean'
+                        ? userData.availableForPrivateInvite
+                        : null,
                 profileGallery: Array.isArray(userData.profileGallery)
                     ? userData.profileGallery.slice(0, 3).map((x) => (typeof x === 'string' ? x : ''))
                     : [],

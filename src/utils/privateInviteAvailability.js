@@ -1,4 +1,4 @@
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs, documentId } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 /** Consumer members may receive private invites (business/admin/guest excluded). */
@@ -12,29 +12,30 @@ export function isUserAvailableForPrivateInvite(user) {
     return true;
 }
 
-/** Load role / dating opt-out from user docs (per-doc get — allowed for signed-in clients). */
+/** Load role / private-invite opt-in from the PUBLIC projection (never users/{uid}). */
 export async function fetchPrivateInviteEligibilityByUserIds(ids) {
     const map = new Map();
     const unique = [...new Set((ids || []).filter(Boolean))];
-    await Promise.all(
-        unique.map(async (userId) => {
-            try {
-                const snap = await getDoc(doc(db, 'users', userId));
-                if (!snap.exists()) return;
-                const data = snap.data() || {};
-                const role = String(data.role || '').toLowerCase();
-                map.set(userId, {
-                    role: data.role,
-                    isBusiness: data.isBusiness === true || role === 'business',
-                    availableForPrivateInvite: data.availableForPrivateInvite,
-                    profileType:
-                        data.isBusiness === true || role === 'business' ? 'business' : 'user',
+    for (let i = 0; i < unique.length; i += 10) {
+        const chunk = unique.slice(i, i + 10);
+        try {
+            const snap = await getDocs(
+                query(collection(db, 'public_profiles'), where(documentId(), 'in', chunk), limit(chunk.length))
+            );
+            snap.docs.forEach((d) => {
+                const data = d.data() || {};
+                const isBusiness = data.profileType === 'business';
+                map.set(d.id, {
+                    role: data.accountRole,
+                    isBusiness,
+                    availableForPrivateInvite: data.userPublic?.availableForPrivateInvite,
+                    profileType: data.profileType || 'user',
                 });
-            } catch (err) {
-                console.warn('[fetchPrivateInviteEligibilityByUserIds]', userId, err);
-            }
-        })
-    );
+            });
+        } catch (err) {
+            console.warn('[fetchPrivateInviteEligibilityByUserIds]', err);
+        }
+    }
     return map;
 }
 

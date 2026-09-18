@@ -1,5 +1,3 @@
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
 import { getFollowers } from './followHelpers';
 
 /** @typedef {'following' | 'mutual' | 'friend_of_friend' | 'interest' | 'discovery' | 'featured' | 'self'} FeedAudienceTier */
@@ -42,23 +40,11 @@ export async function buildFeedAudienceGraph(viewerUid, followingIds = [], viewe
         console.warn('[feedSocialGraph] mutual followers', e);
     }
 
-    const parents = [...followingSet].slice(0, FOF_PARENT_CAP);
-    await Promise.all(
-        parents.map(async (parentId) => {
-            try {
-                const snap = await getDoc(doc(db, 'users', parentId));
-                const theirFollowing = snap.exists() ? snap.data()?.following : [];
-                if (!Array.isArray(theirFollowing)) return;
-                for (const raw of theirFollowing) {
-                    const id = String(raw || '');
-                    if (!id || id === viewerUid || followingSet.has(id) || mutualSet.has(id)) continue;
-                    fofSet.add(id);
-                }
-            } catch {
-                /* skip parent */
-            }
-        })
-    );
+    // Friends-of-friends expansion previously read each followed member's private
+    // following[] (a cross-user read). Dropped for privacy — the feed ranks on
+    // following/mutual only. Restore later via a server callable if FoF reach is
+    // needed. (FOF_PARENT_CAP kept for that future callable.)
+    void FOF_PARENT_CAP;
 
     return {
         followingSet,
