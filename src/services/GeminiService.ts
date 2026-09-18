@@ -21,10 +21,6 @@ import {
 } from '../utils/geminiProviderErrors.js';
 import { normalizeAiOutputLanguage, getAiOutputLanguageLabel } from '../utils/aiOutputLanguage.js';
 import { AI_USER_PROMPT_MAX_CHARS, getAiUserPromptDefaultEn } from '../constants/aiPromptLimits.js';
-import {
-    formatAdviceExcerptsForPrompt,
-    retrieveRelationshipAdvice,
-} from '../utils/relationshipAdviceRetrieval.js';
 
 export type AiOutputLanguage =
     | 'ar'
@@ -464,7 +460,7 @@ function buildSystemInstruction(
             return `${JSON_OUTPUT_RULE} ${languageRule} Return exactly: {"title":"...","description":"...","animation_type":"..."} where animation_type is one of: slide-up, fade-in, zoom-in.`;
 
         case 'text_assistant':
-            return `${JSON_OUTPUT_RULE} ${languageRule} Return exactly: {"answer":"..."}. You are a respectful relationship and dating coach for adults using DineBuddies. Ground answers primarily in the curated excerpts provided in the user message when they match the question; briefly mention a source name when you use one (e.g. Gottman Institute, CDC). If no excerpt fits, give cautious general guidance aligned with healthy communication, consent, boundaries, and safety — never manipulation, stalking, guilt-tripping, or pressure tactics. Refuse requests for coercion, harassment, or abuse. This is educational only — not therapy or medical advice; suggest professional help for crisis, violence, or severe distress. "answer" is plain language (2–6 sentences unless the user asked for a list). No markdown headings unless the user asked for a list.`;
+            return `${JSON_OUTPUT_RULE} ${languageRule} Return exactly: {"answer":"..."}. You are a friendly, practical personal assistant for people using DineBuddies, a dining and social app. Help with everyday topics such as cooking and recipes, food and menu choices, dining and restaurant etiquette, zodiac signs and horoscopes (for fun and entertainment), building social confidence and overcoming shyness, making conversation and good manners, planning outings and meetups with friends, and general lifestyle tips. Give clear, encouraging, practical answers in a warm, respectful tone. This is general guidance only — not medical, legal, financial, or professional therapy advice; gently suggest a qualified professional for medical issues, legal matters, mental-health crises, or serious personal distress. Refuse requests that are harmful, harassing, hateful, sexual, or unsafe. "answer" is plain language (2–6 sentences unless the user asked for a list). No markdown headings unless the user asked for a list.`;
 
         default:
             return `${JSON_OUTPUT_RULE} ${languageRule}`;
@@ -478,18 +474,12 @@ function appendContextLine(lines: string[], label: string, value: unknown) {
 }
 
 function buildUserPrompt(input: GenerateContentInput): string {
-    const { postType, userPrompt, accountType = 'user', outputLanguage: outputLanguageRaw } = input;
-    const outputLanguage = normalizeAiOutputLanguage(outputLanguageRaw);
+    const { postType, userPrompt, accountType = 'user' } = input;
     const lines: string[] = [];
 
     if (postType === 'text_assistant') {
         const trimmedQuestion = userPrompt.trim();
         if (trimmedQuestion) {
-            const matchedAdvice = retrieveRelationshipAdvice(trimmedQuestion, outputLanguage);
-            const excerptBlock = formatAdviceExcerptsForPrompt(matchedAdvice);
-            if (excerptBlock) {
-                lines.push(excerptBlock);
-            }
             lines.push(`User question: ${trimmedQuestion}`);
             return lines.join('\n').trim();
         }

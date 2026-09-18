@@ -15,10 +15,10 @@ import { AI_USER_PROMPT_MAX_CHARS } from '../constants/aiPromptLimits';
 import './AiTextStudio.css';
 
 const STARTER_KEYS = [
-  'ai_text_starter_first_date',
-  'ai_text_starter_boundaries',
-  'ai_text_starter_communication',
-  'ai_text_starter_rejection',
+  'ai_text_starter_cooking',
+  'ai_text_starter_zodiac',
+  'ai_text_starter_dining_etiquette',
+  'ai_text_starter_shyness',
 ];
 
 function createTurnId() {

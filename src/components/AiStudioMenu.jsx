@@ -8,7 +8,7 @@ import { FaImages, FaPenAlt } from 'react-icons/fa';
  * Single "AI" header entry that opens a menu of AI tools. Replaces the separate
  * image/text header buttons; built to grow as more agents are added later.
  *
- * @param {boolean} isBusinessAccount  hide user-only tools (relationship tips)
+ * @param {boolean} isBusinessAccount  hide user-only tools (personal assistant)
  * @param {boolean} active             highlight when on an AI route
  */
 export default function AiStudioMenu({ isBusinessAccount = false, active = false }) {
@@ -30,7 +30,7 @@ export default function AiStudioMenu({ isBusinessAccount = false, active = false
   const items = [
     { key: 'image', icon: <FaImages />, color: '#8b5cf6', label: t('ai_image_nav', 'AI Images'), desc: t('ai_image_desc', 'تصميم صور بالذكاء الصناعي'), to: '/ai-design-studio' },
     ...(!isBusinessAccount
-      ? [{ key: 'text', icon: <FaPenAlt />, color: '#ef4444', label: t('ai_text_nav', 'Relationship tips'), desc: t('ai_text_desc', 'نصائح ومحادثة بالذكاء الصناعي'), to: '/ai-text-studio' }]
+      ? [{ key: 'text', icon: <FaPenAlt />, color: '#ef4444', label: t('ai_text_nav', 'Personal assistant'), desc: t('ai_text_desc', 'نصائح ومحادثة بالذكاء الصناعي'), to: '/ai-text-studio' }]
       : []),
   ];
 
