@@ -26,6 +26,7 @@ import { useAuth } from '../context/AuthContext';
 import { useInvitations } from '../context/InvitationContext';
 import { useToast } from '../context/ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import { getBusinessProAccess } from '../utils/businessSubscription';
 import { uploadImage, uploadVoiceMessage } from '../utils/mediaUtils';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
@@ -316,10 +317,12 @@ export function useStageChatRoom(stageId) {
                 /* ignore */
             }
             unsubHost = onSnapshot(
-                doc(db, 'users', stageHostId),
+                doc(db, 'public_profiles', stageHostId),
                 (hostSnap) => {
                     if (cancelled) return;
-                    hostProfile = hostSnap.exists() ? hostSnap.data() : null;
+                    hostProfile = hostSnap.exists()
+                        ? mapPublicProfileDocToUserShape({ id: stageHostId, ...hostSnap.data() })
+                        : null;
                     publish();
                 },
                 () => {
@@ -595,12 +598,13 @@ export function useStageChatRoom(stageId) {
 
         const unsubs = uniqueIds.map((memberId) =>
             onSnapshot(
-                doc(db, 'users', memberId),
+                doc(db, 'public_profiles', memberId),
                 (snap) => {
                     if (!snap.exists()) {
                         byId.delete(memberId);
                     } else {
-                        const data = snap.data();
+                        const pub = snap.data();
+                        const data = mapPublicProfileDocToUserShape({ id: memberId, ...pub });
                         byId.set(memberId, {
                             id: memberId,
                             displayName:
@@ -610,7 +614,7 @@ export function useStageChatRoom(stageId) {
                                 'User',
                             avatar: getSafeAvatar(data),
                             photoURL: data.photo_url || data.photoURL,
-                            isOnline: Boolean(data.isOnline),
+                            isOnline: Boolean(pub.userPublic?.isOnline),
                             isHost: Boolean(stageHostId && memberId === stageHostId),
                             isMuted: activeMutedIds.has(String(memberId)),
                         });

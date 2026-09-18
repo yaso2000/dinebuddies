@@ -24,6 +24,7 @@ import app, { auth, db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import { uploadImage, uploadVoiceMessage } from '../utils/mediaUtils';
 import { notifyImageUploadError } from '../utils/imageModerationErrors';
 import { createNotification } from '../utils/notificationHelpers';
@@ -461,18 +462,19 @@ export function useSocialInvitationChatRoom(invitationId) {
 
         const unsubs = uniqueIds.map((memberId) =>
             onSnapshot(
-                doc(db, 'users', memberId),
+                doc(db, 'public_profiles', memberId),
                 (snap) => {
                     if (!snap.exists()) {
                         byId.delete(memberId);
                     } else {
-                        const data = snap.data();
+                        const pub = snap.data();
+                        const data = mapPublicProfileDocToUserShape({ id: memberId, ...pub });
                         byId.set(memberId, {
                             id: memberId,
                             displayName: data.display_name || data.name || data.displayName || 'User',
                             avatar: getSafeAvatar(data),
                             photoURL: data.photo_url || data.photoURL,
-                            isOnline: Boolean(data.isOnline),
+                            isOnline: Boolean(pub.userPublic?.isOnline),
                             isHost: Boolean(hostId && memberId === hostId),
                             isMuted: activeMutedIds.has(String(memberId)),
                         });
