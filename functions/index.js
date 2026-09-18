@@ -760,6 +760,60 @@ function toPublicProfile(userDocData, uid) {
             ? {
                 city: userCity || null,
                 country: userCountry || null,
+                countryCode:
+                    asTrimmedString(userData.countryCode) ||
+                    asTrimmedString(userData.country_code) ||
+                    asTrimmedString(locationData.countryCode) ||
+                    null,
+                // ── Directory / swipe-card display fields (public by design). These let
+                // the client build a member card from THIS projection instead of reading
+                // the full users/{uid} doc of every other member (which leaked email +
+                // the precise 5-min GPS trail). Email and precise GPS are NOT projected.
+                bio: (asTrimmedString(userData.bio) || asTrimmedString(userData.shortBio) || '').slice(0, 120) || null,
+                age: (() => {
+                    const n = asFiniteNumber(userData.age);
+                    return typeof n === 'number' && n > 0 ? n : null;
+                })(),
+                ageCategory: asTrimmedString(userData.ageCategory) || asTrimmedString(userData.ageRange) || null,
+                diningPersona: Array.isArray(userData.diningPersona)
+                    ? userData.diningPersona.filter((x) => typeof x === 'string' && x.trim()).slice(0, 3)
+                    : [],
+                joinReasons: Array.isArray(userData.joinReasons)
+                    ? userData.joinReasons.filter((x) => typeof x === 'string' && x.trim()).slice(0, 2)
+                    : [],
+                lookingFor: Array.isArray(userData.lookingFor)
+                    ? userData.lookingFor.filter((x) => typeof x === 'string' && x.trim()).slice(0, 5)
+                    : [],
+                invitePreference: asTrimmedString(userData.invitePreference) || null,
+                profileGallery: Array.isArray(userData.profileGallery)
+                    ? userData.profileGallery.slice(0, 3).map((x) => (typeof x === 'string' ? x : ''))
+                    : [],
+                directoryCoverIndex: (() => {
+                    const n = asFiniteNumber(userData.directoryCoverIndex);
+                    return typeof n === 'number' && n >= 0 ? Math.floor(n) : 0;
+                })(),
+                coverPhotoUrl:
+                    asTrimmedString(userData.cover_photo) ||
+                    asTrimmedString(userData.coverPhotoUrl) ||
+                    null,
+                cardTheme:
+                    userData.cardTheme && typeof userData.cardTheme === 'object'
+                        ? userData.cardTheme
+                        : null,
+                // Presence flag drives the directory "online only" filter.
+                isOnline: userData.isOnline === true,
+                // Coarse location (~1 km; 2-decimal rounding) so the directory/swipe deck
+                // can still sort by rough proximity WITHOUT exposing precise coordinates.
+                geo: (() => {
+                    const coords = userData.coordinates && typeof userData.coordinates === 'object' ? userData.coordinates : {};
+                    const loc = locationData;
+                    const lat = asFiniteNumber(coords.lat ?? coords.latitude ?? userData.userLat ?? loc.latitude ?? loc.lat);
+                    const lng = asFiniteNumber(coords.lng ?? coords.longitude ?? userData.userLng ?? loc.longitude ?? loc.lng);
+                    if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+                    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+                    const round2 = (n) => Math.round(n * 100) / 100;
+                    return { lat: round2(lat), lng: round2(lng) };
+                })(),
                 // TasteScope projection: titleId (badge; display form resolved by
                 // gender at render time) + answers (the 10-key map — compatibility
                 // reads it from here without touching users/{uid}). No history/
