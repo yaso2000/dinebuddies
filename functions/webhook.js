@@ -249,14 +249,17 @@ async function handleCheckoutComplete(session) {
 
         console.log(`✅ User ${userId} → plan: ${planId}, tier: ${tier}, quota: ${weeklyQuota}`);
 
-        await db.collection('user_subscriptions').add({
+        // Idempotent per checkout session: Stripe retries webhooks, so key the
+        // record by session.id instead of .add() to avoid duplicate subscription
+        // rows on every retry.
+        await db.collection('user_subscriptions').doc(session.id).set({
             userId,
             planId,
             subscriptionId,
             status: 'active',
             startDate: admin.firestore.FieldValue.serverTimestamp(),
             sessionId: session.id
-        });
+        }, { merge: true });
 
     } catch (error) {
         console.error('Error updating user subscription:', error);
