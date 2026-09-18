@@ -28,6 +28,10 @@ export const adminApi = {
         call('adminResetAllCredits', { confirmPhrase, dryRun }),
     setUserSubscriptionTier: (targetUid, subscriptionTier, isBusinessUser = false, months = 0) =>
         call('adminSetUserSubscriptionTier', { targetUid, subscriptionTier, isBusinessUser, months }),
+    setUserProfileBasics: (targetUid, { gender, ageCategory } = {}) =>
+        call('adminSetUserProfileBasics', { targetUid, gender, ageCategory }),
+    findDuplicateAccounts: (email) => call('adminFindDuplicateAccounts', { email }),
+    deleteUser: (targetUid) => call('adminDeleteUser', { targetUid }),
     deletePartner: (targetUid) => call('adminDeletePartner', { targetUid }),
     listInvitations: (opts = {}) => call('adminListInvitations', opts),
     moderateInvitation: (invitationId, action, inviteType = 'public') =>

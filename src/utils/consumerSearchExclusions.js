@@ -1,13 +1,15 @@
 import { ADMIN_EMAILS, SUPER_ADMIN_UIDS } from './adminAccess';
 import { isConsumerDirectoryMember } from './consumerDirectory';
 
-/** Roles that must never appear in consumer-facing user/business search. */
+/** Roles that must never appear in consumer-facing user/business search.
+ *  `regional_manager` is panel staff too — hide it like any other admin role. */
 const EXCLUDED_CONSUMER_SEARCH_ROLES = new Set([
     'admin',
     'staff',
     'support',
     'moderator',
     'affiliate_agent',
+    'regional_manager',
 ]);
 
 export function isExcludedConsumerSearchRole(role) {
@@ -24,6 +26,13 @@ function isConsumerHiddenEmail(email) {
     return normalized.length > 0 && ADMIN_EMAILS.includes(normalized);
 }
 
+/** Durable admin/staff markers stamped on the account, independent of the `role` field. */
+function isAdminStaffFlag(data) {
+    if (data?.isAdmin === true || data?.isStaff === true || data?.isTeamMember === true) return true;
+    if (String(data?.accountType || '').toLowerCase() === 'admin') return true;
+    return false;
+}
+
 /**
  * True when this account must be invisible to regular consumer users
  * (search, followers, public profile pages).
@@ -33,7 +42,9 @@ export function isHiddenFromConsumerApp(data = {}) {
     if (isConsumerHiddenUid(id)) return true;
     if (data.isGuest === true) return true;
     if (data.searchable === false) return true;
-    if (isConsumerHiddenEmail(data.email)) return true;
+    // Google sign-in often leaves `email` blank and stores the address on `authEmail`.
+    if (isConsumerHiddenEmail(data.email) || isConsumerHiddenEmail(data.authEmail)) return true;
+    if (isAdminStaffFlag(data)) return true;
 
     const role = String(data.role || data.accountRole || '').toLowerCase();
     if (isExcludedConsumerSearchRole(role)) return true;

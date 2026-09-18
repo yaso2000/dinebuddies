@@ -16,7 +16,9 @@ const SUPER_ADMIN_UIDS = new Set([
     'xboOb7jxpGbYVRgZyP66d544nVi1',
 ]);
 
-const TEAM_ROLES = new Set(['admin', 'staff', 'support', 'moderator', 'affiliate_agent']);
+// `regional_manager` is panel staff too — they must be hidden from the consumer app
+// exactly like any other admin/staff account.
+const TEAM_ROLES = new Set(['admin', 'staff', 'support', 'moderator', 'affiliate_agent', 'regional_manager']);
 
 function isConsumerHiddenUid(uid) {
     return SUPER_ADMIN_UIDS.has(String(uid || '').trim());
@@ -26,8 +28,39 @@ function isConsumerHiddenEmail(email) {
     return ADMIN_EMAILS.has(String(email || '').toLowerCase().trim());
 }
 
+/** Admin recognized by EITHER the profile email or the auth email (Google sign-in often
+ *  stores the address under `authEmail`, leaving `email` blank — the old check missed it). */
+function isConsumerHiddenEmailAny(userData) {
+    return isConsumerHiddenEmail(userData?.email) || isConsumerHiddenEmail(userData?.authEmail);
+}
+
 function isConsumerHiddenRole(role) {
     return TEAM_ROLES.has(String(role || '').toLowerCase());
+}
+
+/** Durable admin/staff markers stamped on the users doc (independent of the `role` field). */
+function isAdminStaffFlag(userData) {
+    if (!userData) return false;
+    if (userData.isAdmin === true || userData.isStaff === true || userData.isTeamMember === true) return true;
+    if (String(userData.accountType || '').toLowerCase() === 'admin') return true;
+    return false;
+}
+
+/**
+ * Admin / team-staff identity for a `users/{uid}` doc — the signals that mean "this is
+ * NOT a regular consumer": super-admin uid, a team role, a durable admin flag, or a
+ * known admin email (profile or auth). Used both to hide the account and to forbid it
+ * from personal chat. Does NOT include guest/banned/frozen (those are lifecycle states,
+ * hidden separately but still ordinary users).
+ */
+function isAdminStaffUserDoc(userData, uid) {
+    const safeUid = String(uid || userData?.uid || '').trim();
+    if (isConsumerHiddenUid(safeUid)) return true;
+    if (!userData) return false;
+    if (isConsumerHiddenRole(userData.role)) return true;
+    if (isAdminStaffFlag(userData)) return true;
+    if (isConsumerHiddenEmailAny(userData)) return true;
+    return false;
 }
 
 /** Full `users/{uid}` document. */
@@ -40,8 +73,7 @@ function isConsumerHiddenUserDoc(userData, uid) {
     // Self-service lifecycle: a frozen (deactivated) or pending-deletion account
     // must vanish from discovery / search / social everywhere until reactivated.
     if (userData.accountState === 'deactivated' || userData.accountState === 'pending_deletion') return true;
-    if (isConsumerHiddenRole(userData.role)) return true;
-    if (isConsumerHiddenEmail(userData.email)) return true;
+    if (isAdminStaffUserDoc(userData, safeUid)) return true;
     return false;
 }
 
@@ -59,6 +91,7 @@ function isConsumerHiddenPublicProfile(data, id) {
 module.exports = {
     isConsumerHiddenUserDoc,
     isConsumerHiddenPublicProfile,
+    isAdminStaffUserDoc,
     isConsumerHiddenRole,
     isConsumerHiddenUid,
     isConsumerHiddenEmail,

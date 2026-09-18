@@ -18,6 +18,7 @@ const { registerPublicStats } = require('./publicStats');
 const {
     isConsumerHiddenPublicProfile,
     isConsumerHiddenUserDoc,
+    isAdminStaffUserDoc,
     isConsumerHiddenUid,
 } = require('./consumerAccountVisibility');
 const stripeModule = require('./stripe');
@@ -2116,6 +2117,16 @@ exports.createOrGetConversation = functions.https.onCall(async (data, context) =
         );
     }
 
+    // Admin / team-staff accounts are fully separated from the consumer social graph:
+    // they never appear to members and can never open or receive a personal chat.
+    // (System/support peers are exempt — that IS the support conversation channel.)
+    if (!isSystemPeer && (isAdminStaffUserDoc(reqData, uid) || isAdminStaffUserDoc(othData, otherUserId))) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'This account cannot use personal chat.'
+        );
+    }
+
     // Minor-safety: a 16-17 user and an adult may never open a personal chat.
     // (createGroupConversation + the group invite branch enforce this already; the
     // 1-on-1 path is the most-used and previously had no age gate.)
@@ -3057,6 +3068,151 @@ exports.adminSetUserBanStatus = functions.https.onCall(async (data, context) => 
     }
 
     return { success: true, targetUid, banned };
+});
+
+// ─── Trusted admin callable: repair a "stuck" consumer profile ──────────────
+// Gender and age category are immutable from the client (anti-manipulation) and are
+// only set on the completion screen. A legacy account that entered the app before that
+// gate (isProfileComplete:true but no gender/ageCategory) can never fix itself: discovery
+// stays empty and social actions are gated. This admin-only override sets them via the
+// Admin SDK (bypassing the client rules) so the owner can unblock such accounts.
+const ADMIN_FIX_ALLOWED_GENDERS = new Set(['male', 'female', 'unspecified']);
+const ADMIN_FIX_ALLOWED_AGE_CATEGORIES = new Set(['16-17', '18-24', '25-34', '35-44', '45-54', '55+']);
+function ageLowerBoundFromCategory(ageCategory) {
+    const first = String(ageCategory || '').split('-')[0].replace(/\D/g, '');
+    return parseInt(first, 10) || 18;
+}
+exports.adminSetUserProfileBasics = functions.https.onCall(async (data, context) => {
+    const { regionScope, requesterUid } = await assertAdminContext(context, data);
+
+    const targetUid = data?.targetUid;
+    if (!targetUid || typeof targetUid !== 'string') {
+        throw new functions.https.HttpsError('invalid-argument', 'targetUid is required.');
+    }
+    if (!(await targetUserInRegion(db, targetUid, regionScope))) {
+        throw new functions.https.HttpsError('permission-denied', 'Outside your region.');
+    }
+
+    const gender = typeof data?.gender === 'string' ? data.gender.trim().toLowerCase() : '';
+    const ageCategory = typeof data?.ageCategory === 'string' ? data.ageCategory.trim() : '';
+    if (!gender && !ageCategory) {
+        throw new functions.https.HttpsError('invalid-argument', 'Provide gender and/or ageCategory.');
+    }
+    if (gender && !ADMIN_FIX_ALLOWED_GENDERS.has(gender)) {
+        throw new functions.https.HttpsError('invalid-argument', 'Invalid gender.');
+    }
+    if (ageCategory && !ADMIN_FIX_ALLOWED_AGE_CATEGORIES.has(ageCategory)) {
+        throw new functions.https.HttpsError('invalid-argument', 'Invalid ageCategory.');
+    }
+
+    const snap = await db.collection('users').doc(targetUid).get();
+    if (!snap.exists) {
+        throw new functions.https.HttpsError('not-found', 'User not found.');
+    }
+    const prior = snap.data() || {};
+    if (isBusinessUserDoc(prior)) {
+        throw new functions.https.HttpsError('failed-precondition', 'Not a consumer account.');
+    }
+
+    const FieldValue = admin.firestore.FieldValue;
+    const updates = {};
+    if (gender) updates.gender = gender;
+    if (ageCategory) {
+        updates.ageCategory = ageCategory;
+        if (!(typeof prior.age === 'number' && prior.age > 0)) {
+            updates.age = ageLowerBoundFromCategory(ageCategory);
+        }
+    }
+
+    // Flip isProfileComplete only when name + gender + age category are all present now,
+    // so the app stops re-routing a genuinely complete account to the completion screen.
+    const hasName = !!(prior.displayName || prior.display_name || prior.nickname || prior.name);
+    const nextGender = gender || prior.gender;
+    const nextAgeCategory = ageCategory || prior.ageCategory || prior.age_category;
+    if (hasName && nextGender && nextAgeCategory) {
+        updates.isProfileComplete = true;
+    }
+
+    updates.profileBasicsFixedAt = FieldValue.serverTimestamp();
+    updates.profileBasicsFixedBy = requesterUid || null;
+
+    await db.collection('users').doc(targetUid).set(updates, { merge: true });
+
+    return {
+        success: true,
+        targetUid,
+        gender: updates.gender || null,
+        ageCategory: updates.ageCategory || null,
+        isProfileComplete: updates.isProfileComplete === true,
+    };
+});
+
+// ─── Trusted admin callable: find duplicate accounts sharing an email ───────
+// Root cause of "gender set but discovery still empty": Firebase Auth allows several
+// accounts (distinct UIDs) for one email (multi-provider / repeated sign-ups). The
+// user completed one UID but now signs into another empty UID. This surfaces every
+// UID tied to an email — Firestore docs (email/authEmail) + the Auth account — with
+// enough signal (providers, completeness, data volume) to pick the keeper and delete
+// the rest via adminDeleteUser.
+exports.adminFindDuplicateAccounts = functions.https.onCall(async (data, context) => {
+    await assertAdminContext(context, data);
+
+    const emailRaw = String(data?.email || '').trim().toLowerCase();
+    if (!emailRaw || !emailRaw.includes('@')) {
+        throw new functions.https.HttpsError('invalid-argument', 'A valid email is required.');
+    }
+
+    const uids = new Set();
+    for (const field of ['email', 'authEmail']) {
+        try {
+            const snap = await db.collection('users').where(field, '==', emailRaw).limit(25).get();
+            snap.docs.forEach((d) => uids.add(d.id));
+        } catch (e) {
+            functions.logger.warn('[adminFindDuplicateAccounts] firestore query failed', field, e.message);
+        }
+    }
+    try {
+        const rec = await admin.auth().getUserByEmail(emailRaw);
+        if (rec?.uid) uids.add(rec.uid);
+    } catch {
+        /* no Auth account for this email — Firestore-only docs still returned */
+    }
+
+    const accounts = [];
+    for (const uid of uids) {
+        const [snap, authRec] = await Promise.all([
+            db.collection('users').doc(uid).get(),
+            admin.auth().getUser(uid).catch(() => null),
+        ]);
+        const d = snap.exists ? snap.data() : {};
+        accounts.push({
+            uid,
+            hasUserDoc: snap.exists,
+            email: d.email || null,
+            authEmail: d.authEmail || authRec?.email || null,
+            displayName: d.displayName || d.display_name || d.nickname || d.name || authRec?.displayName || null,
+            gender: d.gender || null,
+            ageCategory: d.ageCategory || d.age_category || null,
+            isProfileComplete: d.isProfileComplete === true,
+            role: d.role || 'user',
+            providers: authRec ? (authRec.providerData || []).map((p) => p.providerId) : [],
+            disabled: authRec ? authRec.disabled === true : null,
+            createdAt: authRec?.metadata?.creationTime || null,
+            lastSignIn: authRec?.metadata?.lastSignInTime || null,
+            followers: Array.isArray(d.followers) ? d.followers.length : 0,
+            following: Array.isArray(d.following) ? d.following.length : 0,
+        });
+    }
+
+    // Keeper heuristic first: complete profiles, then the ones carrying the most data.
+    accounts.sort(
+        (a, b) =>
+            Number(b.isProfileComplete) - Number(a.isProfileComplete) ||
+            b.followers + b.following - (a.followers + a.following) ||
+            String(a.createdAt).localeCompare(String(b.createdAt))
+    );
+
+    return { email: emailRaw, count: accounts.length, accounts };
 });
 
 // ─── Trusted admin callable: system role changes ────────────────────────────

@@ -1,7 +1,15 @@
 import { ADMIN_EMAILS, SUPER_ADMIN_UIDS } from './adminAccess';
 
-/** Team roles — never in member discovery/directory. */
-const TEAM_ROLES = new Set(['admin', 'staff', 'support', 'moderator', 'affiliate_agent']);
+/** Team roles — never in member discovery/directory. `regional_manager` is staff too. */
+const TEAM_ROLES = new Set(['admin', 'staff', 'support', 'moderator', 'affiliate_agent', 'regional_manager']);
+
+/** Durable admin/staff markers independent of the `role` field. */
+function hasAdminStaffFlag(doc) {
+    if (!doc) return false;
+    if (doc.isAdmin === true || doc.isStaff === true || doc.isTeamMember === true) return true;
+    if (String(doc.accountType || '').toLowerCase() === 'admin') return true;
+    return false;
+}
 
 /**
  * Consumer member directory (/search, /search/list) — regular diners only.
@@ -13,8 +21,13 @@ export function isConsumerDirectoryMember(publicDoc, userDoc = null) {
 
     if (SUPER_ADMIN_UIDS.includes(String(id))) return false;
 
-    const email = String(userDoc?.email || publicDoc?.email || '').toLowerCase().trim();
-    if (email && ADMIN_EMAILS.includes(email)) return false;
+    // Google sign-in often leaves `email` blank and stores the address on `authEmail`.
+    const emails = [userDoc?.email, userDoc?.authEmail, publicDoc?.email, publicDoc?.authEmail]
+        .map((e) => String(e || '').toLowerCase().trim())
+        .filter(Boolean);
+    if (emails.some((e) => ADMIN_EMAILS.includes(e))) return false;
+
+    if (hasAdminStaffFlag(userDoc) || hasAdminStaffFlag(publicDoc)) return false;
 
     if (publicDoc?.profileType && publicDoc.profileType !== 'user') return false;
     if (publicDoc?.searchable === false) return false;

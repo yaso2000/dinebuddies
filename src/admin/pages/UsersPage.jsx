@@ -7,6 +7,7 @@ import { AppText, AppTextInput } from "../../components/base";
 import { normalizeBusinessTier } from '../../utils/businessSubscription';
 import { getPurchaseCredits, getSavedCredits } from '../../utils/walletCredits';
 import { useConfirm } from '../../context/ConfirmContext';
+import UserDetailPanel from '../components/UserDetailPanel';
 
 const USER_TABS = [
 {
@@ -90,6 +91,7 @@ export default function UsersPage() {
   const [cursor, setCursor] = useState(null);
   const [hasNext, setHasNext] = useState(false);
   const [acting, setActing] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
 
   const load = useCallback(
     async (startAfterId = null) => {
@@ -425,10 +427,19 @@ export default function UsersPage() {
                         </thead>
                         <tbody>
                             {rows.map((u) =>
-            <tr key={u.id}>
+            <React.Fragment key={u.id}>
+                                <tr>
                                     <td>
                                         <div>{nameForTab(tab, u)}</div>
                                         <div className="db-id">{u.id}</div>
+                                        <button
+                    type="button"
+                    className="db-btn db-btn--ghost"
+                    style={{ marginTop: 4, padding: '2px 8px', fontSize: '0.72rem' }}
+                    onClick={() => setExpandedId((prev) => prev === u.id ? null : u.id)}>
+
+                                            {expandedId === u.id ? t('admin_user_hide_details', 'Hide details') : t('admin_user_show_details', 'Details')}
+                                        </button>
                                     </td>
                                     {tab === 'business' ?
               <td>
@@ -445,6 +456,19 @@ export default function UsersPage() {
                                     </td>
                                     <td>{renderActions(u)}</td>
                                 </tr>
+                                {expandedId === u.id &&
+              <tr>
+                                        <td colSpan={tab === 'business' ? 5 : 4} style={{ padding: '0 0.5rem 0.75rem' }}>
+                                            <UserDetailPanel
+                    u={u}
+                    t={t}
+                    confirm={confirm}
+                    onChanged={() => search.trim().length >= 2 ? runSearch() : load()} />
+
+                                        </td>
+                                    </tr>
+              }
+                            </React.Fragment>
             )}
                         </tbody>
                     </table>
