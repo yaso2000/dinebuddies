@@ -21,6 +21,7 @@ import InvitationHeader from '../components/Invitation/InvitationHeader';
 import InvitationInfoGrid from '../components/Invitation/InvitationInfoGrid';
 import InvitationTimeline from '../components/Invitation/InvitationTimeline';
 import { getSafeAvatar, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 
 const INVITATION_IMAGE_FALLBACK = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800';
 import { generateShareCardBlob } from '../utils/shareCardCanvas';
@@ -278,9 +279,9 @@ const InvitationDetails = () => {
       const data = {};
       for (const userId of invitation.requests) {
         try {
-          const userDoc = await getDoc(doc(db, 'users', userId));
+          const userDoc = await getDoc(doc(db, 'public_profiles', userId));
           if (userDoc.exists()) {
-            const userData = userDoc.data();
+            const userData = mapPublicProfileDocToUserShape({ id: userId, ...userDoc.data() });
             data[userId] = {
               name: userData.display_name || userData.name || 'User',
               avatar: getSafeAvatar(userData)
@@ -309,9 +310,9 @@ const InvitationDetails = () => {
       const data = {};
       for (const userId of invitation.joined) {
         try {
-          const userDoc = await getDoc(doc(db, 'users', userId));
+          const userDoc = await getDoc(doc(db, 'public_profiles', userId));
           if (userDoc.exists()) {
-            const userData = userDoc.data();
+            const userData = mapPublicProfileDocToUserShape({ id: userId, ...userDoc.data() });
             data[userId] = {
               name: userData.display_name || userData.name || 'User',
               avatar: getSafeAvatar(userData)

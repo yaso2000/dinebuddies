@@ -18,6 +18,7 @@ import { useNotifications } from '../../context/NotificationContext';
 import { usePendingInvitesForMe } from '../../hooks/usePendingInvitesForMe';
 import { useReceivedGiftsForMe } from '../../hooks/useReceivedGiftsForMe';
 import { getSafeAvatar } from '../../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../../utils/publicProfileMap';
 import { getInvitationDetailsPath } from '../../utils/socialInvitationDraft';
 import { resolveInviteCategory } from '../../utils/inviteCategory';
 import {
@@ -131,10 +132,11 @@ function InvitesTab() {
     let cancelled = false;
 
     ids.forEach((hostId) => {
-      getDoc(doc(db, 'users', hostId))
+      getDoc(doc(db, 'public_profiles', hostId))
         .then((snap) => {
           if (cancelled || !snap.exists()) return;
-          setHostCache((prev) => (prev[hostId] ? prev : { ...prev, [hostId]: snap.data() }));
+          const shaped = mapPublicProfileDocToUserShape({ id: hostId, ...snap.data() });
+          setHostCache((prev) => (prev[hostId] ? prev : { ...prev, [hostId]: shaped }));
         })
         .catch(() => {});
     });

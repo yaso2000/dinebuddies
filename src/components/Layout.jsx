@@ -209,16 +209,17 @@ const Layout = ({ children }) => {
     Promise.all(
       ids.map(async (partnerId) => {
         try {
-          const snap = await getDoc(doc(db, 'users', partnerId));
+          // Public projection only (never users/{uid}).
+          const snap = await getDoc(doc(db, 'public_profiles', partnerId));
           if (!snap.exists()) return null;
           const d = snap.data();
-          if (!isBusinessUser(d)) return null;
-          const bi = d.businessInfo || {};
+          if (d.profileType !== 'business') return null;
+          const bp = d.businessPublic || {};
           return {
             id: partnerId,
-            name: bi.businessName || d.display_name || d.name || t('layout_community_fallback', 'Community'),
-            logo: d.photo_url || d.photoURL || d.avatar || null,
-            memberCount: d.communityMembers?.length || 0
+            name: d.displayName || t('layout_community_fallback', 'Community'),
+            logo: d.avatarUrl || null,
+            memberCount: bp.communityMemberCount || 0
           };
         } catch {return null;}
       })

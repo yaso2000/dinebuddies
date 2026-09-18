@@ -26,6 +26,7 @@ import { getSocialInvitationHeroCoverFromInvitation } from '../components/Invita
 import { isPrivateHostedInvitation } from '../utils/inviteCategory';
 import { getHostedInvitationDetailsPath } from '../utils/hostedInvitationRoutes';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import '../components/Invitations/InviteLandingGate.css';
 
 /** Full-screen landing page when an invitee opens the app with a pending invitation. */
@@ -70,11 +71,13 @@ export default function InviteReceivedPage() {
         if (!hostId) return;
 
         let cancelled = false;
-        getDoc(doc(db, 'users', hostId))
+        // Public projection only (host card needs just name/avatar/gender/role).
+        getDoc(doc(db, 'public_profiles', hostId))
             .then((snap) => {
                 if (cancelled || !snap.exists()) return;
+                const shaped = mapPublicProfileDocToUserShape({ id: hostId, ...snap.data() });
                 setHostCache((prev) =>
-                    prev[hostId] ? prev : { ...prev, [hostId]: snap.data() }
+                    prev[hostId] ? prev : { ...prev, [hostId]: shaped }
                 );
             })
             .catch(() => {});

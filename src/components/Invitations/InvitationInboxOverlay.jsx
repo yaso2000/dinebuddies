@@ -11,6 +11,7 @@ import { getInvitationCardTextBackdropFromInvitation } from './socialCard/social
 import { getPrivateInvitationHeroCoverFromInvitation } from './privateCard/privateCardBackgrounds';
 import { getSocialInvitationHeroCoverFromInvitation } from './socialCard/socialCardBackgrounds';
 import { getSafeAvatar } from '../../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../../utils/publicProfileMap';
 import { getHostedInvitationDetailsPath } from '../../utils/hostedInvitationRoutes';
 import {
   buildPendingInvitationInboxQueue,
@@ -148,11 +149,12 @@ export default function InvitationInboxOverlay({
     if (!hostId) return;
 
     let cancelled = false;
-    getDoc(doc(db, 'users', hostId)).
+    getDoc(doc(db, 'public_profiles', hostId)).
     then((snap) => {
       if (cancelled || !snap.exists()) return;
+      const shaped = mapPublicProfileDocToUserShape({ id: hostId, ...snap.data() });
       setHostCache((prev) =>
-      prev[hostId] ? prev : { ...prev, [hostId]: snap.data() }
+      prev[hostId] ? prev : { ...prev, [hostId]: shaped }
       );
     }).
     catch(() => {});
