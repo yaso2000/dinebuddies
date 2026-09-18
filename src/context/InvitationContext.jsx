@@ -458,9 +458,11 @@ export const InvitationProvider = ({ children }) => {
             setAllUsers([]);
             return;
         }
+        // Admin-only. Capped at 200 to satisfy the locked users list rule
+        // (allow list: isAdmin && limit <= 200). Deeper admin scans use adminUserQueries.
         const q = query(
             collection(db, 'users'),
-            limit(500)
+            limit(200)
         );
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const usersData = snapshot.docs.map(d => ({

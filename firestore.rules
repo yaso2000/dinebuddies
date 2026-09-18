@@ -532,12 +532,16 @@ service cloud.firestore {
     // ============================================
     
     match /users/{userId} {
-      // Restricted to signed-in users only. Public data should be read from public_profiles.
-      allow get: if isSignedIn();
-      // Admins can list up to 200; signed-in users can list up to 500 (needed for search feature)
+      // LOCKED (2.1): a users/{uid} document is readable only by its OWNER or an
+      // admin/panel-staff. Everyone else reads the public projection at
+      // /public_profiles/{uid}. This closes the leak of email, phone, fcmTokens,
+      // credit balances, stripeCustomerId and precise GPS to any signed-in user.
+      // All client cross-user reads were migrated to public_profiles beforehand.
+      allow get: if isOwner(userId) || isAdminOrPanelStaff();
+      // Enumeration is admin/panel-staff only, capped at 200. Consumer search/directory
+      // use the public_profiles projection (and server callables) instead.
       allow list: if isAdmin() && request.query.limit != null && request.query.limit <= 200;
       allow list: if isAdminOrPanelStaff() && request.query.limit != null && request.query.limit <= 200;
-      allow list: if isSignedIn() && request.query.limit != null && request.query.limit <= 500;
       allow create: if isSignedIn() && request.auth.uid == userId &&
                        userCreateHasNoServerAffiliateFields() &&
                        userCreateReferredByOk() &&
