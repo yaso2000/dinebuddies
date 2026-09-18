@@ -6754,12 +6754,15 @@ button.notification-bell {
   position: relative;
   width: 100%;
   max-width: var(--max-width, 560px);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
   background: linear-gradient(180deg, #151a2a 0%, #0c0f18 100%);
   border: 1px solid rgba(139, 92, 246, 0.2);
   border-bottom: none;
   border-radius: 20px 20px 0 0;
-  padding: 20px 18px 28px;
-  padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  padding: 16px 18px 24px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
   text-align: start;
   direction: inherit;
@@ -6770,7 +6773,16 @@ button.notification-bell {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
+  flex: 0 0 auto;
+}
+
+/* Scrollable body so the fixed header (and its close button) stay visible */
+.business-create-sheet__shelves {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .business-create-sheet__titles {
@@ -6925,13 +6937,30 @@ button.notification-bell {
 
 .business-create-sheet__options--horizontal .business-create-option {
   flex: 0 0 auto;
-  width: 150px;
+  width: 132px;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 10px;
-  padding: 16px 12px;
+  gap: 8px;
+  padding: 12px 10px;
   scroll-snap-align: start;
+}
+
+/* Compact icon so all shelves fit without pushing the close button off-screen */
+.business-create-sheet__options--horizontal .business-create-option__icon {
+  width: 46px;
+  height: 46px;
+  font-size: 1.2rem;
+  border-radius: 14px;
+}
+
+.business-create-sheet__options--horizontal .business-create-option__label {
+  font-size: 0.95rem;
+}
+
+/* Descriptions are dropped in the compact mobile menu — icon + title is enough */
+.business-create-sheet__options--horizontal .business-create-option__desc {
+  display: none;
 }
 
 .business-create-sheet__options--horizontal .business-create-option__text {
@@ -6939,16 +6968,8 @@ button.notification-bell {
   text-align: center;
 }
 
-.business-create-sheet__options--horizontal .business-create-option__label,
-.business-create-sheet__options--horizontal .business-create-option__desc {
+.business-create-sheet__options--horizontal .business-create-option__label {
   text-align: center;
-}
-
-.business-create-sheet__options--horizontal .business-create-option__desc {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .business-create-sheet__options--horizontal .business-create-option__arrow {
