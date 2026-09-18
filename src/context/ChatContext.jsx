@@ -301,8 +301,11 @@ export const ChatProvider = ({ children }) => {
             }
             const otherUserIdPre = isGroupConvo ? null : convoDataPre?.participants?.find((id) => id !== currentUser.uid);
             if (otherUserIdPre) {
-                const otherSnap = await getDoc(doc(db, 'users', otherUserIdPre));
-                const otherData = otherSnap.data() || {};
+                // Public projection only. Block/mute (both directions) + mutual-follow +
+                // age are enforced server-side by createOrGetConversation; the client
+                // pre-check uses the viewer's own block/mute + own followers reverse index.
+                const otherSnap = await getDoc(doc(db, 'public_profiles', otherUserIdPre));
+                const otherData = otherSnap.exists() ? (otherSnap.data() || {}) : {};
                 const { restricted } = messagingRestrictedBetweenUsers(
                     userProfile,
                     currentUser.uid,
@@ -315,6 +318,7 @@ export const ChatProvider = ({ children }) => {
                 }
                 const viewerFollowing =
                     invitationUser?.following || userProfile?.following || [];
+                const viewerFollowers = Array.isArray(userProfile?.followers) ? userProfile.followers : [];
                 const isSupportPeer =
                     userProfile?.isSystemAccount === true || otherData.isSystemAccount === true;
                 if (!isSupportPeer) {
@@ -322,7 +326,8 @@ export const ChatProvider = ({ children }) => {
                         currentUser.uid,
                         otherUserIdPre,
                         viewerFollowing,
-                        otherData.following || []
+                        [],
+                        { viewerFollowers }
                     );
                     if (!allowed) {
                         showToast(

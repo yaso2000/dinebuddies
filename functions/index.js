@@ -759,6 +759,9 @@ function toPublicProfile(userDocData, uid) {
         subscriptionTier,
         accountRole,
         searchable,
+        // System/support peers (chat gates bypass them) — so clients can detect a
+        // support conversation from the public projection, not the peer's users doc.
+        isSystemAccount: userData.isSystemAccount === true,
         search: {
             displayNameLower: displayName.trim().toLowerCase()
         },
@@ -1026,7 +1029,9 @@ async function syncPublicProfileFromUserDoc(uid, afterData) {
 
     const mapped = toPublicProfile(afterData, uid);
     // `searchable` gates consumer member directory only — businesses use businessPublic.isPublished.
-    if (mapped?.profileType === 'user' && mapped.searchable === false) {
+    // System/support accounts are kept (searchable stays false so they never surface in the
+    // directory) so chat clients can detect a support peer from the projection.
+    if (mapped?.profileType === 'user' && mapped.searchable === false && afterData.isSystemAccount !== true) {
         await publicRef.delete().catch(() => { });
         return { deleted: true, profileType: mapped?.profileType || null };
     }

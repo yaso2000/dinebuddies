@@ -19,6 +19,7 @@ import {
 'react-icons/fa';
 import { FaLock, FaBan } from 'react-icons/fa6';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import UserAvatar from '../components/UserAvatar';
 import { uploadImage, uploadVoiceMessage, formatFileSize, formatDuration, pickAudioRecorderMimeType } from '../utils/mediaUtils';
 import { ImageUploadZone } from '../services/imageUploadZones';
@@ -364,10 +365,19 @@ const Chat = () => {
 
       initInFlightRef.current = true;
       try {
-        const userDoc = await getDoc(doc(db, 'users', userId));
+        // Public projection only (name/avatar/online + isSystemAccount) — never the
+        // peer's users doc. Block/mute (both directions) + mutual-follow + age are
+        // enforced server-side by createOrGetConversation.
+        const userDoc = await getDoc(doc(db, 'public_profiles', userId));
         if (cancelled) return;
 
-        const userData = userDoc.exists() ? userDoc.data() : {};
+        const pub = userDoc.exists() ? userDoc.data() : null;
+        const shaped = pub ? mapPublicProfileDocToUserShape({ id: userId, ...pub }) : {};
+        const userData = {
+          ...shaped,
+          isSystemAccount: pub?.isSystemAccount === true,
+          isOnline: pub?.userPublic?.isOnline === true,
+        };
         const { restricted } = messagingRestrictedBetweenUsers(
           userProfile,
           currentUser.uid,
@@ -379,15 +389,15 @@ const Chat = () => {
         const isSupport = userData.isSystemAccount === true;
         setIsSupportPeer(isSupport);
 
-        if (userDoc.exists()) {
+        if (pub) {
           setOtherUser({
             uid: userId,
-            displayName: isSupport ?
-            userData.display_name || userData.displayName || 'DineBuddies Support' :
-            userData.display_name || userData.displayName || userData.email || 'User',
-            photoURL: getSafeAvatar(userData),
-            isOnline: userData.isOnline || false,
-            lastSeen: userData.lastSeen || null,
+            displayName: isSupport
+              ? shaped.displayName || 'DineBuddies Support'
+              : shaped.displayName || 'User',
+            photoURL: getSafeAvatar(shaped),
+            isOnline: userData.isOnline,
+            lastSeen: null,
             isSystemAccount: isSupport
           });
         } else {

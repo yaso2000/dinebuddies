@@ -1,4 +1,4 @@
-import { doc, updateDoc, arrayUnion, arrayRemove, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 /** @param {unknown} v */
@@ -8,30 +8,16 @@ export function asUidArray(v) {
 }
 
 /**
- * Returns invitee IDs who accept direct outreach from `authorId`
- * (not in their blockedUserIds / mutedUserIds vs author).
+ * Invitees who accept direct outreach from `authorId`. Whether an invitee
+ * blocked/muted the author is now enforced SERVER-SIDE at publish/notify time
+ * (functions publishPrivateInvitationDraft filters blocked/muted/minor invitees),
+ * so the client no longer reads each invitee's private block/mute lists.
+ * @returns {Promise<{ allowed: string[], skipped: string[] }>}
  */
 export async function filterInviteesWhoAcceptAuthor(authorId, inviteeIds) {
     const raw = asUidArray(inviteeIds);
     if (!authorId || raw.length === 0) return { allowed: [], skipped: [] };
-    const allowed = [];
-    const skipped = [];
-    for (const fid of raw) {
-        try {
-            const snap = await getDoc(doc(db, 'users', fid));
-            const d = snap.data() || {};
-            const blocked = asUidArray(d.blockedUserIds);
-            const muted = asUidArray(d.mutedUserIds);
-            if (blocked.includes(authorId) || muted.includes(authorId)) {
-                skipped.push(fid);
-            } else {
-                allowed.push(fid);
-            }
-        } catch {
-            skipped.push(fid);
-        }
-    }
-    return { allowed, skipped };
+    return { allowed: raw, skipped: [] };
 }
 
 export async function toggleUserBlock(myUid, targetUid, shouldBlock) {
@@ -82,13 +68,11 @@ export function messagingRestrictedBetweenUsers(viewerProfile, viewerUid, otherU
     }
     const myBlocked = asUidArray(viewerProfile?.blockedUserIds);
     const myMuted = asUidArray(viewerProfile?.mutedUserIds);
-    const theirBlocked = asUidArray(otherUserDoc?.blockedUserIds);
-    const theirMuted = asUidArray(otherUserDoc?.mutedUserIds);
     if (myBlocked.includes(otherUid) || myMuted.includes(otherUid)) {
         return { restricted: true, reason: 'viewer_list' };
     }
-    if (theirBlocked.includes(viewerUid) || theirMuted.includes(viewerUid)) {
-        return { restricted: true, reason: 'other_list' };
-    }
+    // Whether the OTHER user blocked/muted the viewer is enforced server-side
+    // (createOrGetConversation checks both directions). Not read client-side — that
+    // would require the other member's private lists and reveal blocks to the viewer.
     return { restricted: false, reason: null };
 }
