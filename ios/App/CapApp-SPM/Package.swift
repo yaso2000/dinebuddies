@@ -15,6 +15,7 @@ let package = Package(
         .package(name: "CapacitorFirebaseAuthentication", path: "..\..\..\node_modules\@capacitor-firebase\authentication"),
         .package(name: "CapacitorApp", path: "..\..\..\node_modules\@capacitor\app"),
         .package(name: "CapacitorKeyboard", path: "..\..\..\node_modules\@capacitor\keyboard"),
+        .package(name: "CapacitorScreenOrientation", path: "..\..\..\node_modules\@capacitor\screen-orientation"),
         .package(name: "CapacitorStatusBar", path: "..\..\..\node_modules\@capacitor\status-bar")
     ],
     targets: [
@@ -26,6 +27,7 @@ let package = Package(
                 .product(name: "CapacitorFirebaseAuthentication", package: "CapacitorFirebaseAuthentication"),
                 .product(name: "CapacitorApp", package: "CapacitorApp"),
                 .product(name: "CapacitorKeyboard", package: "CapacitorKeyboard"),
+                .product(name: "CapacitorScreenOrientation", package: "CapacitorScreenOrientation"),
                 .product(name: "CapacitorStatusBar", package: "CapacitorStatusBar")
             ]
         )
