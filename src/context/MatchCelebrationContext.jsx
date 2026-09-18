@@ -216,7 +216,17 @@ export function MatchCelebrationProvider({ children }) {
                 otherUser={celebration?.otherUser}
                 otherName={celebration?.otherName || ''}
                 onChat={() => {
-                    if (celebration?.otherId) navigate(`/chat/${celebration.otherId}`);
+                    // A celebration only fires for a MUTUAL connection that is already
+                    // committed server-side, but the viewer's followers[] reverse index
+                    // (async trigger) may not have synced yet — so the chat's connection
+                    // check would briefly say "not allowed" and never attach the message
+                    // listener (no bubbles). Pass a hint so the chat proceeds immediately;
+                    // createOrGetConversation still enforces the real mutual follow.
+                    if (celebration?.otherId) {
+                        navigate(`/chat/${celebration.otherId}`, {
+                            state: { connectionEstablished: true },
+                        });
+                    }
                 }}
                 onClose={dismissCelebration}
             />

@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React, { Suspense, lazy, useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { collection, query, onSnapshot, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
@@ -127,6 +127,13 @@ const Chat = () => {
   const { userId, groupId } = useParams();
   const isGroup = Boolean(groupId);
   const navigate = useNavigate();
+  const location = useLocation();
+  // Opened from a match/friendship celebration: the mutual connection is committed
+  // server-side but the client's followers[] reverse index may lag, so proceed
+  // optimistically (createOrGetConversation still enforces it) — otherwise the message
+  // listener never attaches and no bubbles show. Latched so it survives re-renders.
+  const assumeConnectedRef = useRef(location.state?.connectionEstablished === true);
+  const assumeConnected = assumeConnectedRef.current;
   const { currentUser, userProfile } = useAuth();
   const { currentUser: invitationUser } = useInvitations();
   const { isDark } = useTheme();
@@ -201,8 +208,8 @@ const Chat = () => {
       setConnectionLocked(false);
       return;
     }
-    setConnectionLocked(!connectionAllowed);
-  }, [isGroup, connectionAllowed, connectionCheckLoading, messagingRestricted, isSupportPeer]);
+    setConnectionLocked(!(connectionAllowed || assumeConnected));
+  }, [isGroup, connectionAllowed, assumeConnected, connectionCheckLoading, messagingRestricted, isSupportPeer]);
 
   const composerBlocked = isGroup
     ? Boolean(groupInfo && groupInfo.isMember === false)
@@ -410,7 +417,7 @@ const Chat = () => {
           });
         }
 
-        const mayMessage = isSupport || (!restricted && connectionAllowed);
+        const mayMessage = isSupport || (!restricted && (assumeConnected || connectionAllowed));
 
         if (!mayMessage) {
           setConversationId(null);
@@ -464,6 +471,7 @@ const Chat = () => {
     blockedKey,
     mutedKey,
     connectionAllowed,
+    assumeConnected,
     connectionCheckLoading,
   ]);
 
