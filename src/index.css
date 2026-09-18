@@ -4470,6 +4470,12 @@ button.notification-bell {
     padding: 1rem 1rem 6rem !important;
   }
 
+  /* Content pages with headings/text need a side gutter on mobile so titles and
+     section headings don't sit flush against the screen edge. */
+  .page-container.business-inbox-manage {
+    padding: 1rem !important;
+  }
+
 
   .feed-list {
     padding: 10px 4px !important;

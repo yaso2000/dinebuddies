@@ -22,7 +22,7 @@ export default function BusinessInboxManage() {
   if (!currentUser?.uid) return null;
 
   return (
-    <div className="page-container" style={{ padding: '1rem', maxWidth: 900, margin: '0 auto' }}>
+    <div className="page-container business-inbox-manage" style={{ padding: '1rem', maxWidth: 900, margin: '0 auto' }}>
       {/* Header — back button on its own row so title/subtitle/section headings all
           share the same left inset (unified margins). */}
       <button
