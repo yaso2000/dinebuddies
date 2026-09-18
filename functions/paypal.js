@@ -576,7 +576,9 @@ exports.createPayPalCreditsOrder = functions.https.onCall(async (data, context) 
 
     const userId = context.auth.uid;
     const clientMode = normalizePayPalMode(data?.clientMode);
-    const currency = resolveOrderCurrency(data?.currency);
+    // SECURITY: currency is server-fixed. Never trust a client-supplied currency —
+    // a fixed price ('2.00') charged in a weak currency = near-free credits.
+    const currency = paypalCurrency();
     const orderPayload = {
         intent: 'CAPTURE',
         purchase_units: [
@@ -695,7 +697,9 @@ exports.createPayPalBusinessPlanOrder = functions.https.onCall(async (data, cont
 
     const planId = String(data?.planId || 'paid').trim();
     const clientMode = normalizePayPalMode(data?.clientMode);
-    const currency = resolveOrderCurrency(data?.currency);
+    // SECURITY: currency is server-fixed. Never trust a client-supplied currency —
+    // a fixed price ('2.00') charged in a weak currency = near-free credits.
+    const currency = paypalCurrency();
     const orderPayload = {
         intent: 'CAPTURE',
         purchase_units: [

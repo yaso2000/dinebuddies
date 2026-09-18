@@ -416,6 +416,19 @@ service cloud.firestore {
         && request.resource.data.get('pendingCashoutRequestId', '') == resource.data.get('pendingCashoutRequestId', '');
     }
 
+    // A CLIENT-created user doc must start with ZERO credit balances. Real credits
+    // are granted only by Cloud Functions (Admin SDK). Without this, a user could
+    // create (or delete + re-create) their doc with paidCredits: 10000000.
+    function creditFieldsZeroOnCreate() {
+      return request.resource.data.get('paidCredits', 0) == 0
+        && request.resource.data.get('savedCredits', 0) == 0
+        && request.resource.data.get('freeCredits', 0) == 0
+        && request.resource.data.get('totalCreditsPurchased', 0) == 0
+        && request.resource.data.get('totalCreditsSpent', 0) == 0
+        && request.resource.data.get('totalSavedCreditsEarned', 0) == 0
+        && !request.resource.data.keys().hasAny(['pendingCashoutRequestId']);
+    }
+
     // Paid business entitlement is server-authoritative: the paid tier is granted
     // only by a Cloud Function (Admin SDK) after a verified IAP/Stripe/PayPal
     // payment. A client CREATE may only make a 'free' account and may not set the
@@ -507,6 +520,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.auth.uid == userId &&
                        userCreateHasNoServerAffiliateFields() &&
                        userCreateReferredByOk() &&
+                       creditFieldsZeroOnCreate() &&
                        subscriptionCreateClientSafe() &&
                        userCreateRoleOkForClient();
       // Allow user to update their own FCM push tokens (from notificationService)
