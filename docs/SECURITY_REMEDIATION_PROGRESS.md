@@ -28,6 +28,14 @@ Resume point for continuing the audit remediation in a later session.
 - **2.8** Phone-number login removed entirely (email+password only); login-resolver endpoints deleted — root-fixes the identity-disclosure oracle.
 - **2.9** Apple IAP verify fail-safe to PRODUCTION when `NODE_ENV=production`.
 
+### More security (user present, deployed)
+- **2.7** Stripe refund/chargeback credit clawback (isolated, clamps to balance).
+- **3.1** Destructive/financial admin actions -> full admin only (assertFullAdmin).
+- **3.3** mirrorEmailVerifiedFromAction requires auth + own-email (closed enumeration oracle).
+- **3.9** Email business signup strips self-granted google_business_verified badge.
+- **Anti-fraud:** per-user velocity limits (10/h, 30/d) on Stripe + PayPal credit purchases.
+- 2.8 phone-number login removed entirely (resolver deleted).
+
 ### Safe hardening done while user was away (validated, deployed)
 - **3.5** `api/cron/ingest-pending-venues.js` fails CLOSED (503) when `CRON_SECRET` unset — ⚠️ confirm `CRON_SECRET` IS set in Vercel or venue ingestion 503s.
 - Removed dead `affiliateAgentContactFieldsOnlyUpdate()` from `firestore.rules` (cleared deploy lint warnings).
