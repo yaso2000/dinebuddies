@@ -3,14 +3,29 @@
  * Run: node scripts/backfill-partner-notifications-inbox.mjs
  */
 import admin from 'firebase-admin';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const sa = JSON.parse(readFileSync(join(__dirname, '..', 'public', 'dinebuddies-23b4e21e9b45.json'), 'utf8'));
+
+// SECURITY: admin credentials must NEVER come from public/ (that folder is
+// web-served and would leak the key). Prefer GOOGLE_APPLICATION_CREDENTIALS,
+// then a gitignored root service-account-key.json, then application default.
+function resolveAdminCredential() {
+    const envPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    if (envPath && existsSync(envPath)) {
+        return admin.credential.cert(JSON.parse(readFileSync(envPath, 'utf8')));
+    }
+    const rootKey = join(__dirname, '..', 'service-account-key.json');
+    if (existsSync(rootKey)) {
+        return admin.credential.cert(JSON.parse(readFileSync(rootKey, 'utf8')));
+    }
+    return admin.credential.applicationDefault();
+}
+
 if (!admin.apps.length) {
-    admin.initializeApp({ credential: admin.credential.cert(sa) });
+    admin.initializeApp({ credential: resolveAdminCredential() });
 }
 const db = admin.firestore();
 
