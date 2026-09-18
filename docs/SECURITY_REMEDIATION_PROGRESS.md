@@ -59,7 +59,9 @@ Resume point for continuing the audit remediation in a later session.
 - **2.7** Refund/dispute credit clawback (Stripe webhook has no `charge.refunded`/dispute handler; also Apple/Play). Needs charge→fulfillment mapping + handling already-spent credits. **Complex — dedicated session.**
 - **2.8** `login-resolver` turns any business phone into the login email without password. **Sensitive auth change.**
 - **2.1 + 2.10–2.17** Architectural, **multi-week**, do incrementally (app stays deployable):
-  - 2.1 `usersRepo` on `public_profiles` then tighten `users` `get`/`list` rules (biggest privacy hole; 83 files read `users` directly).
+  - 2.1 `usersRepo` on `public_profiles` then tighten `users` `get`/`list` rules (biggest privacy hole; ~79 files read `users` directly).
+    - **Slice 1 DONE (committed, NOT deployed):** member directory (`userDirectory.js`) now builds cards from `public_profiles` only — stopped leaking every member's email + precise GPS. Expanded `toPublicProfile` `userPublic` with card display fields + COARSE geo (~1 km). Deploy order (deferred): functions → `adminBackfillPublicProfiles` callable → web.
+    - **Remaining readers to migrate before locking the rule:** `InvitationContext.jsx:468`, `businessRankingStats.js`, `authEmailConflict.js` (email→user oracle), `adminUserQueries.js` (admin-only, keep), plus ~74 `doc(db,'users',id)` single-doc reads. THEN tighten `firestore.rules:529/533` (`allow get`/`list`) to owner+admin.
   - 2.10 AuthContext re-render storm (memoize value, fix lastSeen/location loop).
   - 2.11/2.13/2.17 unify the 3 near-duplicate chat hooks (`useMessagesWindow` + per-viewer receipts).
   - 2.12 business directory: aggregate ratings server-side + route-scoped hook.
