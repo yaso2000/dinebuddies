@@ -76,6 +76,10 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
                 await handlePaymentFailed(event.data.object);
                 break;
 
+            case 'charge.refunded':
+                await handleChargeRefunded(event.data.object);
+                break;
+
             default:
                 console.log(`Unhandled event type: ${event.type}`);
         }
@@ -123,11 +127,82 @@ async function handleDineCreditsPurchase(session) {
             userId,
             credits,
             packageId,
+            // Stored so a later charge.refunded can map back and claw the credits.
+            paymentIntent: String(session.payment_intent || '').trim() || null,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
     });
 
     console.log(`✅ Granted ${credits} dine credits to ${userId}`);
+}
+
+// Refund/chargeback clawback: reclaim granted Dine Credits when the charge is
+// refunded (blocks buy → spend → refund abuse). Isolated + never throws, so it
+// can never affect purchase fulfillment; clamps to the available balance (never
+// negative); idempotent per fulfillment. Requires the `charge.refunded` event to
+// be enabled on the Stripe webhook.
+async function handleChargeRefunded(charge) {
+    try {
+        const paymentIntent = String(charge?.payment_intent || '').trim();
+        if (!paymentIntent) return;
+        const q = await db
+            .collection('stripe_dine_credit_fulfillments')
+            .where('paymentIntent', '==', paymentIntent)
+            .limit(10)
+            .get();
+        if (q.empty) return;
+
+        for (const docSnap of q.docs) {
+            await db.runTransaction(async (tx) => {
+                const fSnap = await tx.get(docSnap.ref);
+                if (!fSnap.exists) return;
+                const f = fSnap.data() || {};
+                if (f.refundedAt) return; // already clawed back
+                const userId = String(f.userId || '');
+                const credits = Math.max(0, Math.floor(Number(f.credits) || 0));
+                if (!userId || credits <= 0) {
+                    tx.update(docSnap.ref, {
+                        refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        refundedCredits: 0,
+                    });
+                    return;
+                }
+                const userRef = db.collection('users').doc(userId);
+                const uSnap = await tx.get(userRef);
+                const u = uSnap.exists ? uSnap.data() || {} : {};
+                const paid = Math.max(0, Math.floor(Number(u.paidCredits) || 0));
+                const deducted = Math.min(paid, credits); // never go negative
+
+                if (uSnap.exists && deducted > 0) {
+                    tx.update(userRef, {
+                        paidCredits: paid - deducted,
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    });
+                    const ledgerRef = db.collection('credit_transactions').doc();
+                    tx.set(ledgerRef, {
+                        userId,
+                        accountRole: isBusinessUserDoc(u) ? 'business' : 'user',
+                        type: 'refund_clawback',
+                        amount: -deducted,
+                        balanceType: 'paid',
+                        wallet: 'purchase',
+                        reason: 'stripe_refund',
+                        relatedId: paymentIntent,
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        paidUsed: deducted,
+                        savedUsed: 0,
+                        freeUsed: 0,
+                    });
+                }
+                tx.update(docSnap.ref, {
+                    refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    refundedCredits: deducted,
+                });
+            });
+        }
+    } catch (e) {
+        console.error('handleChargeRefunded error (non-fatal):', e?.message || e);
+    }
 }
 
 async function handleCheckoutComplete(session) {
