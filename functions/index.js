@@ -655,6 +655,9 @@ function toPublicProfile(userDocData, uid) {
         ? {
             isPublished: authEmailVerified && userOptedIntoDirectory,
             businessType: asTrimmedString(businessInfo.businessType),
+            // Public engagement counter (drives the Partners ranking; already a
+            // client-writable public tally on users.businessInfo.profileLikes).
+            profileLikes: asFiniteNumber(businessInfo.profileLikes) || 0,
             city: asTrimmedString(businessInfo.city) || asTrimmedString(userData.city),
             country:
                 asTrimmedString(businessInfo.country) ||

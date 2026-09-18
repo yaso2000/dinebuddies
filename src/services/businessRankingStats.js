@@ -1,5 +1,5 @@
 import { collection, query, where, limit, getDocs, doc, getDoc, documentId } from 'firebase/firestore';
-import { db, auth } from '../firebase/config';
+import { db } from '../firebase/config';
 
 const BATCH = 10;
 
@@ -98,23 +98,23 @@ export async function loadBusinessRankingStatsMap(businessIds) {
     const statsById = Object.fromEntries(ids.map((id) => [id, emptyStats()]));
     if (!ids.length) return statsById;
 
-    if (auth.currentUser) {
-        for (let i = 0; i < ids.length; i += BATCH) {
-            const chunk = ids.slice(i, i + BATCH);
-            const snap = await getDocs(
-                query(collection(db, 'users'), where(documentId(), 'in', chunk), limit(chunk.length))
-            ).catch(() => ({ docs: [] }));
-            snap.docs.forEach((userDoc) => {
-                const id = userDoc.id;
-                const data = userDoc.data();
-                const biz = data.businessInfo || {};
-                statsById[id] = {
-                    ...statsById[id],
-                    profileLikes: Number(biz.profileLikes) || 0,
-                    subscriptionTier: (data.subscriptionTier || 'free').toString().toLowerCase(),
-                };
-            });
-        }
+    // Read the PUBLIC projection (never users/{uid}). profileLikes + subscriptionTier
+    // are public engagement fields carried on public_profiles.
+    for (let i = 0; i < ids.length; i += BATCH) {
+        const chunk = ids.slice(i, i + BATCH);
+        const snap = await getDocs(
+            query(collection(db, 'public_profiles'), where(documentId(), 'in', chunk), limit(chunk.length))
+        ).catch(() => ({ docs: [] }));
+        snap.docs.forEach((pubDoc) => {
+            const id = pubDoc.id;
+            const data = pubDoc.data();
+            const bizPublic = data.businessPublic || {};
+            statsById[id] = {
+                ...statsById[id],
+                profileLikes: Number(bizPublic.profileLikes) || 0,
+                subscriptionTier: (data.subscriptionTier || 'free').toString().toLowerCase(),
+            };
+        });
     }
 
     const [hostedById, ratingStarsById, postLikesById] = await Promise.all([
@@ -148,11 +148,12 @@ export async function loadBusinessRankingStats(businessId, userProfile) {
         subscriptionTier: (userProfile?.subscriptionTier || 'free').toString().toLowerCase(),
     };
 
-    if (!stats.profileLikes && auth.currentUser) {
-        const snap = await getDoc(doc(db, 'users', businessId)).catch(() => null);
+    if (!stats.profileLikes) {
+        // Public projection only (never users/{uid}).
+        const snap = await getDoc(doc(db, 'public_profiles', businessId)).catch(() => null);
         if (snap?.exists()) {
             const data = snap.data();
-            const stored = data.businessInfo || {};
+            const stored = data.businessPublic || {};
             stats.profileLikes = Number(stored.profileLikes) || 0;
             stats.subscriptionTier = (data.subscriptionTier || stats.subscriptionTier).toString().toLowerCase();
         }
