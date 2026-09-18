@@ -187,3 +187,40 @@
     background: var(--primary, #8b5cf6);
     color: #fff;
 }
+
+/* ── List / Map view toggle + directory map ────────────────────────── */
+.special-offers-viewtoggle {
+    display: flex;
+    gap: 8px;
+    padding: 0 16px 12px;
+}
+.sov-toggle {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-main);
+    font-weight: 600;
+    cursor: pointer;
+}
+.sov-toggle.active {
+    background: var(--secondary, #f59e0b);
+    color: #fff;
+    border-color: transparent;
+}
+.special-offers-map {
+    padding: 0 16px 16px;
+    height: calc(100vh - var(--nav-height, 65px) - 190px);
+    min-height: 360px;
+}
+.special-offers-map .directory-map {
+    width: 100%;
+    height: 100%;
+    border-radius: 14px;
+    overflow: hidden;
+}

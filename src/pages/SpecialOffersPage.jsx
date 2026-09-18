@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle } from 'react-icons/fa';
+import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle, FaList, FaMapMarkedAlt } from 'react-icons/fa';
 import { AppText } from '../components/base';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -10,8 +10,21 @@ import { listActiveCommunityOffers, takeCommunityOffer } from '../services/commu
 import { isBusinessUser } from '../utils/accountRole';
 import { offerBannerStyle } from '../utils/offerBanner';
 import OfferClaimQrModal from '../components/OfferClaimQrModal';
+import DirectoryMap from '../components/DirectoryMap';
 import './SpecialOffersPage.css';
 import './CreateCommunityOffer.css';
+
+const OFFER_MARKER_COLOR = '#f59e0b';
+
+/** Minimal HTML escape for values interpolated into Leaflet popup markup. */
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 /**
  * Consumer "Special Offers" — every active offer businesses published to the feed,
@@ -29,6 +42,7 @@ export default function SpecialOffersPage() {
 
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
   const [userLoc, setUserLoc] = useState(() => {
     const lat = Number(userProfile?.coordinates?.lat);
     const lng = Number(userProfile?.coordinates?.lng);
@@ -139,6 +153,22 @@ export default function SpecialOffersPage() {
     return { label: takingId === offer.id ? t('offer_taking', 'Taking…') : t('offer_take_it', 'Take it'), done: false };
   };
 
+  // Map popup for one offer (image + business + distance + link to the business).
+  const viewLabel = t('view_details', 'View');
+  const buildOfferPopup = useCallback(
+    (o, { distanceKm }) => `
+      <div class="compact-popup" dir="auto" style="unicode-bidi:isolate;text-align:start">
+        ${o.imageUrl ? `<div style="position:relative;"><img src="${escapeHtml(o.imageUrl)}" class="compact-popup-image" /></div>` : ''}
+        <div class="compact-popup-body">
+          <h4 class="compact-popup-title">${escapeHtml(o.title || '')}</h4>
+          <div class="compact-popup-meta">${escapeHtml(o.businessName || '')}</div>
+          ${distanceKm != null ? `<div class="compact-popup-stats"><span dir="auto" style="unicode-bidi:isolate;">📏 ${distanceKm.toFixed(1)} km</span></div>` : ''}
+          <div><button onclick="window.location.href='/business/${escapeHtml(o.partnerId || '')}'" class="compact-popup-btn" style="background:${OFFER_MARKER_COLOR};color:#111;">${escapeHtml(viewLabel)}</button></div>
+        </div>
+      </div>`,
+    [viewLabel]
+  );
+
   return (
     <div className="special-offers-page">
       <div className="special-offers-page__header">
@@ -163,7 +193,23 @@ export default function SpecialOffersPage() {
           <AppText as="p">{t('special_offers_empty', 'No special offers right now. Check back soon.')}</AppText>
         </div>
       ) : (
-        <div className="special-offers-list">
+        <>
+          <div className="special-offers-viewtoggle">
+            <button
+              type="button"
+              className={`sov-toggle${viewMode === 'list' ? ' active' : ''}`}
+              onClick={() => setViewMode('list')}>
+              <FaList aria-hidden /> {t('view_list', 'List')}
+            </button>
+            <button
+              type="button"
+              className={`sov-toggle${viewMode === 'map' ? ' active' : ''}`}
+              onClick={() => setViewMode('map')}>
+              <FaMapMarkedAlt aria-hidden /> {t('view_map', 'Map')}
+            </button>
+          </div>
+          {viewMode === 'list' ? (
+          <div className="special-offers-list">
           {sortedOffers.map((offer) => {
             const state = takeState(offer);
             return (
@@ -192,7 +238,22 @@ export default function SpecialOffersPage() {
               </div>
             );
           })}
-        </div>
+          </div>
+          ) : (
+          <div className="special-offers-map">
+            <DirectoryMap
+              active={viewMode === 'map'}
+              items={sortedOffers}
+              getCoords={(o) => ({ lat: o.lat, lng: o.lng })}
+              getMarkerImageUrl={(o) => o.imageUrl || o.businessAvatar || ''}
+              getFallbackName={(o) => o.businessName || o.title || 'Offer'}
+              buildPopupHtml={buildOfferPopup}
+              userLocation={userLoc}
+              markerColor={OFFER_MARKER_COLOR}
+            />
+          </div>
+          )}
+        </>
       )}
 
       {claimModal && (
