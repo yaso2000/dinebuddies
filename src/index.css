@@ -6869,6 +6869,42 @@ button.notification-bell {
   text-align: start;
 }
 
+/* "More →" scroll affordance for an overflowing shelf row */
+.business-create-sheet__shelf-scroll {
+  position: relative;
+}
+
+.business-create-sheet__more {
+  position: absolute;
+  inset-inline-end: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card, #1f2430);
+  color: var(--text-main, #fff);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  font-size: 0.78rem;
+  pointer-events: none;
+  z-index: 2;
+  animation: dbShelfMoreNudge 1.4s ease-in-out infinite;
+}
+
+/* In RTL, more content is to the left — flip the chevron to point that way. */
+[dir="rtl"] .business-create-sheet__more {
+  transform: translateY(-50%) scaleX(-1);
+}
+
+@keyframes dbShelfMoreNudge {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+
 /* Horizontal swipeable layout for the mobile create menu */
 .business-create-sheet__options--horizontal {
   flex-direction: row;

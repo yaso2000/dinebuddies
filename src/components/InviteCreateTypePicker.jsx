@@ -1,10 +1,55 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FaChevronRight, FaGlobe, FaGamepad, FaMicrophone, FaUserFriends, FaQuestion, FaTheaterMasks, FaUsers } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { AppText } from './base';
 import { useInviteCreateNavigation } from '../hooks/useInviteCreateNavigation';
 import { useDesktopShell } from '../hooks/useDesktopShell';
 import './CreateInvitationSelector.css';
+
+/**
+ * A horizontal shelf row that shows a "more →" chevron when its cards overflow
+ * and there is content still to scroll to, so users know the row is swipeable.
+ * Direction-safe (works in RTL): the chevron sits on the trailing edge.
+ */
+function ShelfRow({ children }) {
+  const ref = useRef(null);
+  const [hasMore, setHasMore] = useState(false);
+
+  const update = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    // abs(scrollLeft): RTL browsers report scrollLeft as 0 → negative.
+    const remaining = el.scrollWidth - el.clientWidth - Math.abs(el.scrollLeft);
+    setHasMore(remaining > 8);
+  }, []);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    update();
+    const raf = requestAnimationFrame(update); // after layout settles
+    el.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [update]);
+
+  return (
+    <div className="business-create-sheet__shelf-scroll">
+      <div ref={ref} className="business-create-sheet__options business-create-sheet__options--horizontal">
+        {children}
+      </div>
+      {hasMore ? (
+        <span className="business-create-sheet__more" aria-hidden>
+          <FaChevronRight />
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 export function inviteCreateTypeSubtitle(t, venueName) {
   if (venueName) {
@@ -216,9 +261,9 @@ export default function InviteCreateTypePicker({
               {showHeadings ? (
                 <AppText as="div" className="business-create-sheet__shelf-heading">{g.label}</AppText>
               ) : null}
-              <div className="business-create-sheet__options business-create-sheet__options--horizontal">
+              <ShelfRow>
                 {itemsOf(g.id).map((opt) => renderCard(opt))}
-              </div>
+              </ShelfRow>
             </div>
           ))}
         </div>
