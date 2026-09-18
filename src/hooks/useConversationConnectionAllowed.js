@@ -77,12 +77,17 @@ export function useConversationConnectionAllowed(
                         { viewerFollowers: viewerFollowersRef.current }
                     );
                     if (!cancelled) {
-                        setAllowed(ok);
+                        // Latch: once a mutual connection is confirmed for this open
+                        // conversation, keep it — even if the viewer's followers[] briefly
+                        // reads stale (the reverse index syncs via an async trigger) or a
+                        // check errors. Reverting to false here would null conversationId
+                        // and tear down the message listener mid-send, dropping the
+                        // sender's own just-sent bubble until the chat is reopened.
+                        setAllowed((prev) => prev || ok);
                         setLoading(false);
                     }
                 } catch {
                     if (!cancelled) {
-                        setAllowed(false);
                         setLoading(false);
                     }
                 }
