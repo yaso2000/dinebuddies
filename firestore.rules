@@ -429,6 +429,16 @@ service cloud.firestore {
         && !request.resource.data.keys().hasAny(['pendingCashoutRequestId']);
     }
 
+    // Minor-safety: ageCategory (16-17 vs adult) is the gate for chat/invites.
+    // A client may set it once (first profile completion, when previously empty)
+    // but may NEVER change it afterwards — otherwise a minor could re-declare as
+    // an adult (or an adult as 16-17) and bypass every age gate. Admin changes go
+    // through server callables (Admin SDK bypasses rules).
+    function ageCategoryImmutableOnceSet() {
+      return resource.data.get('ageCategory', '') == ''
+        || request.resource.data.get('ageCategory', '') == resource.data.get('ageCategory', '');
+    }
+
     // Paid business entitlement is server-authoritative: the paid tier is granted
     // only by a Cloud Function (Admin SDK) after a verified IAP/Stripe/PayPal
     // payment. A client CREATE may only make a 'free' account and may not set the
@@ -555,6 +565,7 @@ service cloud.firestore {
       allow update: if isOwner(userId) && ownerAffiliateWriteGuards() &&
                        creditFieldsUnchanged() &&
                        subscriptionUpdateClientSafe() &&
+                       ageCategoryImmutableOnceSet() &&
                        tasteScopeWriteOk() &&
                        pickOneWriteOk() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
@@ -566,6 +577,7 @@ service cloud.firestore {
       allow update: if isAdminOrPanelStaff() &&
                        creditFieldsUnchanged() &&
                        subscriptionUpdateClientSafe() &&
+                       ageCategoryImmutableOnceSet() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'region', 'accountType']);
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)

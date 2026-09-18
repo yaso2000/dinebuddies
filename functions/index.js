@@ -1318,7 +1318,12 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
         });
         // Do not require host→invitee follow: personal/social invites are often sent
         // from directory/search before a follow relationship exists. Still filter
-        // blocked/muted/business/guest accounts.
+        // blocked/muted/business/guest accounts, and — minor-safety — any invitee
+        // whose age class (16-17 vs adult) differs from the host. This is the
+        // server-authoritative age gate for hosted invites (rules are bypassed by
+        // the Admin SDK write below).
+        const isMinorDoc = (d) => (d?.ageCategory || '') === '16-17';
+        const hostIsMinor = isMinorDoc(hostUser);
         const filteredFriends = [];
         for (const fid of rawIds) {
             if (!fid || typeof fid !== 'string') continue;
@@ -1327,6 +1332,7 @@ exports.publishPrivateInvitationDraft = functions.https.onCall(async (data, cont
             const fd = fSnap.data() || {};
             const role = (fd.role || '').toLowerCase();
             if (role === 'business' || role === 'guest' || fd.isBusiness === true || fd.isGuest === true) continue;
+            if (isMinorDoc(fd) !== hostIsMinor) continue; // minor-safety: no cross-age invites
             const blocked = Array.isArray(fd.blockedUserIds) ? fd.blockedUserIds : [];
             const muted = Array.isArray(fd.mutedUserIds) ? fd.mutedUserIds : [];
             if (blocked.includes(uid)) continue;
@@ -1693,6 +1699,13 @@ exports.claimPrivateInvitationShare = functions.https.onCall(async (data, contex
         const hostSnap = await db.collection('users').doc(hostId).get();
         if (hostSnap.exists) {
             const host = hostSnap.data() || {};
+            // Minor-safety: a 16-17 user and an adult may not join each other's invites.
+            if (((user.ageCategory || '') === '16-17') !== ((host.ageCategory || '') === '16-17')) {
+                throw new functions.https.HttpsError(
+                    'failed-precondition',
+                    'You cannot join this invitation.'
+                );
+            }
             const hostBlocked = Array.isArray(host.blockedUserIds) ? host.blockedUserIds : [];
             const hostMuted = Array.isArray(host.mutedUserIds) ? host.mutedUserIds : [];
             if (hostBlocked.includes(uid) || hostMuted.includes(uid)) {
@@ -1953,6 +1966,17 @@ exports.createOrGetConversation = functions.https.onCall(async (data, context) =
         throw new functions.https.HttpsError(
             'failed-precondition',
             'Business accounts use the Business inbox, not personal chat.'
+        );
+    }
+
+    // Minor-safety: a 16-17 user and an adult may never open a personal chat.
+    // (createGroupConversation + the group invite branch enforce this already; the
+    // 1-on-1 path is the most-used and previously had no age gate.)
+    const isMinor = (d) => (d?.ageCategory || '') === '16-17';
+    if (!isSystemPeer && isMinor(reqData) !== isMinor(othData)) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'This conversation is not allowed.'
         );
     }
 
