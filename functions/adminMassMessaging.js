@@ -14,7 +14,6 @@ const AUDIENCE_MAP = {
     all: 'all',
     user: 'user',
     business: 'business',
-    affiliate_agent: 'affiliate_agent',
     id: 'id',
 };
 

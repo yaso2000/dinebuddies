@@ -24,9 +24,6 @@ function matchesRoleFilter(data, roleFilter, bannedOnly = false) {
         case 'business':
             ok = r === 'business' || r === 'partner';
             break;
-        case 'affiliate_agent':
-            ok = r === 'affiliate_agent';
-            break;
         case 'team':
             ok = TEAM_ROLES.has(r);
             break;

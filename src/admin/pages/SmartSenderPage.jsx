@@ -8,7 +8,6 @@ const AUDIENCE_OPTIONS = [
 { id: 'all', labelKey: 'admin_sender_audience_all' },
 { id: 'user', labelKey: 'admin_sender_audience_users' },
 { id: 'business', labelKey: 'admin_sender_audience_business' },
-{ id: 'affiliate_agent', labelKey: 'admin_sender_audience_agents' },
 { id: 'id', labelKey: 'admin_sender_audience_by_uid' }];
 
 

@@ -25,13 +25,6 @@ const USER_TABS = [
   freezeDays: null,
   freezeLabelKey: 'admin_freeze_account',
   verifyPlaceholder: true
-},
-{
-  id: 'agents',
-  labelKey: 'admin_users_tab_agents',
-  hintKey: 'admin_users_tab_agents_hint',
-  roleFilter: 'affiliate_agent',
-  agents: true
 }];
 
 
