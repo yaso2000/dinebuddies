@@ -74,7 +74,7 @@ export const PROFILE_GIFTS = [
     previewDescKey: 'gift_rose_preview',
     defaultName: 'Rose',
     defaultDesc: 'A classic friendly gesture',
-    defaultPreview: 'A classic romantic gesture 🌹',
+    defaultPreview: 'A classic friendly gesture 🌹',
   },
   {
     id: 'donut',

@@ -182,7 +182,7 @@ export const MOTION_TEMPLATE_REGISTRY: Record<MotionTemplateId, MotionTemplateDe
     },
     romantic_dinner: {
         id: 'romantic_dinner',
-        name: 'Romantic Dinner',
+        name: 'Warm Dinner',
         postType: 'event_post',
         format: 'square',
         version: 1,

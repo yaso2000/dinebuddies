@@ -62,9 +62,11 @@ export const notifyProfileLiked = (profileOwnerId, likerUser) => {
 };
 
 const CONNECT_NOTIFICATION_COPY = {
+    // Mutual profile match is a friendship connection now (no romantic copy). Key
+    // name kept as 'dating' so notification-type routing below is unchanged.
     dating: {
-        title: 'Dating match!',
-        message: (name) => `You and ${name} connected for dating`,
+        title: 'New friendship!',
+        message: (name) => `You and ${name} now follow each other`,
     },
     acquaintance: {
         title: 'New acquaintance!',
