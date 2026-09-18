@@ -22,6 +22,7 @@ import {
 '../constants/languageOptions';
 import { getSpendableCredits } from '../utils/walletCredits';
 import { getRuntime } from '../platform/runtime';
+import { isExternalPaymentAllowed } from '../utils/commercePlatform';
 import { AppText, AppTextInput } from "../components/base";
 
 const BUSINESS_PAID_MONTHLY_USD = Number(String(BUSINESS_PAID_PLAN_DISPLAY.priceLabel).replace(/[^\d.]/g, '')) || 29;
@@ -319,7 +320,8 @@ const Settings = () => {
         color: '#f59e0b',
         badge: isPaidBiz ? null : t('upgrade_available', 'Upgrade Available')
       },
-      {
+      // Anti-steering: external card/billing screens are web-only. Hide on native.
+      ...(isExternalPaymentAllowed() ? [{
         icon: <FaCreditCard />,
         label: t('payment_method', 'Payment Method'),
         value: userProfile?.paymentMethod || t('not_set', 'Not set'),
@@ -332,7 +334,7 @@ const Settings = () => {
         value: '',
         onClick: () => navigate('/settings/billing'),
         color: '#10b981'
-      }]
+      }] : [])]
 
     });
     settingsSections.splice(1, 0, {
@@ -361,13 +363,14 @@ const Settings = () => {
         onClick: () => navigate('/settings/credits'),
         color: '#0ea5e9'
       },
-      {
+      // Anti-steering: saved cards are web-only (Stripe). Hide on native iOS/Android.
+      ...(isExternalPaymentAllowed() ? [{
         icon: <FaCreditCard />,
         label: t('payment_methods', 'Payment Methods'),
         value: t('view_inline', 'View'),
         onClick: () => navigate('/settings/payment-methods'),
         color: '#8b5cf6'
-      }]
+      }] : [])]
 
     });
   }

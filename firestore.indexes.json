@@ -344,20 +344,6 @@
             ]
         },
         {
-            "collectionGroup": "payout_requests",
-            "queryScope": "COLLECTION",
-            "fields": [
-                {
-                    "fieldPath": "agentUid",
-                    "order": "ASCENDING"
-                },
-                {
-                    "fieldPath": "createdAt",
-                    "order": "DESCENDING"
-                }
-            ]
-        },
-        {
             "collectionGroup": "private_invitations",
             "queryScope": "COLLECTION",
             "fields": [

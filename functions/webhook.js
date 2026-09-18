@@ -5,7 +5,6 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { grantPaidCreditsInTransaction, isBusinessUserDoc, normalizeBusinessSubscriptionTier } = require('./creditsCore');
-const { processAffiliateBusinessCommission } = require('./affiliateTracking');
 
 const db = admin.firestore();
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -183,8 +182,6 @@ async function handleCheckoutComplete(session) {
             startDate: admin.firestore.FieldValue.serverTimestamp(),
             sessionId: session.id
         });
-
-        await processAffiliateBusinessCommission({ db, admin, session, userId });
 
     } catch (error) {
         console.error('Error updating user subscription:', error);

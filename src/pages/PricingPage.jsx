@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { isExternalPaymentAllowed } from '../utils/commercePlatform';
 
 /**
  * Consumer pricing — Dine Credits only (shared with business accounts).
@@ -76,6 +77,8 @@ const PricingPage = () => {
                     </button>
                 </div>
 
+                {/* Anti-steering: don't name an external processor on store builds. */}
+                {isExternalPaymentAllowed() &&
                 <div
           style={{
             textAlign: 'center',
@@ -86,6 +89,7 @@ const PricingPage = () => {
 
                     <AppText as="p">{t('Secure payment processed by Stripe', 'Secure payment processed by Stripe')}</AppText>
                 </div>
+                }
             </div>
         </div>);
 

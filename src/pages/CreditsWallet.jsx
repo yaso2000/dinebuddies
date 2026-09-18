@@ -365,7 +365,9 @@ export default function CreditsWallet() {
             </div>
           </section>
 
-          {CASHOUT_UI_ENABLED ? (
+          {/* Anti-steering: real-money cash-out (PayPal payout) is web-only.
+              Never render on native iOS/Android even if the feature flag is on. */}
+          {CASHOUT_UI_ENABLED && !isGooglePlay && !isAppleStore ? (
             <ShieldCashoutSection
               savedBalance={savedBalance}
               pendingRequestId={pendingCashoutRequestId}

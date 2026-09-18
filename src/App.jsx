@@ -16,14 +16,6 @@ import AccountThemeBridge from './components/AccountThemeBridge';
 import LoginHub from './pages/auth/LoginHub';
 import CompleteProfile from './pages/CompleteProfile';
 import HomeRouter from './components/HomeRouter';
-import ReferralJoinPage from './pages/ReferralJoinPage';
-import AffiliateDashboard from './pages/affiliate/AffiliateDashboard';
-import AffiliatePortal from './pages/affiliate/AffiliatePortal';
-import AffiliateForceSignOut from './pages/affiliate/AffiliateForceSignOut';
-import AffiliateRouteLayout from './components/affiliate/AffiliateRouteLayout';
-import AffiliateSignupPage from './pages/affiliate/AffiliateSignupPage';
-import AffiliateLoginPage from './pages/affiliate/AffiliateLoginPage';
-import AffiliateSettingsPage from './pages/affiliate/AffiliateSettingsPage';
 import NotFound from './pages/NotFound';
 import AuthActionHandler from './pages/AuthActionHandler';
 import VerifyEmail from './pages/VerifyEmail';
@@ -150,6 +142,7 @@ import { ChatProvider } from './context/ChatContext';
 import { NotificationProvider } from './context/NotificationContext';
 // Guards & Utils
 import GuestBlockedRoute from './components/GuestBlockedRoute';
+import WebOnlyRoute from './components/WebOnlyRoute';
 import BusinessBlockedRoute from './components/BusinessBlockedRoute';
 import AuthRoutingGate from './components/AuthRoutingGate';
 import AccountShellGate from './components/AccountShellGate';
@@ -218,16 +211,6 @@ function App() {
                                         <Routes>
                                             {/* Auth routes outside of nested Layout wrappers for maximum reliability */}
                                             <Route path="/login" element={<LoginHub />} />
-                                            <Route path="/join" element={<ReferralJoinPage />} />
-                                            <Route element={<AffiliateRouteLayout />}>
-                                                <Route path="/affiliate/use-laptop" element={<Navigate to="/affiliate/dashboard" replace />} />
-                                                <Route path="/affiliate/sign-out" element={<AffiliateForceSignOut />} />
-                                                <Route path="/affiliate/signup" element={<AffiliateSignupPage />} />
-                                                <Route path="/affiliate/login" element={<AffiliateLoginPage />} />
-                                                <Route path="/affiliate/settings" element={<AffiliateSettingsPage />} />
-                                                <Route path="/affiliate/dashboard" element={<AffiliateDashboard />} />
-                                                <Route path="/affiliate" element={<AffiliatePortal />} />
-                                            </Route>
                                             <Route path="/business/login" element={<Navigate to="/login?tab=business" replace />} />
                                             <Route
                                                 path="/signup/business"
@@ -375,11 +358,11 @@ function App() {
                                                     <Route path="/settings/privacy" element={<GuestBlockedRoute><PrivacySettings /></GuestBlockedRoute>} />
                                                     <Route path="/settings/blocked-users" element={<GuestBlockedRoute><BlockedUsersSettings /></GuestBlockedRoute>} />
                                                     <Route path="/settings/declined-invitations" element={<GuestBlockedRoute><DeclinedInvitationsSettings /></GuestBlockedRoute>} />
-                                                    <Route path="/settings/payment-methods" element={<GuestBlockedRoute><SavedPaymentMethods /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/payment-methods" element={<GuestBlockedRoute><WebOnlyRoute><SavedPaymentMethods /></WebOnlyRoute></GuestBlockedRoute>} />
                                                     <Route path="/settings/subscription" element={<GuestBlockedRoute><SubscriptionSettings /></GuestBlockedRoute>} />
                                                     <Route path="/settings/credits" element={<GuestBlockedRoute><CreditsWallet /></GuestBlockedRoute>} />
                                                     <Route path="/settings/payment" element={<GuestBlockedRoute><PaymentSettings /></GuestBlockedRoute>} />
-                                                    <Route path="/settings/billing" element={<GuestBlockedRoute><BillingSettings /></GuestBlockedRoute>} />
+                                                    <Route path="/settings/billing" element={<GuestBlockedRoute><WebOnlyRoute><BillingSettings /></WebOnlyRoute></GuestBlockedRoute>} />
                                                     <Route path="/settings" element={<GuestBlockedRoute><Settings /></GuestBlockedRoute>} />
 
                                                     <Route path="/support" element={<HelpSupport />} />

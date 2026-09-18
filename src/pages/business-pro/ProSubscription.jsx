@@ -335,7 +335,7 @@ const ProSubscription = () => {
 
   return (
     <div>
-            <StripeTestModeBanner />
+            {!IS_APPLE_STORE && !IS_GOOGLE_PLAY && <StripeTestModeBanner />}
             <BusinessProLiteCard userProfile={userProfile} isFullPaid={isPaid} />
             <div
         style={{
@@ -375,7 +375,10 @@ const ProSubscription = () => {
             }
                     </div>
                 </div>
-                {isPaid &&
+                {/* Anti-steering: "Manage billing" opens Stripe's external portal.
+                    Web only — on Apple/Google, subscription management is handled
+                    by the store (App Store / Play subscriptions). */}
+                {isPaid && !IS_APPLE_STORE && !IS_GOOGLE_PLAY &&
         <button
           type="button"
           className="ui-btn ui-btn--secondary"

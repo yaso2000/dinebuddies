@@ -399,6 +399,23 @@ service cloud.firestore {
       return !affiliateServerOnlyKeysAffected() && referredByClientUpdateOk();
     }
 
+    // Credit / cherry / cash-out balances are server-authoritative: every real
+    // change goes through Cloud Functions (Admin SDK, which bypasses these
+    // rules). A CLIENT update may never change any of these fields — it may only
+    // leave them at their stored value. A missing field counts as 0/'' so a
+    // first-time provisioning that writes 0 still passes, and an auth-sync that
+    // re-writes the value it just read passes; only an actual change is denied.
+    // Prevents a user from minting savedCredits/paidCredits via a direct write.
+    function creditFieldsUnchanged() {
+      return request.resource.data.get('paidCredits', 0) == resource.data.get('paidCredits', 0)
+        && request.resource.data.get('savedCredits', 0) == resource.data.get('savedCredits', 0)
+        && request.resource.data.get('freeCredits', 0) == resource.data.get('freeCredits', 0)
+        && request.resource.data.get('totalCreditsPurchased', 0) == resource.data.get('totalCreditsPurchased', 0)
+        && request.resource.data.get('totalCreditsSpent', 0) == resource.data.get('totalCreditsSpent', 0)
+        && request.resource.data.get('totalSavedCreditsEarned', 0) == resource.data.get('totalSavedCreditsEarned', 0)
+        && request.resource.data.get('pendingCashoutRequestId', '') == resource.data.get('pendingCashoutRequestId', '');
+    }
+
     // Clients cannot self-assign affiliate_agent (or staff/admin) on first create — use Cloud Function.
     function userCreateRoleOkForClient() {
       return !request.resource.data.keys().hasAny(['role']) ||
@@ -460,23 +477,23 @@ service cloud.firestore {
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
-      // Affiliate: phone / PayPal / mailing address only (no financial fields)
-      allow update: if affiliateAgentContactFieldsOnlyUpdate(userId);
       // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
       allow update: if isOwner(userId) &&
                        ownerAffiliateWriteGuards() &&
+                       creditFieldsUnchanged() &&
                        userDocHasNoRoleField() &&
                        request.resource.data.role == 'user';
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
       allow update: if isOwner(userId) &&
                        ownerAffiliateWriteGuards() &&
+                       creditFieldsUnchanged() &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
                        request.resource.data.keys().hasAny(['businessInfo']);
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && isBusinessSignupCompletionFromIntent();
+      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && isBusinessSignupCompletionFromIntent();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && isUpgradingStubToBusinessProfile();
+      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && isUpgradingStubToBusinessProfile();
       // Follow / unfollow: owner may update only their following[] list.
       // Businesses do not follow users (no social interaction).
       allow update: if isOwner(userId) &&
@@ -485,6 +502,7 @@ service cloud.firestore {
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['following']) &&
                        request.resource.data.following is list;
       allow update: if isOwner(userId) && ownerAffiliateWriteGuards() &&
+                       creditFieldsUnchanged() &&
                        tasteScopeWriteOk() &&
                        pickOneWriteOk() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
@@ -494,6 +512,7 @@ service cloud.firestore {
       // write — that would let a regional_manager self-promote. Those fields change only through
       // trusted server callables (Admin SDK, which bypasses these rules).
       allow update: if isAdminOrPanelStaff() &&
+                       creditFieldsUnchanged() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'region', 'accountType']);
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
@@ -573,12 +592,6 @@ service cloud.firestore {
         
         // User can delete their own preferences
         allow delete: if isOwner(userId);
-      }
-
-      // Affiliate commission ledger (written only by Cloud Functions / Admin SDK)
-      match /commissions_history/{entryId} {
-        allow read: if isOwner(userId);
-        allow create, update, delete: if false;
       }
     }
 
@@ -1488,8 +1501,10 @@ service cloud.firestore {
     // ============================================
     match /credit_transactions/{id} {
       allow read: if isAdminOrPanelStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isAdminOrPanelStaff() || (isSignedIn() && request.resource.data.userId == request.auth.uid);
-      allow update, delete: if false;
+      // Ledger rows are written only by Cloud Functions (Admin SDK, bypasses
+      // rules). Clients may read their own ledger but never forge entries — a
+      // forged row could otherwise make a fraudulent balance look legitimate.
+      allow create, update, delete: if false;
     }
 
     // Profile gifts (Cloud Functions only — sender/recipient read)
@@ -1504,32 +1519,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // ============================================
-    // AFFILIATE PAYOUT REQUESTS (created by Cloud Functions only)
-    // ============================================
-    match /payout_requests/{id} {
-      allow read: if isSignedIn() &&
-                     (resource.data.agentUid == request.auth.uid || isAdminOrPanelStaff());
-      allow create, update, delete: if false;
-    }
-
     // Shield cash-out requests (Cloud Functions only; user/admin read)
     match /cashout_requests/{id} {
       allow read: if isSignedIn() &&
         (resource.data.userId == request.auth.uid || isAdminOrPanelStaff());
       allow create, update, delete: if false;
-    }
-
-    // ============================================
-    // AFFILIATE REFERRAL REGISTRY (Cloud Functions Admin SDK only)
-    // ============================================
-    match /affiliate_referral_codes/{code} {
-      allow read, write: if false;
-    }
-
-    // Referral click rate limits (Cloud Functions only)
-    match /referral_rate_limits/{docId} {
-      allow read, write: if false;
     }
 
     // ============================================

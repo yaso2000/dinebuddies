@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { isExternalPaymentAllowed } from '../utils/commercePlatform';
 import AppBackButton from '../components/AppBackButton';
 import { useToast } from '../context/ToastContext';
 import { useStripeContext } from '../context/StripeContext';
@@ -92,6 +94,13 @@ const SavedPaymentMethods = () => {
   const { stripePromise, stripeConfigured } = useStripeContext() || {};
   const { methods, loading, mutatingId, refresh, setDefault, removeMethod } = usePaymentMethods();
   const [addingCard, setAddingCard] = useState(false);
+
+  // Anti-steering: saved cards are a web-only (Stripe) concept. On native iOS/
+  // Android the payment method lives in the user's Apple ID / Google account —
+  // never surfaced or stored in-app. Redirect away on any store build.
+  if (!isExternalPaymentAllowed()) {
+    return <Navigate to="/settings" replace />;
+  }
 
   const handleSetDefault = async (pmId) => {
     try {

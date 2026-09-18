@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import AppBackButton from '../components/AppBackButton';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { isExternalPaymentAllowed } from '../utils/commercePlatform';
 import { FaArrowLeft, FaFileInvoice, FaDownload, FaCheckCircle, FaClock } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import './SettingsPages.css';
@@ -40,6 +41,12 @@ const BillingSettings = () => {
     invoiceUrl: '#'
   }]
   );
+
+  // Anti-steering: invoices/prices and external invoice links must not appear
+  // on native iOS/Android. Billing history is web-only.
+  if (!isExternalPaymentAllowed()) {
+    return <Navigate to="/settings" replace />;
+  }
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);

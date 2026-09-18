@@ -33,3 +33,15 @@ export function isAppleStoreCommerce() {
 export function isStripeCommerce() {
   return getCommercePlatform() === COMMERCE_PLATFORM.STRIPE;
 }
+
+/**
+ * Anti-steering guard: any off-store payment surface (Stripe cards, PayPal,
+ * saved payment methods, billing/invoices, real-money cash-out, "pay on the
+ * web" copy) is allowed ONLY on web. On native iOS the app shows Apple IAP
+ * only; on native Android, Google Play only. Apple/Google forbid surfacing or
+ * linking to external payment inside the app. Gate every external-payment UI
+ * on this single function so it can never leak onto a store build.
+ */
+export function isExternalPaymentAllowed() {
+  return isStripeCommerce();
+}

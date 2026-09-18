@@ -20,13 +20,6 @@ const {
     isConsumerHiddenUserDoc,
     isConsumerHiddenUid,
 } = require('./consumerAccountVisibility');
-const { registerAffiliateReferralOnUserWrite } = require('./affiliateReferral');
-const {
-    incrementReferralClicks,
-    syncAffiliatePendingReferralOnUserWrite,
-} = require('./affiliateTracking');
-const { registerAffiliateAgentProfile } = require('./affiliateAuth');
-const { requestAffiliatePayout } = require('./affiliatePayouts');
 const stripeModule = require('./stripe');
 const paypalModule = require('./paypal');
 const webhookModule = require('./webhook');
@@ -1097,12 +1090,6 @@ exports.mirrorEmailVerifiedFromAction = functions.https.onCall(async (data) => {
 
     return { ok: true, uid, profileType: detectPublicProfileType(userData) };
 });
-
-registerAffiliateReferralOnUserWrite(exports, { db, admin });
-exports.incrementReferralClicks = incrementReferralClicks;
-exports.syncAffiliatePendingReferralOnUserWrite = syncAffiliatePendingReferralOnUserWrite;
-exports.registerAffiliateAgentProfile = registerAffiliateAgentProfile;
-exports.requestAffiliatePayout = requestAffiliatePayout;
 
 // ─── Trigger: denormalize averageRating + reviewCount into public_profiles ───
 // Fires on every create/update/delete in reviews/{reviewId}.
