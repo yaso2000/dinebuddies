@@ -1074,10 +1074,20 @@ exports.syncMyBusinessPublicProfile = functions.https.onCall(async (_data, conte
  * After email verification in Safari (iOS often has no Auth session), mirror Auth → Firestore
  * and re-sync business public_profiles so Partners directory can show published listings.
  */
-exports.mirrorEmailVerifiedFromAction = functions.https.onCall(async (data) => {
+exports.mirrorEmailVerifiedFromAction = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+    }
     const email = String(data?.email || '').trim().toLowerCase();
     if (!email) {
         throw new functions.https.HttpsError('invalid-argument', 'email is required');
+    }
+    // SECURITY: a caller may only mirror THEIR OWN verified email. Requiring the
+    // email to equal the caller's token email closes the account-enumeration
+    // oracle (previously anyone could probe any email: not-found vs found).
+    const callerEmail = String(context.auth.token?.email || '').trim().toLowerCase();
+    if (!callerEmail || callerEmail !== email) {
+        throw new functions.https.HttpsError('permission-denied', 'Email does not match your account.');
     }
 
     let userRecord;
