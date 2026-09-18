@@ -9,6 +9,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { useChat } from '../context/ChatContext';
 import { getTemplateStyle } from '../utils/invitationTemplates';
 import { getSafeAvatar, pickSafeDisplayImageUrl, enrichUserWithAvatarFields, hydrateUsersAvatarFields, getAvatarUrlOrNull } from '../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import SocialInvitationInfoGrid from '../components/Invitation/SocialInvitationInfoGrid';
 import PrivateInvitationPairShowcase from '../components/Invitations/privateCard/PrivateInvitationPairShowcase';
 import SocialInvitationExternalShare from '../components/Invitations/socialCard/SocialInvitationExternalShare';
@@ -176,12 +177,12 @@ const SocialInvitationDetails = () => {
                 const friendUid = normUid(typeof fid === 'string' ? fid : fid?.id);
                 if (!friendUid) continue;
                 try {
-                  const uSnap = await getDoc(doc(db, 'users', friendUid));
+                  const uSnap = await getDoc(doc(db, 'public_profiles', friendUid));
                   if (uSnap.exists()) {
                     users.push(
                       enrichUserWithAvatarFields({
                         id: friendUid,
-                        ...uSnap.data(),
+                        ...mapPublicProfileDocToUserShape({ id: friendUid, ...uSnap.data() }),
                         rsvpStatus: data.rsvps?.[friendUid] || 'pending',
                       })
                     );

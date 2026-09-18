@@ -11,6 +11,7 @@ import {
   clearPrivateInviteDeclineCooldown,
 } from '../utils/privateInviteDeclineCooldown';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import UserAvatar from '../components/UserAvatar';
 import './SettingsPages.css';
 import { AppText } from '../components/base';
@@ -41,11 +42,11 @@ const DeclinedInvitationsSettings = () => {
       const out = [];
       for (const decline of declines) {
         try {
-          const snap = await getDoc(doc(db, 'users', decline.senderId));
-          const d = snap.exists() ? snap.data() : {};
+          const snap = await getDoc(doc(db, 'public_profiles', decline.senderId));
+          const d = snap.exists() ? mapPublicProfileDocToUserShape({ id: decline.senderId, ...snap.data() }) : {};
           out.push({
             id: decline.senderId,
-            name: d.display_name || d.displayName || d.name || d.nickname || decline.senderId.slice(0, 8) + '…',
+            name: d.display_name || d.displayName || d.name || decline.senderId.slice(0, 8) + '…',
             avatar: getSafeAvatar({ ...d, id: decline.senderId }),
             gender: d.gender,
           });

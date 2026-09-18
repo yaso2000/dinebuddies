@@ -7,6 +7,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useInvitations } from '../../../context/InvitationContext';
 import { getFollowing } from '../../../utils/followHelpers';
 import { hydrateUsersAvatarFields, enrichUserWithAvatarFields } from '../../../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../../../utils/publicProfileMap';
 import { isExcludedFromUserDocSearch } from '../../../utils/consumerSearchExclusions';
 import { searchAccounts } from '../../../services/accountSearch';
 import UserAvatar from '../../UserAvatar';
@@ -115,17 +116,14 @@ export default function SocialInvitationInviteePanel({
           continue;
         }
         try {
-          const snap = await getDoc(doc(db, 'users', friendId));
+          const snap = await getDoc(doc(db, 'public_profiles', friendId));
           if (snap.exists()) {
+            const shaped = mapPublicProfileDocToUserShape({ id: friendId, ...snap.data() });
             profiles.push(
               enrichUserWithAvatarFields({
                 id: friendId,
-                display_name:
-                  snap.data().display_name ||
-                  snap.data().displayName ||
-                  snap.data().name ||
-                  'User',
-                ...snap.data(),
+                display_name: shaped.display_name || shaped.displayName || shaped.name || 'User',
+                ...shaped,
               })
             );
           } else {

@@ -9,6 +9,7 @@ import { FaArrowLeft, FaBan } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { asUidArray, toggleUserBlock } from '../utils/userSocialLists';
 import { getSafeAvatar } from '../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import UserAvatar from '../components/UserAvatar';
 import './SettingsPages.css';
 import { AppText } from "../components/base";
@@ -42,11 +43,11 @@ const BlockedUsersSettings = () => {
       const out = [];
       for (const id of ids) {
         try {
-          const snap = await getDoc(doc(db, 'users', id));
-          const d = snap.exists() ? snap.data() : {};
+          const snap = await getDoc(doc(db, 'public_profiles', id));
+          const d = snap.exists() ? mapPublicProfileDocToUserShape({ id, ...snap.data() }) : {};
           out.push({
             id,
-            name: d.display_name || d.displayName || d.name || d.nickname || id.slice(0, 8) + '…',
+            name: d.display_name || d.displayName || d.name || id.slice(0, 8) + '…',
             avatar: getSafeAvatar({ ...d, id }),
             gender: d.gender
           });
