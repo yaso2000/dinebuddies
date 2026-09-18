@@ -429,6 +429,21 @@ service cloud.firestore {
         && !request.resource.data.keys().hasAny(['pendingCashoutRequestId']);
     }
 
+    // Trust/verification flags are server-authoritative. A client may never flip
+    // its own verified badge, ban status, or email-verified flag by a direct
+    // write — these change only via server callables (verify-my-business, admin,
+    // the email-verify mirror). Nested businessInfo.* verified fields included.
+    function trustFlagsUnchanged() {
+      return request.resource.data.get('banned', false) == resource.data.get('banned', false)
+        && request.resource.data.get('emailVerified', false) == resource.data.get('emailVerified', false)
+        // Badge fields: block ESCALATION (false -> true) only, so a normal
+        // businessInfo edit that preserves or drops the flag is never blocked.
+        && (request.resource.data.get(['businessInfo', 'google_business_verified'], false) == false
+            || resource.data.get(['businessInfo', 'google_business_verified'], false) == true)
+        && (request.resource.data.get(['businessInfo', 'verified'], false) == false
+            || resource.data.get(['businessInfo', 'verified'], false) == true);
+    }
+
     // Minor-safety: ageCategory (16-17 vs adult) is the gate for chat/invites.
     // A client may set it once (first profile completion, when previously empty)
     // but may NEVER change it afterwards — otherwise a minor could re-declare as
@@ -548,13 +563,14 @@ service cloud.firestore {
                        ownerAffiliateWriteGuards() &&
                        creditFieldsUnchanged() &&
                        subscriptionUpdateClientSafe() &&
+                       trustFlagsUnchanged() &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
                        request.resource.data.keys().hasAny(['businessInfo']);
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && subscriptionUpdateClientSafe() && isBusinessSignupCompletionFromIntent();
+      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && subscriptionUpdateClientSafe() && trustFlagsUnchanged() && isBusinessSignupCompletionFromIntent();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && subscriptionUpdateClientSafe() && isUpgradingStubToBusinessProfile();
+      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && subscriptionUpdateClientSafe() && trustFlagsUnchanged() && isUpgradingStubToBusinessProfile();
       // Follow / unfollow: owner may update only their following[] list.
       // Businesses do not follow users (no social interaction).
       allow update: if isOwner(userId) &&
@@ -566,6 +582,7 @@ service cloud.firestore {
                        creditFieldsUnchanged() &&
                        subscriptionUpdateClientSafe() &&
                        ageCategoryImmutableOnceSet() &&
+                       trustFlagsUnchanged() &&
                        tasteScopeWriteOk() &&
                        pickOneWriteOk() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
