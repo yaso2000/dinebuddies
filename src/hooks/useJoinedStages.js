@@ -9,6 +9,7 @@ import {
     query,
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import app, { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { getSafeAvatar } from '../utils/avatarUtils';
@@ -190,12 +191,12 @@ export function useJoinedStages() {
                         if (hostId) {
                             try {
                                 const hostSnap = await Promise.race([
-                                    getDoc(doc(db, 'users', hostId)),
+                                    getDoc(doc(db, 'public_profiles', hostId)),
                                     new Promise((_, reject) =>
                                         setTimeout(() => reject(new Error('host_timeout')), 3000)
                                     ),
                                 ]);
-                                if (hostSnap.exists()) hostData = hostSnap.data();
+                                if (hostSnap.exists()) hostData = mapPublicProfileDocToUserShape({ id: hostId, ...hostSnap.data() });
                             } catch {
                                 hostData = null;
                             }

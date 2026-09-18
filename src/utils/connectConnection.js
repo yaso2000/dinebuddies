@@ -45,7 +45,8 @@ async function resolveProfileShape(userId, profileHint) {
     if (profileHint && typeof profileHint === 'object') {
         return { id: userId, ...profileHint };
     }
-    const snap = await getDoc(doc(db, 'users', userId));
+    // Public projection only (legacy path; the reverse-index path never calls this).
+    const snap = await getDoc(doc(db, 'public_profiles', userId));
     return snap.exists() ? { id: userId, ...snap.data() } : { id: userId };
 }
 

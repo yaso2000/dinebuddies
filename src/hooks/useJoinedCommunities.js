@@ -54,7 +54,7 @@ async function buildCommunityCard(partnerId, data, businessInfo, lastReadTimesta
         cover: businessInfo.coverImage || data.cover_url || data.coverImage,
         type: businessInfo.businessType || data.business_type || 'Restaurant',
         location: businessInfo.city || businessInfo.address || data.city || data.address || '',
-        memberCount: data.communityMembers?.length || 0,
+        memberCount: businessInfo.communityMemberCount ?? data.communityMembers?.length ?? 0,
         unreadCount,
         lastMessage: lastMessage
             ? lastMessage.length > 40
@@ -94,18 +94,7 @@ export function useJoinedCommunities() {
             const communitiesData = await Promise.all(
                 joinedCommunities.map(async (partnerId) => {
                     try {
-                        const partnerDoc = await getDoc(doc(db, 'users', partnerId));
-                        if (partnerDoc.exists() && partnerDoc.data().role === 'business') {
-                            const data = partnerDoc.data();
-                            return buildCommunityCard(
-                                partnerId,
-                                data,
-                                data.businessInfo || {},
-                                lastReadTimestamps,
-                                viewerIds
-                            );
-                        }
-
+                        // Public projection only — never the business's users doc.
                         const publicProfileDoc = await getDoc(doc(db, 'public_profiles', partnerId));
                         if (!publicProfileDoc.exists()) return null;
 
@@ -113,19 +102,6 @@ export function useJoinedCommunities() {
                         if (p.profileType !== 'business') return null;
 
                         const businessPublic = p.businessPublic || {};
-                        const ownerId = p.userId || p.ownerId || partnerId;
-                        const ownerDoc = await getDoc(doc(db, 'users', ownerId));
-                        if (ownerDoc.exists()) {
-                            const ownerData = ownerDoc.data();
-                            return buildCommunityCard(
-                                ownerId,
-                                ownerData,
-                                ownerData.businessInfo || businessPublic,
-                                lastReadTimestamps,
-                                viewerIds
-                            );
-                        }
-
                         return buildCommunityCard(
                             partnerId,
                             {
@@ -135,7 +111,6 @@ export function useJoinedCommunities() {
                                 cover_url: businessPublic.coverImage || '',
                                 city: businessPublic.city || '',
                                 address: businessPublic.address || '',
-                                communityMembers: [],
                             },
                             {
                                 businessName: p.displayName || 'Business',
@@ -143,6 +118,7 @@ export function useJoinedCommunities() {
                                 businessType: businessPublic.businessType || 'Restaurant',
                                 city: businessPublic.city || '',
                                 address: businessPublic.address || '',
+                                communityMemberCount: businessPublic.communityMemberCount || 0,
                             },
                             lastReadTimestamps,
                             viewerIds

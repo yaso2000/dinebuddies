@@ -800,6 +800,9 @@ function toPublicProfile(userDocData, uid) {
                     typeof userData.availableForPrivateInvite === 'boolean'
                         ? userData.availableForPrivateInvite
                         : null,
+                // Whether the member's followers/following lists are visible to others
+                // (profile "Friends" section privacy). Default visible unless set false.
+                showFriends: userData.privacySettings?.showFriends !== false,
                 profileGallery: Array.isArray(userData.profileGallery)
                     ? userData.profileGallery.slice(0, 3).map((x) => (typeof x === 'string' ? x : ''))
                     : [],

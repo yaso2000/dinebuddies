@@ -503,14 +503,14 @@ const Chat = () => {
         if (key !== lastParticipantsKey) {
           lastParticipantsKey = key;
           const snaps = await Promise.all(
-            participants.map((id) => getDoc(doc(db, 'users', id)).catch(() => null))
+            participants.map((id) => getDoc(doc(db, 'public_profiles', id)).catch(() => null))
           );
           if (cancelled) return;
           const profs = {};
           snaps.forEach((s, i) => {
-            const ud = s && s.exists() ? s.data() : {};
+            const ud = s && s.exists() ? mapPublicProfileDocToUserShape({ id: participants[i], ...s.data() }) : {};
             profs[participants[i]] = {
-              name: ud.display_name || ud.displayName || ud.email || t('user', 'User'),
+              name: ud.display_name || ud.displayName || t('user', 'User'),
               avatar: getSafeAvatar(ud),
             };
           });

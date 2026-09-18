@@ -12,6 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { updateSocialMetaTags, generateBusinessMetaTags, resetSocialMetaTags } from '../utils/socialMetaTags';
 import { useTranslation } from 'react-i18next';
 import { getSafeAvatar, getShareableCoverImage, pickSafeDisplayImageUrl } from '../utils/avatarUtils';
+import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import {
   DEFAULT_BUSINESS_COVER,
   mergeBusinessInfoDrafts,
@@ -697,8 +698,8 @@ export function useBusinessProfile(profileId) {
     const last5 = memberIds.slice(-5).reverse(); // last 5, newest first
     Promise.all(
       last5.map((uid) =>
-      getDoc(doc(db, 'users', uid)).
-      then((snap) => snap.exists() ? getSafeAvatar(snap.data()) : null).
+      getDoc(doc(db, 'public_profiles', uid)).
+      then((snap) => snap.exists() ? getSafeAvatar(mapPublicProfileDocToUserShape({ id: uid, ...snap.data() })) : null).
       catch(() => null)
       )
     ).then((photos) => setMemberAvatars(photos.filter(Boolean)));

@@ -382,8 +382,10 @@ export async function hydrateUsersAvatarFields(users = []) {
     await Promise.all(
         needIds.map(async (uid) => {
             try {
+                // public_profiles is the primary source; users/{uid} is a best-effort
+                // enrichment (own doc or admin) — never let its denial drop the public row.
                 const [userSnap, pubSnap] = await Promise.all([
-                    getDoc(doc(db, 'users', uid)),
+                    getDoc(doc(db, 'users', uid)).catch(() => null),
                     getDoc(doc(db, 'public_profiles', uid)),
                 ]);
                 const merged = { id: uid };
@@ -393,7 +395,7 @@ export async function hydrateUsersAvatarFields(users = []) {
                         mapPublicProfileDocToUserShape({ ...pubSnap.data(), uid })
                     );
                 }
-                if (userSnap.exists()) {
+                if (userSnap && userSnap.exists()) {
                     Object.assign(merged, userSnap.data());
                 }
                 if (Object.keys(merged).length > 1) {

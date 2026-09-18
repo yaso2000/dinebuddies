@@ -209,18 +209,17 @@ export const getFollowers = async (userId) => {
 /**
  * Get users that a specific user follows
  */
-export const getFollowing = async (userId, followingIds = []) => {
+export const getFollowing = async (userId, _followingIds = []) => {
     try {
-        if (!followingIds || followingIds.length === 0) {
-            console.log('User is not following anyone (list is empty)');
-            return [];
-        }
-
+        // The server (listUserNetwork) reads the user's following[] itself, so no
+        // client-side read of the viewed user's users doc is needed. _followingIds
+        // is ignored (kept for call-site compatibility).
+        if (!userId) return [];
         const result = await callListUserNetwork({
             userId,
             includeFollowers: false,
             includeFollowing: true,
-            limit: Math.min(200, followingIds.length)
+            limit: 200
         });
         const following = Array.isArray(result?.data?.following) ? result.data.following : [];
         return filterVisibleNetworkUsers(following).map(mapNetworkUser);

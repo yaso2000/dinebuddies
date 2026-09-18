@@ -166,11 +166,12 @@ export const FavoritePlaces = ({ userId, readOnly = false, syncedPlaces = null }
       const entries = await Promise.all(
         [...new Set(missing)].map(async (id) => {
           try {
-            let snap = await getDoc(doc(db, 'users', id));
-            if (!snap.exists()) snap = await getDoc(doc(db, 'public_profiles', id));
+            // Public projection only (favorite-place business card needs name/logo/address).
+            const snap = await getDoc(doc(db, 'public_profiles', id));
             if (!snap.exists()) return [id, null];
-            const d = snap.data() || {};
-            const bi = d.businessInfo || {};
+            const pub = snap.data() || {};
+            const d = { ...pub, display_name: pub.displayName, photo_url: pub.avatarUrl, avatar: pub.avatarUrl };
+            const bi = pub.businessPublic || {};
             return [id, {
               name: d.display_name || d.displayName || d.name || bi.businessName || bi.name || '',
               address: bi.address || d.address || '',

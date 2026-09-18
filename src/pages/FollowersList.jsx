@@ -43,15 +43,21 @@ const FollowersList = () => {
 
     setLoading(true);
       try {
-        // If viewing another user, get their following list from Firestore
+        // Viewing another user: read the PUBLIC projection for name + friends-privacy.
+        // Their following list is fetched by the getFollowing callable (server reads it),
+        // never a client read of their users doc.
         let viewedFollowingIds = [];
         let viewedUserDocData = null;
         if (!isOwnProfile) {
-          const userDoc = await getDoc(doc(db, 'users', viewedUserId));
-          if (userDoc.exists()) {
-            viewedUserDocData = userDoc.data();
-            viewedFollowingIds = viewedUserDocData.following || [];
-            setProfileName(viewedUserDocData.display_name || viewedUserDocData.name || '');
+          const pubSnap = await getDoc(doc(db, 'public_profiles', viewedUserId));
+          if (pubSnap.exists()) {
+            const p = pubSnap.data();
+            viewedUserDocData = {
+              display_name: p.displayName,
+              name: p.displayName,
+              privacySettings: { showFriends: p.userPublic?.showFriends !== false },
+            };
+            setProfileName(p.displayName || '');
           }
           const myUid = currentUser?.uid || currentUser?.id;
           const canSeeFriends = canViewerSeeProfileFriends(
