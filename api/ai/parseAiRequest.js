@@ -229,9 +229,9 @@ export function parseAiGenerateBody(body) {
         }
 
         if (subType === 'private') {
-            const datingCtx = parsePrivateTextContext(record);
-            if (datingCtx.ok === false) {
-                return datingCtx;
+            const personalCtx = parsePrivateTextContext(record);
+            if (personalCtx.ok === false) {
+                return personalCtx;
             }
             return {
                 ok: true,
@@ -240,12 +240,12 @@ export function parseAiGenerateBody(body) {
                 postType: 'invitation',
                 userPrompt: normalizeUserPrompt(manualPrompt, 'invitation', 'date'),
                 subType,
-                inviteeId: datingCtx.inviteeId,
-                date: datingCtx.date,
-                time: datingCtx.time,
-                venueDetails: datingCtx.venueDetails,
+                inviteeId: personalCtx.inviteeId,
+                date: personalCtx.date,
+                time: personalCtx.time,
+                venueDetails: personalCtx.venueDetails,
                 venueType: pickOptionalString(venueType),
-                venueName: datingCtx.venueDetails.name || pickOptionalString(venueName),
+                venueName: personalCtx.venueDetails.name || pickOptionalString(venueName),
                 cardStructure: pickCardStructure(cardStructure) || 'modern_minimal',
             };
         }
@@ -316,8 +316,8 @@ function pickVenueDetails(value) {
 }
 
 /**
- * Dating text generation requires schedule and venue before Gemini runs.
- * Invitee is optional during create — chosen later on the preview/send step.
+ * Personal (1-on-1) invite text generation requires schedule and venue before
+ * Gemini runs. Invitee is optional during create — chosen later on the preview/send step.
  * @param {Record<string, unknown>} record
  */
 function parsePrivateTextContext(record) {
@@ -348,7 +348,7 @@ function parsePrivateTextContext(record) {
             ok: false,
             error: 'private_context_incomplete',
             missing,
-            message: `Missing required dating fields: ${missing.join(', ')}`,
+            message: `Missing required invitation fields: ${missing.join(', ')}`,
         };
     }
 

@@ -418,7 +418,7 @@ function buildInvitationSystemInstruction(
         } else if (subType === 'private') {
             toneRule += ' Private invitation: exclusive, VIP tone while staying professional.';
         } else if (subType === 'date') {
-            toneRule += ' Date invitation: romantic ambiance with a polished hospitality tone.';
+            toneRule += ' Personal invitation: warm, welcoming one-on-one meetup tone with a polished hospitality feel. Never romantic.';
         }
     } else {
         toneRule = `Write a personal social invitation in ${langLabel}: warm, casual, and informal — like a friend inviting friends to meet up at a venue.`;

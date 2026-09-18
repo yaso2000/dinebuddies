@@ -20,8 +20,8 @@ const LOCATION = process.env.GEMINI_VERTEX_LOCATION?.trim() || 'us-central1';
 const KNOWLEDGE = `
 DineBuddies — what it is:
 A social app for food lovers that blends three things: (1) discovering restaurants,
-(2) meeting new people through food invitations (dining together / dating-style
-connections), and (3) real communities built around the table.
+(2) meeting new people through food invitations (dining together and making new
+friends over a meal), and (3) real communities built around the table.
 
 Invitations & bill splitting:
 - Tap the (+) button, pick a restaurant, set date & time.

@@ -32,7 +32,7 @@ export const AI_OUTPUT_LANGUAGE_LABELS = Object.freeze({
 });
 
 /** Example private-card greetings per locale (for system instructions). */
-export const AI_DATING_GREETING_EXAMPLES = Object.freeze({
+export const AI_INVITE_GREETING_EXAMPLES = Object.freeze({
     ar: 'مرحباً [الاسم]، or أهلاً [الاسم]،',
     ur: 'سلام [نام]،',
     hi: 'नमस्ते [नाम],',
@@ -77,9 +77,9 @@ export function getAiOutputLanguageLabel(code) {
  * @param {string | undefined} code
  * @returns {string}
  */
-export function getAiDatingGreetingExample(code) {
+export function getAiInviteGreetingExample(code) {
     const normalized = normalizeAiOutputLanguage(code);
-    return AI_DATING_GREETING_EXAMPLES[normalized] || AI_DATING_GREETING_EXAMPLES.en;
+    return AI_INVITE_GREETING_EXAMPLES[normalized] || AI_INVITE_GREETING_EXAMPLES.en;
 }
 
 /** @param {string | undefined} language */
