@@ -2,13 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { HiBuildingStorefront } from 'react-icons/hi2';
-import { FaEnvelope, FaLock, FaArrowRight, FaEye, FaEyeSlash, FaUser } from 'react-icons/fa';
+import { FaEnvelope, FaLock, FaArrowRight, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import {
-  resolveBusinessLoginForSignIn,
-  requestBusinessPasswordReset,
   BUSINESS_LOGIN_INVALID_MSG_EN,
   BUSINESS_AI_UNCLAIMED_MSG_AR } from
 '../../services/businessLoginApi';
@@ -42,7 +40,6 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
   const [googleBusy, setGoogleBusy] = useState(false);
 
   const [loginId, setLoginId] = useState('');
-  const [countryCode, setCountryCode] = useState('+20');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -90,8 +87,11 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
     setError('');
     setAiUnclaimedHint(false);
     try {
-      const emailForAuth = await resolveBusinessLoginForSignIn(loginId, password, countryCode);
-      await signInWithEmail(emailForAuth, password, { portal: AUTH_PORTAL.BUSINESS });
+      // Email + password only. Phone-number login (and its server resolver) was
+      // removed — business accounts sign in with their email directly.
+      await signInWithEmail(String(loginId || '').trim().toLowerCase(), password, {
+        portal: AUTH_PORTAL.BUSINESS,
+      });
       clearPostLogoutRedirect();
       setJustLoggedIn(true);
     } catch (err) {
@@ -171,36 +171,15 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
     setError('');
     setAiUnclaimedHint(false);
     try {
-      const id = String(loginId || '').trim();
+      const id = String(loginId || '').trim().toLowerCase();
       if (!id) {
-        setError(t('auth_enter_email_reset', 'Enter your email or phone above.'));
+        setError(t('auth_enter_email_reset', 'Enter your email above.'));
         return;
       }
-      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(id);
-      if (isEmail) {
-        // Email path: send directly via Resend. The server (sendPasswordResetEmailResend)
-        // safely handles unknown emails (anti-enumeration), so the phone→email resolver —
-        // which was returning "generic" and silently sending nothing — is bypassed.
-        await sendPasswordResetToEmail(id);
-        showToast(t('auth_reset_email_sent', 'Check your inbox for a password reset link.'), 'success');
-        return;
-      }
-      // Phone / other identifier: resolve to an email first, then send.
-      const reset = await requestBusinessPasswordReset(id, countryCode);
-      if (reset.genericOnly || !reset.email) {
-        showToast(
-          reset.message ||
-          t('auth_reset_generic_success'),
-          'success'
-        );
-        return;
-      }
-      await sendPasswordResetToEmail(reset.email);
-      showToast(
-        reset.message ||
-        t('auth_reset_email_sent', 'Check your inbox for a password reset link.'),
-        'success'
-      );
+      // Email-only reset. sendPasswordResetEmailResend safely handles unknown
+      // emails (anti-enumeration).
+      await sendPasswordResetToEmail(id);
+      showToast(t('auth_reset_email_sent', 'Check your inbox for a password reset link.'), 'success');
     } catch (err) {
       if (err?.code === 'invalid-input') {
         setError(err?.message || t('auth_enter_email_reset', 'Enter your email or phone above.'));
@@ -416,10 +395,10 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                 color: 'var(--text-secondary)'
               }}>
 
-                            {t('business_login_credentials_label')}
+                            {t('email', 'Email')}
                         </label>
                         <div style={{ position: 'relative' }}>
-                            <FaUser
+                            <FaEnvelope
                 style={{
                   position: 'absolute',
                   left: '1rem',
@@ -428,11 +407,11 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                   color: 'color-mix(in srgb, var(--primary) 55%, var(--text-muted))',
                   fontSize: '0.9rem'
                 }} />
-              
+
                             <AppTextInput
-                type="text"
+                type="email"
                 autoComplete="username"
-                placeholder={t('business_login_identifier')}
+                placeholder={t('business_login_email_placeholder', 'name@business.com')}
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
                 required
@@ -445,41 +424,8 @@ export default function BusinessLoginPanel({ embedInHub = false, embeddedInSingl
                   fontSize: '1rem',
                   boxSizing: 'border-box'
                 }} />
-              
+
                         </div>
-                        {!loginId.includes('@') && loginId.length > 0 &&
-            <div style={{ marginTop: '0.5rem' }}>
-                                <label
-                style={{
-                  display: 'block',
-                  fontSize: '0.75rem',
-                  color: 'var(--text-muted)',
-                  marginBottom: '0.25rem'
-                }}>
-                
-                                    {t('business_login_country_code_label')}
-                                </label>
-                                <select
-                value={countryCode}
-                onChange={(e) => setCountryCode(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.65rem 0.75rem',
-                  borderRadius: '10px',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-color)',
-                  fontSize: '0.95rem',
-                  color: 'var(--text-primary)'
-                }}
-                aria-label={t('business_login_country_code_label')}>
-                
-                                    <option value="+20">{t('phone_country_eg')} (+20)</option>
-                                    <option value="+966">{t('phone_country_sa')} (+966)</option>
-                                    <option value="+971">{t('phone_country_ae')} (+971)</option>
-                                    <option value="+962">{t('phone_country_jo')} (+962)</option>
-                                </select>
-                            </div>
-            }
                     </div>
                     <div style={{ marginBottom: '1rem' }}>
                         <label

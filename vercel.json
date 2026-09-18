@@ -70,10 +70,6 @@
             "destination": "/api/business-preview?id=:id"
         },
         {
-            "source": "/api/auth/login-resolver",
-            "destination": "/api/business-login-resolver"
-        },
-        {
             "source": "/invite/p/:token",
             "destination": "/api/invite-preview?token=:token"
         },
