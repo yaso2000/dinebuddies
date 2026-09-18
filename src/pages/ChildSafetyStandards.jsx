@@ -56,7 +56,7 @@ const ChildSafetyStandards = () => {
           <section style={{ marginBottom: '2rem' }}>
             <AppText as="h2" style={{ fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>2. الحد الأدنى للعمر</AppText>
             <AppText as="p">
-              التطبيق مخصص حصريًا للمستخدمين البالغين 18 عامًا فما فوق. لا يُسمح لمن هم دون هذا العمر بإنشاء حساب أو استخدام الخدمة. أي حساب يتبيّن أن صاحبه دون 18 عامًا يُحذف فور اكتشافه.
+              التطبيق مخصص للمستخدمين من عمر 16 عامًا فأكثر. لا يُسمح لمن هم دون 16 عامًا بإنشاء حساب أو استخدام الخدمة، وأي حساب يتبيّن أن صاحبه دون 16 عامًا يُحذف فور اكتشافه. وتُطبَّق حماية إضافية على الفئة العمرية 16–17 عامًا: تُفصَل تفاعلاتهم عن البالغين، فلا يستطيع مستخدمو 16–17 التواصل أو تبادل الدعوات مع البالغين (18 عامًا فأكثر)، والعكس صحيح.
             </AppText>
           </section>
 
@@ -108,7 +108,7 @@ const ChildSafetyStandards = () => {
           <section style={{ marginBottom: '2rem' }}>
             <AppText as="h2" style={{ fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>2. Minimum Age</AppText>
             <AppText as="p">
-              The Service is intended exclusively for users aged 18 and older. Anyone under this age is not permitted to create an account or use the Service. Any account found to belong to a user under 18 is removed as soon as it is discovered.
+              The Service is intended for users aged 16 and older. Anyone under 16 is not permitted to create an account or use the Service, and any account found to belong to a user under 16 is removed as soon as it is discovered. Users aged 16–17 receive additional protection: their interactions are separated from adults — a 16–17 user cannot chat with or exchange invitations with adults (18+), and vice versa.
             </AppText>
           </section>
 
