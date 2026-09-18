@@ -106,12 +106,15 @@ const ALLOWED_PURPOSES = new Set([
     'ai_edit_input',
 ]);
 
-// Profile photos must contain a human face (Vision FACE_DETECTION). Tunable via env:
-//  FACE_REQUIRED_PURPOSES — comma list of purposes requiring a face (default 'avatar')
+// Profile photos require ONLY that a real image is uploaded — a human face is NOT
+// required (product decision: a photo is mandatory, its content is not gated to a face).
+// So no purpose requires a face by default; the "Camera or AI?" selfie game keeps its
+// OWN mandatory face via isGameSelfiePurpose(), independent of this set. To re-enable a
+// face requirement for a purpose, set env FACE_REQUIRED_PURPOSES (e.g. 'avatar').
 //  FACE_MIN_CONFIDENCE    — 0..1 minimum detection confidence (default 0.5)
 //  FACE_REQUIRED_DISABLED — 'true' turns the whole face requirement off
 const FACE_REQUIRED_PURPOSES = new Set(
-    (process.env.FACE_REQUIRED_PURPOSES || 'avatar,dating_photo')
+    (process.env.FACE_REQUIRED_PURPOSES || '')
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean)
