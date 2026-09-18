@@ -245,9 +245,18 @@ exports.verifyAppleBusinessSubscription = functions.https.onCall(async (data, co
     const paidUntil = admin.firestore.Timestamp.fromMillis(decoded.expiresDate);
 
     await db.runTransaction(async (tx) => {
-        const snap = await tx.get(userRef);
+        const [snap, fulfillSnap] = await Promise.all([tx.get(userRef), tx.get(fulfillRef)]);
         if (!snap.exists) {
             throw new functions.https.HttpsError('not-found', 'User not found');
+        }
+        // SECURITY: one Apple subscription (originalTransactionId) may activate only
+        // ONE DineBuddies account. Without this, the same signed transaction could
+        // be replayed from many accounts to each get Paid Business.
+        if (fulfillSnap.exists && String(fulfillSnap.data()?.userId || '') !== userId) {
+            throw new functions.https.HttpsError(
+                'failed-precondition',
+                'This Apple subscription is already linked to another account.'
+            );
         }
         const userData = snap.data() || {};
         if (!isBusinessUserDoc(userData)) {
