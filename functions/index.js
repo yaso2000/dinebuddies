@@ -1082,18 +1082,67 @@ async function syncPublicProfileFromUserDoc(uid, afterData) {
     };
 }
 
+/**
+ * Reverse follow index: mirror who-follows-me onto users/{target}.followers[] so a
+ * viewer can answer "does X follow me?" / "are we mutual?" from THEIR OWN doc,
+ * without reading another member's users/{uid} doc. Written ONLY here (Admin SDK) —
+ * clients are blocked from writing `followers` (firestore.rules followersUnchanged()).
+ * @param {string} followerUid the user whose following[] changed
+ * @param {unknown} beforeFollowing previous following[]
+ * @param {unknown} afterFollowing new following[]
+ */
+async function maintainFollowersReverseIndex(followerUid, beforeFollowing, afterFollowing) {
+    if (!followerUid) return;
+    const before = Array.isArray(beforeFollowing) ? beforeFollowing.filter((x) => typeof x === 'string' && x) : [];
+    const after = Array.isArray(afterFollowing) ? afterFollowing.filter((x) => typeof x === 'string' && x) : [];
+    const beforeSet = new Set(before);
+    const afterSet = new Set(after);
+    const added = after.filter((t) => t !== followerUid && !beforeSet.has(t));
+    const removed = before.filter((t) => t !== followerUid && !afterSet.has(t));
+    if (added.length === 0 && removed.length === 0) return;
+
+    const ops = [];
+    for (const targetUid of added) {
+        // update() (never set-merge) so a missing target is not recreated as a ghost doc.
+        ops.push(
+            db.collection('users').doc(targetUid).update({
+                followers: admin.firestore.FieldValue.arrayUnion(followerUid),
+            }).catch(() => {})
+        );
+    }
+    for (const targetUid of removed) {
+        ops.push(
+            db.collection('users').doc(targetUid).update({
+                followers: admin.firestore.FieldValue.arrayRemove(followerUid),
+            }).catch(() => {})
+        );
+    }
+    await Promise.all(ops);
+}
+
 exports.syncPublicProfileOnUserWrite = functions.firestore
     .document('users/{uid}')
     .onWrite(async (change, context) => {
         const uid = context.params.uid;
 
-        // User deleted => remove public profile projection.
+        // User deleted => remove public profile projection + reverse-index edges.
         if (!change.after.exists) {
             await db.collection('public_profiles').doc(uid).delete().catch(() => { });
+            await maintainFollowersReverseIndex(
+                uid,
+                change.before.exists ? change.before.data()?.following : [],
+                []
+            ).catch(() => {});
             return null;
         }
 
         await syncPublicProfileFromUserDoc(uid, change.after.data() || {});
+        // Keep the reverse follow index in sync (only acts when following[] changed).
+        await maintainFollowersReverseIndex(
+            uid,
+            change.before.exists ? change.before.data()?.following : [],
+            change.after.data()?.following
+        ).catch((e) => functions.logger.warn('maintainFollowersReverseIndex failed', { uid, e: String(e) }));
         return null;
     });
 
@@ -3686,6 +3735,59 @@ exports.adminBackfillPublicProfiles = functions.https.onCall(async (data, contex
         nextCursor,
         hasMore
     };
+});
+
+/**
+ * One-time (idempotent) backfill of the reverse follow index: rebuild
+ * users/{uid}.followers[] from every user's following[]. Run once after deploying
+ * maintainFollowersReverseIndex so existing follow relationships are indexed.
+ * dryRun:true reports counts without writing.
+ */
+exports.adminBackfillFollowers = functions.https.onCall(async (data, context) => {
+    await assertAdminContext(context);
+    const dryRun = data?.dryRun === true;
+
+    // Build target -> Set(follower) from every user's following[].
+    const followersByUid = new Map();
+    const allUserIds = [];
+    const PAGE = 300;
+    let last = null;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        let q = db.collection('users').orderBy(admin.firestore.FieldPath.documentId()).limit(PAGE);
+        if (last) q = q.startAfter(last);
+        const snap = await q.get();
+        if (snap.empty) break;
+        snap.docs.forEach((d) => {
+            allUserIds.push(d.id);
+            const following = Array.isArray(d.data().following) ? d.data().following : [];
+            following.forEach((t) => {
+                if (typeof t !== 'string' || !t || t === d.id) return;
+                if (!followersByUid.has(t)) followersByUid.set(t, new Set());
+                followersByUid.get(t).add(d.id);
+            });
+        });
+        last = snap.docs[snap.docs.length - 1].id;
+        if (snap.size < PAGE) break;
+    }
+
+    if (dryRun) {
+        return { success: true, dryRun: true, usersScanned: allUserIds.length, targetsWithFollowers: followersByUid.size };
+    }
+
+    // Write the authoritative followers[] to each EXISTING user (merge; never create ghosts).
+    let updated = 0;
+    for (let i = 0; i < allUserIds.length; i += 400) {
+        const chunk = allUserIds.slice(i, i + 400);
+        const batch = db.batch();
+        chunk.forEach((uid) => {
+            const followers = [...(followersByUid.get(uid) || [])];
+            batch.set(db.collection('users').doc(uid), { followers }, { merge: true });
+        });
+        await batch.commit();
+        updated += chunk.length;
+    }
+    return { success: true, usersScanned: allUserIds.length, updated };
 });
 
 async function adminDeleteUserCascade(targetUid) {

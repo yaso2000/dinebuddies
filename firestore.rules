@@ -405,6 +405,13 @@ service cloud.firestore {
         && request.resource.data.get('pendingCashoutRequestId', '') == resource.data.get('pendingCashoutRequestId', '');
     }
 
+    // The reverse follow index (users/{uid}.followers[]) is server-maintained only
+    // (Cloud Functions Admin SDK). A client must never write it — otherwise a user
+    // could fake "X follows me" to bypass the mutual-follow messaging/connection gate.
+    function followersUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['followers']);
+    }
+
     // A CLIENT-created user doc must start with ZERO credit balances. Real credits
     // are granted only by Cloud Functions (Admin SDK). Without this, a user could
     // create (or delete + re-create) their doc with paidCredits: 10000000.
@@ -545,6 +552,7 @@ service cloud.firestore {
                        ownerAffiliateWriteGuards() &&
                        creditFieldsUnchanged() &&
                        subscriptionUpdateClientSafe() &&
+                       followersUnchanged() &&
                        userDocHasNoRoleField() &&
                        request.resource.data.role == 'user';
       // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
@@ -553,13 +561,14 @@ service cloud.firestore {
                        creditFieldsUnchanged() &&
                        subscriptionUpdateClientSafe() &&
                        trustFlagsUnchanged() &&
+                       followersUnchanged() &&
                        userDocHasNoRoleField() &&
                        (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
                        request.resource.data.keys().hasAny(['businessInfo']);
       // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && subscriptionUpdateClientSafe() && trustFlagsUnchanged() && isBusinessSignupCompletionFromIntent();
+      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && subscriptionUpdateClientSafe() && trustFlagsUnchanged() && followersUnchanged() && isBusinessSignupCompletionFromIntent();
       // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && subscriptionUpdateClientSafe() && trustFlagsUnchanged() && isUpgradingStubToBusinessProfile();
+      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && subscriptionUpdateClientSafe() && trustFlagsUnchanged() && followersUnchanged() && isUpgradingStubToBusinessProfile();
       // Follow / unfollow: owner may update only their following[] list.
       // Businesses do not follow users (no social interaction).
       allow update: if isOwner(userId) &&
@@ -574,6 +583,7 @@ service cloud.firestore {
                        trustFlagsUnchanged() &&
                        tasteScopeWriteOk() &&
                        pickOneWriteOk() &&
+                       followersUnchanged() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'accountType']);
       // Admin panel (admin + moderator/support/staff/regional_manager): credits, moderation, etc.
@@ -584,6 +594,7 @@ service cloud.firestore {
                        creditFieldsUnchanged() &&
                        subscriptionUpdateClientSafe() &&
                        ageCategoryImmutableOnceSet() &&
+                       followersUnchanged() &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['role', 'region', 'accountType']);
       // Allow any signed-in user to increment profile engagement counters only (views, likes, shares)
