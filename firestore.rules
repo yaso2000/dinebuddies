@@ -420,8 +420,20 @@ service cloud.firestore {
     // (avatar, bio, settings) was denied. One diff + one hasAny keeps it well under
     // budget. A client profile edit may never change any of these server-managed
     // fields (credits, subscription, trust flags, followers, role, affiliate).
-    function serverManagedFieldsUnchanged() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+    // The common owner profile update, as ONE function that computes the changed-key
+    // set a SINGLE time (let binding) and checks every constraint against it. Doing the
+    // diff once (instead of once per guard, across ~8 update rules) is what keeps the
+    // whole users ruleset under Firestore's 1000-expression evaluation budget for a
+    // real (large) profile doc. Same protections as the old separate guards: credits,
+    // subscription, trust flags, followers, role/accountType, affiliate all locked;
+    // ageCategory immutable-once-set; tasteScope/pickOne shape; referred_by set-once.
+    function clientOwnerProfileUpdateOk() {
+      return clientProfileChangeAllowed(
+        request.resource.data.diff(resource.data).affectedKeys()
+      );
+    }
+    function clientProfileChangeAllowed(affected) {
+      return !affected.hasAny([
         'role', 'accountType', 'followers',
         'paidCredits', 'savedCredits', 'freeCredits', 'totalCreditsPurchased',
         'totalCreditsSpent', 'totalSavedCreditsEarned', 'pendingCashoutRequestId',
@@ -434,7 +446,18 @@ service cloud.firestore {
         'successful_referrals_count', 'pending_payouts', 'total_clicks',
         'referral_code', 'referral_link', 'affiliateLastCommissionSessionId',
         'registrationChannel'
-      ]);
+      ])
+      && (!affected.hasAny(['ageCategory'])
+          || resource.data.get('ageCategory', '') == ''
+          || request.resource.data.get('ageCategory', '') == resource.data.get('ageCategory', ''))
+      && (!affected.hasAny(['tasteScope']) || tasteScopeValid(request.resource.data.tasteScope))
+      && (!affected.hasAny(['pickOne'])
+          || (request.resource.data.pickOne is map
+              && request.resource.data.pickOne.keys().hasOnly(['foods-arab', 'foods-world', 'foods-desserts', 'foods-street'])))
+      && (!affected.hasAny(['referred_by'])
+          || (!resource.data.keys().hasAny(['referred_by'])
+              && request.resource.data.referred_by is string
+              && request.resource.data.referred_by.matches('^AGENT-[A-Z0-9]{5,12}$')));
     }
     // Business verified badges are server-authoritative: block false -> true
     // escalation via a client write (dropping/keeping is fine — a normal edit).
@@ -584,47 +607,49 @@ service cloud.firestore {
       // Allow user to update their own FCM push tokens (from notificationService)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
-      // First-time personal registration: auth sync may create a role-less stub first, then profile bootstrap sets role:user.
+      // NOTE: each rule below leads with its CHEAP discriminator so a normal profile
+      // edit short-circuits BEFORE the heavy business/credit guards run — required to
+      // stay under Firestore's 1000-expression evaluation budget on a real profile doc.
+      // First-time personal registration: role-less stub → role:user.
       allow update: if isOwner(userId) &&
+                       userDocHasNoRoleField() &&
+                       request.resource.data.role == 'user' &&
                        ownerAffiliateWriteGuards() &&
                        creditFieldsUnchanged() &&
                        subscriptionUpdateClientSafe() &&
-                       followersUnchanged() &&
-                       userDocHasNoRoleField() &&
-                       request.resource.data.role == 'user';
-      // First-time business registration: stub doc has no `role` yet; app sets role + businessInfo together.
+                       followersUnchanged();
+      // First-time business registration: stub with no role → role + businessInfo.
       allow update: if isOwner(userId) &&
+                       userDocHasNoRoleField() &&
+                       (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
+                       request.resource.data.keys().hasAny(['businessInfo']) &&
                        ownerAffiliateWriteGuards() &&
                        creditFieldsUnchanged() &&
                        subscriptionUpdateClientSafe() &&
                        trustFlagsUnchanged() &&
-                       followersUnchanged() &&
-                       userDocHasNoRoleField() &&
-                       (request.resource.data.role == 'business' || request.resource.data.role == 'partner') &&
-                       request.resource.data.keys().hasAny(['businessInfo']);
-      // Same completion when stub was corrupted with role:user before step 2 (see isBusinessSignupCompletionFromIntent)
-      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && subscriptionUpdateClientSafe() && trustFlagsUnchanged() && followersUnchanged() && isBusinessSignupCompletionFromIntent();
-      // Consumer or email-only stub → full business profile (BusinessSignup setDoc after createUser)
-      allow update: if isOwner(userId) && ownerAffiliateWriteGuards() && creditFieldsUnchanged() && subscriptionUpdateClientSafe() && trustFlagsUnchanged() && followersUnchanged() && isUpgradingStubToBusinessProfile();
-      // Follow / unfollow: owner may update only their following[] list.
+                       followersUnchanged();
+      // Business completion when a stub was corrupted with role:user (intent gate first).
+      allow update: if isOwner(userId) && isBusinessSignupCompletionFromIntent() &&
+                       ownerAffiliateWriteGuards() && creditFieldsUnchanged() &&
+                       subscriptionUpdateClientSafe() && trustFlagsUnchanged() && followersUnchanged();
+      // Consumer / email-only stub → full business profile (businessInfo gate first).
+      allow update: if isOwner(userId) && isUpgradingStubToBusinessProfile() &&
+                       ownerAffiliateWriteGuards() && creditFieldsUnchanged() &&
+                       subscriptionUpdateClientSafe() && trustFlagsUnchanged() && followersUnchanged();
+      // Follow / unfollow: owner may update only their following[] list (cheap gate first).
       // Businesses do not follow users (no social interaction).
       allow update: if isOwner(userId) &&
-                       !convoParticipantIsBusiness(request.auth.uid) &&
-                       ownerAffiliateWriteGuards() &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['following']) &&
-                       request.resource.data.following is list;
-      // Consolidated guards (serverManagedFieldsUnchanged) so the whole users update
-      // ruleset stays under Firestore's 1000-expression evaluation budget — otherwise
-      // EVERY client profile write is denied. Same protections as before: credits,
-      // subscription, trust flags, followers, role/accountType, affiliate all locked;
-      // ageCategory immutable-once-set; referred_by set-once; tasteScope/pickOne shape.
+                       request.resource.data.following is list &&
+                       !convoParticipantIsBusiness(request.auth.uid) &&
+                       ownerAffiliateWriteGuards();
+      // The common owner profile edit — a SINGLE diff via clientOwnerProfileUpdateOk,
+      // so the whole ruleset stays under the 1000-expression budget. Same protections
+      // as before (credits/subscription/trust/followers/role/affiliate locked;
+      // ageCategory immutable-once-set; tasteScope/pickOne shape; referred_by set-once).
       allow update: if isOwner(userId)
-                       && serverManagedFieldsUnchanged()
-                       && businessBadgeNotEscalated()
-                       && ageCategoryImmutableOnceSet()
-                       && tasteScopeWriteOk()
-                       && pickOneWriteOk()
-                       && referredByClientUpdateOk();
+                       && clientOwnerProfileUpdateOk()
+                       && businessBadgeNotEscalated();
       // Admin panel (admin + moderator/support/staff/regional_manager): credits, moderation, etc.
       // SECURITY: panel staff may NOT change role / region / accountType via a direct client
       // write — that would let a regional_manager self-promote. Those fields change only through
