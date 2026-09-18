@@ -3060,7 +3060,45 @@ exports.expireCompBusinessPlans = functions.pubsub.schedule('every 24 hours').on
             functions.logger.error('expireCompBusinessPlans revert failed', { uid: d.id, message: err.message });
         }
     }
-    functions.logger.info('expireCompBusinessPlans', { candidates: snap.size, reverted });
+    // Real paid subscriptions (Apple / PayPal) expire on `businessPaidUntil`.
+    // Without this pass they never revert — one payment = a permanent paid plan.
+    // (App Store Server Notifications / PayPal webhooks are the eventual real-time
+    // fix; a lapsed user who actually renewed just re-verifies to restore.)
+    let paidReverted = 0;
+    const paidSnap = await db
+        .collection('users')
+        .where('businessPaidUntil', '<=', now)
+        .limit(300)
+        .get();
+    for (const d of paidSnap.docs) {
+        const u = d.data() || {};
+        const src = String(u.subscriptionSource || '');
+        if (src !== 'apple' && src !== 'paypal') continue; // leave admin_comp/others
+        if (String(u.subscriptionTier || 'free') !== 'paid') continue;
+        try {
+            await d.ref.set(
+                {
+                    subscriptionTier: 'free',
+                    subscriptionStatus: 'expired',
+                    weeklyPrivateQuota: USER_WEEKLY_PRIVATE_QUOTAS.free ?? 0,
+                    usedPrivateCreditsThisWeek: 0,
+                    businessPaidUntil: FieldValue.delete(),
+                    businessPaidExpiredAt: FieldValue.serverTimestamp(),
+                },
+                { merge: true }
+            );
+            paidReverted += 1;
+        } catch (err) {
+            functions.logger.error('expirePaidBusinessPlans revert failed', { uid: d.id, message: err.message });
+        }
+    }
+
+    functions.logger.info('expireCompBusinessPlans', {
+        candidates: snap.size,
+        reverted,
+        paidCandidates: paidSnap.size,
+        paidReverted,
+    });
     return null;
 });
 
