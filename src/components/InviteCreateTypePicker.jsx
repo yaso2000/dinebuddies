@@ -170,8 +170,8 @@ export default function InviteCreateTypePicker({
     group_game: 'games', suitability: 'games', realornai: 'games', zodiac: 'games',
   };
   const GROUPS = [
-    { id: 'chat', label: t('invite_group_chat', 'محادثات') },
     { id: 'invitations', label: t('invite_group_invitations', 'دعوات') },
+    { id: 'chat', label: t('invite_group_chat', 'Chats') },
     { id: 'games', label: t('invite_group_games', 'ألعاب') },
   ];
   const itemsOf = (gid) => options.filter((o) => (GROUP_OF[o.kind] || 'invitations') === gid);
@@ -180,33 +180,55 @@ export default function InviteCreateTypePicker({
   const headingStyle = { fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-secondary,#6b7280)', margin: '12px 4px 2px', width: '100%' };
 
   if (variant === 'sheet') {
+    const renderCard = (opt) => {
+      const Icon = opt.icon;
+      return (
+        <button
+          key={opt.kind}
+          type="button"
+          className="business-create-option"
+          disabled={Boolean(opt.busy)}
+          aria-busy={opt.busy || undefined}
+          onClick={() => goCreate(opt.kind)}
+        >
+          <AppText as="span" className={`business-create-option__icon ${opt.sheetIconClass}`} aria-hidden>
+            <Icon />
+          </AppText>
+          <AppText as="span" className="business-create-option__text">
+            <AppText as="span" className="business-create-option__label">{opt.title}</AppText>
+            <AppText as="span" className="business-create-option__desc">{opt.desc}</AppText>
+          </AppText>
+          <FaChevronRight className="business-create-option__arrow" aria-hidden />
+        </button>
+      );
+    };
+
+    // Mobile: vertical shelves — each section's heading sits ABOVE a horizontal
+    // scroll row of that section's cards (not inline between the cards).
+    if (horizontal) {
+      return (
+        <div className={`business-create-sheet__shelves${className ? ` ${className}` : ''}`}>
+          {activeGroups.map((g) => (
+            <div key={g.id} className="business-create-sheet__shelf">
+              {showHeadings ? (
+                <AppText as="div" className="business-create-sheet__shelf-heading">{g.label}</AppText>
+              ) : null}
+              <div className="business-create-sheet__options business-create-sheet__options--horizontal">
+                {itemsOf(g.id).map((opt) => renderCard(opt))}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // Desktop / non-horizontal: flat list with inline headings.
     return (
-      <div className={`business-create-sheet__options${horizontal ? ' business-create-sheet__options--horizontal' : ''}${className ? ` ${className}` : ''}`}>
+      <div className={`business-create-sheet__options${className ? ` ${className}` : ''}`}>
         {activeGroups.map((g) => (
           <React.Fragment key={g.id}>
             {showHeadings ? <AppText as="div" style={headingStyle}>{g.label}</AppText> : null}
-            {itemsOf(g.id).map((opt) => {
-              const Icon = opt.icon;
-              return (
-                <button
-                  key={opt.kind}
-                  type="button"
-                  className="business-create-option"
-                  disabled={Boolean(opt.busy)}
-                  aria-busy={opt.busy || undefined}
-                  onClick={() => goCreate(opt.kind)}
-                >
-                  <AppText as="span" className={`business-create-option__icon ${opt.sheetIconClass}`} aria-hidden>
-                    <Icon />
-                  </AppText>
-                  <AppText as="span" className="business-create-option__text">
-                    <AppText as="span" className="business-create-option__label">{opt.title}</AppText>
-                    <AppText as="span" className="business-create-option__desc">{opt.desc}</AppText>
-                  </AppText>
-                  <FaChevronRight className="business-create-option__arrow" aria-hidden />
-                </button>
-              );
-            })}
+            {itemsOf(g.id).map((opt) => renderCard(opt))}
           </React.Fragment>
         ))}
       </div>

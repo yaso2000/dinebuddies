@@ -6848,6 +6848,27 @@ button.notification-bell {
   transform: scale(0.99);
 }
 
+/* Mobile create menu: vertical shelves — heading above a horizontal card row */
+.business-create-sheet__shelves {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.business-create-sheet__shelf {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.business-create-sheet__shelf-heading {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text-secondary, #6b7280);
+  padding-inline: 4px;
+  text-align: start;
+}
+
 /* Horizontal swipeable layout for the mobile create menu */
 .business-create-sheet__options--horizontal {
   flex-direction: row;
