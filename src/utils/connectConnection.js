@@ -16,11 +16,6 @@ export function resolveConnectionKind() {
     return CONNECTION_KIND.FRIENDSHIP;
 }
 
-/** @param {ConnectionKind} _kind */
-export function connectionKindToCelebrationType() {
-    return 'friendship';
-}
-
 /**
  * Whether a completed connection exists (chat allowed) for this pair:
  * a mutual Follow.

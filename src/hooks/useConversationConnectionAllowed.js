@@ -26,8 +26,7 @@ export function useConversationConnectionAllowed(
     const [allowed, setAllowed] = useState(isSupportPeer);
     const [loading, setLoading] = useState(Boolean(enabled && viewerUid && targetUserId && !isSupportPeer));
 
-    // Consumers use targetProfile only as a truthiness gate + resolveConnectionKind()
-    // (which returns 'friendship' regardless). Minimal shape — no target-doc read.
+    // Consumers use targetProfile only as a truthiness gate. Minimal shape — no target-doc read.
     const targetProfile = useMemo(() => (targetUserId ? { id: targetUserId } : null), [targetUserId]);
 
     // Depend on the contents, not array identity: callers build these inline with a

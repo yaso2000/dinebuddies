@@ -3,7 +3,7 @@ import { checkCanMessage } from '../utils/chatHelpers';
 import { useAuth } from '../context/AuthContext';
 
 /**
- * Whether the viewer may DM this member (dating, acquaintance, or friendship connection).
+ * Whether the viewer may DM this member (i.e. they are mutual-follow friends).
  * @param {string} viewerUid
  * @param {string} targetUserId
  * @param {string[]} [viewerFollowing]

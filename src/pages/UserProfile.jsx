@@ -43,7 +43,6 @@ import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import { isAdminIdentity } from '../utils/adminAccess';
 import { asUidArray, toggleUserBlock, toggleUserMute } from '../utils/userSocialLists';
 import { checkCanMessage } from '../utils/chatHelpers';
-import { connectionKindToCelebrationType } from '../utils/connectConnection';
 import { useMatchCelebration } from '../context/MatchCelebrationContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
@@ -624,7 +623,7 @@ const UserProfile = () => {
       if (result.connectionComplete && result.connectionKind) {
         setCanChat(true);
         celebrateMatch({
-          type: connectionKindToCelebrationType(result.connectionKind),
+          type: 'friendship',
           otherUser: user,
           otherId: userId,
           otherName: getPrivateInviteeDisplayName(user) || profileModel.displayName,

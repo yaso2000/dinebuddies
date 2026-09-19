@@ -13,7 +13,6 @@ import { followCancelConfirmOptions } from '../../utils/connectionCancelConfirm'
 import { sendDiscoveryGreeting } from '../../utils/discoveryProfile';
 import { isFollowing as checkIsFollowing } from '../../utils/followHelpers';
 import { checkCanMessage } from '../../utils/chatHelpers';
-import { connectionKindToCelebrationType } from '../../utils/connectConnection';
 import { useAuth } from '../../context/AuthContext';
 import { useInvitations } from '../../context/InvitationContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -146,7 +145,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
         if (result.connectionComplete && result.connectionKind) {
           setCanChat(true);
           celebrateMatch({
-            type: connectionKindToCelebrationType(result.connectionKind),
+            type: 'friendship',
             otherUser: user,
             otherId: user.id,
             otherName: displayName,

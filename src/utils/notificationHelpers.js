@@ -50,58 +50,23 @@ export const notifyNewFollower = (followedUserId, followerUser) => {
     });
 };
 
-export const notifyProfileLiked = (profileOwnerId, likerUser) => {
-    fireNotification({
-        userId: profileOwnerId,
-        type: 'like',
-        title: 'Profile liked',
-        message: `${likerUser.name || 'Someone'} liked your profile`,
-        actionUrl: `/profile/${likerUser.id}`,
-        metadata: { source: 'discovery_feed', likerId: likerUser.id },
-    });
-};
-
-const CONNECT_NOTIFICATION_COPY = {
-    // Mutual profile match is a friendship connection now (no romantic copy). Key
-    // name kept as 'dating' so notification-type routing below is unchanged.
-    dating: {
-        title: 'New friendship!',
-        message: (name) => `You and ${name} now follow each other`,
-    },
-    acquaintance: {
-        title: 'New acquaintance!',
-        message: (name) => `You and ${name} connected`,
-    },
-    friendship: {
-        title: 'New friendship!',
-        message: (name) => `You and ${name} became friends`,
-    },
-};
-
-/** Connection complete — visual/inbox notification (dating | acquaintance | friendship). */
-export const notifyConnectConnectionComplete = (recipientUserId, otherUser, connectionKind = 'dating') => {
-    const kind = CONNECT_NOTIFICATION_COPY[connectionKind] ? connectionKind : 'acquaintance';
-    const copy = CONNECT_NOTIFICATION_COPY[kind];
+/** Connection complete — a mutual Follow makes two members friends (the only kind). */
+export const notifyConnectConnectionComplete = (recipientUserId, otherUser) => {
     const name = otherUser?.name || otherUser?.display_name || 'Someone';
     fireNotification({
         userId: recipientUserId,
-        type: kind === 'dating' ? 'like' : 'connect',
-        title: copy.title,
-        message: copy.message(name),
+        type: 'connect',
+        title: 'New friendship!',
+        message: `You and ${name} became friends`,
         actionUrl: `/profile/${otherUser?.id || ''}`,
         metadata: {
             source: 'connect',
-            connectionKind: kind,
+            connectionKind: 'friendship',
             mutual: true,
             otherUserId: otherUser?.id || null,
             senderId: otherUser?.id || null,
         },
     });
-};
-
-/** @deprecated Use notifyConnectConnectionComplete(..., 'dating') */
-export const notifyMutualProfileMatch = (profileOwnerId, matchedUser) => {
-    notifyConnectConnectionComplete(profileOwnerId, matchedUser, 'dating');
 };
 
 export const notifyProfileGreeting = (profileOwnerId, senderUser) => {

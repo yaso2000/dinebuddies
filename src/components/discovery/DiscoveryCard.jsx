@@ -17,7 +17,6 @@ import { followCancelConfirmOptions } from '../../utils/connectionCancelConfirm'
 import { useConfirm } from '../../context/ConfirmContext';
 import { isFollowing as checkIsFollowing } from '../../utils/followHelpers';
 import { checkCanMessage } from '../../utils/chatHelpers';
-import { connectionKindToCelebrationType } from '../../utils/connectConnection';
 import { useDiscoveryActionStatus } from '../../hooks/useDiscoveryActionStatus';
 import { useCanMessageMember } from '../../hooks/useCanMessageMember';
 import { useMatchCelebration } from '../../context/MatchCelebrationContext';
@@ -243,7 +242,7 @@ export default function DiscoveryCard({
       if (result.connectionComplete && result.connectionKind) {
         setCanChat(true);
         celebrateMatch({
-          type: connectionKindToCelebrationType(result.connectionKind),
+          type: 'friendship',
           otherUser: targetUser,
           otherId: profile.id,
           otherName: profile.name,
