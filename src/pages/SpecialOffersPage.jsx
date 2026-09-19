@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle, FaList, FaMapMarkedAlt, FaLayerGroup } from 'react-icons/fa';
+import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle, FaList, FaMapMarkedAlt, FaLayerGroup, FaMapMarkerAlt } from 'react-icons/fa';
 import { AppText, AppTextInput } from '../components/base';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -11,7 +11,8 @@ import { isBusinessUser } from '../utils/accountRole';
 import { offerBannerStyle } from '../utils/offerBanner';
 import OfferClaimQrModal from '../components/OfferClaimQrModal';
 import DirectoryMap from '../components/DirectoryMap';
-import SwipeDeck from '../components/SwipeDeck';
+import MagneticDeck from '../components/discovery/MagneticDeck';
+import DirectorySwipeCard from '../components/discovery/DirectorySwipeCard';
 import './SpecialOffersPage.css';
 import './CreateCommunityOffer.css';
 
@@ -195,32 +196,35 @@ export default function SpecialOffersPage({ embedded = false }) {
     [viewLabel]
   );
 
-  // Swipe-deck card for one offer (browse view).
-  const renderOfferCard = (offer) => {
-    const state = takeState(offer);
+  // Deck items need a stable coverImage for the next-card preview.
+  const offerDeckItems = useMemo(
+    () => filteredOffers.map((o) => ({ ...o, coverImage: o.imageUrl || o.businessAvatar || '' })),
+    [filteredOffers]
+  );
+
+  // MagneticDeck card renderer (same swipe as venues, amber accent).
+  const renderOfferSwipeCard = ({ item, isTop, onSkip, onBack }) => {
+    const state = takeState(item);
+    const chips = [];
+    if (item._dist != null) chips.push({ key: 'dist', icon: FaMapMarkerAlt, label: `${item._dist.toFixed(1)} km` });
+    else if (item.city) chips.push({ key: 'city', icon: FaMapMarkerAlt, label: item.city });
     return (
-      <div className="dir-swipe-card">
-        <button
-          type="button"
-          className="dir-swipe-card__business"
-          onClick={() => offer.partnerId && navigate(`/business/${offer.partnerId}`)}>
-          {offer.businessName}
-        </button>
-        <AppText as="div" className="dir-swipe-card__title">{offer.title}</AppText>
-        {offer.description ? <AppText as="div" className="dir-swipe-card__desc">{offer.description}</AppText> : <div className="dir-swipe-card__desc" />}
-        {offer.city ? <div className="dir-swipe-card__meta"><AppText as="span">📍 {offer.city}</AppText></div> : null}
-        {!isBusiness && (
-          <button
-            type="button"
-            className="dir-swipe-card__cta"
-            style={{ background: OFFER_MARKER_COLOR }}
-            disabled={state.done || takingId === offer.id}
-            onClick={() => onTakeClick(offer)}>
-            {state.done ? <FaCheckCircle aria-hidden style={{ marginInlineEnd: 6 }} /> : null}
-            {state.label}
-          </button>
-        )}
-      </div>
+      <DirectorySwipeCard
+        item={item}
+        isTop={isTop}
+        onSkip={onSkip}
+        onBack={onBack}
+        accent={OFFER_MARKER_COLOR}
+        badge={t('special_offers_badge', 'Offer')}
+        title={item.title}
+        subtitle={item.businessName}
+        description={item.description}
+        chips={chips}
+        ctaLabel={!isBusiness ? state.label : ''}
+        ctaDisabled={state.done || takingId === item.id}
+        onCta={!isBusiness ? () => onTakeClick(item) : undefined}
+        onOpen={() => item.partnerId && navigate(`/business/${item.partnerId}`)}
+        onClose={() => setViewMode('list')} />
     );
   };
 
@@ -244,12 +248,14 @@ export default function SpecialOffersPage({ embedded = false }) {
 
       {/* Directory chrome — ALWAYS visible (search + venue-type chips + list/map toggle) */}
       <div className="offers-filterbar">
+        {viewMode !== 'swipe' && (
         <AppTextInput
           type="search"
           className="offers-search"
           placeholder={t('search_offer_or_business', 'Search an offer or business…')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)} />
+        )}
         <div className="offers-cat-chips category-icons-scroll">
           {OFFER_CATEGORIES.map((c) => (
             <button
@@ -261,10 +267,11 @@ export default function SpecialOffersPage({ embedded = false }) {
             </button>
           ))}
         </div>
+        {viewMode !== 'swipe' && (
         <div className="special-offers-viewtoggle">
           <button
             type="button"
-            className={`sov-toggle${viewMode === 'swipe' ? ' active' : ''}`}
+            className="sov-toggle"
             onClick={() => setViewMode('swipe')}>
             <FaLayerGroup aria-hidden /> {t('view_swipe', 'Swipe')}
           </button>
@@ -281,6 +288,7 @@ export default function SpecialOffersPage({ embedded = false }) {
             <FaMapMarkedAlt aria-hidden /> {t('view_map', 'Map')}
           </button>
         </div>
+        )}
       </div>
 
       {loading ? (
@@ -299,13 +307,15 @@ export default function SpecialOffersPage({ embedded = false }) {
         </div>
       ) : viewMode === 'swipe' ? (
         <div className="special-offers-map">
-          <SwipeDeck
-            items={filteredOffers}
-            renderCard={renderOfferCard}
-            accent="var(--secondary)"
-            emptyLabel={offers.length === 0
+          <MagneticDeck
+            items={offerDeckItems}
+            renderCard={renderOfferSwipeCard}
+            emptyTitle={offers.length === 0
               ? t('special_offers_empty', 'No special offers right now. Check back soon.')
-              : t('special_offers_none_match', 'No offers match your filters.')} />
+              : t('special_offers_none_match', 'No offers match your filters.')}
+            emptySub=""
+            finishedTitle={t('offers_deck_done', "That's every offer for now")}
+            finishedSub="" />
         </div>
       ) : filteredOffers.length === 0 ? (
         <div className="special-offers-page__empty">

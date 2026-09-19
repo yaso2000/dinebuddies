@@ -28,7 +28,6 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import '../components/MapStyles.css';
 import { addBaseTileLayer } from '../utils/mapTiles';
-import SwipeDeck from '../components/SwipeDeck';
 import DirectorySearchBar from '../components/DirectorySearchBar';
 import { matchesAllTokens } from '../utils/searchNormalize';
 import { goToLogin } from '../utils/goToLogin';
@@ -831,7 +830,7 @@ const BusinessesDirectory = ({ embedded = false }) => {
   const [locationFilter, setLocationFilter] = useState('All');
   const [placeFilter, setPlaceFilter] = useState(null); // { id, type:'country'|'city', value, label, sublabel } | null
   const [activeFilter, setActiveFilter] = useState(() => searchParams.get('category') || 'All'); // Category filter
-  const [viewMode, setViewMode] = useState('swipe'); // 'swipe' | 'list' | 'map'
+  const [viewMode, setViewMode] = useState('list');
   const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode for map
   const [userLocation, setUserLocation] = useState(null);
   const [detectedLocationContext, setDetectedLocationContext] = useState(null);
@@ -1434,20 +1433,6 @@ const BusinessesDirectory = ({ embedded = false }) => {
                     </Link>
                     <div style={{ background: 'var(--bg-card)', padding: '4px', borderRadius: '50px', display: 'flex', border: '1px solid var(--border-color)' }}>
                         <button
-              onClick={() => setViewMode('swipe')}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '50px',
-                background: viewMode === 'swipe' ? 'var(--luxury-gold)' : 'transparent',
-                color: viewMode === 'swipe' ? 'rgba(255, 255, 254, 1)' : 'var(--text-main)',
-                border: 'none',
-                fontSize: '0.82rem',
-                fontWeight: 600
-              }}>
-
-                            {t('view_swipe', 'Swipe')}
-                        </button>
-                        <button
               onClick={() => setViewMode('list')}
               style={{
                 padding: '6px 12px',
@@ -1695,19 +1680,6 @@ const BusinessesDirectory = ({ embedded = false }) => {
           <AppText as="p" style={{ textAlign: 'center', opacity: 0.5 }}>{t('no_results')}</AppText>
           )}
                 </div>
-
-                {/* Swipe View (browse deck — reuses the business card) */}
-                {viewMode === 'swipe' && (
-                <div className="restaurant-swipe" style={{ height: 'calc(100vh - var(--nav-height, 65px) - 210px)', minHeight: 360 }}>
-                    <SwipeDeck
-            items={filteredRestaurants}
-            accent="var(--luxury-gold)"
-            emptyLabel={t('no_results')}
-            renderCard={(res) =>
-            <RestaurantCard res={res} onViewMembers={handleViewMembers} onHostInvitation={handleHostInvitation} />
-            } />
-                </div>
-                )}
             </div>
             {/* Members Modal */}
             {selectedCommunityId &&

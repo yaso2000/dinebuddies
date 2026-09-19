@@ -7,7 +7,8 @@ import { useAuth } from '../context/AuthContext';
 import { haversineKm } from '../utils/postsFeedScope';
 import { listOpenJobs } from '../services/jobPostings';
 import DirectoryMap from '../components/DirectoryMap';
-import SwipeDeck from '../components/SwipeDeck';
+import MagneticDeck from '../components/discovery/MagneticDeck';
+import DirectorySwipeCard from '../components/discovery/DirectorySwipeCard';
 import JobApplicationModal from '../components/JobApplicationModal';
 import './SpecialOffersPage.css';
 
@@ -120,34 +121,34 @@ export default function JobsDirectory({ embedded = false }) {
     [viewLabel]
   );
 
-  // Swipe-deck card for one job (browse view).
-  const renderJobCard = (job) => (
-    <div className="dir-swipe-card">
-      <button
-        type="button"
-        className="dir-swipe-card__business"
-        onClick={() => job.businessId && navigate(`/business/${job.businessId}`)}>
-        {job.businessName}
-      </button>
-      <AppText as="div" className="dir-swipe-card__title">{job.title}</AppText>
-      <div className="dir-swipe-card__meta">
-        <AppText as="span">{jobTypeLabel(t, job.jobType)}</AppText>
-        {job.location ? (
-          <AppText as="span" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <FaMapMarkerAlt size={12} aria-hidden /> {job.location}
-          </AppText>
-        ) : null}
-      </div>
-      {job.description ? <AppText as="div" className="dir-swipe-card__desc">{job.description}</AppText> : <div className="dir-swipe-card__desc" />}
-      <button
-        type="button"
-        className="dir-swipe-card__cta"
-        style={{ background: JOB_MARKER_COLOR }}
-        onClick={() => setApplyJob(job)}>
-        {viewLabel}
-      </button>
-    </div>
+  const jobDeckItems = useMemo(
+    () => filteredJobs.map((j) => ({ ...j, coverImage: j.businessAvatar || '' })),
+    [filteredJobs]
   );
+
+  // MagneticDeck card renderer (same swipe as venues, blue accent).
+  const renderJobSwipeCard = ({ item, isTop, onSkip, onBack }) => {
+    const chips = [{ key: 'type', icon: FaBriefcase, label: jobTypeLabel(t, item.jobType) }];
+    if (item.location) chips.push({ key: 'loc', icon: FaMapMarkerAlt, label: item.location });
+    else if (item._dist != null) chips.push({ key: 'dist', icon: FaMapMarkerAlt, label: `${item._dist.toFixed(1)} km` });
+    return (
+      <DirectorySwipeCard
+        item={item}
+        isTop={isTop}
+        onSkip={onSkip}
+        onBack={onBack}
+        accent={JOB_MARKER_COLOR}
+        badge={t('jobs_badge', 'Hiring')}
+        title={item.title}
+        subtitle={item.businessName}
+        description={item.description}
+        chips={chips}
+        ctaLabel={viewLabel}
+        onCta={() => setApplyJob(item)}
+        onOpen={() => item.businessId && navigate(`/business/${item.businessId}`)}
+        onClose={() => setViewMode('list')} />
+    );
+  };
 
   return (
     <div className="special-offers-page">
@@ -164,12 +165,14 @@ export default function JobsDirectory({ embedded = false }) {
       )}
 
       <div className="offers-filterbar">
+        {viewMode !== 'swipe' && (
         <AppTextInput
           type="search"
           className="offers-search"
           placeholder={t('search_job_or_business', 'Search a job or business…')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)} />
+        )}
         <div className="offers-cat-chips category-icons-scroll">
           {JOB_CATEGORIES.map((c) => (
             <button
@@ -181,8 +184,9 @@ export default function JobsDirectory({ embedded = false }) {
             </button>
           ))}
         </div>
+        {viewMode !== 'swipe' && (
         <div className="special-offers-viewtoggle">
-          <button type="button" className={`sov-toggle${viewMode === 'swipe' ? ' active' : ''}`} onClick={() => setViewMode('swipe')}>
+          <button type="button" className="sov-toggle" onClick={() => setViewMode('swipe')}>
             <FaLayerGroup aria-hidden /> {t('view_swipe', 'Swipe')}
           </button>
           <button type="button" className={`sov-toggle${viewMode === 'list' ? ' active' : ''}`} onClick={() => setViewMode('list')}>
@@ -192,6 +196,7 @@ export default function JobsDirectory({ embedded = false }) {
             <FaMapMarkedAlt aria-hidden /> {t('view_map', 'Map')}
           </button>
         </div>
+        )}
       </div>
 
       {loading ? (
@@ -210,13 +215,15 @@ export default function JobsDirectory({ embedded = false }) {
         </div>
       ) : viewMode === 'swipe' ? (
         <div className="special-offers-map">
-          <SwipeDeck
-            items={filteredJobs}
-            renderCard={renderJobCard}
-            accent={JOB_MARKER_COLOR}
-            emptyLabel={jobs.length === 0
+          <MagneticDeck
+            items={jobDeckItems}
+            renderCard={renderJobSwipeCard}
+            emptyTitle={jobs.length === 0
               ? t('jobs_directory_empty', 'No open jobs right now. Check back soon.')
-              : t('jobs_directory_none_match', 'No jobs match your filters.')} />
+              : t('jobs_directory_none_match', 'No jobs match your filters.')}
+            emptySub=""
+            finishedTitle={t('jobs_deck_done', "That's every job for now")}
+            finishedSub="" />
         </div>
       ) : filteredJobs.length === 0 ? (
         <div className="special-offers-page__empty">

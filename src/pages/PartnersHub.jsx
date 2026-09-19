@@ -8,7 +8,7 @@ import './PartnersHub.css';
 // Each tab is a full directory (venues / offers / jobs) rendered chrome-less via its
 // `embedded` prop — the hub's tab bar replaces each page's own header. Lazy so a tab's
 // bundle only loads when opened. Only the active tab mounts, so only it fetches data.
-const BusinessesDirectory = lazy(() => import('./BusinessesDirectory'));
+const BusinessesSwipePage = lazy(() => import('./BusinessesSwipePage'));
 const SpecialOffersPage = lazy(() => import('./SpecialOffersPage'));
 const JobsDirectory = lazy(() => import('./JobsDirectory'));
 
@@ -51,7 +51,7 @@ export default function PartnersHub() {
       </div>
       <div className="partners-hub__body">
         <Suspense fallback={<div className="partners-hub__loading">{t('loading', 'Loading…')}</div>}>
-          {tab === 'venues' && <BusinessesDirectory embedded />}
+          {tab === 'venues' && <BusinessesSwipePage />}
           {tab === 'offers' && <SpecialOffersPage embedded />}
           {tab === 'jobs' && <JobsDirectory embedded />}
         </Suspense>
