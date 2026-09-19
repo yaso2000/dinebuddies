@@ -1133,28 +1133,31 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
     });
   }, [filteredRestaurants]);
 
-  // Most common country among the venues (the button zooms to where the venues are) →
-  // flag on the "Country" map button. Resolves a stored code OR a country name (e.g.
-  // "Australia" → "AU"), since venues may lack countryCode. Falls back to the viewer's.
+  // Flag for the "Country" map button = the venues' GEOGRAPHIC country (where the map is),
+  // NOT the viewer's profile/language country. Venues store no country field, but their
+  // formatted address ends with the country name ("…QLD 4670, Australia" → "Australia" →
+  // "AU"). Resolve code/name/address, take the most common, then the detected location.
   const countryFlag = useMemo(() => {
+    const venueCountry = (res) => {
+      const direct = res.countryCode || res.country || res.businessInfo?.countryCode || res.businessInfo?.country;
+      if (direct) return resolveCountryIso2(direct);
+      const addr = String(res.address || res.location || res.businessInfo?.address || '').trim();
+      const last = addr.includes(',') ? addr.split(',').pop().trim() : '';
+      return resolveCountryIso2(last);
+    };
     const counts = {};
     for (const res of restaurantsWithCoords) {
-      const iso = resolveCountryIso2(
-        res.countryCode || res.country || res.businessInfo?.countryCode || res.businessInfo?.country
-      );
+      const iso = venueCountry(res);
       if (iso) counts[iso] = (counts[iso] || 0) + 1;
     }
     let best = '';
     let max = 0;
     for (const [cc, n] of Object.entries(counts)) if (n > max) { max = n; best = cc; }
-    // Venues rarely store country → fall back to the viewer's DETECTED location (GPS/IP,
-    // = the area the map is showing) before the profile's saved country.
     return countryFlagEmoji(
       best ||
-      resolveCountryIso2(detectedLocationContext?.countryCode || detectedLocationContext?.country) ||
-      resolveCountryIso2(userProfile?.countryCode || userProfile?.country)
+      resolveCountryIso2(detectedLocationContext?.countryCode || detectedLocationContext?.country)
     );
-  }, [restaurantsWithCoords, detectedLocationContext, userProfile?.countryCode, userProfile?.country]);
+  }, [restaurantsWithCoords, detectedLocationContext]);
 
   // Map control functions
   const zoomIn = () => {
