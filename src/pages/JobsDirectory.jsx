@@ -171,12 +171,14 @@ export default function JobsDirectory({ embedded = false, view = null, onViewCha
       <div className="offers-filterbar">
         {viewMode !== 'swipe' && (
         <div className="offers-searchrow">
-          <AppTextInput
-            type="search"
-            className="offers-search"
-            placeholder={t('search_job_or_business', 'Search a job or business…')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)} />
+          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+            <AppTextInput
+              type="search"
+              className="offers-search"
+              placeholder={t('search_job_or_business', 'Search a job or business…')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)} />
+          </div>
           <div className="special-offers-viewtoggle">
             <button type="button" className={`sov-toggle${viewMode === 'list' ? ' active' : ''}`} onClick={() => setViewMode('list')}>
               <FaList aria-hidden /> {t('view_list', 'List')}

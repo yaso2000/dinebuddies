@@ -254,12 +254,14 @@ export default function SpecialOffersPage({ embedded = false, view = null, onVie
       <div className="offers-filterbar">
         {viewMode !== 'swipe' && (
         <div className="offers-searchrow">
-          <AppTextInput
-            type="search"
-            className="offers-search"
-            placeholder={t('search_offer_or_business', 'Search an offer or business…')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)} />
+          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+            <AppTextInput
+              type="search"
+              className="offers-search"
+              placeholder={t('search_offer_or_business', 'Search an offer or business…')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)} />
+          </div>
           <div className="special-offers-viewtoggle">
             <button
               type="button"
