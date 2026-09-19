@@ -131,7 +131,7 @@ export default function CityRegisterPanel() {
 
   const CATS = [
     { key: 'invitations', icon: <FaCalendarAlt />, color: '#ef4444', label: t('city_register_invitations', 'دعوات عامة نشطة'), count: cityInvitations.length },
-    { key: 'offers', icon: <FaGift />, color: '#8b5cf6', label: t('city_register_offers', 'عروض'), count: offers.length },
+    { key: 'offers', icon: <FaGift />, color: '#8b5cf6', label: t('city_register_offers', 'عروض'), count: offers.length, route: '/offers' },
     { key: 'jobs', icon: <FaBriefcase />, color: '#0ea5e9', label: t('city_register_jobs', 'وظائف'), count: jobs.length },
   ];
 
@@ -225,7 +225,7 @@ export default function CityRegisterPanel() {
                 </p>
               ) : view === 'summary' ? (
                 CATS.map((c) => (
-                  <button key={c.key} type="button" onClick={() => setView(c.key)} dir={i18n.dir()} style={rowStyle}>
+                  <button key={c.key} type="button" onClick={() => (c.route ? go(c.route) : setView(c.key))} dir={i18n.dir()} style={rowStyle}>
                     <span style={{ width: 40, height: 40, borderRadius: 12, background: `${c.color}1a`, color: c.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{c.icon}</span>
                     <span style={{ flex: 1, fontWeight: 800, color: 'var(--text-main)' }}>{c.label}</span>
                     <span style={{ fontWeight: 900, fontSize: '1.1rem', color: c.color, minWidth: 24, textAlign: 'center' }}>{loading && c.key !== 'invitations' ? '…' : c.count}</span>
