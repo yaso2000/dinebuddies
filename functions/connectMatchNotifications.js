@@ -3,20 +3,10 @@
  */
 const functions = require('firebase-functions');
 
-const CONNECT_COPY = {
-    // Legacy kind — rendered exactly like a friendship (no dating copy anywhere).
-    dating: {
-        title: 'New friendship!',
-        message: (name) => `You and ${name} became friends`,
-    },
-    acquaintance: {
-        title: 'New acquaintance!',
-        message: (name) => `You and ${name} connected`,
-    },
-    friendship: {
-        title: 'New friendship!',
-        message: (name) => `You and ${name} became friends`,
-    },
+// Dating and the person-"like" are removed — a mutual Follow is the only connection.
+const FRIENDSHIP_COPY = {
+    title: 'New friendship!',
+    message: (name) => `You and ${name} became friends`,
 };
 
 function pickDisplayName(data) {
@@ -40,28 +30,25 @@ function pickAvatar(data) {
 
 function registerConnectMatchNotifications(
     exportsObj,
-    { db, admin, resolveConnectionKindFromData, hasConnectConnection }
+    { db, admin, hasConnectConnection }
 ) {
-    async function writeConnectNotification(recipientId, otherId, connectionKind) {
+    async function writeConnectNotification(recipientId, otherId) {
         if (!recipientId || !otherId || recipientId === otherId) return;
 
         const otherSnap = await db.collection('users').doc(otherId).get();
         const other = otherSnap.exists ? otherSnap.data() : {};
         const name = pickDisplayName(other);
         const avatar = pickAvatar(other);
-        const kind = CONNECT_COPY[connectionKind] ? connectionKind : 'acquaintance';
-        const copy = CONNECT_COPY[kind];
-        const notifType = kind === 'dating' ? 'like' : 'connect';
-        const notifId = `connect_${recipientId}_${otherId}_${kind}`;
+        const notifId = `connect_${recipientId}_${otherId}_friendship`;
         const ref = db.collection('notifications').doc(notifId);
         const existing = await ref.get();
         if (existing.exists) return;
 
         await ref.set({
             userId: recipientId,
-            type: notifType,
-            title: copy.title,
-            message: copy.message(name),
+            type: 'connect',
+            title: FRIENDSHIP_COPY.title,
+            message: FRIENDSHIP_COPY.message(name),
             actionUrl: `/profile/${otherId}`,
             fromUserId: otherId,
             fromUserName: name,
@@ -71,7 +58,7 @@ function registerConnectMatchNotifications(
             senderAvatar: avatar,
             metadata: {
                 source: 'connect',
-                connectionKind: kind,
+                connectionKind: 'friendship',
                 mutual: true,
                 otherUserId: otherId,
                 senderId: otherId,
@@ -81,36 +68,15 @@ function registerConnectMatchNotifications(
         });
     }
 
-    async function notifyBothUsers(userA, userB, connectionKind) {
+    async function notifyBothUsers(userA, userB) {
         await Promise.all([
-            writeConnectNotification(userA, userB, connectionKind),
-            writeConnectNotification(userB, userA, connectionKind),
+            writeConnectNotification(userA, userB),
+            writeConnectNotification(userB, userA),
         ]);
     }
 
-    exportsObj.onDiscoveryLikeMutual = functions.firestore
-        .document('discovery_likes/{likeId}')
-        .onWrite(async (change) => {
-            const after = change.after.exists ? change.after.data() : null;
-            if (!after?.mutual) return null;
-            const before = change.before.exists ? change.before.data() : null;
-            if (before?.mutual === true) return null;
-
-            const likerId = after.likerId;
-            const targetUserId = after.targetUserId;
-            if (!likerId || !targetUserId || likerId === targetUserId) return null;
-
-            const [likerSnap, targetSnap] = await Promise.all([
-                db.collection('users').doc(likerId).get(),
-                db.collection('users').doc(targetUserId).get(),
-            ]);
-            if (!likerSnap.exists || !targetSnap.exists) return null;
-
-            const kind = resolveConnectionKindFromData(likerSnap.data(), targetSnap.data());
-            await notifyBothUsers(likerId, targetUserId, kind);
-            return null;
-        });
-
+    // A mutual Follow is the only connection now, so celebrate friendships when a new
+    // follow completes a mutual pair. (The legacy discovery_likes trigger is removed.)
     exportsObj.onUserFollowingConnect = functions.firestore
         .document('users/{uid}')
         .onUpdate(async (change) => {
@@ -133,8 +99,7 @@ function registerConnectMatchNotifications(
                 const targetData = targetSnap.data() || {};
                 const connected = await hasConnectConnection(uid, targetId, viewerData, targetData);
                 if (!connected) continue;
-                const kind = resolveConnectionKindFromData(viewerData, targetData);
-                await notifyBothUsers(uid, targetId, kind);
+                await notifyBothUsers(uid, targetId);
             }
             return null;
         });

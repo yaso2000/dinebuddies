@@ -7,8 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useDiscoveryProfiles } from '../hooks/useDiscoveryProfiles';
 import { useProfileGiftPicker } from '../hooks/useProfileGiftPicker';
-import { likeDiscoveryProfile, sendDiscoveryGreeting } from '../utils/discoveryProfile';
-import { showLikeCooldownWarning } from '../utils/connectionActionCooldown';
+import { sendDiscoveryGreeting } from '../utils/discoveryProfile';
 import { goToLogin } from '../utils/goToLogin';
 import '../components/discovery/discovery.css';
 import { AppText } from '../components/base';
@@ -18,8 +17,8 @@ import { AppText } from '../components/base';
  * List browse remains available at /search/list.
  */
 export default function DiscoveryPage() {
-  const { t, i18n } = useTranslation();
-  const { showToast, showPersistentWarning } = useToast();
+  const { t } = useTranslation();
+  const { showToast } = useToast();
   const { currentUser, userProfile, isGuest, isBusiness } = useAuth();
 
   const viewerUid = currentUser?.uid || currentUser?.id;
@@ -40,37 +39,6 @@ export default function DiscoveryPage() {
       goToLogin({ returnPath: '/search' });
     }
   }, [isGuest, userProfile?.role]);
-
-  const handleLike = useCallback(
-    async (profile) => {
-      if (!viewerUid) {
-        goToLogin({ returnPath: '/search' });
-        return false;
-      }
-
-      try {
-        const result = await likeDiscoveryProfile(viewerUid, profile.user, userProfile || currentUser);
-        if (result?.reason === 'already_liked') {
-          showToast(t('discovery_like_already', 'You already liked this profile.'), 'info');
-          return { ok: false, limited: true };
-        }
-        if (result?.reason === 'cooldown') {
-          showLikeCooldownWarning(showPersistentWarning, i18n, result.cancelledAtMs, result.retryAtMs);
-          return { ok: false, limited: true };
-        }
-        if (!result?.ok) {
-          showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
-          return { ok: false };
-        }
-        return { ok: true, mutual: result.mutual === true || result.match === true };
-      } catch (err) {
-        console.error('[Discovery] like', err);
-        showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
-        return { ok: false };
-      }
-    },
-    [currentUser, i18n, showPersistentWarning, showToast, t, userProfile, viewerUid]
-  );
 
   const handleGreeting = useCallback(
     async (profile) => {
@@ -124,13 +92,12 @@ export default function DiscoveryPage() {
 
   const feedHandlers = useMemo(
     () => ({
-      onLike: handleLike,
       onGreeting: handleGreeting,
       onSendGift: handleGift,
       onNearEnd: handleNearEnd,
       onRefresh: handleRefresh,
     }),
-    [handleGift, handleGreeting, handleLike, handleNearEnd, handleRefresh]
+    [handleGift, handleGreeting, handleNearEnd, handleRefresh]
   );
 
   // Businesses may not discover / like / contact regular users.

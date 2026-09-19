@@ -7,16 +7,11 @@ vi.mock('./followHelpers', () => ({
   isMutualFollow: (a, b, aId, bId) => Array.isArray(a) && Array.isArray(b) && a.includes(bId) && b.includes(aId),
 }));
 
-const { profileShowsLikeButton, resolveConnectionKind, isConnectionCompleteSync, CONNECTION_KIND } =
+const { resolveConnectionKind, isConnectionCompleteSync, CONNECTION_KIND } =
   await import('./connectConnection');
 
 /** The only Connect rule: Follow everywhere; a mutual Follow makes friends and unlocks chat. */
 describe('Connect: single follow-based connection', () => {
-  it('never shows a heart/like button', () => {
-    expect(profileShowsLikeButton({}, {})).toBe(false);
-    expect(profileShowsLikeButton(null, null)).toBe(false);
-  });
-
   it('every connection is a friendship', () => {
     expect(resolveConnectionKind({}, {})).toBe('friendship');
     expect(CONNECTION_KIND).toEqual({ FRIENDSHIP: 'friendship' });

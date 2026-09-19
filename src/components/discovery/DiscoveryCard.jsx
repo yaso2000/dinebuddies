@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AnimatePresence, animate, motion, useMotionValue } from 'framer-motion';
+import { animate, motion, useMotionValue } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { FaComments, FaGift, FaHeart, FaMapMarkerAlt, FaRegHeart, FaUserCheck, FaUserPlus } from 'react-icons/fa';
+import { FaComments, FaGift, FaMapMarkerAlt, FaUserCheck, FaUserPlus } from 'react-icons/fa';
 import { LuX } from 'react-icons/lu';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -13,22 +13,11 @@ import TasteScopeBadge from '../../features/tastescope/TasteScopeBadge';
 import TasteCompatRing from '../../features/tastescope/TasteCompatRing';
 import { computeCompatibility } from '../../features/tastescope/computeCompatibility';
 import { useToast } from '../../context/ToastContext';
-import {
-  likeDiscoveryProfile,
-  unlikeDiscoveryProfile,
-} from '../../utils/discoveryProfile';
-import { showLikeCooldownWarning } from '../../utils/connectionActionCooldown';
-import {
-  followCancelConfirmOptions,
-  likeCancelConfirmOptions,
-} from '../../utils/connectionCancelConfirm';
+import { followCancelConfirmOptions } from '../../utils/connectionCancelConfirm';
 import { useConfirm } from '../../context/ConfirmContext';
 import { isFollowing as checkIsFollowing } from '../../utils/followHelpers';
 import { checkCanMessage } from '../../utils/chatHelpers';
-import {
-  profileShowsLikeButton,
-  connectionKindToCelebrationType,
-} from '../../utils/connectConnection';
+import { connectionKindToCelebrationType } from '../../utils/connectConnection';
 import { useDiscoveryActionStatus } from '../../hooks/useDiscoveryActionStatus';
 import { useCanMessageMember } from '../../hooks/useCanMessageMember';
 import { useMatchCelebration } from '../../context/MatchCelebrationContext';
@@ -42,7 +31,6 @@ import { AppText } from '../base';
 
 const SWIPE_THRESHOLD = 90;
 const SWIPE_VELOCITY = 420;
-const BURST_MS = 1400;
 
 function formatAgeLabel(profile) {
   const raw =
@@ -61,7 +49,6 @@ function formatAgeLabel(profile) {
 export default function DiscoveryCard({
   profile,
   onSkip,
-  onLike,
   onSendGift,
   onGreeting,
   onBack = null,
@@ -69,9 +56,9 @@ export default function DiscoveryCard({
   isTop = true,
   listPath = '/search/list',
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const { showToast, showPersistentWarning } = useToast();
+  const { showToast } = useToast();
   const confirm = useConfirm();
   const { currentUser, userProfile } = useAuth();
   const { toggleFollow, currentUser: invitationUser } = useInvitations();
@@ -79,7 +66,6 @@ export default function DiscoveryCard({
   const targetUser = profile?.user || profile;
   const isOnline = useUserPresence(profile?.id, { fallback: Boolean(targetUser?.isOnline) });
   const viewerProfile = userProfile || currentUser || invitationUser;
-  const useDatingLike = profileShowsLikeButton(viewerProfile, targetUser);
   const viewerUid = currentUser?.uid || currentUser?.id;
   const viewerFollowing = useMemo(
     () => invitationUser?.following || [],
@@ -90,16 +76,13 @@ export default function DiscoveryCard({
     viewerProfile: viewerProfile,
     targetProfile: targetUser,
   });
-  const { liked, greetedToday } = useDiscoveryActionStatus(viewerUid, profile?.id);
+  const { greetedToday } = useDiscoveryActionStatus(viewerUid, profile?.id);
 
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const exitHandledRef = useRef(false);
   const draggingRef = useRef(false);
-  const burstTimerRef = useRef(null);
 
-  const [likeBusy, setLikeBusy] = useState(false);
-  const [likeBurst, setLikeBurst] = useState(false);
   const [canChat, setCanChat] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
   const [greetingBusy, setGreetingBusy] = useState(false);
@@ -151,14 +134,6 @@ export default function DiscoveryCard({
     setCanChat(canMessageFromServer);
   }, [canMessageFromServer]);
 
-  const triggerBurst = useCallback((setter) => {
-    if (burstTimerRef.current) window.clearTimeout(burstTimerRef.current);
-    setter(true);
-    burstTimerRef.current = window.setTimeout(() => {
-      setter(false);
-      burstTimerRef.current = null;
-    }, BURST_MS);
-  }, []);
 
   const resetPosition = useCallback(() => {
     animate(x, 0, { type: 'spring', stiffness: 520, damping: 28 });
@@ -250,68 +225,6 @@ export default function DiscoveryCard({
     }
   }, [isInteractiveTarget, isTop, openProfile, x, y]);
 
-  const handleToggleLike = async (e) => {
-    e.stopPropagation();
-    if (!isTop || likeBusy) return;
-
-    if (!viewerUid) {
-      onLike?.(profile);
-      return;
-    }
-
-    // Undoing costs a 24h lock — never on a single stray tap.
-    if (liked && !(await confirm(likeCancelConfirmOptions(t)))) return;
-
-    setLikeBusy(true);
-    try {
-      if (liked) {
-        const result = await unlikeDiscoveryProfile(viewerUid, targetUser);
-        if (result?.ok) {
-          if (result.wasMutual) await refreshCanChat();
-        } else if (result?.reason === 'permission_denied') {
-          showToast(
-            t(
-              'discovery_unlike_rules_pending',
-              'Could not remove like yet — app rules may need updating. Try again shortly.'
-            ),
-            'error'
-          );
-        } else {
-          showToast(t('discovery_unlike_failed', 'Could not remove like. Try again.'), 'error');
-        }
-        return;
-      }
-
-      triggerBurst(setLikeBurst);
-      const result = await likeDiscoveryProfile(viewerUid, targetUser, userProfile || currentUser);
-      // Liking something already liked is a no-op, not a failure — every other
-      // like surface treats it that way.
-      if (result?.reason === 'already_liked') return;
-      if (result?.reason === 'cooldown') {
-        showLikeCooldownWarning(showPersistentWarning, i18n, result.cancelledAtMs, result.retryAtMs);
-        return;
-      }
-      if (!result?.ok) {
-        showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
-        return;
-      }
-      if (result.mutual || result.match) {
-        setCanChat(true);
-        celebrateMatch({
-          type: connectionKindToCelebrationType(result.connectionKind || 'friendship'),
-          otherUser: targetUser,
-          otherId: profile.id,
-          otherName: profile.name,
-        });
-      }
-    } catch (err) {
-      console.error('[DiscoveryCard] like', err);
-      showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
-    } finally {
-      setLikeBusy(false);
-    }
-  };
-
   const handleFollow = async (e) => {
     e.stopPropagation();
     if (!isTop || followBusy) return;
@@ -369,12 +282,7 @@ export default function DiscoveryCard({
     if (!profile?.id) return;
     if (!canChat) {
       showToast(
-        t(
-          'discovery_chat_locked',
-          useDatingLike
-            ? 'Like each other to unlock chat.'
-            : 'Follow each other to unlock chat.'
-        ),
+        t('discovery_chat_locked', 'Follow each other to unlock chat.'),
         'info'
       );
       return;
@@ -526,53 +434,22 @@ export default function DiscoveryCard({
             </AppText>
           </button>
 
-          {useDatingLike ? (
-            <button
-              type="button"
-              className={`discovery-card__action discovery-card__action--glass discovery-card__action--like${
-                liked ? ' discovery-card__action--liked' : ' discovery-card__action--like-idle'
-              }`}
-              disabled={likeBusy}
-              aria-label={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
-              aria-pressed={liked}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={handleToggleLike}
-            >
-              {/* Solid only when liked — a filled heart on every card read as
-                  "already liked" at a glance. */}
-              {liked ? <FaHeart size={22} /> : <FaRegHeart size={22} />}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={`discovery-card__action discovery-card__action--glass discovery-card__action--follow${
-                isFollowingUser ? ' discovery-card__action--following' : ''
-              }`}
-              disabled={followBusy}
-              aria-label={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
-              aria-pressed={isFollowingUser}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={handleFollow}
-            >
-              {isFollowingUser ? <FaUserCheck size={22} /> : <FaUserPlus size={22} />}
-            </button>
-          )}
+          <button
+            type="button"
+            className={`discovery-card__action discovery-card__action--glass discovery-card__action--follow${
+              isFollowingUser ? ' discovery-card__action--following' : ''
+            }`}
+            disabled={followBusy}
+            aria-label={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
+            aria-pressed={isFollowingUser}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleFollow}
+          >
+            {isFollowingUser ? <FaUserCheck size={22} /> : <FaUserPlus size={22} />}
+          </button>
         </div>
       </div>
 
-      <AnimatePresence>
-        {likeBurst ? (
-          <motion.div
-            className="discovery-card__burst discovery-card__burst--heart"
-            initial={{ opacity: 0, scale: 0.35 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.08 }}
-            transition={{ duration: 0.28, ease: 'easeOut' }}
-          >
-            <FaHeart className="discovery-card__heart-3d" aria-hidden />
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
     </motion.article>
   );
 }

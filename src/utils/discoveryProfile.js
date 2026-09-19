@@ -1,4 +1,4 @@
-import { doc, getDoc, deleteDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 
 import { db } from '../firebase/config';
 
@@ -7,18 +7,11 @@ import { normalizeDiningPersona, normalizeJoinReasons } from '../constants/priva
 import { normalizeLookingFor, getLookingForLabel } from '../constants/personalInviteCategories';
 import { resolveSwipeProfilePhotoUrl } from './profileGallery';
 import { getPrivateInviteeDisplayName } from './privateInviteAvailability';
-import { notifyProfileGreeting, notifyConnectConnectionComplete } from './notificationHelpers';
-import { CONNECTION_KIND } from './connectConnection';
+import { notifyProfileGreeting } from './notificationHelpers';
 import { USER_DIRECTORY_DEFAULT_SWIPE_PHOTO } from './userDirectory';
-import {
-  checkLikeRelikeAllowed,
-  clearLikeCooldown,
-  recordLikeCancelled,
-} from './connectionActionCooldown';
 
 
 
-const DISCOVERY_LIKES_COLLECTION = 'discovery_likes';
 const DISCOVERY_GREETINGS_COLLECTION = 'discovery_greetings';
 
 /** In-memory cache — avoids duplicate getDoc on every card mount. */
@@ -92,22 +85,9 @@ export async function getDiscoveryActionStatus(viewerId, targetId) {
     if (pending) return pending;
 
     const request = (async () => {
-        const [likeSnap, greetingSnap] = await Promise.all([
-            getDoc(getDiscoveryLikeRef(targetId, viewerId)),
-            getDoc(getDiscoveryGreetingRef(targetId, viewerId, dayKey)),
-        ]);
-
-        const result = {
-            liked: likeSnap.exists(),
-            greetedToday: greetingSnap.exists(),
-        };
-        const freshCache = actionStatusCache.get(key);
-        if (freshCache && freshCache.liked !== result.liked) {
-            return {
-                liked: freshCache.liked,
-                greetedToday: freshCache.greetedToday ?? result.greetedToday,
-            };
-        }
+        // Person-"like" removed — only the daily-greeting status is read now.
+        const greetingSnap = await getDoc(getDiscoveryGreetingRef(targetId, viewerId, dayKey));
+        const result = { liked: false, greetedToday: greetingSnap.exists() };
         actionStatusCache.set(key, { ...result, dayKey });
         return result;
     })();
@@ -122,21 +102,6 @@ export async function getDiscoveryActionStatus(viewerId, targetId) {
 
 
 
-/** Doc id: `{targetUserId}_{likerId}` — target is liked BY liker. */
-
-export function getDiscoveryLikeDocId(targetUserId, likerId) {
-
-    return `${targetUserId}_${likerId}`;
-
-}
-
-
-
-export function getDiscoveryLikeRef(targetUserId, likerId) {
-
-    return doc(db, DISCOVERY_LIKES_COLLECTION, getDiscoveryLikeDocId(targetUserId, likerId));
-
-}
 
 
 
@@ -228,29 +193,6 @@ function buildLikerPayload(likerId, likerProfile) {
 
  */
 
-export async function checkIsMutualMatch(userId1, userId2) {
-
-    if (!userId1 || !userId2 || userId1 === userId2) return false;
-
-
-
-    const [like1to2Snap, like2to1Snap] = await Promise.all([
-
-        getDoc(getDiscoveryLikeRef(userId2, userId1)),
-
-        getDoc(getDiscoveryLikeRef(userId1, userId2)),
-
-    ]);
-
-
-
-    if (!like1to2Snap.exists() || !like2to1Snap.exists()) return false;
-
-    const d1 = like1to2Snap.data();
-    const d2 = like2to1Snap.data();
-    // Match completes when the second like is sent; reverse `mutual` may update async.
-    return d1?.mutual === true || d2?.mutual === true;
-}
 
 
 
@@ -267,134 +209,6 @@ export async function checkIsMutualMatch(userId1, userId2) {
  * @param {object} likerProfile — current user's profile
 
  */
-
-export async function likeDiscoveryProfile(likerId, targetUser, likerProfile, options = {}) {
-    const { skipCooldown = false } = options;
-    const targetId = targetUser?.id;
-    if (!likerId || !targetId || likerId === targetId) {
-        throw new Error('discovery_like_invalid');
-    }
-
-    if (!skipCooldown) {
-        const allowed = await checkLikeRelikeAllowed(likerId, targetId);
-        if (!allowed.ok) {
-            return {
-                ok: false,
-                reason: allowed.reason,
-                cancelledAtMs: allowed.cancelledAtMs,
-                retryAtMs: allowed.retryAtMs,
-            };
-        }
-    }
-
-    const likeRef = getDiscoveryLikeRef(targetId, likerId);
-    const reverseLikeRef = getDiscoveryLikeRef(likerId, targetId);
-    const likerPayload = buildLikerPayload(likerId, likerProfile);
-
-    const reverseSnap = await getDoc(reverseLikeRef);
-    const isMatch = reverseSnap.exists();
-
-    try {
-        await setDoc(likeRef, {
-            targetUserId: targetId,
-            likerId,
-            createdAt: serverTimestamp(),
-            source: 'discovery_feed',
-            mutual: isMatch,
-        });
-    } catch (err) {
-        if (isPermissionDenied(err)) {
-            primeDiscoveryActionStatus(likerId, targetId, { liked: true });
-            return {
-                ok: false,
-                reason: 'already_liked',
-                already: true,
-                mutual: isMatch && reverseSnap.data()?.mutual === true,
-            };
-        }
-        console.error('[discoveryProfile] like write failed', err?.code, err?.message);
-        throw err;
-    }
-
-    primeDiscoveryActionStatus(likerId, targetId, { liked: true });
-
-    if (!skipCooldown) {
-        void clearLikeCooldown(likerId, targetId).catch(() => {});
-    }
-
-    if (isMatch) {
-        if (reverseSnap.data()?.mutual !== true) {
-            try {
-                await updateDoc(reverseLikeRef, { mutual: true });
-            } catch (e) {
-                console.warn('[discoveryProfile] reverse mutual update', e?.message || e);
-            }
-        }
-        notifyConnectConnectionComplete(targetId, likerPayload, CONNECTION_KIND.FRIENDSHIP);
-        notifyConnectConnectionComplete(likerId, {
-            id: targetId,
-            name: getPrivateInviteeDisplayName(targetUser) || 'Someone',
-            avatar: getSafeAvatar(targetUser),
-        }, CONNECTION_KIND.FRIENDSHIP);
-        return { ok: true, already: false, mutual: true, match: true, connectionKind: CONNECTION_KIND.FRIENDSHIP };
-    }
-
-    return { ok: true, already: false, mutual: false };
-}
-
-/**
- * Remove a discovery like (toggle off). Clears mutual flag on the reverse doc when needed.
- */
-export async function unlikeDiscoveryProfile(likerId, targetUser, options = {}) {
-    const { skipCooldown = false } = options;
-    const targetId = targetUser?.id;
-    if (!likerId || !targetId || likerId === targetId) {
-        return { ok: false, reason: 'invalid' };
-    }
-
-    const likeRef = getDiscoveryLikeRef(targetId, likerId);
-    const reverseLikeRef = getDiscoveryLikeRef(likerId, targetId);
-
-    const [likeSnap, reverseSnap] = await Promise.all([
-        getDoc(likeRef),
-        getDoc(reverseLikeRef),
-    ]);
-
-    if (!likeSnap.exists()) {
-        primeDiscoveryActionStatus(likerId, targetId, { liked: false });
-        return { ok: true, already: false, removed: false };
-    }
-
-    const wasMutual =
-        likeSnap.data()?.mutual === true ||
-        (reverseSnap.exists() && reverseSnap.data()?.mutual === true);
-
-    try {
-        await deleteDoc(likeRef);
-    } catch (err) {
-        if (isPermissionDenied(err)) {
-            return { ok: false, reason: 'permission_denied' };
-        }
-        console.error('[discoveryProfile] unlike delete failed', err?.code, err?.message);
-        throw err;
-    }
-
-    if (reverseSnap.exists() && reverseSnap.data()?.mutual === true) {
-        try {
-            await updateDoc(reverseLikeRef, { mutual: false });
-        } catch (err) {
-            console.warn('[discoveryProfile] unlike mutual reset', err?.message || err);
-        }
-    }
-
-    primeDiscoveryActionStatus(likerId, targetId, { liked: false });
-
-    if (!skipCooldown) {
-        void recordLikeCancelled(likerId, targetId).catch(() => {});
-    }
-
-    return { ok: true, removed: true, wasMutual };
-}
 
 /**
  * Send a wave greeting (👋) — once per sender→target per UTC day.

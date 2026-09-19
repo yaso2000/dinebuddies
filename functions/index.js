@@ -537,7 +537,6 @@ const { registerConnectMatchNotifications } = require('./connectMatchNotificatio
 registerConnectMatchNotifications(exports, {
     db,
     admin,
-    resolveConnectionKindFromData,
     hasConnectConnection,
 });
 function asTrimmedString(value) {
@@ -2023,12 +2022,6 @@ function areMutuallyFollowing(reqData, othData, uid, otherUserId) {
     const reqFollowing = Array.isArray(reqData?.following) ? reqData.following : [];
     const othFollowing = Array.isArray(othData?.following) ? othData.following : [];
     return reqFollowing.includes(otherUserId) && othFollowing.includes(uid);
-}
-
-// Dating removed: every connection is a friendship (mutual Follow). The
-// `openToDating` / `lookingFor: 'dating'` fields are legacy and ignored.
-function resolveConnectionKindFromData() {
-    return 'friendship';
 }
 
 // Dating and the person-"like" are removed, so the only connection is a mutual

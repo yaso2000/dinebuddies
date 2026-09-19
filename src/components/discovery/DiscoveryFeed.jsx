@@ -12,7 +12,6 @@ import { markSeen, firstUnseenIndex, clearSeen } from '../../utils/discoverySeen
 export default function DiscoveryFeed({
   profiles = [],
   onSkip,
-  onLike,
   onSendGift,
   onGreeting,
   onDeckEmpty,
@@ -106,11 +105,10 @@ export default function DiscoveryFeed({
   const handlers = useMemo(
     () => ({
       onSkip: handleSkip,
-      onLike,
       onSendGift: (p) => onSendGift?.(p),
       onGreeting,
     }),
-    [handleSkip, onGreeting, onLike, onSendGift]
+    [handleSkip, onGreeting, onSendGift]
   );
 
   if (isEmpty) {

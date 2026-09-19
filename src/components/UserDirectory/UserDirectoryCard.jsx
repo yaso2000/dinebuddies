@@ -2,30 +2,18 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
-import { FaComments, FaGift, FaHeart, FaMapMarkerAlt, FaRegHeart, FaUserCheck, FaUserPlus } from 'react-icons/fa';
+import { FaComments, FaGift, FaMapMarkerAlt, FaUserCheck, FaUserPlus } from 'react-icons/fa';
 import { db } from '../../firebase/config';
 import { getSafeAvatar, mergeAvatarStyleWithGenderRing, hasRealProfilePhoto, normalizeUserGender } from '../../utils/avatarUtils';
 import TasteScopeBadge from '../../features/tastescope/TasteScopeBadge';
 import { getPrivateInviteeDisplayName } from '../../utils/privateInviteAvailability';
 import { goToLogin } from '../../utils/goToLogin';
 import { useConfirm } from '../../context/ConfirmContext';
-import {
-  followCancelConfirmOptions,
-  likeCancelConfirmOptions,
-} from '../../utils/connectionCancelConfirm';
-import {
-  likeDiscoveryProfile,
-  unlikeDiscoveryProfile,
-  sendDiscoveryGreeting,
-} from '../../utils/discoveryProfile';
-import { showLikeCooldownWarning } from '../../utils/connectionActionCooldown';
+import { followCancelConfirmOptions } from '../../utils/connectionCancelConfirm';
+import { sendDiscoveryGreeting } from '../../utils/discoveryProfile';
 import { isFollowing as checkIsFollowing } from '../../utils/followHelpers';
 import { checkCanMessage } from '../../utils/chatHelpers';
-import {
-  profileShowsLikeButton,
-  connectionKindToCelebrationType,
-  tryCelebrateConnectionComplete,
-} from '../../utils/connectConnection';
+import { connectionKindToCelebrationType } from '../../utils/connectConnection';
 import { useAuth } from '../../context/AuthContext';
 import { useInvitations } from '../../context/InvitationContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -48,9 +36,9 @@ function resolveAgeLabel(user) {
 
 /** Connect list card — profile photo + intro + action tools. */
 function UserDirectoryCard({ user, currentUser, onGift }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const { showToast, showPersistentWarning } = useToast();
+  const { showToast } = useToast();
   const confirm = useConfirm();
   const { isDark } = useTheme();
   const { userProfile, isGuest } = useAuth();
@@ -65,10 +53,8 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
     live: false,
   });
   const profilePath = profileUid ? `/profile/${profileUid}` : null;
-  const useDatingLike = profileShowsLikeButton(userProfile || invitationUser || currentUser, user);
-  const { liked, greetedToday } = useDiscoveryActionStatus(viewerUid, profileUid);
+  const { greetedToday } = useDiscoveryActionStatus(viewerUid, profileUid);
 
-  const [likeBusy, setLikeBusy] = useState(false);
   const [greetingBusy, setGreetingBusy] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
 
@@ -78,7 +64,7 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
   );
   const isFollowingUser = checkIsFollowing(viewerFollowing, profileUid);
   // Defer chat permission reads until there is a reason to expect a connection.
-  const shouldProbeChat = isFollowingUser || liked;
+  const shouldProbeChat = isFollowingUser;
   const canMessageFromServer = useCanMessageMember(viewerUid, profileUid, viewerFollowing, {
     enabled: shouldProbeChat,
     viewerProfile: userProfile || invitationUser || currentUser,
@@ -134,99 +120,6 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
   // Profile-photo soft gate (target-side): follow / greet / gift show only when
   // the TARGET has a real uploaded photo. The viewer's own photo does not matter.
   const canContact = hasRealProfilePhoto(user);
-
-  const showUnlikeError = useCallback(
-    (reason) => {
-      if (reason === 'permission_denied') {
-        showToast(
-          t(
-            'discovery_unlike_rules_pending',
-            'Could not remove like yet — app rules may need updating. Try again shortly.'
-          ),
-          'error'
-        );
-        return;
-      }
-      showToast(t('discovery_unlike_failed', 'Could not remove like. Try again.'), 'error');
-    },
-    [showToast, t]
-  );
-
-  const handleToggleLike = useCallback(
-    async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (!viewerUid || isGuest || currentUser?.isGuest || currentUser?.id === 'guest') {
-        goToLogin({ returnPath: `/profile/${user.id}` });
-        return;
-      }
-      if (isSelf || likeBusy) return;
-      // Undoing costs a 24h lock — never on a single stray tap.
-      if (liked && !(await confirm(likeCancelConfirmOptions(t)))) return;
-
-      setLikeBusy(true);
-      try {
-        if (liked) {
-          const result = await unlikeDiscoveryProfile(viewerUid, user);
-          if (result?.ok) {
-            if (result.wasMutual) await refreshCanChat();
-          } else {
-            showUnlikeError(result?.reason);
-          }
-          return;
-        }
-
-        const result = await likeDiscoveryProfile(viewerUid, user, userProfile || currentUser);
-        if (result?.reason === 'already_liked') return;
-        if (result?.reason === 'cooldown') {
-          showLikeCooldownWarning(showPersistentWarning, i18n, result.cancelledAtMs, result.retryAtMs);
-          return;
-        }
-        if (!result?.ok) {
-          showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
-          return;
-        }
-        if (result.mutual || result.match) {
-          setCanChat(true);
-          await tryCelebrateConnectionComplete({
-            viewerUid,
-            targetUser: user,
-            viewerProfile,
-            viewerFollowing,
-            viewerFollowers: Array.isArray(userProfile?.followers) ? userProfile.followers : [],
-            celebrateMatch,
-            displayName,
-          });
-        }
-      } catch (err) {
-        console.error('[UserDirectoryCard] like', err);
-        showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
-      } finally {
-        setLikeBusy(false);
-      }
-    },
-    [confirm, 
-      celebrateMatch,
-      currentUser,
-      displayName,
-      isGuest,
-      isSelf,
-      likeBusy,
-      liked,
-      refreshCanChat,
-      i18n,
-      showPersistentWarning,
-      showToast,
-      showUnlikeError,
-      t,
-      user,
-      userProfile,
-      viewerFollowing,
-      viewerProfile,
-      viewerUid,
-    ]
-  );
 
   const handleFollow = useCallback(
     async (e) => {
@@ -430,39 +323,21 @@ function UserDirectoryCard({ user, currentUser, onGift }) {
           <div className="user-directory-card__actions">
             {canContact ? (
               <>
-                {useDatingLike ? (
-                  <button
-                    type="button"
-                    className={`user-directory-card__action user-directory-card__action--like${liked ? ' user-directory-card__action--liked' : ' user-directory-card__action--like-idle'}`}
-                    onClick={handleToggleLike}
-                    disabled={likeBusy}
-                    title={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
-                    aria-label={liked ? t('unlike', 'Unlike') : t('user_directory_like', 'Like profile')}
-                    aria-pressed={liked}
-                  >
-                    {liked ? (
-                      <FaHeart className="user-directory-card__action-icon" aria-hidden />
-                    ) : (
-                      <FaRegHeart className="user-directory-card__action-icon" aria-hidden />
-                    )}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className={`user-directory-card__action user-directory-card__action--follow${isFollowingUser ? ' user-directory-card__action--following' : ''}`}
-                    onClick={handleFollow}
-                    disabled={followBusy}
-                    title={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
-                    aria-label={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
-                    aria-pressed={isFollowingUser}
-                  >
-                    {isFollowingUser ? (
-                      <FaUserCheck className="user-directory-card__action-icon" aria-hidden />
-                    ) : (
-                      <FaUserPlus className="user-directory-card__action-icon" aria-hidden />
-                    )}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className={`user-directory-card__action user-directory-card__action--follow${isFollowingUser ? ' user-directory-card__action--following' : ''}`}
+                  onClick={handleFollow}
+                  disabled={followBusy}
+                  title={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
+                  aria-label={isFollowingUser ? t('following', 'Following') : t('follow', 'Follow')}
+                  aria-pressed={isFollowingUser}
+                >
+                  {isFollowingUser ? (
+                    <FaUserCheck className="user-directory-card__action-icon" aria-hidden />
+                  ) : (
+                    <FaUserPlus className="user-directory-card__action-icon" aria-hidden />
+                  )}
+                </button>
                 <button
                   type="button"
                   className={`user-directory-card__action user-directory-card__action--greeting${greetedToday ? ' user-directory-card__action--greeted' : ''}`}

@@ -17,8 +17,6 @@ import {
   FaEnvelope,
   FaHandshake,
   FaUsers,
-  FaHeart,
-  FaRegHeart,
   FaCheck,
   FaCommentDots,
   FaPaperPlane,
@@ -45,17 +43,7 @@ import { mapPublicProfileDocToUserShape } from '../utils/publicProfileMap';
 import { isAdminIdentity } from '../utils/adminAccess';
 import { asUidArray, toggleUserBlock, toggleUserMute } from '../utils/userSocialLists';
 import { checkCanMessage } from '../utils/chatHelpers';
-import {
-  likeDiscoveryProfile,
-  unlikeDiscoveryProfile,
-} from '../utils/discoveryProfile';
-import { showLikeCooldownWarning } from '../utils/connectionActionCooldown';
-import {
-  profileShowsLikeButton,
-  connectionKindToCelebrationType,
-  tryCelebrateConnectionComplete,
-} from '../utils/connectConnection';
-import { useDiscoveryActionStatus } from '../hooks/useDiscoveryActionStatus';
+import { connectionKindToCelebrationType } from '../utils/connectConnection';
 import { useMatchCelebration } from '../context/MatchCelebrationContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
@@ -73,10 +61,7 @@ import './UserProfile.tailwind.css';
 import { DEFAULT_PROFILE_COVER_FALLBACK } from '../constants/defaultProfileMedia';
 import { AppText } from "../components/base";
 import { useConfirm } from '../context/ConfirmContext';
-import {
-  followCancelConfirmOptions,
-  likeCancelConfirmOptions,
-} from '../utils/connectionCancelConfirm';
+import { followCancelConfirmOptions } from '../utils/connectionCancelConfirm';
 
 const PROFILE_SECTION_PREVIEW_MAX = 3;
 
@@ -442,7 +427,7 @@ const UserProfile = () => {
   const { invitations, currentUser, toggleFollow, submitReport } = useInvitations();
   const { userProfile, loading: authLoading } = useAuth();
   const { celebrateMatch } = useMatchCelebration();
-  const { showToast, showPersistentWarning } = useToast();
+  const { showToast } = useToast();
   const { isDark } = useTheme();
   const galleryTheme = isDark ? 'dark' : 'light';
 
@@ -461,13 +446,10 @@ const UserProfile = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [canChat, setCanChat] = useState(false);
   const [canChatLoading, setCanChatLoading] = useState(true);
-  const [likeBusy, setLikeBusy] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
 
   const myUid = currentUser?.uid || currentUser?.id;
   const viewerProfile = userProfile || currentUser;
-  const useDatingLike = profileShowsLikeButton(viewerProfile, user);
-  const { liked } = useDiscoveryActionStatus(myUid, userId);
 
   const profileModel = useMemo(() => mapUserDocToProfileModel(user), [user]);
   const isAdminViewer = isAdminIdentity(currentUser, userProfile);
@@ -620,90 +602,6 @@ const UserProfile = () => {
       setCanChat(false);
     }
   }, [currentUser?.following, myUid, user, userId, viewerProfile]);
-
-  const showUnlikeError = useCallback(
-    (reason) => {
-      if (reason === 'permission_denied') {
-        showToast(
-          t(
-            'discovery_unlike_rules_pending',
-            'Could not remove like yet — app rules may need updating. Try again shortly.'
-          ),
-          'error'
-        );
-        return;
-      }
-      showToast(t('discovery_unlike_failed', 'Could not remove like. Try again.'), 'error');
-    },
-    [showToast, t]
-  );
-
-  const handleToggleLike = useCallback(async () => {
-    if (currentUser?.isGuest || !currentUser || !myUid) {
-      goToLogin({ returnPath: `/profile/${userId}` });
-      return;
-    }
-    if (likeBusy || !user) return;
-    // Undoing costs a 24h lock — never on a single stray tap.
-    if (liked && !(await confirm(likeCancelConfirmOptions(t)))) return;
-
-    setLikeBusy(true);
-    try {
-      if (liked) {
-        const result = await unlikeDiscoveryProfile(myUid, user);
-        if (result?.ok) {
-          if (result.wasMutual) await refreshCanChat();
-        } else {
-          showUnlikeError(result?.reason);
-        }
-        return;
-      }
-
-      const result = await likeDiscoveryProfile(myUid, user, viewerProfile);
-      if (result?.reason === 'already_liked') return;
-      if (result?.reason === 'cooldown') {
-        showLikeCooldownWarning(showPersistentWarning, i18n, result.cancelledAtMs, result.retryAtMs);
-        return;
-      }
-      if (!result?.ok) {
-        showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
-        return;
-      }
-      if (result.mutual || result.match) {
-        setCanChat(true);
-        await tryCelebrateConnectionComplete({
-          viewerUid: myUid,
-          targetUser: user,
-          viewerProfile,
-          viewerFollowing: currentUser?.following || [],
-          viewerFollowers: viewerProfile?.followers || [],
-          celebrateMatch,
-          displayName: getPrivateInviteeDisplayName(user) || profileModel.displayName,
-        });
-      }
-    } catch (err) {
-      console.error('[UserProfile] like', err);
-      showToast(t('discovery_like_failed', 'Could not like. Try again.'), 'error');
-    } finally {
-      setLikeBusy(false);
-    }
-  }, [confirm, 
-    celebrateMatch,
-    currentUser,
-    liked,
-    likeBusy,
-    myUid,
-    profileModel.displayName,
-    refreshCanChat,
-    showPersistentWarning,
-    showToast,
-    showUnlikeError,
-    i18n,
-    t,
-    user,
-    userId,
-    viewerProfile,
-  ]);
 
   const handleConnectFollow = useCallback(async () => {
     if (currentUser?.isGuest || !currentUser || !myUid) {
@@ -1121,16 +1019,6 @@ const UserProfile = () => {
 
           <div className="user-profile-actions">
             {userProfile?.role !== 'business' && canBeFollowed ?
-            useDatingLike ?
-            <button
-              type="button"
-              onClick={handleToggleLike}
-              disabled={likeBusy}
-              aria-pressed={liked}
-              className={`user-profile-action user-profile-action--like ${liked ? 'is-liked' : ''}`}>
-              {liked ? <FaHeart aria-hidden /> : <FaRegHeart aria-hidden />}
-              {liked ? t('liked', 'Liked') : t('user_directory_like', 'Like')}
-            </button> :
             <button
               type="button"
               onClick={handleConnectFollow}

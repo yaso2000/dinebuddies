@@ -11,14 +11,6 @@ export const CONNECTION_KIND = {
     FRIENDSHIP: 'friendship',
 };
 
-/**
- * Primary action on a profile card, anywhere it appears — swipe deck, list card
- * or profile page. There is no heart/like action: every card shows Follow.
- */
-export function profileShowsLikeButton() {
-    return false;
-}
-
 /** @returns {ConnectionKind} */
 export function resolveConnectionKind() {
     return CONNECTION_KIND.FRIENDSHIP;
