@@ -13,11 +13,16 @@
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-  /* Only the body scrolls (cards); tabs + each tab's filter bar stay put. */
-  overflow-y: auto;
-  overflow-x: hidden;
+  /* Default (swipe / map): fill, no scroll — the deck owns the touch gesture and the map
+     self-sizes. Scrolling here intercepted the swipe drag on iPhone. */
+  overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+/* List view only: cards scroll while tabs + the filter/categories bar stay pinned. */
+.partners-hub__body--scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 /* Let an embedded full-screen swipe shell (venues) fill the tab body. */
 .partners-hub__body > .discovery-shell {

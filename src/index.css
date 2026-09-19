@@ -2441,6 +2441,17 @@ select.input-field {
   height: 100% !important;
 }
 
+/* Same fixes for the Offers/Jobs maps (they render DirectoryMap inside .special-offers-page,
+   not .directory-page, so scope to the whole hub so the map fills to the nav there too). */
+.partners-hub .map-view-container {
+  padding: 0 !important;
+  background: transparent !important;
+  height: auto !important;
+}
+.partners-hub .responsive-map-container {
+  height: 100% !important;
+}
+
 .map-wrapper {
   position: relative;
   /* own stacking context: map controls (z 999/1000) stay inside the map, below the nav */

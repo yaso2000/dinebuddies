@@ -72,7 +72,9 @@ export default function PartnersHub() {
           <FaLayerGroup aria-hidden />
         </button>
       </div>
-      <div className="partners-hub__body">
+      {/* Scroll ONLY in list view (cards). Swipe and map fill the body with no scroll, so
+          the swipe deck's touch drag isn't intercepted (broke swiping on iPhone). */}
+      <div className={`partners-hub__body${view === 'list' ? ' partners-hub__body--scroll' : ''}`}>
         <Suspense fallback={<div className="partners-hub__loading">{t('loading', 'Loading…')}</div>}>
           {tab === 'venues' && <VenuesTab view={view} onViewChange={setView} />}
           {tab === 'offers' && <SpecialOffersPage embedded view={view} onViewChange={setView} />}
