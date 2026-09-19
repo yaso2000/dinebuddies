@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaBriefcase, FaArrowLeft, FaArrowRight, FaList, FaMapMarkedAlt, FaMapMarkerAlt } from 'react-icons/fa';
+import { FaBriefcase, FaArrowLeft, FaArrowRight, FaList, FaMapMarkedAlt, FaMapMarkerAlt, FaLayerGroup } from 'react-icons/fa';
 import { AppText, AppTextInput } from '../components/base';
 import { useAuth } from '../context/AuthContext';
 import { haversineKm } from '../utils/postsFeedScope';
 import { listOpenJobs } from '../services/jobPostings';
 import DirectoryMap from '../components/DirectoryMap';
+import SwipeDeck from '../components/SwipeDeck';
 import JobApplicationModal from '../components/JobApplicationModal';
 import './SpecialOffersPage.css';
 
@@ -45,7 +46,7 @@ export default function JobsDirectory({ embedded = false }) {
 
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('list');
+  const [viewMode, setViewMode] = useState('swipe');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [applyJob, setApplyJob] = useState(null);
@@ -119,6 +120,35 @@ export default function JobsDirectory({ embedded = false }) {
     [viewLabel]
   );
 
+  // Swipe-deck card for one job (browse view).
+  const renderJobCard = (job) => (
+    <div className="dir-swipe-card">
+      <button
+        type="button"
+        className="dir-swipe-card__business"
+        onClick={() => job.businessId && navigate(`/business/${job.businessId}`)}>
+        {job.businessName}
+      </button>
+      <AppText as="div" className="dir-swipe-card__title">{job.title}</AppText>
+      <div className="dir-swipe-card__meta">
+        <AppText as="span">{jobTypeLabel(t, job.jobType)}</AppText>
+        {job.location ? (
+          <AppText as="span" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <FaMapMarkerAlt size={12} aria-hidden /> {job.location}
+          </AppText>
+        ) : null}
+      </div>
+      {job.description ? <AppText as="div" className="dir-swipe-card__desc">{job.description}</AppText> : <div className="dir-swipe-card__desc" />}
+      <button
+        type="button"
+        className="dir-swipe-card__cta"
+        style={{ background: JOB_MARKER_COLOR }}
+        onClick={() => setApplyJob(job)}>
+        {viewLabel}
+      </button>
+    </div>
+  );
+
   return (
     <div className="special-offers-page">
       {!embedded && (
@@ -152,6 +182,9 @@ export default function JobsDirectory({ embedded = false }) {
           ))}
         </div>
         <div className="special-offers-viewtoggle">
+          <button type="button" className={`sov-toggle${viewMode === 'swipe' ? ' active' : ''}`} onClick={() => setViewMode('swipe')}>
+            <FaLayerGroup aria-hidden /> {t('view_swipe', 'Swipe')}
+          </button>
           <button type="button" className={`sov-toggle${viewMode === 'list' ? ' active' : ''}`} onClick={() => setViewMode('list')}>
             <FaList aria-hidden /> {t('view_list', 'List')}
           </button>
@@ -174,6 +207,16 @@ export default function JobsDirectory({ embedded = false }) {
             buildPopupHtml={buildJobPopup}
             userLocation={userLoc}
             markerColor={JOB_MARKER_COLOR} />
+        </div>
+      ) : viewMode === 'swipe' ? (
+        <div className="special-offers-map">
+          <SwipeDeck
+            items={filteredJobs}
+            renderCard={renderJobCard}
+            accent={JOB_MARKER_COLOR}
+            emptyLabel={jobs.length === 0
+              ? t('jobs_directory_empty', 'No open jobs right now. Check back soon.')
+              : t('jobs_directory_none_match', 'No jobs match your filters.')} />
         </div>
       ) : filteredJobs.length === 0 ? (
         <div className="special-offers-page__empty">

@@ -1,0 +1,115 @@
+.swipe-deck {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px 16px 16px;
+}
+
+.swipe-deck__stage {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  overflow: hidden;
+}
+
+.swipe-deck__card {
+  width: 100%;
+  max-width: 460px;
+  cursor: grab;
+  touch-action: pan-y;
+}
+.swipe-deck__card:active {
+  cursor: grabbing;
+}
+
+.swipe-deck__nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding-top: 12px;
+}
+
+.swipe-deck__arrow {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.swipe-deck__arrow:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.swipe-deck__counter {
+  font-weight: 700;
+  color: var(--text-secondary, var(--text-muted));
+  min-width: 60px;
+  text-align: center;
+}
+
+.swipe-deck__empty {
+  text-align: center;
+  color: var(--text-secondary, var(--text-muted));
+  padding: 60px 16px;
+}
+
+/* Directory swipe card (offers / jobs) */
+.dir-swipe-card {
+  border-radius: 18px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  padding: 20px;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+.dir-swipe-card__business {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-secondary, var(--text-muted));
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  text-align: start;
+}
+.dir-swipe-card__title {
+  font-size: 1.5rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+.dir-swipe-card__desc {
+  font-size: 0.98rem;
+  opacity: 0.9;
+  flex: 1;
+}
+.dir-swipe-card__meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+.dir-swipe-card__cta {
+  align-self: stretch;
+  padding: 12px;
+  border-radius: 12px;
+  border: none;
+  font-weight: 800;
+  font-size: 1rem;
+  color: #fff;
+  cursor: pointer;
+}

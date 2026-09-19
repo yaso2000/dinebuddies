@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle, FaList, FaMapMarkedAlt } from 'react-icons/fa';
+import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle, FaList, FaMapMarkedAlt, FaLayerGroup } from 'react-icons/fa';
 import { AppText, AppTextInput } from '../components/base';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -11,6 +11,7 @@ import { isBusinessUser } from '../utils/accountRole';
 import { offerBannerStyle } from '../utils/offerBanner';
 import OfferClaimQrModal from '../components/OfferClaimQrModal';
 import DirectoryMap from '../components/DirectoryMap';
+import SwipeDeck from '../components/SwipeDeck';
 import './SpecialOffersPage.css';
 import './CreateCommunityOffer.css';
 
@@ -52,7 +53,7 @@ export default function SpecialOffersPage({ embedded = false }) {
 
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
+  const [viewMode, setViewMode] = useState('swipe'); // 'swipe' | 'list' | 'map'
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [userLoc, setUserLoc] = useState(() => {
@@ -194,6 +195,35 @@ export default function SpecialOffersPage({ embedded = false }) {
     [viewLabel]
   );
 
+  // Swipe-deck card for one offer (browse view).
+  const renderOfferCard = (offer) => {
+    const state = takeState(offer);
+    return (
+      <div className="dir-swipe-card">
+        <button
+          type="button"
+          className="dir-swipe-card__business"
+          onClick={() => offer.partnerId && navigate(`/business/${offer.partnerId}`)}>
+          {offer.businessName}
+        </button>
+        <AppText as="div" className="dir-swipe-card__title">{offer.title}</AppText>
+        {offer.description ? <AppText as="div" className="dir-swipe-card__desc">{offer.description}</AppText> : <div className="dir-swipe-card__desc" />}
+        {offer.city ? <div className="dir-swipe-card__meta"><AppText as="span">📍 {offer.city}</AppText></div> : null}
+        {!isBusiness && (
+          <button
+            type="button"
+            className="dir-swipe-card__cta"
+            style={{ background: OFFER_MARKER_COLOR }}
+            disabled={state.done || takingId === offer.id}
+            onClick={() => onTakeClick(offer)}>
+            {state.done ? <FaCheckCircle aria-hidden style={{ marginInlineEnd: 6 }} /> : null}
+            {state.label}
+          </button>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="special-offers-page">
       {!embedded && (
@@ -234,6 +264,12 @@ export default function SpecialOffersPage({ embedded = false }) {
         <div className="special-offers-viewtoggle">
           <button
             type="button"
+            className={`sov-toggle${viewMode === 'swipe' ? ' active' : ''}`}
+            onClick={() => setViewMode('swipe')}>
+            <FaLayerGroup aria-hidden /> {t('view_swipe', 'Swipe')}
+          </button>
+          <button
+            type="button"
             className={`sov-toggle${viewMode === 'list' ? ' active' : ''}`}
             onClick={() => setViewMode('list')}>
             <FaList aria-hidden /> {t('view_list', 'List')}
@@ -260,6 +296,16 @@ export default function SpecialOffersPage({ embedded = false }) {
             buildPopupHtml={buildOfferPopup}
             userLocation={userLoc}
             markerColor={OFFER_MARKER_COLOR} />
+        </div>
+      ) : viewMode === 'swipe' ? (
+        <div className="special-offers-map">
+          <SwipeDeck
+            items={filteredOffers}
+            renderCard={renderOfferCard}
+            accent="var(--secondary)"
+            emptyLabel={offers.length === 0
+              ? t('special_offers_empty', 'No special offers right now. Check back soon.')
+              : t('special_offers_none_match', 'No offers match your filters.')} />
         </div>
       ) : filteredOffers.length === 0 ? (
         <div className="special-offers-page__empty">
