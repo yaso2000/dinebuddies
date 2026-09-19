@@ -56,30 +56,10 @@ export function buildFollowCooldownToast(i18n, cancelledAtMs, retryAtMs) {
   });
 }
 
-export function buildLikeCooldownToast(i18n, cancelledAtMs, retryAtMs) {
-  const { cancelledAt, retryAt } = formatConnectionCooldownTimes(
-    cancelledAtMs,
-    retryAtMs,
-    i18n?.language
-  );
-  return i18n.t('like_relike_cooldown', {
-    cancelledAt,
-    retryAt,
-    defaultValue: `You removed your like at ${cancelledAt}. You can like again after ${retryAt} (24 hours after removing it).`,
-  });
-}
-
 export function showFollowCooldownWarning(showPersistentWarning, i18n, cancelledAtMs, retryAtMs) {
   showPersistentWarning({
     title: i18n.t('follow_refollow_warning_title', 'Cannot follow again yet'),
     message: buildFollowCooldownToast(i18n, cancelledAtMs, retryAtMs),
-  });
-}
-
-export function showLikeCooldownWarning(showPersistentWarning, i18n, cancelledAtMs, retryAtMs) {
-  showPersistentWarning({
-    title: i18n.t('like_relike_warning_title', 'Cannot like again yet'),
-    message: buildLikeCooldownToast(i18n, cancelledAtMs, retryAtMs),
   });
 }
 
@@ -109,18 +89,6 @@ export async function checkFollowRefollowAllowed(viewerId, targetId) {
   return { ok: true };
 }
 
-export async function checkLikeRelikeAllowed(viewerId, targetId) {
-  if (!viewerId || !targetId || viewerId === targetId) {
-    return { ok: false, reason: 'invalid' };
-  }
-  const cancelledAtMs = await readCooldownField(viewerId, targetId, 'likeCancelledAt');
-  const block = getCooldownBlock(cancelledAtMs);
-  if (block.blocked) {
-    return { ok: false, reason: 'cooldown', ...block };
-  }
-  return { ok: true };
-}
-
 export async function recordFollowCancelled(viewerId, targetId) {
   if (!viewerId || !targetId || viewerId === targetId) return;
   await setDoc(
@@ -129,20 +97,6 @@ export async function recordFollowCancelled(viewerId, targetId) {
       viewerId,
       targetId,
       followCancelledAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
-}
-
-export async function recordLikeCancelled(viewerId, targetId) {
-  if (!viewerId || !targetId || viewerId === targetId) return;
-  await setDoc(
-    getConnectionCooldownRef(viewerId, targetId),
-    {
-      viewerId,
-      targetId,
-      likeCancelledAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     },
     { merge: true }
@@ -161,14 +115,3 @@ export async function clearFollowCooldown(viewerId, targetId) {
   );
 }
 
-export async function clearLikeCooldown(viewerId, targetId) {
-  if (!viewerId || !targetId || viewerId === targetId) return;
-  await setDoc(
-    getConnectionCooldownRef(viewerId, targetId),
-    {
-      likeCancelledAt: deleteField(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
-}
