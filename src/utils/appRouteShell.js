@@ -54,6 +54,10 @@ export function getAppRouteShell(pathname, search = '', { isDesktopShell = false
   const isBrowseHeaderlessRoute =
     path === '/invitations' || path.startsWith('/invitations/') ||
     path === '/restaurants' || path.startsWith('/restaurants/') ||
+    // Partners discovery hub (venues/offers/jobs tabs) — the hub's own tab bar is the
+    // header, so hide the app top bar in every view for maximum space.
+    path === '/partners' || path.startsWith('/partners') ||
+    path === '/offers' || path === '/jobs' ||
     path === '/search' || path.startsWith('/search/');
 
   /**
