@@ -2434,6 +2434,13 @@ select.input-field {
   height: auto !important;
 }
 
+/* The inner Leaflet container must fill the JS-sized wrapper. A global mobile rule
+   forces `.responsive-map-container` to 60vh !important, which left a dead band below
+   the map inside the taller wrapper — override it here. */
+.directory-page .responsive-map-container {
+  height: 100% !important;
+}
+
 .map-wrapper {
   position: relative;
   /* own stacking context: map controls (z 999/1000) stay inside the map, below the nav */
