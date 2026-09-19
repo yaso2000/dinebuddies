@@ -58,6 +58,7 @@ import { formatAppTime } from '../utils/localeFormat';
 import { useChatTheme } from '../hooks/useChatTheme';
 import ChatThemePicker from '../components/chat/ChatThemePicker';
 import PrivateChatTopPanels from '../components/chat/PrivateChatTopPanels';
+import VoiceMessagePlayer from '../components/chat/VoiceMessagePlayer';
 
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
@@ -1151,10 +1152,7 @@ const Chat = () => {
                                     {msg.type === 'image' && <img src={msg.text} alt="Shared" className="message-image" />}
                                     
                                     {msg.type === 'voice' &&
-                    <div className="voice-message">
-                                            <audio controls src={msg.text} style={{ maxWidth: '250px' }} />
-                                            <AppText as="span" className="voice-duration">{formatDuration(msg.duration || 0)}</AppText>
-                                        </div>
+                    <VoiceMessagePlayer src={msg.text} duration={msg.duration || 0} isOwn={isOwn} />
                     }
                                     {msg.type === 'file' &&
                     <div className="file-message">

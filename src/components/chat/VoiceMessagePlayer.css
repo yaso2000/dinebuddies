@@ -1,0 +1,100 @@
+.voice-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+  max-width: 260px;
+  padding: 4px 2px;
+}
+
+.voice-player__btn {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.voice-player__btn:active {
+  transform: scale(0.92);
+}
+
+.voice-player__track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 6px;
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.voice-player__fill {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.voice-player__thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+[dir='rtl'] .voice-player__thumb {
+  transform: translate(50%, -50%);
+}
+
+.voice-player__time {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 30px;
+  text-align: end;
+}
+
+/* On the sender's gradient bubble — light-on-color. */
+.voice-player--own .voice-player__btn {
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--primary, #8b5cf6);
+}
+.voice-player--own .voice-player__track {
+  background: rgba(255, 255, 255, 0.32);
+}
+.voice-player--own .voice-player__fill {
+  background: #ffffff;
+}
+.voice-player--own .voice-player__thumb {
+  background: #ffffff;
+}
+.voice-player--own .voice-player__time {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* On a received light bubble — accent-on-surface. */
+.voice-player--other .voice-player__btn {
+  background: var(--primary, #8b5cf6);
+  color: #ffffff;
+}
+.voice-player--other .voice-player__track {
+  background: rgba(139, 92, 246, 0.2);
+}
+.voice-player--other .voice-player__fill {
+  background: var(--primary, #8b5cf6);
+}
+.voice-player--other .voice-player__thumb {
+  background: var(--primary, #8b5cf6);
+}
+.voice-player--other .voice-player__time {
+  color: var(--text-muted, #64748b);
+}
