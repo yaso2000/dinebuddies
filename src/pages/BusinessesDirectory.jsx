@@ -1467,7 +1467,7 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
                     <div
             style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         {/* Unified search — one box: venue name + city + country */}
-                        <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+                        <div style={{ flex: '1 1 0%', minWidth: 0 }}>
                         <DirectorySearchBar
               text={searchQuery}
               onTextChange={setSearchQuery}

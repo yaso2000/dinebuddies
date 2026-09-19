@@ -254,7 +254,7 @@ export default function SpecialOffersPage({ embedded = false, view = null, onVie
       <div className="offers-filterbar">
         {viewMode !== 'swipe' && (
         <div className="offers-searchrow">
-          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+          <div style={{ flex: '1 1 0%', minWidth: 0 }}>
             <AppTextInput
               type="search"
               className="offers-search"

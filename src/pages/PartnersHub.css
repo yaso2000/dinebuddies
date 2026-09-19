@@ -8,6 +8,10 @@
 .partners-hub__body {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  /* Guard: a stray wide child (e.g. a non-shrinking search row) must never widen
+     the hub past the viewport. */
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }

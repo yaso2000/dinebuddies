@@ -171,7 +171,7 @@ export default function JobsDirectory({ embedded = false, view = null, onViewCha
       <div className="offers-filterbar">
         {viewMode !== 'swipe' && (
         <div className="offers-searchrow">
-          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+          <div style={{ flex: '1 1 0%', minWidth: 0 }}>
             <AppTextInput
               type="search"
               className="offers-search"
