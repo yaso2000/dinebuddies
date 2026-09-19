@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useRef, useLayoutEffect } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaStore, FaTag, FaBriefcase, FaLayerGroup } from 'react-icons/fa';
@@ -39,21 +39,6 @@ export default function PartnersHub() {
   // One view shared across tabs: swipe (default) | list | map.
   const [view, setView] = useState('swipe');
 
-  // Measure the pinned tab bar so each tab's sticky filter bar can sit right below it
-  // (instead of overlapping) while scrolling list/map.
-  const rootRef = useRef(null);
-  const tabsRef = useRef(null);
-  useLayoutEffect(() => {
-    const root = rootRef.current;
-    const bar = tabsRef.current;
-    if (!root || !bar || typeof ResizeObserver === 'undefined') return undefined;
-    const apply = () => root.style.setProperty('--filterbar-top', `${bar.offsetHeight}px`);
-    apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(bar);
-    return () => ro.disconnect();
-  }, []);
-
   const select = (id) => {
     setTab(id);
     const next = new URLSearchParams(searchParams);
@@ -64,8 +49,8 @@ export default function PartnersHub() {
   const swipeActive = view === 'swipe';
 
   return (
-    <div className="partners-hub" ref={rootRef}>
-      <div className="partners-hub__tabs" ref={tabsRef}>
+    <div className="partners-hub">
+      <div className="partners-hub__tabs">
         {TABS.map((x) => (
           <button
             key={x.id}

@@ -4,7 +4,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import { FaSearch, FaMapMarkedAlt, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaBuilding, FaPlus, FaGlobe, FaTimes, FaFlag } from 'react-icons/fa';
+import { FaSearch, FaMapMarkedAlt, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaBuilding, FaPlus, FaGlobe, FaTimes, FaFlag, FaThList } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -814,8 +814,8 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
 const RESTAURANT_LIKE_TYPES = new Set(['Restaurant', 'Fast Food', 'Food Truck']);
 
 // Quick-focus zoom levels for the map buttons (Leaflet zoom → geographic scope).
-// Country uses fit-to-all-venues (their data is one country), so no fixed country zoom.
 const CITY_ZOOM = 12;
+const COUNTRY_ZOOM = 4;
 const WORLD_ZOOM = 2;
 
 /** ISO 3166-1 alpha-2 country code → flag emoji (e.g. "AU" → "🇦🇺"). */
@@ -1169,14 +1169,19 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
     }
   };
 
-  // Quick-focus buttons: city / state / country — recenter on the viewer (or the
-  // current map center as a fallback) at the matching zoom level.
+  // City / Country buttons — recenter on the viewer (or the current map center) at the
+  // matching zoom level.
   const focusLevel = (zoom) => {
     if (!mapInstance.current) return;
     const center = userLocation
       ? [userLocation.lat, userLocation.lng]
       : mapInstance.current.getCenter();
     mapInstance.current.setView(center, zoom, { animate: true });
+  };
+
+  // World button — a true global view (not centered on the viewer).
+  const focusWorld = () => {
+    if (mapInstance.current) mapInstance.current.setView([20, 0], WORLD_ZOOM, { animate: true });
   };
 
   const resetMapView = () => {
@@ -1431,7 +1436,7 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
     <div className="directory-page" style={{ paddingBottom: viewMode === 'map' ? '0' : '100px', minHeight: '100%' }}>
 
 
-            <div style={{ padding: embedded ? '0.5rem 8px 0' : '1rem 1.5rem 0' }}>
+            <div style={{ padding: embedded ? '0 8px 0' : '1rem 1.5rem 0' }}>
                 {!embedded && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '0.75rem' }}>
                     {/* Rankings (trophy) moved to the top bar. */}
@@ -1506,37 +1511,30 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
               placeholder={t('search_venue_or_place', 'Search a venue, city or country…')}
               clearLabel={t('clear', 'Clear')} />
                         </div>
-                        {/* List / Map toggle — beside the search to save space. */}
-                        <div style={{ flex: '0 0 auto', background: 'var(--bg-card)', padding: '4px', borderRadius: '50px', display: 'flex', border: '1px solid var(--border-color)' }}>
-                            <button
-                onClick={() => setViewMode('list')}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '50px',
-                  background: viewMode === 'list' ? 'var(--luxury-gold)' : 'transparent',
-                  color: viewMode === 'list' ? 'rgba(255, 255, 254, 1)' : 'var(--text-main)',
-                  border: 'none',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap',
-                }}>
-                                {t('list')}
-                            </button>
-                            <button
-                onClick={() => setViewMode('map')}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '50px',
-                  background: viewMode === 'map' ? 'var(--luxury-gold)' : 'transparent',
-                  color: viewMode === 'map' ? 'rgba(255, 255, 254, 1)' : 'var(--text-main)',
-                  border: 'none',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap',
-                }}>
-                                {t('map')}
-                            </button>
-                        </div>
+                        {/* Single toggle — flips between list and map (shows the target view). */}
+                        <button
+              type="button"
+              onClick={() => setViewMode(viewMode === 'map' ? 'list' : 'map')}
+              aria-label={viewMode === 'map' ? t('list') : t('map')}
+              style={{
+                flex: '0 0 auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                borderRadius: '50px',
+                background: 'var(--luxury-gold)',
+                color: 'rgba(255, 255, 254, 1)',
+                border: '1px solid var(--border-color)',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                cursor: 'pointer',
+              }}>
+                            {viewMode === 'map'
+                              ? <><FaThList aria-hidden /> {t('list')}</>
+                              : <><FaMapMarkedAlt aria-hidden /> {t('map')}</>}
+                        </button>
                     </div>
 
                     {/* Row 2: Venue-type filter — always visible */}
@@ -1658,12 +1656,12 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
                             <button onClick={() => focusLevel(CITY_ZOOM)} className="btn-map-control" title={t('map_focus_city', { defaultValue: 'City' })} aria-label={t('map_focus_city', { defaultValue: 'City' })}>
                                 <FaMapMarkedAlt />
                             </button>
-                            <button onClick={resetMapView} className="btn-map-control" title={t('map_focus_country', { defaultValue: 'Country' })} aria-label={t('map_focus_country', { defaultValue: 'Country' })}>
+                            <button onClick={() => focusLevel(COUNTRY_ZOOM)} className="btn-map-control" title={t('map_focus_country', { defaultValue: 'Country' })} aria-label={t('map_focus_country', { defaultValue: 'Country' })}>
                                 {countryFlag
                                   ? <AppText as="span" aria-hidden style={{ fontSize: '1.15rem', lineHeight: 1 }}>{countryFlag}</AppText>
                                   : <FaFlag />}
                             </button>
-                            <button onClick={() => focusLevel(WORLD_ZOOM)} className="btn-map-control" title={t('map_focus_world', { defaultValue: 'World' })} aria-label={t('map_focus_world', { defaultValue: 'World' })}>
+                            <button onClick={focusWorld} className="btn-map-control" title={t('map_focus_world', { defaultValue: 'World' })} aria-label={t('map_focus_world', { defaultValue: 'World' })}>
                                 <FaGlobe />
                             </button>
                         </div>
