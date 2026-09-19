@@ -1436,7 +1436,9 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
     <div className="directory-page" style={{ paddingBottom: viewMode === 'map' ? '0' : '100px', minHeight: '100%' }}>
 
 
-            <div style={{ padding: embedded ? '0 8px 0' : '1rem 1.5rem 0' }}>
+            {/* In the hub, this wrapper is display:contents so the sticky filter card's
+                containing block is the tall .directory-page (otherwise it unsticks). */}
+            <div style={embedded ? { display: 'contents' } : { padding: '1rem 1.5rem 0' }}>
                 {!embedded && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '0.75rem' }}>
                     {/* Rankings (trophy) moved to the top bar. */}
@@ -1490,6 +1492,7 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
           borderRadius: '16px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
           marginBottom: viewMode === 'map' ? '4px' : '0.75rem',
+          marginInline: embedded ? '8px' : 0,
           position: 'sticky',
           top: 'var(--filterbar-top, 0px)',
           zIndex: 30
