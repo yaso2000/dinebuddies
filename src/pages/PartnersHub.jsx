@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, useRef, useLayoutEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaStore, FaTag, FaBriefcase, FaLayerGroup } from 'react-icons/fa';
@@ -39,6 +39,32 @@ export default function PartnersHub() {
   // One view shared across tabs: swipe (default) | list | map.
   const [view, setView] = useState('swipe');
 
+  // Size the hub to end exactly at the fixed bottom nav's real top, measured at runtime.
+  // CSS calc(100dvh - nav - safe-area) is unreliable in the iOS Capacitor WebView, which
+  // left the swipe card's bottom (action buttons) hidden behind the nav.
+  const rootRef = useRef(null);
+  useLayoutEffect(() => {
+    const hub = rootRef.current;
+    if (!hub) return undefined;
+    const apply = () => {
+      const nav = document.querySelector('.bottom-nav');
+      const top = hub.getBoundingClientRect().top;
+      const navTop = nav ? Math.round(nav.getBoundingClientRect().top) : window.innerHeight;
+      hub.style.height = `${Math.max(320, navTop - top)}px`;
+    };
+    apply();
+    const t1 = setTimeout(apply, 150);
+    const t2 = setTimeout(apply, 400);
+    window.addEventListener('resize', apply);
+    window.addEventListener('orientationchange', apply);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('resize', apply);
+      window.removeEventListener('orientationchange', apply);
+    };
+  }, []);
+
   const select = (id) => {
     setTab(id);
     const next = new URLSearchParams(searchParams);
@@ -49,7 +75,7 @@ export default function PartnersHub() {
   const swipeActive = view === 'swipe';
 
   return (
-    <div className="partners-hub">
+    <div className="partners-hub" ref={rootRef}>
       <div className="partners-hub__tabs">
         {TABS.map((x) => (
           <button
