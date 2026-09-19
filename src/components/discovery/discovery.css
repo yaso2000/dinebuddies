@@ -94,6 +94,14 @@
     box-sizing: border-box;
 }
 
+/* Venues/partners swipe: the categories row is a SIBLING above the feed, so height:100%
+   makes the feed the full shell height and overflows by the categories-row height (clipping
+   the card's action buttons on iPhone). Flex-fill the REMAINING space instead. */
+.discovery-shell--partners .discovery-feed {
+    height: auto;
+    max-height: none;
+}
+
 .discovery-feed__hint {
     display: none;
 }
