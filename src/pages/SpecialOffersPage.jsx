@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle, FaList, FaMapMarkedAlt } from 'react-icons/fa';
-import { AppText } from '../components/base';
+import { AppText, AppTextInput } from '../components/base';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { haversineKm } from '../utils/postsFeedScope';
@@ -15,6 +15,16 @@ import './SpecialOffersPage.css';
 import './CreateCommunityOffer.css';
 
 const OFFER_MARKER_COLOR = '#f59e0b';
+
+// Same venue types as the businesses directory — an offer inherits its business type.
+const OFFER_CATEGORIES = [
+  { id: 'All', labelKey: 'filter_all', fallback: 'All', icon: '🌍' },
+  { id: 'Restaurant', labelKey: 'type_restaurant', fallback: 'Restaurant', icon: '🍴' },
+  { id: 'Cafe', labelKey: 'type_cafe', fallback: 'Café', icon: '☕' },
+  { id: 'Bar', labelKey: 'type_bar', fallback: 'Bar', icon: '🍺' },
+  { id: 'Night Club', labelKey: 'type_nightclub', fallback: 'Night Club', icon: '🎵' },
+  { id: 'Hotel', labelKey: 'type_hotel', fallback: 'Hotel', icon: '🏨' },
+];
 
 /** Minimal HTML escape for values interpolated into Leaflet popup markup. */
 function escapeHtml(value) {
@@ -43,6 +53,8 @@ export default function SpecialOffersPage() {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All');
   const [userLoc, setUserLoc] = useState(() => {
     const lat = Number(userProfile?.coordinates?.lat);
     const lng = Number(userProfile?.coordinates?.lng);
@@ -72,6 +84,19 @@ export default function SpecialOffersPage() {
       return a._dist - b._dist;
     });
   }, [offers, userLoc]);
+  // Search + venue-type filter over the nearest-first list.
+  const filteredOffers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return sortedOffers.filter((o) => {
+      if (activeCategory !== 'All' && String(o.businessType || '') !== activeCategory) return false;
+      if (q) {
+        const hay = `${o.title || ''} ${o.businessName || ''} ${o.description || ''} ${o.city || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [sortedOffers, searchQuery, activeCategory]);
+
   const [takingId, setTakingId] = useState('');
   const [takenById, setTakenById] = useState({}); // offerId -> { ok, reason, status, claimToken }
   const [joinPrompt, setJoinPrompt] = useState(null); // { partnerId, businessName }
@@ -185,32 +210,67 @@ export default function SpecialOffersPage() {
         </AppText>
       </div>
 
+      {/* Directory chrome — ALWAYS visible (search + venue-type chips + list/map toggle) */}
+      <div className="offers-filterbar">
+        <AppTextInput
+          type="search"
+          className="offers-search"
+          placeholder={t('search_offer_or_business', 'Search an offer or business…')}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)} />
+        <div className="offers-cat-chips category-icons-scroll">
+          {OFFER_CATEGORIES.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={`offers-cat-chip${activeCategory === c.id ? ' active' : ''}`}
+              onClick={() => setActiveCategory(c.id)}>
+              {c.icon ? <AppText as="span" aria-hidden>{c.icon} </AppText> : null}{t(c.labelKey, c.fallback)}
+            </button>
+          ))}
+        </div>
+        <div className="special-offers-viewtoggle">
+          <button
+            type="button"
+            className={`sov-toggle${viewMode === 'list' ? ' active' : ''}`}
+            onClick={() => setViewMode('list')}>
+            <FaList aria-hidden /> {t('view_list', 'List')}
+          </button>
+          <button
+            type="button"
+            className={`sov-toggle${viewMode === 'map' ? ' active' : ''}`}
+            onClick={() => setViewMode('map')}>
+            <FaMapMarkedAlt aria-hidden /> {t('view_map', 'Map')}
+          </button>
+        </div>
+      </div>
+
       {loading ? (
         <div className="special-offers-page__status">{t('loading', 'Loading…')}</div>
-      ) : offers.length === 0 ? (
+      ) : viewMode === 'map' ? (
+        <div className="special-offers-map">
+          <DirectoryMap
+            active
+            items={filteredOffers}
+            getCoords={(o) => ({ lat: o.lat, lng: o.lng })}
+            getMarkerImageUrl={(o) => o.imageUrl || o.businessAvatar || ''}
+            getFallbackName={(o) => o.businessName || o.title || 'Offer'}
+            buildPopupHtml={buildOfferPopup}
+            userLocation={userLoc}
+            markerColor={OFFER_MARKER_COLOR} />
+        </div>
+      ) : filteredOffers.length === 0 ? (
         <div className="special-offers-page__empty">
           <FaTag style={{ fontSize: '2.4rem', opacity: 0.3 }} aria-hidden />
-          <AppText as="p">{t('special_offers_empty', 'No special offers right now. Check back soon.')}</AppText>
+          <AppText as="p">
+            {offers.length === 0
+              ? t('special_offers_empty', 'No special offers right now. Check back soon.')
+              : t('special_offers_none_match', 'No offers match your filters.')}
+          </AppText>
         </div>
       ) : (
-        <>
-          <div className="special-offers-viewtoggle">
-            <button
-              type="button"
-              className={`sov-toggle${viewMode === 'list' ? ' active' : ''}`}
-              onClick={() => setViewMode('list')}>
-              <FaList aria-hidden /> {t('view_list', 'List')}
-            </button>
-            <button
-              type="button"
-              className={`sov-toggle${viewMode === 'map' ? ' active' : ''}`}
-              onClick={() => setViewMode('map')}>
-              <FaMapMarkedAlt aria-hidden /> {t('view_map', 'Map')}
-            </button>
-          </div>
-          {viewMode === 'list' ? (
-          <div className="special-offers-list">
-          {sortedOffers.map((offer) => {
+        <div className="special-offers-list">
+          {filteredOffers.map((offer) => {
             const state = takeState(offer);
             return (
               <div key={offer.id} className="offer-banner" style={offerBannerStyle(offer)}>
@@ -238,22 +298,7 @@ export default function SpecialOffersPage() {
               </div>
             );
           })}
-          </div>
-          ) : (
-          <div className="special-offers-map">
-            <DirectoryMap
-              active={viewMode === 'map'}
-              items={sortedOffers}
-              getCoords={(o) => ({ lat: o.lat, lng: o.lng })}
-              getMarkerImageUrl={(o) => o.imageUrl || o.businessAvatar || ''}
-              getFallbackName={(o) => o.businessName || o.title || 'Offer'}
-              buildPopupHtml={buildOfferPopup}
-              userLocation={userLoc}
-              markerColor={OFFER_MARKER_COLOR}
-            />
-          </div>
-          )}
-        </>
+        </div>
       )}
 
       {claimModal && (

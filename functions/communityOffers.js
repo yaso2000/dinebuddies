@@ -93,6 +93,10 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             'Business';
         const senderAvatar =
             biz.avatar || biz.photo_url || biz.photoURL || bi.logoUrl || bi.logo || null;
+        // Venue type (Restaurant/Cafe/Bar/Night Club/Hotel) — inherited from the business
+        // so the offers directory can filter by type, same as the businesses directory.
+        const businessType =
+            String(bi.businessType || biz.business_type || '').trim() || 'Restaurant';
 
         // Business geo (for nearest-first ordering on the offers feed/page). Prefer
         // the users doc, else the restaurants listing.
@@ -197,6 +201,7 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
             lat: offerLat,
             lng: offerLng,
             city: offerCity,
+            businessType,
             redemptionCount: 0,
             // Billing: included (plan) vs prepaid extra.
             isPaidOffer: isExtraOffer,
@@ -566,6 +571,7 @@ function registerCommunityOffers(exports, { db, admin, enforceCallableRateLimit 
                     lat: typeof o.lat === 'number' ? o.lat : null,
                     lng: typeof o.lng === 'number' ? o.lng : null,
                     city: o.city || null,
+                    businessType: o.businessType || null,
                     createdAt: o.createdAt?.toMillis ? o.createdAt.toMillis() : null,
                 };
             })
