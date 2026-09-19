@@ -4,7 +4,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaBuilding, FaPlus, FaGlobe, FaTimes, FaCity, FaMap, FaFlag } from 'react-icons/fa';
+import { FaSearch, FaMapMarkedAlt, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaBuilding, FaPlus, FaGlobe, FaTimes, FaFlag } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -813,9 +813,16 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
 const RESTAURANT_LIKE_TYPES = new Set(['Restaurant', 'Fast Food', 'Food Truck']);
 
 // Quick-focus zoom levels for the map buttons (Leaflet zoom → geographic scope).
+// Country uses fit-to-all-venues (their data is one country), so no fixed country zoom.
 const CITY_ZOOM = 12;
-const STATE_ZOOM = 8;
-const COUNTRY_ZOOM = 6;
+const WORLD_ZOOM = 2;
+
+/** ISO 3166-1 alpha-2 country code → flag emoji (e.g. "AU" → "🇦🇺"). */
+function countryFlagEmoji(code) {
+  const cc = String(code || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return '';
+  return String.fromCodePoint(...[...cc].map((c) => 127397 + c.charCodeAt(0)));
+}
 
 
 const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = null }) => {
@@ -1125,6 +1132,20 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
     });
   }, [filteredRestaurants]);
 
+  // Most common country among the venues (their data is one country) → flag on the
+  // "Country" map button. Falls back to the viewer's profile country.
+  const countryFlag = useMemo(() => {
+    const counts = {};
+    for (const res of restaurantsWithCoords) {
+      const cc = String(res.countryCode || res.businessInfo?.countryCode || '').toUpperCase();
+      if (/^[A-Z]{2}$/.test(cc)) counts[cc] = (counts[cc] || 0) + 1;
+    }
+    let best = '';
+    let max = 0;
+    for (const [cc, n] of Object.entries(counts)) if (n > max) { max = n; best = cc; }
+    return countryFlagEmoji(best || userProfile?.countryCode);
+  }, [restaurantsWithCoords, userProfile?.countryCode]);
+
   // Map control functions
   const zoomIn = () => {
     if (mapInstance.current) {
@@ -1187,7 +1208,7 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
           const lngs = restaurantsWithCoords.map((r) => r.lng);
           initialLat = (Math.min(...lats) + Math.max(...lats)) / 2;
           initialLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-          initialZoom = STATE_ZOOM;
+          initialZoom = 6;
         }
 
         mapInstance.current = L.map(mapRef.current, {
@@ -1608,17 +1629,7 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
                             <button onClick={zoomOut} className="btn-map-control" title={t('zoom_out', { defaultValue: 'Zoom Out' })}>
                                 <AppText as="span" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>−</AppText>
                             </button>
-                            {/* Scope focus: City / State / Country (centered on the viewer) */}
-                            <button onClick={() => focusLevel(CITY_ZOOM)} className="btn-map-control" title={t('map_focus_city', { defaultValue: 'City' })} aria-label={t('map_focus_city', { defaultValue: 'City' })}>
-                                <FaCity />
-                            </button>
-                            <button onClick={() => focusLevel(STATE_ZOOM)} className="btn-map-control" title={t('map_focus_state', { defaultValue: 'State' })} aria-label={t('map_focus_state', { defaultValue: 'State' })}>
-                                <FaMap />
-                            </button>
-                            <button onClick={() => focusLevel(COUNTRY_ZOOM)} className="btn-map-control" title={t('map_focus_country', { defaultValue: 'Country' })} aria-label={t('map_focus_country', { defaultValue: 'Country' })}>
-                                <FaFlag />
-                            </button>
-                            {/* Fullscreen Toggle Button */}
+                            {/* Fullscreen — directly under the minus. */}
                             <button
                 onClick={() => {
                   setIsFullscreen(!isFullscreen);
@@ -1630,11 +1641,19 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
                 }}
                 className="btn-map-control"
                 title={isFullscreen ? t('exit_fullscreen', 'Exit Fullscreen') : t('fullscreen', 'Fullscreen')}>
-                
+
                                 {isFullscreen ? <FaCompress /> : <FaExpand />}
                             </button>
-                            {/* World / fit-all Button */}
-                            <button onClick={resetMapView} className="btn-map-control" title={t('map_focus_world', { defaultValue: 'World (all venues)' })} aria-label={t('map_focus_world', { defaultValue: 'World (all venues)' })}>
+                            {/* Scope focus: City (pin on map) / Country (flag) / World (globe). */}
+                            <button onClick={() => focusLevel(CITY_ZOOM)} className="btn-map-control" title={t('map_focus_city', { defaultValue: 'City' })} aria-label={t('map_focus_city', { defaultValue: 'City' })}>
+                                <FaMapMarkedAlt />
+                            </button>
+                            <button onClick={resetMapView} className="btn-map-control" title={t('map_focus_country', { defaultValue: 'Country' })} aria-label={t('map_focus_country', { defaultValue: 'Country' })}>
+                                {countryFlag
+                                  ? <AppText as="span" aria-hidden style={{ fontSize: '1.15rem', lineHeight: 1 }}>{countryFlag}</AppText>
+                                  : <FaFlag />}
+                            </button>
+                            <button onClick={() => focusLevel(WORLD_ZOOM)} className="btn-map-control" title={t('map_focus_world', { defaultValue: 'World' })} aria-label={t('map_focus_world', { defaultValue: 'World' })}>
                                 <FaGlobe />
                             </button>
                         </div>
