@@ -1133,21 +1133,16 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
     });
   }, [filteredRestaurants]);
 
-  // Flag for the "Country" map button = the venues' GEOGRAPHIC country (where the map is),
-  // NOT the viewer's profile/language country. Venues store no country field, but their
-  // formatted address ends with the country name ("…QLD 4670, Australia" → "Australia" →
-  // "AU"). Resolve code/name/address, take the most common, then the detected location.
+  // Flag for the "Country" map button = the GEOGRAPHIC country the viewer is browsing, NOT
+  // the profile/language country. In mixed data (venues across countries), vote among the
+  // venues NEAREST the viewer (restaurantsWithCoords is distance-sorted) so a Bundaberg user
+  // gets 🇦🇺, not the global most-common. Falls back to the detected (GPS/IP) country.
   const countryFlag = useMemo(() => {
-    const venueCountry = (res) => {
-      const direct = res.countryCode || res.country || res.businessInfo?.countryCode || res.businessInfo?.country;
-      if (direct) return resolveCountryIso2(direct);
-      const addr = String(res.address || res.location || res.businessInfo?.address || '').trim();
-      const last = addr.includes(',') ? addr.split(',').pop().trim() : '';
-      return resolveCountryIso2(last);
-    };
     const counts = {};
-    for (const res of restaurantsWithCoords) {
-      const iso = venueCountry(res);
+    for (const res of restaurantsWithCoords.slice(0, 12)) {
+      const iso = resolveCountryIso2(
+        res.countryCode || res.country || res.businessInfo?.countryCode || res.businessInfo?.country
+      );
       if (iso) counts[iso] = (counts[iso] || 0) + 1;
     }
     let best = '';
