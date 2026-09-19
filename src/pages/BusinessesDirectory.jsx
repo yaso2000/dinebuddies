@@ -1361,6 +1361,34 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isFullscreen]);
 
+  // Size the map to end ~4px above the bottom nav on ANY device (a fixed vh height
+  // leaves a dead strip under the map on taller screens). Measures the live nav.
+  useEffect(() => {
+    if (viewMode !== 'map') return undefined;
+    const wrapper = mapRef.current?.closest('.directory-map-wrapper');
+    if (!wrapper) return undefined;
+    const apply = () => {
+      if (isFullscreen) { wrapper.style.height = ''; return; }
+      const top = wrapper.getBoundingClientRect().top;
+      const nav = document.querySelector('.bottom-nav');
+      const navTop = nav ? nav.getBoundingClientRect().top : window.innerHeight;
+      const h = Math.max(260, Math.round(navTop - top - 4));
+      wrapper.style.height = `${h}px`;
+      if (mapInstance.current) mapInstance.current.invalidateSize();
+    };
+    apply();
+    const t1 = setTimeout(apply, 150);
+    const t2 = setTimeout(apply, 400);
+    window.addEventListener('resize', apply);
+    window.addEventListener('orientationchange', apply);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('resize', apply);
+      window.removeEventListener('orientationchange', apply);
+    };
+  }, [viewMode, isFullscreen]);
+
 
   const handleRefresh = useCallback(async () => {
     document.querySelector('.app-main')?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1425,7 +1453,7 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
           padding: '8px 12px',
           borderRadius: '16px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-          marginBottom: '0.75rem',
+          marginBottom: viewMode === 'map' ? '4px' : '0.75rem',
           position: 'sticky',
           top: 'var(--filterbar-top, 0px)',
           zIndex: 30

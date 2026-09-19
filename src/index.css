@@ -2424,6 +2424,14 @@ select.input-field {
   padding: 0 1rem 120px;
 }
 
+/* Partners/venues directory map: no bottom padding and no light backing — the map
+   is sized by JS to sit ~4px above the bottom nav, so any padding/background here
+   would show as a dead strip under the map. */
+.directory-page .map-view-container {
+  padding: 0 !important;
+  background: transparent !important;
+}
+
 .map-wrapper {
   position: relative;
   /* own stacking context: map controls (z 999/1000) stay inside the map, below the nav */
