@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle, FaList, FaMapMarkedAlt, FaLayerGroup, FaMapMarkerAlt } from 'react-icons/fa';
+import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle, FaList, FaMapMarkedAlt, FaMapMarkerAlt } from 'react-icons/fa';
 import { AppText, AppTextInput } from '../components/base';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -43,7 +43,7 @@ function escapeHtml(value) {
  * as a list. "Take it" records the claim for community members; non-members get a
  * floating prompt to join the community first.
  */
-export default function SpecialOffersPage({ embedded = false }) {
+export default function SpecialOffersPage({ embedded = false, view = null, onViewChange = null }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { userProfile } = useAuth();
@@ -54,7 +54,11 @@ export default function SpecialOffersPage({ embedded = false }) {
 
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('swipe'); // 'swipe' | 'list' | 'map'
+  const [internalViewMode, setInternalViewMode] = useState('swipe'); // 'swipe' | 'list' | 'map'
+  // In the hub the view is controlled (shared swipe/list/map toggle); standalone keeps its own.
+  const controlledView = typeof onViewChange === 'function' && !!view;
+  const viewMode = controlledView ? view : internalViewMode;
+  const setViewMode = controlledView ? onViewChange : setInternalViewMode;
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [userLoc, setUserLoc] = useState(() => {
@@ -246,15 +250,31 @@ export default function SpecialOffersPage({ embedded = false }) {
         </div>
       )}
 
-      {/* Directory chrome — ALWAYS visible (search + venue-type chips + list/map toggle) */}
+      {/* Directory chrome — categories always; search + list/map toggle on one row. */}
       <div className="offers-filterbar">
         {viewMode !== 'swipe' && (
-        <AppTextInput
-          type="search"
-          className="offers-search"
-          placeholder={t('search_offer_or_business', 'Search an offer or business…')}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)} />
+        <div className="offers-searchrow">
+          <AppTextInput
+            type="search"
+            className="offers-search"
+            placeholder={t('search_offer_or_business', 'Search an offer or business…')}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)} />
+          <div className="special-offers-viewtoggle">
+            <button
+              type="button"
+              className={`sov-toggle${viewMode === 'list' ? ' active' : ''}`}
+              onClick={() => setViewMode('list')}>
+              <FaList aria-hidden /> {t('view_list', 'List')}
+            </button>
+            <button
+              type="button"
+              className={`sov-toggle${viewMode === 'map' ? ' active' : ''}`}
+              onClick={() => setViewMode('map')}>
+              <FaMapMarkedAlt aria-hidden /> {t('view_map', 'Map')}
+            </button>
+          </div>
+        </div>
         )}
         <div className="offers-cat-chips category-icons-scroll">
           {OFFER_CATEGORIES.map((c) => (
@@ -267,28 +287,6 @@ export default function SpecialOffersPage({ embedded = false }) {
             </button>
           ))}
         </div>
-        {viewMode !== 'swipe' && (
-        <div className="special-offers-viewtoggle">
-          <button
-            type="button"
-            className="sov-toggle"
-            onClick={() => setViewMode('swipe')}>
-            <FaLayerGroup aria-hidden /> {t('view_swipe', 'Swipe')}
-          </button>
-          <button
-            type="button"
-            className={`sov-toggle${viewMode === 'list' ? ' active' : ''}`}
-            onClick={() => setViewMode('list')}>
-            <FaList aria-hidden /> {t('view_list', 'List')}
-          </button>
-          <button
-            type="button"
-            className={`sov-toggle${viewMode === 'map' ? ' active' : ''}`}
-            onClick={() => setViewMode('map')}>
-            <FaMapMarkedAlt aria-hidden /> {t('view_map', 'Map')}
-          </button>
-        </div>
-        )}
       </div>
 
       {loading ? (

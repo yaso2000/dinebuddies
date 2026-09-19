@@ -232,7 +232,19 @@
     gap: 10px;
     padding: 0 16px 12px;
 }
+/* Search + list/map toggle share one row to save vertical space. */
+.offers-searchrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.offers-searchrow .special-offers-viewtoggle {
+    flex: 0 0 auto;
+    padding: 0;
+}
 .offers-search {
+    flex: 1 1 auto;
+    min-width: 0;
     width: 100%;
     padding: 10px 14px;
     border-radius: 12px;

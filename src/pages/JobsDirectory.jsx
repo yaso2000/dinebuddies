@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaBriefcase, FaArrowLeft, FaArrowRight, FaList, FaMapMarkedAlt, FaMapMarkerAlt, FaLayerGroup } from 'react-icons/fa';
+import { FaBriefcase, FaArrowLeft, FaArrowRight, FaList, FaMapMarkedAlt, FaMapMarkerAlt } from 'react-icons/fa';
 import { AppText, AppTextInput } from '../components/base';
 import { useAuth } from '../context/AuthContext';
 import { haversineKm } from '../utils/postsFeedScope';
@@ -39,7 +39,7 @@ function jobTypeLabel(t, jobType) {
  * filter tools as the offers and businesses directories. Jobs inherit their business's
  * geo + venue type (stamped at creation), so they plot on the shared map and filter by type.
  */
-export default function JobsDirectory({ embedded = false }) {
+export default function JobsDirectory({ embedded = false, view = null, onViewChange = null }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { userProfile } = useAuth();
@@ -47,7 +47,11 @@ export default function JobsDirectory({ embedded = false }) {
 
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('swipe');
+  const [internalViewMode, setInternalViewMode] = useState('swipe');
+  // In the hub the view is controlled (shared swipe/list/map toggle); standalone keeps its own.
+  const controlledView = typeof onViewChange === 'function' && !!view;
+  const viewMode = controlledView ? view : internalViewMode;
+  const setViewMode = controlledView ? onViewChange : setInternalViewMode;
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [applyJob, setApplyJob] = useState(null);
@@ -166,12 +170,22 @@ export default function JobsDirectory({ embedded = false }) {
 
       <div className="offers-filterbar">
         {viewMode !== 'swipe' && (
-        <AppTextInput
-          type="search"
-          className="offers-search"
-          placeholder={t('search_job_or_business', 'Search a job or business…')}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)} />
+        <div className="offers-searchrow">
+          <AppTextInput
+            type="search"
+            className="offers-search"
+            placeholder={t('search_job_or_business', 'Search a job or business…')}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)} />
+          <div className="special-offers-viewtoggle">
+            <button type="button" className={`sov-toggle${viewMode === 'list' ? ' active' : ''}`} onClick={() => setViewMode('list')}>
+              <FaList aria-hidden /> {t('view_list', 'List')}
+            </button>
+            <button type="button" className={`sov-toggle${viewMode === 'map' ? ' active' : ''}`} onClick={() => setViewMode('map')}>
+              <FaMapMarkedAlt aria-hidden /> {t('view_map', 'Map')}
+            </button>
+          </div>
+        </div>
         )}
         <div className="offers-cat-chips category-icons-scroll">
           {JOB_CATEGORIES.map((c) => (
@@ -184,19 +198,6 @@ export default function JobsDirectory({ embedded = false }) {
             </button>
           ))}
         </div>
-        {viewMode !== 'swipe' && (
-        <div className="special-offers-viewtoggle">
-          <button type="button" className="sov-toggle" onClick={() => setViewMode('swipe')}>
-            <FaLayerGroup aria-hidden /> {t('view_swipe', 'Swipe')}
-          </button>
-          <button type="button" className={`sov-toggle${viewMode === 'list' ? ' active' : ''}`} onClick={() => setViewMode('list')}>
-            <FaList aria-hidden /> {t('view_list', 'List')}
-          </button>
-          <button type="button" className={`sov-toggle${viewMode === 'map' ? ' active' : ''}`} onClick={() => setViewMode('map')}>
-            <FaMapMarkedAlt aria-hidden /> {t('view_map', 'Map')}
-          </button>
-        </div>
-        )}
       </div>
 
       {loading ? (

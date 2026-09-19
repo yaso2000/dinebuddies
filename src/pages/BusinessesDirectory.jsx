@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { LuSparkles } from 'react-icons/lu';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -486,7 +485,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
         background: tc?.cardBg || '#0f172a',
         borderRadius: '24px',
         overflow: 'hidden',
-        marginBottom: '20px',
+        marginBottom: '12px',
         boxShadow: tc ? `0 4px 24px rgba(0,0,0,0.5), ${tc.headerGlow}` : '0 4px 20px rgba(0,0,0,0.4)',
         border: tc ? `1px solid ${tc.border}` : '1px solid rgba(255, 255, 255, 0.1)',
         position: 'relative',
@@ -814,7 +813,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
 const RESTAURANT_LIKE_TYPES = new Set(['Restaurant', 'Fast Food', 'Food Truck']);
 
 
-const BusinessesDirectory = ({ embedded = false, onSwipeView = null }) => {
+const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = null }) => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -830,7 +829,12 @@ const BusinessesDirectory = ({ embedded = false, onSwipeView = null }) => {
   const [locationFilter, setLocationFilter] = useState('All');
   const [placeFilter, setPlaceFilter] = useState(null); // { id, type:'country'|'city', value, label, sublabel } | null
   const [activeFilter, setActiveFilter] = useState(() => searchParams.get('category') || 'All'); // Category filter
-  const [viewMode, setViewMode] = useState('list');
+  const [internalViewMode, setInternalViewMode] = useState('list');
+  // In the hub, view is controlled by the hub (shared swipe/list/map); standalone keeps
+  // its own list/map state. Venues "swipe" is a separate component, so here view is list|map.
+  const controlledView = typeof onViewChange === 'function' && !!view;
+  const viewMode = controlledView ? view : internalViewMode;
+  const setViewMode = controlledView ? onViewChange : setInternalViewMode;
   const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode for map
   const [userLocation, setUserLocation] = useState(null);
   const [detectedLocationContext, setDetectedLocationContext] = useState(null);
@@ -1401,71 +1405,12 @@ const BusinessesDirectory = ({ embedded = false, onSwipeView = null }) => {
 
 
             <div style={{ padding: '1rem 1.5rem 0' }}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', rowGap: 8, justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    {!embedded && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        {/* Rankings (trophy) moved to the top bar. */}
-                        <AppText as="h1" style={{ fontSize: '1.2rem', fontWeight: '800', lineHeight: '1', margin: 0 }}>{t('business_directory', 'Business')}</AppText>
-                    </div>
-                    )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {/* In the hub, "Swipe view" switches mode in place (stays on the tab); */}
-                    {/* standalone, it links to the swipe route. */}
-                    <Link
-                      to="/restaurants"
-                      onClick={onSwipeView ? (e) => { e.preventDefault(); onSwipeView(); } : undefined}
-                      className="users-directory-feed-link"
-                      title={t('user_directory_feed_view', 'Card view')}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        minHeight: 34,
-                        padding: '6px 10px',
-                        borderRadius: 999,
-                        border: '1px solid var(--border-color)',
-                        background: 'rgba(232, 110, 46, 0.12)',
-                        color: 'var(--primary)',
-                        textDecoration: 'none',
-                        fontSize: '0.76rem',
-                        fontWeight: 700,
-                      }}
-                    >
-                      <LuSparkles aria-hidden />
-                      <AppText as="span">{t('user_directory_feed_view', 'Card view')}</AppText>
-                    </Link>
-                    <div style={{ background: 'var(--bg-card)', padding: '4px', borderRadius: '50px', display: 'flex', border: '1px solid var(--border-color)' }}>
-                        <button
-              onClick={() => setViewMode('list')}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '50px',
-                background: viewMode === 'list' ? 'var(--luxury-gold)' : 'transparent',
-                color: viewMode === 'list' ? 'rgba(255, 255, 254, 1)' : 'var(--text-main)',
-                border: 'none',
-                fontSize: '0.82rem',
-                fontWeight: 600
-              }}>
-
-                            {t('list')}
-                        </button>
-                        <button
-              onClick={() => setViewMode('map')}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '50px',
-                background: viewMode === 'map' ? 'var(--luxury-gold)' : 'transparent',
-                color: viewMode === 'map' ? 'rgba(255, 255, 254, 1)' : 'var(--text-main)',
-                border: 'none',
-                fontSize: '0.82rem',
-                fontWeight: 600
-              }}>
-              
-                            {t('map')}
-                        </button>
-                    </div>
-                    </div>
+                {!embedded && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '0.75rem' }}>
+                    {/* Rankings (trophy) moved to the top bar. */}
+                    <AppText as="h1" style={{ fontSize: '1.2rem', fontWeight: '800', lineHeight: '1', margin: 0 }}>{t('business_directory', 'Business')}</AppText>
                 </div>
+                )}
 
                 <style>{`
                     .filter-select {
@@ -1514,15 +1459,15 @@ const BusinessesDirectory = ({ embedded = false, onSwipeView = null }) => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
           marginBottom: '0.75rem',
           position: 'sticky',
-          top: 0,
+          top: 'var(--filterbar-top, 0px)',
           zIndex: 30
         }}>
                     {/* Row 1: Search + Filters — one horizontally-scrollable row so filters
                         never overlap/truncate on narrow screens. */}
                     <div
-            className="category-icons-scroll"
-            style={{ display: 'flex', gap: '8px', alignItems: 'center', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         {/* Unified search — one box: venue name + city + country */}
+                        <div style={{ flex: '1 1 auto', minWidth: 0 }}>
                         <DirectorySearchBar
               text={searchQuery}
               onTextChange={setSearchQuery}
@@ -1533,6 +1478,38 @@ const BusinessesDirectory = ({ embedded = false, onSwipeView = null }) => {
               itemIcon="🍴"
               placeholder={t('search_venue_or_place', 'Search a venue, city or country…')}
               clearLabel={t('clear', 'Clear')} />
+                        </div>
+                        {/* List / Map toggle — beside the search to save space. */}
+                        <div style={{ flex: '0 0 auto', background: 'var(--bg-card)', padding: '4px', borderRadius: '50px', display: 'flex', border: '1px solid var(--border-color)' }}>
+                            <button
+                onClick={() => setViewMode('list')}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '50px',
+                  background: viewMode === 'list' ? 'var(--luxury-gold)' : 'transparent',
+                  color: viewMode === 'list' ? 'rgba(255, 255, 254, 1)' : 'var(--text-main)',
+                  border: 'none',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}>
+                                {t('list')}
+                            </button>
+                            <button
+                onClick={() => setViewMode('map')}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '50px',
+                  background: viewMode === 'map' ? 'var(--luxury-gold)' : 'transparent',
+                  color: viewMode === 'map' ? 'rgba(255, 255, 254, 1)' : 'var(--text-main)',
+                  border: 'none',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}>
+                                {t('map')}
+                            </button>
+                        </div>
                     </div>
 
                     {/* Row 2: Venue-type filter — always visible */}

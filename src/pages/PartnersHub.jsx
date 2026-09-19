@@ -1,7 +1,7 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, useRef, useLayoutEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaStore, FaTag, FaBriefcase } from 'react-icons/fa';
+import { FaStore, FaTag, FaBriefcase, FaLayerGroup } from 'react-icons/fa';
 import { AppText } from '../components/base';
 import './PartnersHub.css';
 
@@ -13,12 +13,11 @@ const BusinessesDirectory = lazy(() => import('./BusinessesDirectory'));
 const SpecialOffersPage = lazy(() => import('./SpecialOffersPage'));
 const JobsDirectory = lazy(() => import('./JobsDirectory'));
 
-/** Venues tab: swipe (default) ↔ list/map, staying inside the hub. */
-function VenuesTab() {
-  const [mode, setMode] = useState('swipe');
-  return mode === 'swipe'
-    ? <BusinessesSwipePage onClose={() => setMode('list')} />
-    : <BusinessesDirectory embedded onSwipeView={() => setMode('swipe')} />;
+/** Venues tab: swipe deck (canonical) ↔ list/map directory, staying inside the hub. */
+function VenuesTab({ view, onViewChange }) {
+  return view === 'swipe'
+    ? <BusinessesSwipePage onClose={() => onViewChange('list')} />
+    : <BusinessesDirectory embedded view={view} onViewChange={onViewChange} />;
 }
 
 const TABS = [
@@ -29,13 +28,31 @@ const TABS = [
 
 /**
  * Unified discovery hub reached from the Partners nav — one screen, three tabs
- * (venues / offers / jobs), each with the same search + venue-type + list/map tools.
+ * (venues / offers / jobs). The three tab banners plus an icon-only swipe toggle stay
+ * pinned at the top in every view; each tab shares one view mode (swipe / list / map).
  */
 export default function PartnersHub() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab');
   const [tab, setTab] = useState(TABS.some((x) => x.id === paramTab) ? paramTab : 'venues');
+  // One view shared across tabs: swipe (default) | list | map.
+  const [view, setView] = useState('swipe');
+
+  // Measure the pinned tab bar so each tab's sticky filter bar can sit right below it
+  // (instead of overlapping) while scrolling list/map.
+  const rootRef = useRef(null);
+  const tabsRef = useRef(null);
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const bar = tabsRef.current;
+    if (!root || !bar || typeof ResizeObserver === 'undefined') return undefined;
+    const apply = () => root.style.setProperty('--filterbar-top', `${bar.offsetHeight}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, []);
 
   const select = (id) => {
     setTab(id);
@@ -44,9 +61,11 @@ export default function PartnersHub() {
     setSearchParams(next, { replace: true });
   };
 
+  const swipeActive = view === 'swipe';
+
   return (
-    <div className="partners-hub">
-      <div className="partners-hub__tabs">
+    <div className="partners-hub" ref={rootRef}>
+      <div className="partners-hub__tabs" ref={tabsRef}>
         {TABS.map((x) => (
           <button
             key={x.id}
@@ -57,12 +76,22 @@ export default function PartnersHub() {
             <AppText as="span">{t(x.labelKey, x.fallback)}</AppText>
           </button>
         ))}
+        {/* Icon-only swipe toggle, beside the three banners. Active = swipe deck. */}
+        <button
+          type="button"
+          className={`partners-hub__swipe-toggle${swipeActive ? ' active' : ''}`}
+          aria-pressed={swipeActive}
+          aria-label={t('view_swipe', 'Swipe')}
+          title={t('view_swipe', 'Swipe')}
+          onClick={() => setView(swipeActive ? 'list' : 'swipe')}>
+          <FaLayerGroup aria-hidden />
+        </button>
       </div>
       <div className="partners-hub__body">
         <Suspense fallback={<div className="partners-hub__loading">{t('loading', 'Loading…')}</div>}>
-          {tab === 'venues' && <VenuesTab />}
-          {tab === 'offers' && <SpecialOffersPage embedded />}
-          {tab === 'jobs' && <JobsDirectory embedded />}
+          {tab === 'venues' && <VenuesTab view={view} onViewChange={setView} />}
+          {tab === 'offers' && <SpecialOffersPage embedded view={view} onViewChange={setView} />}
+          {tab === 'jobs' && <JobsDirectory embedded view={view} onViewChange={setView} />}
         </Suspense>
       </div>
     </div>

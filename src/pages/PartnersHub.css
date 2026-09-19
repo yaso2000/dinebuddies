@@ -23,8 +23,38 @@
   padding: 12px 16px 8px;
   position: sticky;
   top: 0;
-  z-index: 20;
+  /* Above every in-tab sticky filter bar so the three banners stay visible. */
+  z-index: 40;
   background: var(--bg-main, var(--bg-body, #0b0b12));
+}
+
+/* Icon-only swipe toggle sitting beside the three banners. */
+.partners-hub__swipe-toggle {
+  flex: 0 0 auto;
+  width: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+.partners-hub__swipe-toggle.active {
+  background: var(--primary, #e86e2e);
+  color: #fff;
+  border-color: transparent;
+}
+
+/* Each tab's own filter bar pins right below the tab bar (never over it). */
+.partners-hub .offers-filterbar {
+  position: sticky;
+  top: var(--filterbar-top, 0px);
+  z-index: 25;
+  background: var(--bg-main, var(--bg-body, #0b0b12));
+  padding-top: 8px;
 }
 
 .partners-hub__tab {

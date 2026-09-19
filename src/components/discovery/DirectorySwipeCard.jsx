@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { LuX } from 'react-icons/lu';
+import { LuX, LuChevronUp } from 'react-icons/lu';
 import { AppText } from '../base';
 import { useMagneticCardDrag } from '../../hooks/useMagneticCardDrag';
 import './discovery.css';
@@ -81,14 +81,26 @@ export default function DirectorySwipeCard({
           ) : (
             <span className="discovery-card__location-spacer" aria-hidden />
           )}
-          <button
-            type="button"
-            className="discovery-card__close discovery-card__action--glass"
-            aria-label="Close"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); onClose && onClose(); }}>
-            <LuX size={22} aria-hidden />
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {onBack ? (
+              <button
+                type="button"
+                className="discovery-card__close discovery-card__action--glass"
+                aria-label="Previous"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); onBack(); }}>
+                <LuChevronUp size={22} aria-hidden />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="discovery-card__close discovery-card__action--glass"
+              aria-label="Close"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); onClose && onClose(); }}>
+              <LuX size={22} aria-hidden />
+            </button>
+          </div>
         </div>
 
         <div className="discovery-card__body">

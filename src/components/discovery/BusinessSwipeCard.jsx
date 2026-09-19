@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { FaMapMarkerAlt, FaStar, FaComments, FaStore, FaPlus } from 'react-icons/fa';
-import { LuX } from 'react-icons/lu';
+import { LuX, LuChevronUp } from 'react-icons/lu';
 import { useAuth } from '../../context/AuthContext';
 import { useInvitations } from '../../context/InvitationContext';
 import { useToast } from '../../context/ToastContext';
@@ -217,6 +217,19 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, onBack =
 
           <div className="discovery-card__top-row">
             <span className="discovery-card__location-spacer" aria-hidden />
+            {onBack ? (
+              <button
+                type="button"
+                className="discovery-card__close discovery-card__action--glass"
+                style={{ marginInlineEnd: 8 }}
+                aria-label={t('previous', 'Previous')}
+                title={t('magnetic_back_prev', 'Previous card')}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); onBack(); }}
+              >
+                <LuChevronUp size={22} aria-hidden />
+              </button>
+            ) : null}
             <button
               type="button"
               className="discovery-card__close discovery-card__action--glass"
