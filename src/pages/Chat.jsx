@@ -58,14 +58,6 @@ import { formatAppTime } from '../utils/localeFormat';
 import { useChatTheme } from '../hooks/useChatTheme';
 import ChatThemePicker from '../components/chat/ChatThemePicker';
 import PrivateChatTopPanels from '../components/chat/PrivateChatTopPanels';
-import { resolveConnectionKind } from '../utils/connectConnection';
-import { FaHandshake, FaUserFriends } from 'react-icons/fa';
-
-const RELATIONSHIP_BADGE = {
-  dating: { icon: FaUserFriends, labelKey: 'chat_relationship_friendship', label: 'Friendship' }, // legacy kind
-  friendship: { icon: FaUserFriends, labelKey: 'chat_relationship_friendship', label: 'Friendship' },
-  acquaintance: { icon: FaHandshake, labelKey: 'chat_relationship_acquaintance', label: 'Acquaintance' },
-};
 
 const LazyEmojiPicker = lazy(() => import('emoji-picker-react'));
 
@@ -192,14 +184,6 @@ const Chat = () => {
       enabled: Boolean(currentUser?.uid && userId),
       isSupportPeer,
     });
-
-  // Live — recomputes if either side's dating preference changes later.
-  const connectionKind =
-    !isSupportPeer && connectionAllowed && userProfile && targetProfile
-      ? resolveConnectionKind(userProfile, targetProfile)
-      : null;
-  const relationshipBadge = connectionKind ? RELATIONSHIP_BADGE[connectionKind] : null;
-
 
   useEffect(() => {
     if (isGroup) { setConnectionLocked(false); return; }
@@ -991,8 +975,8 @@ const Chat = () => {
                 onCopy={selectedMessage.text ? handleCopySelected : undefined}
               />
             ) : (
-            <div className={`chat-header${connectionKind ? ` chat-header--${connectionKind}` : ''}`} style={{
-        background: connectionKind ? undefined : 'var(--header-bg)',
+            <div className="chat-header" style={{
+        background: 'var(--header-bg)',
         borderBottom: '1px solid var(--border-color)',
         boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,0,0.06)',
         zIndex: 100
@@ -1025,19 +1009,9 @@ const Chat = () => {
                         <div className="header-info" style={{ textAlign: 'start', minWidth: 0, flex: 1 }}>
                             <AppText as="h3" style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 {otherUser.displayName}
-                                {relationshipBadge ? (
-                <AppText
-                  as="span"
-                  className={`chat-relationship-icon chat-relationship-icon--${connectionKind}`}
-                  title={t(relationshipBadge.labelKey, relationshipBadge.label)}
-                >
-                                        <relationshipBadge.icon size={11} aria-hidden />
-                                    </AppText>
-                ) : null}
                             </AppText>
                             <AppText as="p" className="status" style={{ fontSize: '0.8rem', opacity: 0.7 }}>
                                 {otherUserTyping ? t('typing') : otherUser.isOnline ? t('online') : formatLastSeen(otherUser.lastSeen)}
-                                {relationshipBadge ? ` · ${t(relationshipBadge.labelKey, relationshipBadge.label)}` : ''}
                             </AppText>
                         </div>
                     </>
@@ -1099,8 +1073,6 @@ const Chat = () => {
                 hasCustomMyImage={Boolean(myPanelImage)}
                 onEditMyPanel={() => panelImageInputRef.current?.click()}
                 onResetMyPanel={handleResetMyPanelImage}
-                connectionKind={connectionKind}
-                relationshipBadge={relationshipBadge}
               />
             ) : null}
 

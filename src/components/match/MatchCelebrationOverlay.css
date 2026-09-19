@@ -37,16 +37,8 @@
     opacity: 0.55;
 }
 
-.match-celebration__stage--dating::before {
-    background: radial-gradient(circle, rgba(251, 113, 133, 0.28) 0%, transparent 68%);
-}
-
 .match-celebration__stage--friendship::before {
     background: radial-gradient(circle, rgba(56, 189, 248, 0.26) 0%, transparent 68%);
-}
-
-.match-celebration__stage--acquaintance::before {
-    background: radial-gradient(circle, rgba(251, 191, 36, 0.24) 0%, transparent 68%);
 }
 
 .match-celebration__close {
@@ -147,20 +139,8 @@
     flex-shrink: 0;
 }
 
-.match-celebration__badge--dating,
-.match-celebration__badge--like {
-    background: linear-gradient(145deg, #fb7185, #e11d48);
-    color: #fff;
-}
-
-.match-celebration__badge--friendship,
-.match-celebration__badge--follow {
+.match-celebration__badge--friendship {
     background: linear-gradient(145deg, #38bdf8, #0284c7);
-    color: #fff;
-}
-
-.match-celebration__badge--acquaintance {
-    background: linear-gradient(145deg, #fbbf24, #ea580c);
     color: #fff;
 }
 

@@ -61,8 +61,9 @@ function extractOtherFromNotification(notif) {
 function isConnectCelebrationNotification(notif) {
     if (!notif) return false;
     if (notif.metadata?.mutual !== true) return false;
-    const kind = notif.metadata?.connectionKind;
-    if (kind === 'dating' || kind === 'acquaintance' || kind === 'friendship') return true;
+    // Dating removed — any mutual connection (kind present, or a connect/connect-sourced
+    // like notification) celebrates as the single friendship variant.
+    if (notif.metadata?.connectionKind) return true;
     if (notif.type === 'connect') return true;
     return notif.type === 'like' && notif.metadata?.source === 'connect';
 }
@@ -130,34 +131,10 @@ export function MatchCelebrationProvider({ children }) {
             const other = extractOtherFromNotification(notif);
             if (!other.id || other.id === viewerUid) return;
 
-            const connectionKind = notif.metadata?.connectionKind;
-            if (
-                connectionKind === 'dating' ||
-                connectionKind === 'acquaintance' ||
-                connectionKind === 'friendship'
-            ) {
+            // Dating removed — a mutual connection is always a friendship.
+            if (isConnectCelebration) {
                 celebrateMatch({
-                    type: connectionKind,
-                    otherUser: other,
-                    otherId: other.id,
-                    otherName: other.name,
-                });
-                return;
-            }
-
-            if (notif.type === 'connect' && notif.metadata?.mutual === true) {
-                celebrateMatch({
-                    type: 'acquaintance',
-                    otherUser: other,
-                    otherId: other.id,
-                    otherName: other.name,
-                });
-                return;
-            }
-
-            if (notif.type === 'like' && notif.metadata?.mutual === true) {
-                celebrateMatch({
-                    type: 'dating',
+                    type: 'friendship',
                     otherUser: other,
                     otherId: other.id,
                     otherName: other.name,
