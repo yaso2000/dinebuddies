@@ -52,6 +52,15 @@
   border-color: transparent;
 }
 
+/* The offers/jobs page centres itself with `margin:0 auto` + max-width:640 when
+   standalone; inside the hub's flex column that auto margin cancels the stretch and
+   the page sizes to its content (overflowing). Pin it to the tab width instead. */
+.partners-hub .special-offers-page {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+}
+
 /* Each tab's own filter bar pins right below the tab bar (never over it). */
 .partners-hub .offers-filterbar {
   position: sticky;
