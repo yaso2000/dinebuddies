@@ -61,6 +61,13 @@
   margin: 0;
 }
 
+/* Venues map inside the hub: fill down to just above the bottom nav (tiny gap),
+   instead of a short fixed height that leaves dead space under the map. */
+.partners-hub .directory-map-wrapper:not(.directory-map-wrapper--fullscreen) {
+  height: calc(100dvh - 264px);
+  min-height: 300px;
+}
+
 /* Each tab's own filter bar pins right below the tab bar (never over it). */
 .partners-hub .offers-filterbar {
   position: sticky;

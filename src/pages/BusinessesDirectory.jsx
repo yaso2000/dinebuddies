@@ -4,7 +4,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaBuilding, FaPlus, FaGlobe, FaTimes } from 'react-icons/fa';
+import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaBuilding, FaPlus, FaGlobe, FaTimes, FaCity, FaMap, FaFlag } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -812,6 +812,11 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
 // Legacy sub-types folded into "Restaurant" for filtering (no separate chips).
 const RESTAURANT_LIKE_TYPES = new Set(['Restaurant', 'Fast Food', 'Food Truck']);
 
+// Quick-focus zoom levels for the map buttons (Leaflet zoom → geographic scope).
+const CITY_ZOOM = 12;
+const STATE_ZOOM = 8;
+const COUNTRY_ZOOM = 6;
+
 
 const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = null }) => {
   const { t, i18n } = useTranslation();
@@ -881,6 +886,9 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
 
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
+  // Focus the map on the viewer's area once (city zoom), without re-snapping on every
+  // data update — so a manual zoom to country/state/world isn't yanked back.
+  const didFocusRef = useRef(false);
 
   // Sync category filter from URL (e.g. when navigating from BusinessCard category click)
   useEffect(() => {
@@ -1130,6 +1138,16 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
     }
   };
 
+  // Quick-focus buttons: city / state / country — recenter on the viewer (or the
+  // current map center as a fallback) at the matching zoom level.
+  const focusLevel = (zoom) => {
+    if (!mapInstance.current) return;
+    const center = userLocation
+      ? [userLocation.lat, userLocation.lng]
+      : mapInstance.current.getCenter();
+    mapInstance.current.setView(center, zoom, { animate: true });
+  };
+
   const resetMapView = () => {
     if (mapInstance.current && restaurantsWithCoords.length > 0) {
       const bounds = [];
@@ -1153,7 +1171,7 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
       ensureLeafletMapDetachedIfOrphan(mapInstance, mapRef.current);
 
       if (!mapInstance.current) {
-        // Smart Initialization: User > Content > World
+        // Default view = the viewer's city. Fall back to the venues' area, then world.
         let initialLat = 0;
         let initialLng = 0;
         let initialZoom = 2;
@@ -1161,14 +1179,15 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
         if (userLocation) {
           initialLat = userLocation.lat;
           initialLng = userLocation.lng;
-          initialZoom = 13;
+          initialZoom = CITY_ZOOM;
+          didFocusRef.current = true;
         } else if (restaurantsWithCoords.length > 0) {
-          // Center on restaurants
+          // Center on the venues' centroid (no city known yet).
           const lats = restaurantsWithCoords.map((r) => r.lat);
           const lngs = restaurantsWithCoords.map((r) => r.lng);
           initialLat = (Math.min(...lats) + Math.max(...lats)) / 2;
           initialLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-          initialZoom = 10;
+          initialZoom = STATE_ZOOM;
         }
 
         mapInstance.current = L.map(mapRef.current, {
@@ -1176,14 +1195,13 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
           attributionControl: false,
           tap: false
         }).setView([initialLat, initialLng], initialZoom);
+      }
 
-        // Auto-fit bounds perfectly if content exists and no user location
-        if (!userLocation && restaurantsWithCoords.length > 0) {
-          const bounds = restaurantsWithCoords.map((r) => [r.lat, r.lng]);
-          try {
-            mapInstance.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-          } catch (e) {}
-        }
+      // GPS/IP location can resolve after the map is created — focus the city once,
+      // then leave the viewport alone so manual zoom (state/country/world) sticks.
+      if (!didFocusRef.current && userLocation && mapInstance.current) {
+        mapInstance.current.setView([userLocation.lat, userLocation.lng], CITY_ZOOM);
+        didFocusRef.current = true;
       }
 
       // Always ensure tiles match current theme
@@ -1307,71 +1325,21 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
         });
       });
 
-      // Force map recalculation
+      // Force map recalculation (no viewport change — the default city focus above stands).
       setTimeout(() => {
         if (mapInstance.current) {
           mapInstance.current.invalidateSize();
         }
       }, 100);
-
-      // Auto-fit bounds with delay
-      setTimeout(() => {
-        if (!mapInstance.current) return;
-
-        if (restaurantsWithCoords.length > 0 || userLocation) {
-          const bounds = [];
-          restaurantsWithCoords.forEach((res) => {
-            if (res.lat && res.lng) bounds.push([res.lat, res.lng]);
-          });
-
-          if (userLocation) bounds.push([userLocation.lat, userLocation.lng]);
-
-          if (bounds.length > 0) {
-            try {
-              mapInstance.current.fitBounds(bounds, {
-                padding: [50, 50],
-                maxZoom: 15,
-                animate: true
-              });
-            } catch (e) {
-              console.error("Error fitting bounds:", e);
-              if (userLocation) {
-                mapInstance.current.setView([userLocation.lat, userLocation.lng], 12);
-              }
-            }
-          }
-        }
-      }, 300);
     }
   }, [viewMode, userLocation, restaurantsWithCoords, t, i18n.language]);
 
-  // Fix for map disappearing when switching between list and map view
+  // Keep the map sized correctly when switching into map view or toggling theme —
+  // recalc only, never re-fit (so the chosen zoom level is preserved).
   useEffect(() => {
     if (viewMode === 'map' && mapInstance.current) {
-      // Small delay to ensure DOM is ready
       setTimeout(() => {
-        if (mapInstance.current) {
-          mapInstance.current.invalidateSize();
-          // Re-fit bounds if we have restaurants
-          if (restaurantsWithCoords.length > 0 || userLocation) {
-            const bounds = [];
-            restaurantsWithCoords.forEach((res) => {
-              if (res.lat && res.lng) bounds.push([res.lat, res.lng]);
-            });
-            if (userLocation) bounds.push([userLocation.lat, userLocation.lng]);
-            if (bounds.length > 0) {
-              try {
-                mapInstance.current.fitBounds(bounds, {
-                  padding: [50, 50],
-                  maxZoom: 15,
-                  animate: true
-                });
-              } catch (e) {
-                console.error("Error fitting bounds:", e);
-              }
-            }
-          }
-        }
+        if (mapInstance.current) mapInstance.current.invalidateSize();
       }, 100);
     }
   }, [viewMode, restaurantsWithCoords, userLocation, isDark]);
@@ -1401,7 +1369,7 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
 
   return (
     <PullToRefresh onRefresh={handleRefresh}>
-    <div className="directory-page" style={{ paddingBottom: '100px', minHeight: '100%' }}>
+    <div className="directory-page" style={{ paddingBottom: viewMode === 'map' ? '0' : '100px', minHeight: '100%' }}>
 
 
             <div style={{ padding: '1rem 1.5rem 0' }}>
@@ -1612,6 +1580,16 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
                             <button onClick={zoomOut} className="btn-map-control" title={t('zoom_out', { defaultValue: 'Zoom Out' })}>
                                 <AppText as="span" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>−</AppText>
                             </button>
+                            {/* Scope focus: City / State / Country (centered on the viewer) */}
+                            <button onClick={() => focusLevel(CITY_ZOOM)} className="btn-map-control" title={t('map_focus_city', { defaultValue: 'City' })} aria-label={t('map_focus_city', { defaultValue: 'City' })}>
+                                <FaCity />
+                            </button>
+                            <button onClick={() => focusLevel(STATE_ZOOM)} className="btn-map-control" title={t('map_focus_state', { defaultValue: 'State' })} aria-label={t('map_focus_state', { defaultValue: 'State' })}>
+                                <FaMap />
+                            </button>
+                            <button onClick={() => focusLevel(COUNTRY_ZOOM)} className="btn-map-control" title={t('map_focus_country', { defaultValue: 'Country' })} aria-label={t('map_focus_country', { defaultValue: 'Country' })}>
+                                <FaFlag />
+                            </button>
                             {/* Fullscreen Toggle Button */}
                             <button
                 onClick={() => {
@@ -1627,9 +1605,9 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
                 
                                 {isFullscreen ? <FaCompress /> : <FaExpand />}
                             </button>
-                            {/* Recenter Button */}
-                            <button onClick={resetMapView} className="btn-map-control" title={t('recenter_map', { defaultValue: 'Recenter Map' })}>
-                                <FaBullseye />
+                            {/* World / fit-all Button */}
+                            <button onClick={resetMapView} className="btn-map-control" title={t('map_focus_world', { defaultValue: 'World (all venues)' })} aria-label={t('map_focus_world', { defaultValue: 'World (all venues)' })}>
+                                <FaGlobe />
                             </button>
                         </div>
 
