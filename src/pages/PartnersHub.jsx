@@ -9,8 +9,17 @@ import './PartnersHub.css';
 // `embedded` prop — the hub's tab bar replaces each page's own header. Lazy so a tab's
 // bundle only loads when opened. Only the active tab mounts, so only it fetches data.
 const BusinessesSwipePage = lazy(() => import('./BusinessesSwipePage'));
+const BusinessesDirectory = lazy(() => import('./BusinessesDirectory'));
 const SpecialOffersPage = lazy(() => import('./SpecialOffersPage'));
 const JobsDirectory = lazy(() => import('./JobsDirectory'));
+
+/** Venues tab: swipe (default) ↔ list/map, staying inside the hub. */
+function VenuesTab() {
+  const [mode, setMode] = useState('swipe');
+  return mode === 'swipe'
+    ? <BusinessesSwipePage onClose={() => setMode('list')} />
+    : <BusinessesDirectory embedded onSwipeView={() => setMode('swipe')} />;
+}
 
 const TABS = [
   { id: 'venues', labelKey: 'partners_tab_venues', fallback: 'Venues', icon: <FaStore aria-hidden /> },
@@ -51,7 +60,7 @@ export default function PartnersHub() {
       </div>
       <div className="partners-hub__body">
         <Suspense fallback={<div className="partners-hub__loading">{t('loading', 'Loading…')}</div>}>
-          {tab === 'venues' && <BusinessesSwipePage />}
+          {tab === 'venues' && <VenuesTab />}
           {tab === 'offers' && <SpecialOffersPage embedded />}
           {tab === 'jobs' && <JobsDirectory embedded />}
         </Suspense>

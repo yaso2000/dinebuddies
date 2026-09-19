@@ -11,7 +11,7 @@ import { AppText } from '../components/base';
 const RESTAURANT_LIKE_TYPES = new Set(['Restaurant', 'Fast Food', 'Food Truck']);
 
 /** Partners / restaurants — magnetic swipe deck (default /restaurants). Close → list. */
-export default function BusinessesSwipePage() {
+export default function BusinessesSwipePage({ onClose = null } = {}) {
   const { t } = useTranslation();
   const { items, loading } = useBusinessSwipeDeck();
   const [activeFilter, setActiveFilter] = useState('All');
@@ -37,9 +37,9 @@ export default function BusinessesSwipePage() {
 
   const renderCard = useCallback(
     ({ item, isTop, onSkip, onBack }) => (
-      <BusinessSwipeCard key={item.id} item={item} isTop={isTop} onSkip={onSkip} onBack={onBack} />
+      <BusinessSwipeCard key={item.id} item={item} isTop={isTop} onSkip={onSkip} onBack={onBack} onClose={onClose} />
     ),
-    []
+    [onClose]
   );
 
   const showChips = !(loading && items.length === 0) && items.length > 0;

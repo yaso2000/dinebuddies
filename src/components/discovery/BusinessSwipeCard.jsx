@@ -35,7 +35,7 @@ import './discovery.css';
 import { AppText } from '../base';
 import { venueDisplayDescription } from '../../utils/venueSummary';
 
-export default function BusinessSwipeCard({ item, isTop = true, onSkip, onBack = null, listPath = '/restaurants/list' }) {
+export default function BusinessSwipeCard({ item, isTop = true, onSkip, onBack = null, listPath = '/restaurants/list', onClose = null }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -124,6 +124,7 @@ export default function BusinessSwipeCard({ item, isTop = true, onSkip, onBack =
 
   const handleClose = (e) => {
     e.stopPropagation();
+    if (onClose) { onClose(); return; } // stay in the hub (switch to list mode)
     navigate(listPath, { replace: true });
   };
 

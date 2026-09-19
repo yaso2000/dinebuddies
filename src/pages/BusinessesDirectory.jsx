@@ -814,7 +814,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
 const RESTAURANT_LIKE_TYPES = new Set(['Restaurant', 'Fast Food', 'Food Truck']);
 
 
-const BusinessesDirectory = ({ embedded = false }) => {
+const BusinessesDirectory = ({ embedded = false, onSwipeView = null }) => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1409,8 +1409,11 @@ const BusinessesDirectory = ({ embedded = false }) => {
                     </div>
                     )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {/* In the hub, "Swipe view" switches mode in place (stays on the tab); */}
+                    {/* standalone, it links to the swipe route. */}
                     <Link
                       to="/restaurants"
+                      onClick={onSwipeView ? (e) => { e.preventDefault(); onSwipeView(); } : undefined}
                       className="users-directory-feed-link"
                       title={t('user_directory_feed_view', 'Card view')}
                       style={{
