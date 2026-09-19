@@ -41,7 +41,7 @@ function escapeHtml(value) {
  * as a list. "Take it" records the claim for community members; non-members get a
  * floating prompt to join the community first.
  */
-export default function SpecialOffersPage() {
+export default function SpecialOffersPage({ embedded = false }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { userProfile } = useAuth();
@@ -196,19 +196,21 @@ export default function SpecialOffersPage() {
 
   return (
     <div className="special-offers-page">
-      <div className="special-offers-page__header">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          aria-label={t('back', 'Back')}
-          className="special-offers-page__back">
-          <BackIcon />
-        </button>
-        <AppText as="h1" className="special-offers-page__title">
-          <FaTag aria-hidden style={{ marginInlineEnd: 8, color: 'var(--secondary)' }} />
-          {t('special_offers_title', 'Special offers')}
-        </AppText>
-      </div>
+      {!embedded && (
+        <div className="special-offers-page__header">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            aria-label={t('back', 'Back')}
+            className="special-offers-page__back">
+            <BackIcon />
+          </button>
+          <AppText as="h1" className="special-offers-page__title">
+            <FaTag aria-hidden style={{ marginInlineEnd: 8, color: 'var(--secondary)' }} />
+            {t('special_offers_title', 'Special offers')}
+          </AppText>
+        </div>
+      )}
 
       {/* Directory chrome — ALWAYS visible (search + venue-type chips + list/map toggle) */}
       <div className="offers-filterbar">

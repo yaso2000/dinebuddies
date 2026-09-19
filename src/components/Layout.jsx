@@ -22,6 +22,7 @@ import {
   FaMicrophone,
   FaTag,
   FaBriefcase,
+  FaTrophy,
 } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { useChat } from '../context/ChatContext';
@@ -35,7 +36,6 @@ import InstallAppBanner from './InstallAppBanner';
 import { getSafeAvatar } from '../utils/avatarUtils';
 import UserAvatar from './UserAvatar';
 import AiStudioMenu from './AiStudioMenu';
-import CityRegisterPanel from './CityRegisterPanel';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import AppRouteLoading from './AppRouteLoading';
@@ -330,6 +330,8 @@ const Layout = ({ children }) => {
   location.pathname === '/invitations/' ||
   location.pathname.startsWith('/invitations/');
   const isRestaurantsNavActive =
+  location.pathname === '/partners' ||
+  location.pathname.startsWith('/partners') ||
   location.pathname === '/restaurants' ||
   location.pathname === '/restaurants/' ||
   location.pathname.startsWith('/restaurants/');
@@ -518,8 +520,14 @@ const Layout = ({ children }) => {
                             {/* Single "AI" entry → menu of AI tools (extensible to more agents). */}
                             <AiStudioMenu isBusinessAccount={isBusinessAccount} active={isAiDesignRoute || isAiTextRoute} />
 
-                            {/* City register — what's available in the viewer's city. */}
-                            <CityRegisterPanel />
+                            {/* Business rankings (trophy) — moved here from the businesses directory. */}
+                            <Link
+              to="/rankings"
+              className={`notification-bell header-settings-btn${isActive('/rankings') ? ' active' : ''}`}
+              aria-label={t('rankings_title', 'Rankings')}
+              title={t('rankings_title', 'Rankings')}>
+                                <FaTrophy />
+                            </Link>
                             {/* DM inbox — businesses do no user chat, so hide it for them. */}
                             {!isBusinessAccount && (
                             <Link
@@ -671,7 +679,7 @@ const Layout = ({ children }) => {
                         <Link to="/invitations" className={`ds-nav-item ${isInvitationsNavActive ? 'active' : ''}`}>
                             <FaEnvelope /><AppText as="span">{t('nav_invitations', 'Invitations')}</AppText>
                         </Link>
-                        <Link to="/restaurants" className={`ds-nav-item ${isRestaurantsNavActive ? 'active' : ''}`}>
+                        <Link to="/partners" className={`ds-nav-item ${isRestaurantsNavActive ? 'active' : ''}`}>
                             <FaStore /><AppText as="span">{t('nav_partners', 'Businesses')}</AppText>
                         </Link>
                         {!isGuest && userProfile?.role !== 'guest' &&
@@ -824,7 +832,7 @@ const Layout = ({ children }) => {
                         </button>
         }
                     {!isBusinessAccount &&
-        <Link to="/restaurants" className={`nav-item ${isRestaurantsNavActive ? 'active' : ''}`}>
+        <Link to="/partners" className={`nav-item ${isRestaurantsNavActive ? 'active' : ''}`}>
                         <FaStore className="nav-icon" />
                         <AppText as="span">{t('nav_partners', 'Businesses')}</AppText>
                     </Link>

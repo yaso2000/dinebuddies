@@ -5,7 +5,7 @@ import { useInvitations } from '../context/InvitationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from 'react-i18next';
-import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaTrophy, FaBuilding, FaPlus, FaGlobe, FaTimes } from 'react-icons/fa';
+import { FaSearch, FaMapMarkedAlt, FaBullseye, FaStar, FaStore, FaInfoCircle, FaExpand, FaCompress, FaHeart, FaRegHeart, FaComments, FaBuilding, FaPlus, FaGlobe, FaTimes } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -814,7 +814,7 @@ const RestaurantCard = React.memo(({ res, onViewMembers, onHostInvitation }) => 
 const RESTAURANT_LIKE_TYPES = new Set(['Restaurant', 'Fast Food', 'Food Truck']);
 
 
-const BusinessesDirectory = () => {
+const BusinessesDirectory = ({ embedded = false }) => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1402,18 +1402,12 @@ const BusinessesDirectory = () => {
 
             <div style={{ padding: '1rem 1.5rem 0' }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', rowGap: 8, justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    {!embedded && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        {/* Rankings (trophy) moved to the top bar. */}
                         <AppText as="h1" style={{ fontSize: '1.2rem', fontWeight: '800', lineHeight: '1', margin: 0 }}>{t('business_directory', 'Business')}</AppText>
-                        <button
-              type="button"
-              onClick={() => navigate('/rankings')}
-              title={t('rankings_title', 'Rankings')}
-              aria-label={t('rankings_title', 'Rankings')}
-              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, color: 'var(--luxury-gold)', background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
-              
-                            <FaTrophy style={{ fontSize: '1.25rem' }} />
-                        </button>
                     </div>
+                    )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Link
                       to="/restaurants"

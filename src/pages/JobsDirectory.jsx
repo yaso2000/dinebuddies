@@ -37,7 +37,7 @@ function jobTypeLabel(t, jobType) {
  * filter tools as the offers and businesses directories. Jobs inherit their business's
  * geo + venue type (stamped at creation), so they plot on the shared map and filter by type.
  */
-export default function JobsDirectory() {
+export default function JobsDirectory({ embedded = false }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { userProfile } = useAuth();
@@ -121,15 +121,17 @@ export default function JobsDirectory() {
 
   return (
     <div className="special-offers-page">
-      <div className="special-offers-page__header">
-        <button type="button" onClick={() => navigate(-1)} aria-label={t('back', 'Back')} className="special-offers-page__back">
-          <BackIcon />
-        </button>
-        <AppText as="h1" className="special-offers-page__title">
-          <FaBriefcase aria-hidden style={{ marginInlineEnd: 8, color: JOB_MARKER_COLOR }} />
-          {t('jobs_directory_title', 'Jobs')}
-        </AppText>
-      </div>
+      {!embedded && (
+        <div className="special-offers-page__header">
+          <button type="button" onClick={() => navigate(-1)} aria-label={t('back', 'Back')} className="special-offers-page__back">
+            <BackIcon />
+          </button>
+          <AppText as="h1" className="special-offers-page__title">
+            <FaBriefcase aria-hidden style={{ marginInlineEnd: 8, color: JOB_MARKER_COLOR }} />
+            {t('jobs_directory_title', 'Jobs')}
+          </AppText>
+        </div>
+      )}
 
       <div className="offers-filterbar">
         <AppTextInput
