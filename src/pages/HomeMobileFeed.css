@@ -10,8 +10,9 @@
         padding-bottom: 80px !important;
     }
 
-    /* 2. Map Container */
-    .map-view-container {
+    /* 2. Map Container — scoped to the home feed only; must NOT leak into the
+       Partners/venues directory map (which is sized by JS to reach the nav). */
+    .home-page .map-view-container {
         height: calc(100vh - 120px) !important;
     }
 

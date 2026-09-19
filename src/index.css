@@ -2430,6 +2430,8 @@ select.input-field {
 .directory-page .map-view-container {
   padding: 0 !important;
   background: transparent !important;
+  /* Never let a global map-container height clamp this; the wrapper is JS-sized. */
+  height: auto !important;
 }
 
 .map-wrapper {

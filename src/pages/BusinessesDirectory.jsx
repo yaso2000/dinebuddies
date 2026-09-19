@@ -1400,7 +1400,7 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
     <div className="directory-page" style={{ paddingBottom: viewMode === 'map' ? '0' : '100px', minHeight: '100%' }}>
 
 
-            <div style={{ padding: '1rem 1.5rem 0' }}>
+            <div style={{ padding: embedded ? '0.5rem 8px 0' : '1rem 1.5rem 0' }}>
                 {!embedded && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '0.75rem' }}>
                     {/* Rankings (trophy) moved to the top bar. */}
