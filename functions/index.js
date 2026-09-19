@@ -2031,43 +2031,11 @@ function resolveConnectionKindFromData() {
     return 'friendship';
 }
 
-async function hasMutualDiscoveryMatch(uid, otherUserId) {
-    const [likeSnapA, likeSnapB] = await Promise.all([
-        db.collection('discovery_likes').doc(`${otherUserId}_${uid}`).get(),
-        db.collection('discovery_likes').doc(`${uid}_${otherUserId}`).get(),
-    ]);
-    if (!likeSnapA.exists || !likeSnapB.exists) return false;
-    const d1 = likeSnapA.data();
-    const d2 = likeSnapB.data();
-    return d1?.mutual === true || d2?.mutual === true;
-}
-
-async function hasAcquaintanceConnection(uid, otherUserId, reqData, othData) {
-    const reqFollowing = Array.isArray(reqData?.following) ? reqData.following : [];
-    const othFollowing = Array.isArray(othData?.following) ? othData.following : [];
-
-    if (areMutuallyFollowing(reqData, othData, uid, otherUserId)) {
-        return true;
-    }
-
-    const [likeReqToOth, likeOthToReq] = await Promise.all([
-        db.collection('discovery_likes').doc(`${otherUserId}_${uid}`).get(),
-        db.collection('discovery_likes').doc(`${uid}_${otherUserId}`).get(),
-    ]);
-
-    const reqLikedOth = likeReqToOth.exists;
-    const othLikedReq = likeOthToReq.exists;
-
-    if (reqFollowing.includes(otherUserId) && othLikedReq) return true;
-    if (othFollowing.includes(uid) && reqLikedOth) return true;
-    return false;
-}
-
+// Dating and the person-"like" are removed, so the only connection is a mutual
+// Follow. (Behaviour-identical to the old kind-based dispatch, which always
+// resolved to 'friendship' → areMutuallyFollowing.)
 async function hasConnectConnection(uid, otherUserId, reqData, othData) {
-    const kind = resolveConnectionKindFromData(reqData, othData);
-    if (kind === 'dating') return hasMutualDiscoveryMatch(uid, otherUserId);
-    if (kind === 'friendship') return areMutuallyFollowing(reqData, othData, uid, otherUserId);
-    return hasAcquaintanceConnection(uid, otherUserId, reqData, othData);
+    return areMutuallyFollowing(reqData, othData, uid, otherUserId);
 }
 
 // ─── Trusted callable: create/get conversation with anti-spam limits ────────

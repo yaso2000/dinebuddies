@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { onSnapshot } from 'firebase/firestore';
 import { checkCanMessage } from '../utils/chatHelpers';
-import { getDiscoveryLikeRef } from '../utils/discoveryProfile';
 import { useAuth } from '../context/AuthContext';
 
 const CHECK_DEBOUNCE_MS = 400;
@@ -94,26 +92,14 @@ export function useConversationConnectionAllowed(
             }, CHECK_DEBOUNCE_MS);
         };
 
-        const onListenerError = (error) => {
-            console.warn('[useConversationConnectionAllowed] listener failed:', error?.code || error);
-            runCheck();
-        };
-
-        // Re-check when either side toggles a discovery like (a like ref, not a users
-        // doc). The follow-back signal itself arrives via viewerFollowers (deps below).
-        const likeUnsubs = [
-            onSnapshot(getDiscoveryLikeRef(targetUserId, viewerUid), () => runCheck(), onListenerError),
-            onSnapshot(getDiscoveryLikeRef(viewerUid, targetUserId), () => runCheck(), onListenerError),
-        ];
-
-        // Nothing above is guaranteed to fire while offline — resolve rather than hang.
+        // The follow-back signal arrives via viewerFollowers (deps below), which re-runs
+        // this effect and re-checks. (Dating/likes removed — no like listeners here.)
         runCheck();
 
         return () => {
             cancelled = true;
             clearTimeout(watchdog);
             if (debounceRef.current) clearTimeout(debounceRef.current);
-            likeUnsubs.forEach((unsub) => unsub());
         };
     }, [enabled, isSupportPeer, targetUserId, followingKey, followersKey, viewerUid]);
 
