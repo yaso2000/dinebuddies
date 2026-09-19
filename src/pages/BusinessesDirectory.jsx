@@ -47,6 +47,7 @@ import {
   matchesBusinessLocationFilter,
   parseBusinessLatLng,
 } from '../utils/businessDirectoryGeoFilter';
+import { resolveCountryIso2 } from '../utils/countryIso';
 import { formatBiDiText, escapeHtmlText } from '../utils/formatBiDiText';
 import { AppText, AppTextInput } from "../components/base";
 import CreateInvitationSelector from '../components/CreateInvitationSelector';
@@ -1132,19 +1133,22 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
     });
   }, [filteredRestaurants]);
 
-  // Most common country among the venues (their data is one country) → flag on the
-  // "Country" map button. Falls back to the viewer's profile country.
+  // Most common country among the venues (the button zooms to where the venues are) →
+  // flag on the "Country" map button. Resolves a stored code OR a country name (e.g.
+  // "Australia" → "AU"), since venues may lack countryCode. Falls back to the viewer's.
   const countryFlag = useMemo(() => {
     const counts = {};
     for (const res of restaurantsWithCoords) {
-      const cc = String(res.countryCode || res.businessInfo?.countryCode || '').toUpperCase();
-      if (/^[A-Z]{2}$/.test(cc)) counts[cc] = (counts[cc] || 0) + 1;
+      const iso = resolveCountryIso2(
+        res.countryCode || res.country || res.businessInfo?.countryCode || res.businessInfo?.country
+      );
+      if (iso) counts[iso] = (counts[iso] || 0) + 1;
     }
     let best = '';
     let max = 0;
     for (const [cc, n] of Object.entries(counts)) if (n > max) { max = n; best = cc; }
-    return countryFlagEmoji(best || userProfile?.countryCode);
-  }, [restaurantsWithCoords, userProfile?.countryCode]);
+    return countryFlagEmoji(best || resolveCountryIso2(userProfile?.countryCode || userProfile?.country));
+  }, [restaurantsWithCoords, userProfile?.countryCode, userProfile?.country]);
 
   // Map control functions
   const zoomIn = () => {
