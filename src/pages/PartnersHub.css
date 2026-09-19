@@ -1,7 +1,9 @@
 .partners-hub {
   /* Bounded to the space above the fixed bottom nav: the tab bar stays fixed and only
-     the body scrolls, so the filter/categories bar can pin and only the cards move. */
-  height: calc(100dvh - var(--nav-height, 65px));
+     the body scrolls, so the filter/categories bar can pin and only the cards move.
+     Subtract the iOS safe-area too — the nav is nav-height PLUS the home-indicator inset,
+     so without this the swipe card's bottom hides behind the nav on iPhone. */
+  height: calc(100dvh - var(--nav-height, 65px) - env(safe-area-inset-bottom, 0px));
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -61,15 +63,25 @@
   width: 100%;
   max-width: 100%;
   margin: 0;
+  /* Match the venues tab's tight side spacing (the page's own 1rem inset would
+     otherwise stack with the filter/list padding and look larger). */
+  padding-inline: 0;
+  padding-top: 0;
 }
 
-/* Each tab's own filter bar pins right below the tab bar (never over it). */
+/* Each tab's own filter bar pins right below the tab bar (never over it) — same 8px
+   side inset as the venues filter card. */
 .partners-hub .offers-filterbar {
   position: sticky;
   top: var(--filterbar-top, 0px);
   z-index: 25;
   background: var(--bg-main, var(--bg-body, #0b0b12));
-  padding-top: 8px;
+  padding: 8px 8px 12px;
+}
+
+/* Offers/jobs list cards: same tight side inset as the rest of the tab. */
+.partners-hub .special-offers-list {
+  padding-inline: 8px;
 }
 
 .partners-hub__tab {
