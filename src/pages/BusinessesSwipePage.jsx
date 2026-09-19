@@ -57,25 +57,7 @@ export default function BusinessesSwipePage() {
             width: '100%',
             flex: '0 0 auto',
           }}>
-          <Link
-            to="/offers"
-            style={{
-              flex: '0 0 auto',
-              padding: '8px 12px',
-              borderRadius: '10px',
-              border: '1px solid var(--secondary, #e86e2e)',
-              background: 'var(--secondary, #e86e2e)',
-              color: '#fff',
-              fontSize: '0.8rem',
-              fontWeight: 700,
-              textDecoration: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              whiteSpace: 'nowrap',
-            }}>
-            🎁 {t('special_offers_title', 'Special offers')}
-          </Link>
+          {/* (Removed) "Special offers" shortcut — the hub has a dedicated Offers tab. */}
           {categories.map((cat) => (
             <button
               key={cat.id}
