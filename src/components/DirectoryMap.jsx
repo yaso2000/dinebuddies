@@ -1,29 +1,35 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { FaExpand, FaCompress, FaMapMarkedAlt, FaGlobe, FaFlag } from 'react-icons/fa';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './MapStyles.css';
+import { AppText } from './base';
 import { addBaseTileLayer } from '../utils/mapTiles';
 import { detachLeafletMap, ensureLeafletMapDetachedIfOrphan } from '../utils/leafletMapLifecycle';
 import { useTheme } from '../context/ThemeContext';
 import { haversineKm } from '../utils/postsFeedScope';
 
+const CITY_ZOOM = 12;
+const COUNTRY_ZOOM = 4;
+const WORLD_ZOOM = 2;
+
 /**
- * Reusable multi-marker directory map (list ↔ map pattern). Extracted from the
- * hand-rolled Leaflet effect that BusinessesDirectory / Home each duplicated, so
- * offers, jobs and any future directory share one map. Free Esri tiles (no API key)
- * via addBaseTileLayer. The parent controls height via CSS on the wrapper.
+ * Reusable multi-marker directory map — the SAME chrome as the venues map: default city
+ * focus, zoom +/-, fullscreen, City / Country (flag) / World buttons, self-sizes to ~4px
+ * above the bottom nav, and an "active" count badge. Free Esri tiles (no API key).
  *
  * @param {object} props
- * @param {boolean} props.active            — map view is visible (skip work when hidden)
- * @param {Array<object>} props.items       — rows to plot
+ * @param {boolean} props.active
+ * @param {Array<object>} props.items
  * @param {(item:object)=>({lat:number,lng:number}|null)} props.getCoords
- * @param {(item:object)=>string} props.getMarkerImageUrl  — logo/photo for the pin
- * @param {(item:object)=>string} props.getFallbackName    — name for the initials fallback
+ * @param {(item:object)=>string} props.getMarkerImageUrl
+ * @param {(item:object)=>string} props.getFallbackName
  * @param {(item:object, ctx:{distanceKm:number|null, travelMin:number|null})=>string} props.buildPopupHtml
  * @param {{lat:number,lng:number}|null} [props.userLocation]
- * @param {string} [props.markerColor]      — pin border colour
- * @param {string} [props.className]
+ * @param {string} [props.markerColor]
+ * @param {string} [props.countryFlag]  — flag emoji for the Country button (else a flag icon)
+ * @param {string} [props.badgeLabel]   — e.g. "Active offers" (prefixed with the count)
  */
 export default function DirectoryMap({
   active,
@@ -34,14 +40,16 @@ export default function DirectoryMap({
   buildPopupHtml,
   userLocation = null,
   markerColor = '#fbbf24',
-  className = '',
+  countryFlag = '',
+  badgeLabel = '',
 }) {
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
+  const didFocusRef = useRef(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Only rows with finite coordinates are plottable.
   const points = useMemo(() => {
     return (items || [])
       .map((item) => {
@@ -49,33 +57,34 @@ export default function DirectoryMap({
         const lat = Number(c?.lat);
         const lng = Number(c?.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-        if (lat === 0 && lng === 0) return null; // guard Null Island
+        if (lat === 0 && lng === 0) return null;
         return { item, lat, lng };
       })
       .filter(Boolean);
   }, [items, getCoords]);
 
-  // Detach the Leaflet instance on unmount (avoids "container already initialized").
   useEffect(() => () => detachLeafletMap(mapInstance), []);
 
+  // Build/refresh the map + markers. Default view = the viewer's city (once), never fit-all.
   useEffect(() => {
-    if (!active || !mapRef.current) return;
+    if (!active || !mapRef.current) return undefined;
     ensureLeafletMapDetachedIfOrphan(mapInstance, mapRef.current);
 
     if (!mapInstance.current) {
-      let initialLat = 0;
+      let initialLat = 20;
       let initialLng = 0;
-      let initialZoom = 2;
+      let initialZoom = WORLD_ZOOM;
       if (userLocation) {
         initialLat = userLocation.lat;
         initialLng = userLocation.lng;
-        initialZoom = 13;
+        initialZoom = CITY_ZOOM;
+        didFocusRef.current = true;
       } else if (points.length > 0) {
         const lats = points.map((p) => p.lat);
         const lngs = points.map((p) => p.lng);
         initialLat = (Math.min(...lats) + Math.max(...lats)) / 2;
         initialLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-        initialZoom = 10;
+        initialZoom = 6;
       }
       mapInstance.current = L.map(mapRef.current, {
         zoomControl: false,
@@ -84,18 +93,21 @@ export default function DirectoryMap({
       }).setView([initialLat, initialLng], initialZoom);
     }
 
-    // Re-apply theme tiles.
+    // GPS/IP can resolve after creation — focus the city once, then leave the viewport.
+    if (!didFocusRef.current && userLocation) {
+      mapInstance.current.setView([userLocation.lat, userLocation.lng], CITY_ZOOM);
+      didFocusRef.current = true;
+    }
+
     mapInstance.current.eachLayer((layer) => {
       if (layer instanceof L.TileLayer) mapInstance.current.removeLayer(layer);
     });
     addBaseTileLayer(L, mapInstance.current, isDark);
 
-    // Clear old markers.
     mapInstance.current.eachLayer((layer) => {
       if (layer instanceof L.Marker) mapInstance.current.removeLayer(layer);
     });
 
-    // Viewer marker.
     if (userLocation) {
       const userIcon = L.divIcon({
         className: 'user-location-marker',
@@ -108,7 +120,6 @@ export default function DirectoryMap({
         .bindPopup(`<strong style="color:#8b5cf6;">📍 ${t('your_location', 'Your location')}</strong>`);
     }
 
-    // Item markers.
     points.forEach(({ item, lat, lng }) => {
       let distanceKm = null;
       let travelMin = null;
@@ -139,25 +150,91 @@ export default function DirectoryMap({
     const t1 = setTimeout(() => {
       if (mapInstance.current) mapInstance.current.invalidateSize();
     }, 100);
-    const t2 = setTimeout(() => {
-      if (!mapInstance.current) return;
-      const bounds = points.map((p) => [p.lat, p.lng]);
-      if (userLocation) bounds.push([userLocation.lat, userLocation.lng]);
-      if (bounds.length > 0) {
-        try {
-          mapInstance.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15, animate: true });
-        } catch {
-          if (userLocation) mapInstance.current.setView([userLocation.lat, userLocation.lng], 12);
-        }
-      }
-    }, 300);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
+    return () => clearTimeout(t1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, points, userLocation, isDark, t]);
 
-  return <div ref={mapRef} className={`directory-map ${className}`.trim()} />;
+  // Size the map to end ~4px above the bottom nav on any device (matches the venues map).
+  useEffect(() => {
+    if (!active) return undefined;
+    const wrapper = mapRef.current?.closest('.directory-map-wrapper');
+    if (!wrapper) return undefined;
+    const apply = () => {
+      if (isFullscreen) { wrapper.style.height = ''; return; }
+      const top = wrapper.getBoundingClientRect().top;
+      const nav = document.querySelector('.bottom-nav');
+      const navTop = nav ? nav.getBoundingClientRect().top : window.innerHeight;
+      wrapper.style.height = `${Math.max(260, Math.round(navTop - top - 4))}px`;
+      if (mapInstance.current) mapInstance.current.invalidateSize();
+    };
+    apply();
+    const t1 = setTimeout(apply, 150);
+    const t2 = setTimeout(apply, 400);
+    window.addEventListener('resize', apply);
+    window.addEventListener('orientationchange', apply);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('resize', apply);
+      window.removeEventListener('orientationchange', apply);
+    };
+  }, [active, isFullscreen]);
+
+  const zoomBy = (delta) => mapInstance.current && (delta > 0 ? mapInstance.current.zoomIn() : mapInstance.current.zoomOut());
+  const focusLevel = (zoom) => {
+    if (!mapInstance.current) return;
+    const center = userLocation ? [userLocation.lat, userLocation.lng] : mapInstance.current.getCenter();
+    mapInstance.current.setView(center, zoom, { animate: true });
+  };
+  const focusWorld = () => mapInstance.current && mapInstance.current.setView([20, 0], WORLD_ZOOM, { animate: true });
+
+  return (
+    <div
+      className="map-view-container"
+      style={{
+        position: isFullscreen ? 'fixed' : 'relative',
+        inset: isFullscreen ? 0 : 'auto',
+        zIndex: isFullscreen ? 9999 : 'auto',
+      }}>
+      <div
+        className={`map-wrapper directory-map-wrapper${isFullscreen ? ' directory-map-wrapper--fullscreen' : ''}`}
+        style={{ borderRadius: 0, overflow: 'hidden', width: '100%', height: isFullscreen ? '100dvh' : undefined, position: 'relative' }}>
+        <div ref={mapRef} className="responsive-map-container leaflet-container-home" style={{ width: '100%', height: '100%', outline: 'none' }} />
+
+        <div className="map-zoom-controls">
+          <button onClick={() => zoomBy(1)} className="btn-map-control" title={t('zoom_in', { defaultValue: 'Zoom In' })}>
+            <AppText as="span" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>+</AppText>
+          </button>
+          <button onClick={() => zoomBy(-1)} className="btn-map-control" title={t('zoom_out', { defaultValue: 'Zoom Out' })}>
+            <AppText as="span" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>−</AppText>
+          </button>
+          <button
+            onClick={() => {
+              setIsFullscreen((v) => !v);
+              setTimeout(() => mapInstance.current && mapInstance.current.invalidateSize(), 100);
+            }}
+            className="btn-map-control"
+            title={isFullscreen ? t('exit_fullscreen', 'Exit Fullscreen') : t('fullscreen', 'Fullscreen')}>
+            {isFullscreen ? <FaCompress /> : <FaExpand />}
+          </button>
+          <button onClick={() => focusLevel(CITY_ZOOM)} className="btn-map-control" title={t('map_focus_city', { defaultValue: 'City' })} aria-label={t('map_focus_city', { defaultValue: 'City' })}>
+            <FaMapMarkedAlt />
+          </button>
+          <button onClick={() => focusLevel(COUNTRY_ZOOM)} className="btn-map-control" title={t('map_focus_country', { defaultValue: 'Country' })} aria-label={t('map_focus_country', { defaultValue: 'Country' })}>
+            {countryFlag ? <AppText as="span" aria-hidden style={{ fontSize: '1.15rem', lineHeight: 1 }}>{countryFlag}</AppText> : <FaFlag />}
+          </button>
+          <button onClick={focusWorld} className="btn-map-control" title={t('map_focus_world', { defaultValue: 'World' })} aria-label={t('map_focus_world', { defaultValue: 'World' })}>
+            <FaGlobe />
+          </button>
+        </div>
+
+        {badgeLabel ? (
+          <div className="map-discovery-badge" style={{ top: 'auto', bottom: '20px', left: '50%', transform: 'translateX(-50%)' }}>
+            <div className="pulse-dot" />
+            <AppText as="span">{points.length} {badgeLabel}</AppText>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
 }

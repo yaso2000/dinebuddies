@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaBriefcase, FaArrowLeft, FaArrowRight, FaList, FaMapMarkedAlt, FaMapMarkerAlt } from 'react-icons/fa';
+import { FaBriefcase, FaArrowLeft, FaArrowRight, FaThList, FaMapMarkedAlt, FaMapMarkerAlt } from 'react-icons/fa';
 import { AppText, AppTextInput } from '../components/base';
 import { useAuth } from '../context/AuthContext';
 import { haversineKm } from '../utils/postsFeedScope';
@@ -180,11 +180,10 @@ export default function JobsDirectory({ embedded = false, view = null, onViewCha
               onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
           <div className="special-offers-viewtoggle">
-            <button type="button" className={`sov-toggle${viewMode === 'list' ? ' active' : ''}`} onClick={() => setViewMode('list')}>
-              <FaList aria-hidden /> {t('view_list', 'List')}
-            </button>
-            <button type="button" className={`sov-toggle${viewMode === 'map' ? ' active' : ''}`} onClick={() => setViewMode('map')}>
-              <FaMapMarkedAlt aria-hidden /> {t('view_map', 'Map')}
+            <button type="button" className="sov-toggle active" onClick={() => setViewMode(viewMode === 'map' ? 'list' : 'map')}>
+              {viewMode === 'map'
+                ? <><FaThList aria-hidden /> {t('view_list', 'List')}</>
+                : <><FaMapMarkedAlt aria-hidden /> {t('view_map', 'Map')}</>}
             </button>
           </div>
         </div>
@@ -205,17 +204,16 @@ export default function JobsDirectory({ embedded = false, view = null, onViewCha
       {loading ? (
         <div className="special-offers-page__status">{t('loading', 'Loading…')}</div>
       ) : viewMode === 'map' ? (
-        <div className="special-offers-map">
-          <DirectoryMap
-            active
-            items={filteredJobs}
-            getCoords={(j) => ({ lat: j.lat, lng: j.lng })}
-            getMarkerImageUrl={(j) => j.businessAvatar || ''}
-            getFallbackName={(j) => j.businessName || j.title || 'Job'}
-            buildPopupHtml={buildJobPopup}
-            userLocation={userLoc}
-            markerColor={JOB_MARKER_COLOR} />
-        </div>
+        <DirectoryMap
+          active
+          items={filteredJobs}
+          getCoords={(j) => ({ lat: j.lat, lng: j.lng })}
+          getMarkerImageUrl={(j) => j.businessAvatar || ''}
+          getFallbackName={(j) => j.businessName || j.title || 'Job'}
+          buildPopupHtml={buildJobPopup}
+          userLocation={userLoc}
+          markerColor={JOB_MARKER_COLOR}
+          badgeLabel={t('open_jobs', { defaultValue: 'Open jobs' })} />
       ) : viewMode === 'swipe' ? (
         <div className="special-offers-map">
           <MagneticDeck

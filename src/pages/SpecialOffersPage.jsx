@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle, FaList, FaMapMarkedAlt, FaMapMarkerAlt } from 'react-icons/fa';
+import { FaTag, FaArrowLeft, FaArrowRight, FaCheckCircle, FaThList, FaMapMarkedAlt, FaMapMarkerAlt } from 'react-icons/fa';
 import { AppText, AppTextInput } from '../components/base';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -265,15 +265,11 @@ export default function SpecialOffersPage({ embedded = false, view = null, onVie
           <div className="special-offers-viewtoggle">
             <button
               type="button"
-              className={`sov-toggle${viewMode === 'list' ? ' active' : ''}`}
-              onClick={() => setViewMode('list')}>
-              <FaList aria-hidden /> {t('view_list', 'List')}
-            </button>
-            <button
-              type="button"
-              className={`sov-toggle${viewMode === 'map' ? ' active' : ''}`}
-              onClick={() => setViewMode('map')}>
-              <FaMapMarkedAlt aria-hidden /> {t('view_map', 'Map')}
+              className="sov-toggle active"
+              onClick={() => setViewMode(viewMode === 'map' ? 'list' : 'map')}>
+              {viewMode === 'map'
+                ? <><FaThList aria-hidden /> {t('view_list', 'List')}</>
+                : <><FaMapMarkedAlt aria-hidden /> {t('view_map', 'Map')}</>}
             </button>
           </div>
         </div>
@@ -294,17 +290,16 @@ export default function SpecialOffersPage({ embedded = false, view = null, onVie
       {loading ? (
         <div className="special-offers-page__status">{t('loading', 'Loading…')}</div>
       ) : viewMode === 'map' ? (
-        <div className="special-offers-map">
-          <DirectoryMap
-            active
-            items={filteredOffers}
-            getCoords={(o) => ({ lat: o.lat, lng: o.lng })}
-            getMarkerImageUrl={(o) => o.imageUrl || o.businessAvatar || ''}
-            getFallbackName={(o) => o.businessName || o.title || 'Offer'}
-            buildPopupHtml={buildOfferPopup}
-            userLocation={userLoc}
-            markerColor={OFFER_MARKER_COLOR} />
-        </div>
+        <DirectoryMap
+          active
+          items={filteredOffers}
+          getCoords={(o) => ({ lat: o.lat, lng: o.lng })}
+          getMarkerImageUrl={(o) => o.imageUrl || o.businessAvatar || ''}
+          getFallbackName={(o) => o.businessName || o.title || 'Offer'}
+          buildPopupHtml={buildOfferPopup}
+          userLocation={userLoc}
+          markerColor={OFFER_MARKER_COLOR}
+          badgeLabel={t('active_offers', { defaultValue: 'Active offers' })} />
       ) : viewMode === 'swipe' ? (
         <div className="special-offers-map">
           <MagneticDeck
