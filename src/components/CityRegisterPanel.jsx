@@ -132,7 +132,7 @@ export default function CityRegisterPanel() {
   const CATS = [
     { key: 'invitations', icon: <FaCalendarAlt />, color: '#ef4444', label: t('city_register_invitations', 'دعوات عامة نشطة'), count: cityInvitations.length },
     { key: 'offers', icon: <FaGift />, color: '#8b5cf6', label: t('city_register_offers', 'عروض'), count: offers.length, route: '/offers' },
-    { key: 'jobs', icon: <FaBriefcase />, color: '#0ea5e9', label: t('city_register_jobs', 'وظائف'), count: jobs.length },
+    { key: 'jobs', icon: <FaBriefcase />, color: '#0ea5e9', label: t('city_register_jobs', 'وظائف'), count: jobs.length, route: '/jobs' },
   ];
 
   const rowStyle = {

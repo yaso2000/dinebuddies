@@ -97,14 +97,77 @@ function registerJobPostings(exports, { db, admin, enforceCallableRateLimit }) {
                 'Job posting is a Business Pro feature.'
             );
         }
+        const bi = u.businessInfo && typeof u.businessInfo === 'object' ? u.businessInfo : {};
         const name =
             asTrimmed(u.displayName) ||
             asTrimmed(u.display_name) ||
+            asTrimmed(bi.businessName) ||
             asTrimmed(u.businessName) ||
             'Business';
-        const avatar = u.photoURL || u.photo_url || u.avatarUrl || null;
-        return { name, avatar };
+        const avatar = u.photoURL || u.photo_url || u.avatarUrl || bi.logoUrl || null;
+        // Geo + venue type — inherited from the business so the jobs directory can plot
+        // jobs on the map and filter by venue type (same as offers / the venues directory).
+        const pickNum = (...vals) => {
+            for (const v of vals) {
+                const n = Number(v);
+                if (Number.isFinite(n) && n !== 0) return n;
+            }
+            return null;
+        };
+        const lat = pickNum(u.lat, u.latitude, u.location && u.location.lat, u.coordinates && u.coordinates.lat, bi.lat);
+        const lng = pickNum(u.lng, u.longitude, u.location && u.location.lng, u.coordinates && u.coordinates.lng, bi.lng);
+        const city = asTrimmed(u.city) || asTrimmed(bi.city) || null;
+        const businessType = asTrimmed(bi.businessType) || asTrimmed(u.business_type) || 'Restaurant';
+        return { name, avatar, lat, lng, city, businessType };
     }
+
+    // ── Public consumer jobs directory ───────────────────────────────────────
+    // Open, non-expired jobs any signed-in user can browse (mirrors
+    // listActiveCommunityOffers). Carries business geo + venue type for the map + filter.
+    exports.listOpenJobs = functions.https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Please sign in.');
+        }
+        const nowMs = Date.now();
+        let snap;
+        try {
+            snap = await db
+                .collection('business_jobs')
+                .where('status', '==', 'open')
+                .orderBy('createdAt', 'desc')
+                .limit(150)
+                .get();
+        } catch (err) {
+            snap = await db.collection('business_jobs').where('status', '==', 'open').limit(150).get();
+        }
+        const jobs = snap.docs
+            .map((d) => {
+                const j = d.data() || {};
+                const expiresMs = j.expiresAt && j.expiresAt.toMillis ? j.expiresAt.toMillis() : null;
+                const isExpired = expiresMs != null && expiresMs <= nowMs;
+                return {
+                    id: d.id,
+                    businessId: j.businessId || null,
+                    businessName: j.businessName || '',
+                    businessAvatar: j.businessAvatar || null,
+                    title: j.title || '',
+                    description: j.description ? String(j.description).slice(0, 400) : null,
+                    jobType: j.jobType || null,
+                    location: j.location || null,
+                    lat: typeof j.lat === 'number' ? j.lat : null,
+                    lng: typeof j.lng === 'number' ? j.lng : null,
+                    city: j.city || null,
+                    businessType: j.businessType || null,
+                    applicationCount: typeof j.applicationCount === 'number' ? j.applicationCount : 0,
+                    expiresAt: expiresMs,
+                    active: !isExpired,
+                    createdAt: j.createdAt && j.createdAt.toMillis ? j.createdAt.toMillis() : null,
+                };
+            })
+            .filter((j) => j.active)
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        return { jobs };
+    });
 
     // ── Business creates a job posting ────────────────────────────────────────
     exports.createJobPosting = functions.https.onCall(async (data, context) => {
@@ -159,6 +222,11 @@ function registerJobPostings(exports, { db, admin, enforceCallableRateLimit }) {
             description,
             jobType,
             location: location || null,
+            // Business geo + venue type (for the jobs directory map + type filter).
+            lat: business.lat,
+            lng: business.lng,
+            city: business.city,
+            businessType: business.businessType,
             status: 'open', // open | closed
             applicationCount: 0,
             expiresAt: expiresAt || null,

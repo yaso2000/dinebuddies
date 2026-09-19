@@ -34,6 +34,7 @@ const PostDetails = lazy(() => import('./pages/PostDetails'));
 const UserProfile = lazy(() => import('./pages/UserProfile'));
 const BusinessesDirectory = lazy(() => import('./pages/BusinessesDirectory'));
 const SpecialOffersPage = lazy(() => import('./pages/SpecialOffersPage'));
+const JobsDirectory = lazy(() => import('./pages/JobsDirectory'));
 const BusinessRankings = lazy(() => import('./pages/BusinessRankings'));
 const RestaurantDetails = lazy(() => import('./pages/RestaurantDetails'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -299,6 +300,7 @@ function App() {
                                                     <Route path="/restaurants" element={<BusinessesSwipePage />} />
                                                     <Route path="/restaurants/list" element={<BusinessesDirectory />} />
                                                     <Route path="/offers" element={<GuestBlockedRoute><SpecialOffersPage /></GuestBlockedRoute>} />
+                                                    <Route path="/jobs" element={<GuestBlockedRoute><JobsDirectory /></GuestBlockedRoute>} />
                                                     <Route path="/rankings" element={<BusinessRankings />} />
                                                     <Route path="/restaurant/:id" element={<RestaurantDetails />} />
 

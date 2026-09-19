@@ -23,6 +23,11 @@ export function submitJobApplication(payload) {
     return httpsCallable(fns(), 'submitJobApplication')(payload).then((r) => r.data);
 }
 
+/** Public consumer jobs directory — open jobs (with business geo + venue type). */
+export function listOpenJobs() {
+    return httpsCallable(fns(), 'listOpenJobs')({}).then((r) => (Array.isArray(r.data?.jobs) ? r.data.jobs : []));
+}
+
 export function setJobApplicationStatus(applicationId, status) {
     return httpsCallable(fns(), 'setJobApplicationStatus')({ applicationId, status }).then((r) => r.data);
 }
