@@ -1147,8 +1147,14 @@ const BusinessesDirectory = ({ embedded = false, view = null, onViewChange = nul
     let best = '';
     let max = 0;
     for (const [cc, n] of Object.entries(counts)) if (n > max) { max = n; best = cc; }
-    return countryFlagEmoji(best || resolveCountryIso2(userProfile?.countryCode || userProfile?.country));
-  }, [restaurantsWithCoords, userProfile?.countryCode, userProfile?.country]);
+    // Venues rarely store country → fall back to the viewer's DETECTED location (GPS/IP,
+    // = the area the map is showing) before the profile's saved country.
+    return countryFlagEmoji(
+      best ||
+      resolveCountryIso2(detectedLocationContext?.countryCode || detectedLocationContext?.country) ||
+      resolveCountryIso2(userProfile?.countryCode || userProfile?.country)
+    );
+  }, [restaurantsWithCoords, detectedLocationContext, userProfile?.countryCode, userProfile?.country]);
 
   // Map control functions
   const zoomIn = () => {
